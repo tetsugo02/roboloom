@@ -1,0 +1,77 @@
+type: joint
+input: leader
+robot: robot
+unit: dynamixel_count
+alignment_tolerance: 100
+max_speed_counts_per_s: 500
+command_deadline_ms: 100
+input_timeout_ms: 150
+joints:
+- leader: torso_yaw
+  follower: torso_yaw
+  sign: 1
+  offset: 0
+- leader: head_yaw
+  follower: head_yaw
+  sign: 1
+  offset: 0
+- leader: head_pitch
+  follower: head_pitch
+  sign: 1
+  offset: 0
+- leader: r_arm_sh_pitch1
+  follower: r_arm_sh_pitch1
+  sign: 1
+  offset: 0
+- leader: r_arm_sh_roll
+  follower: r_arm_sh_roll
+  sign: 1
+  offset: 0
+- leader: r_arm_sh_pitch2
+  follower: r_arm_sh_pitch2
+  sign: 1
+  offset: 0
+- leader: r_arm_el_yaw
+  follower: r_arm_el_yaw
+  sign: 1
+  offset: 0
+- leader: r_arm_wr_roll
+  follower: r_arm_wr_roll
+  sign: 1
+  offset: 0
+- leader: r_arm_wr_yaw
+  follower: r_arm_wr_yaw
+  sign: 1
+  offset: 0
+- leader: r_arm_grip
+  follower: r_arm_grip
+  sign: 1
+  offset: 0
+- leader: l_arm_sh_pitch1
+  follower: l_arm_sh_pitch1
+  sign: 1
+  offset: 0
+- leader: l_arm_sh_roll
+  follower: l_arm_sh_roll
+  sign: 1
+  offset: 0
+- leader: l_arm_sh_pitch2
+  follower: l_arm_sh_pitch2
+  sign: 1
+  offset: 0
+- leader: l_arm_el_yaw
+  follower: l_arm_el_yaw
+  sign: 1
+  offset: 0
+- leader: l_arm_wr_roll
+  follower: l_arm_wr_roll
+  sign: 1
+  offset: 0
+- leader: l_arm_wr_yaw
+  follower: l_arm_wr_yaw
+  sign: 1
+  offset: 0
+- leader: l_arm_grip
+  follower: l_arm_grip
+  sign: 1
+  offset: 0

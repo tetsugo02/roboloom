@@ -1,0 +1,15 @@
+robot_id: rakuda-mock
+repo_id: local/rakuda-mock
+output: ../../datasets/rakuda-mock
+mode: mock
+dataset_fps: 10
+nodes:
+  leader: nodes/leader.yaml
+  controller: nodes/controller.yaml
+  robot: nodes/robot.yaml
+  camera: nodes/camera.yaml
+  digit_left: nodes/digit_left.yaml
+  digit_right: nodes/digit_right.yaml
+  audio: nodes/audio.yaml
+  recorder: nodes/recorder.yaml
+  session: nodes/session.yaml

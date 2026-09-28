@@ -1,0 +1,7 @@
+max_age_ms:
+  leader: 300
+  robot: 300
+  camera: 300
+  digit_left: 300
+  digit_right: 300
+  audio: 300

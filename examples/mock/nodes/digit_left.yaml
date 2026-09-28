@@ -1,0 +1,6 @@
+type: digit
+serial: mock-digit-left
+name: left
+width: 64
+height: 48
+fps: 10

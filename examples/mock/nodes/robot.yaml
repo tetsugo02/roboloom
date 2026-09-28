@@ -1,0 +1,90 @@
+type: rakuda_follower
+port: mock://follower
+motor_ids:
+- 27
+- 28
+- 29
+- 1
+- 3
+- 5
+- 7
+- 9
+- 11
+- 31
+- 2
+- 4
+- 6
+- 8
+- 10
+- 12
+- 30
+control_hz: 30
+limits:
+- name: torso_yaw
+  min: 0
+  max: 4095
+  max_step: 200
+- name: head_yaw
+  min: 0
+  max: 4095
+  max_step: 200
+- name: head_pitch
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_sh_pitch1
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_sh_roll
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_sh_pitch2
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_el_yaw
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_wr_roll
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_wr_yaw
+  min: 0
+  max: 4095
+  max_step: 200
+- name: r_arm_grip
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_sh_pitch1
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_sh_roll
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_sh_pitch2
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_el_yaw
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_wr_roll
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_wr_yaw
+  min: 0
+  max: 4095
+  max_step: 200
+- name: l_arm_grip
+  min: 0
+  max: 4095
+  max_step: 200

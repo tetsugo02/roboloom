@@ -1,0 +1,4 @@
+type: pcm_mono
+device: mock-microphone
+sample_rate: 16000
+channels: 1
