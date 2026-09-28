@@ -27,22 +27,22 @@
 
 ## 1．Rakuda の最小制御構成
 
-- [x] **模擬構成まで** Python 3.12、`dora-rs`／`dora-rs-cli` 1.0.1、LeRobot 0.6.1 を `pyproject.toml` と `uv.lock` に固定し、9 ノードの dataflow を生成する（`src/roboloom/flow.py`、`examples/mock/`）。
-- [x] **模擬単体試験まで** leader→joint controller→robot の関節対応、姿勢差による開始抑止、速度制限、最新指令優先、期限・次元・有限値・関節範囲・変化量の基本検査を実装する（`src/roboloom/control.py`、`tests/test_control.py`）。
-- [x] **模擬単体試験まで** `HOLD`、`FAULT`、`ESTOP` の基本動作とラッチ、自動再起動しない設定を用意する（`src/roboloom/control.py`、`src/roboloom/flow.py`）。
+- [x] **模擬構成まで** Python 3.12、`dora-rs`／`dora-rs-cli` 1.0.1、LeRobot 0.6.1 を `pyproject.toml` と `uv.lock` に固定し、9 ノードの dataflow を生成する（`src/roboloom/runtime/flow.py`、`examples/mock/`）。
+- [x] **模擬単体試験まで** leader→joint controller→robot の関節対応、姿勢差による開始抑止、速度制限、最新指令優先、期限・次元・有限値・関節範囲・変化量の基本検査を実装する（`src/roboloom/controllers/joint.py`、`src/roboloom/robots/safety.py`、`tests/test_control.py`）。
+- [x] **模擬単体試験まで** `HOLD`、`FAULT`、`ESTOP` の基本動作とラッチ、自動再起動しない設定を用意する（`src/roboloom/robots/safety.py`、`src/roboloom/runtime/flow.py`）。
 - [ ] **暫定実装・要検証** 固定版の dora CLI/API で `validate`、模擬 dataflow の起動・終了・セッション操作を一連で実行し、使用する Python 環境とログを記録する。現テストは dataflow の形と関数単位を確認しており、プロセスを通した試験ではない。
 - [ ] **暫定実装・要検証** 指令断、古い指令、重複、通信失敗、ノード停止、過負荷を注入し、robot ノードが自律的に安全状態へ入ることを dataflow 上で確かめる。離散操作の受信確認と状態遷移を定義する。
-- [ ] **未実施** Rakuda の停止手段、HOLD 中の電流・温度・落下リスク、Dynamixel の対象モードと EEPROM 制限を実機で確認する。起動時のレジスタ照合を実装し、必要なら校正手順を別に作る（`src/roboloom/devices.py` は現状レジスタを照合しない）。
+- [ ] **未実施** Rakuda の停止手段、HOLD 中の電流・温度・落下リスク、Dynamixel の対象モードと EEPROM 制限を実機で確認する。起動時のレジスタ照合を実装し、必要なら校正手順を別に作る（`src/roboloom/drivers/dynamixel.py` は現状レジスタを照合しない）。
 - [ ] **未実施** 実機で期限切れ・停止・再開・通信断を試し、指令間隔と追従誤差を段階 0 と比較する。timer とノード内待機の採否は、この結果から決める。
 
 **通過条件：** 模擬異常注入と実機安全試験の記録があり、決めた制御周期・期限を満たす。現在のコードだけでは未通過。
 
 ## 2．単一センサーと LeRobot 保存
 
-- [x] **コード・単体試験まで** `source_id`、`boot_id`、`seq`、スキーマ版、取得・利用可能・受信・送信時刻を分ける基本形式を実装する（`src/roboloom/protocol.py`、`src/roboloom/recording.py`）。
-- [x] **模擬試験まで** `t_k` までに recorder が受信した観測と、その後の最初の有効な送信指令を行に割り当てる。欠損値、有効フラグ、age を保存する（`src/roboloom/recording.py`、`tests/test_recording.py`）。
-- [x] **模擬試験まで** 公式 `LeRobotDataset` writer でエピソードの保存・破棄・再開・読み戻しを行う（`src/roboloom/recording.py`、`tests/test_api.py`）。
-- [ ] **暫定実装・要検証** カメラ 1 台と robot を dora 上で同時に動かし、撮像時刻と `t_ready` の付け方、欠損、書き込み負荷を測る。現 `node.py` はフレーム取得後のホスト時刻を `t_capture` とするため、物理撮像時刻との差を確認する。
+- [x] **コード・単体試験まで** `source_id`、`boot_id`、`seq`、スキーマ版、取得・利用可能・受信・送信時刻を分ける基本形式を実装する（`src/roboloom/core/protocol.py`、`src/roboloom/recording/`）。
+- [x] **模擬試験まで** `t_k` までに recorder が受信した観測と、その後の最初の有効な送信指令を行に割り当てる。欠損値、有効フラグ、age を保存する（`src/roboloom/recording/`、`tests/test_recording.py`）。
+- [x] **模擬試験まで** 公式 `LeRobotDataset` writer でエピソードの保存・破棄・再開・読み戻しを行う（`src/roboloom/recording/`、`tests/test_api.py`）。
+- [ ] **暫定実装・要検証** カメラ 1 台と robot を dora 上で同時に動かし、撮像時刻と `t_ready` の付け方、欠損、書き込み負荷を測る。現 `sensors/` の reader はフレーム取得後のホスト時刻を `t_capture` とするため、物理撮像時刻との差を確認する。
 - [ ] **要検証** 既知の短い指令列で `observation[t]` と `action[t]` の対応を固定版 LeRobot の記録手順と照合し、保存後の読み戻しまで確認する。`t_sent` と実際の適用時刻の差も測る。
 - [ ] **未実装** 物理的同時性の分析用整列と学習用の因果的整列を選択・記録できるようにする。現状は後者の recorder 受信時刻を使う一方式のみ。
 - [ ] **未実装** 欠損率の基準による学習対象からの除外と、標準学習コードが追加 feature をどう扱うかの試験を行う。
@@ -51,17 +51,17 @@
 
 ## 3．DIGIT・音声・深度と性能測定
 
-- [ ] **暫定実装・要検証** 左右 DIGIT と PCM 音声の取得ノード・feature を dora 上で収録し、実機で読めることと欠損時の表現を確認する（`src/roboloom/node.py`、`src/roboloom/recording.py`）。
+- [ ] **暫定実装・要検証** 左右 DIGIT と PCM 音声の取得ノード・feature を dora 上で収録し、実機で読めることと欠損時の表現を確認する（`src/roboloom/sensors/`、`src/roboloom/recording/`）。
 - [ ] **暫定実装・要検証** 音声の固定長 PCM feature が LeRobot 0.6.1 で保存・読み戻し・配布できるか確認する。生音声を別に保持する必要性と関連付け方を決める。
 - [ ] **未実装** 深度を使うか決め、使う場合は固定版で feature・保存・読み戻しを試して取得ノードを追加する。
 - [ ] **未実施** 各センサーの取得周期、取得から利用可能・受信までの遅延、欠損率を測る。センサーを順に追加して制御周期の p95・p99・最大、CPU・メモリ・ディスク負荷を段階 0 と比較する。
-- [ ] **要検証** `pyrealsense2`、`digit-interface`、`sounddevice`、LeRobot と OS 側ライブラリを、対象 OS と同じ uv 環境で導入・import・実機起動できるか確かめる。必要なら機器別 extras に分ける（現状は一つの `hardware` extra）。
+- [ ] **要検証** `pyrealsense2`、`digit-interface`、`sounddevice`、LeRobot と OS 側ライブラリを、対象 OS と同じ uv 環境で導入・import・実機起動できるか確かめる。必要なら機器別 extras に分ける（現状は `dynamixel-sdk` を基本依存、他の機器 SDK を一つの `hardware` extra に置く）。
 
 **通過条件：** 各センサーの周期・遅延・欠損と、収録による制御への影響を示す測定記録がある。
 
 ## 4．入力源・ロボットの拡張
 
-- [ ] **一部汎用 API のみ** `JointIntent`／`PoseIntent`／`TwistIntent`、単位・座標系・期限を持つ `RobotCommand` の契約を定義する。現状の dora dataflow は Rakuda の生カウント関節入力専用（`src/roboloom/config.py`、`src/roboloom/control.py`）。
+- [ ] **一部汎用 API のみ** `JointIntent`／`PoseIntent`／`TwistIntent`、単位・座標系・期限を持つ `RobotCommand` の契約を定義する。現状の dora dataflow は Rakuda の生カウント関節入力専用（`src/roboloom/config.py`、`src/roboloom/controllers/`）。
 - [ ] **未実装** SpaceMouse→SO-101、Koch、xArm のデバイス所有ノードと変換を、組合せごとに追加する。未対応組合せは起動前に拒否し、機体別の安全契約を試験する。
 - [ ] **未実装** 入力源切替、相対入力の基準姿勢、クラッチ、`ALIGNING`、停止後の復帰手順を状態遷移として実装・試験する。
 - [ ] **未実装** 複数ロボットの `robot_id` 別ノード・固定順の複合スキーマを追加し、物理バスを重複して開かないことを確認する。

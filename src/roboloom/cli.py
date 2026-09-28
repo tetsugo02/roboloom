@@ -12,12 +12,12 @@ import time
 from pathlib import Path
 
 from .config import load_experiment
-from .flow import write_flow
+from .runtime.flow import build_flow, write_flow
 
 
 def send_session(path: str, line: str) -> None:
     cfg = load_experiment(path)
-    fifo = Path(cfg["experiment"]["output"]).resolve().with_suffix(".fifo")
+    fifo = Path(cfg.output).resolve().with_suffix(".fifo")
     fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
     try:
         os.write(fd, (line + "\n").encode())
@@ -57,11 +57,11 @@ def main() -> None:
         flow = write_flow(cfg, Path(directory) / "flow.yaml")
         subprocess.run([dora, "validate", "--offline", str(flow)], check=True)
         if args.command == "validate":
-            print(f"Valid: {cfg['path']} ({len(cfg['nodes'])} nodes)")
+            print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
             return
-        if cfg["experiment"]["mode"] == "hardware" and not args.hardware:
+        if not cfg.mock and not args.hardware:
             raise SystemExit("hardware mode requires run --hardware")
-        fifo = Path(cfg["experiment"]["output"]).resolve().with_suffix(".fifo")
+        fifo = Path(cfg.output).resolve().with_suffix(".fifo")
         fifo.parent.mkdir(parents=True, exist_ok=True)
         if fifo.exists():
             raise SystemExit(f"session FIFO already exists: {fifo}")

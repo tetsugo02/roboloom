@@ -13,12 +13,12 @@ dependencies = [
     "dora-rs-cli==1.0.1",
     "PyYAML>=6,<7",
     "numpy>=1.26,<3",
+    "dynamixel-sdk>=3.7,<4",
 ]
 
 [project.optional-dependencies]
 record = ["lerobot[dataset]==0.6.1"]
 hardware = [
-    "dynamixel-sdk>=3.7,<4",
     "pyrealsense2>=2.55,<3",
     "digit-interface>=0.2,<1",
     "sounddevice>=0.4,<1",
@@ -33,6 +33,10 @@ packages = ["src/roboloom"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[[tool.mypy.overrides]]
+module = ["dynamixel_sdk"]
+ignore_missing_imports = true
 
 [tool.pyright]
 include = ["src", "tests", "main.py"]

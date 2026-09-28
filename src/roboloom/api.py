@@ -6,33 +6,21 @@ The dora runner uses the same controller, safety and recorder components.
 
 from __future__ import annotations
 
-import math
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, Self
+from typing import Any, Self
 
-import numpy as np
-
-from .config import load_experiment
-from .control import FollowerSafety, JointController, positions
-from .devices import open_bus
-from .protocol import Publisher, pack_array
-from .recording import EpisodeRecorder
-
-
-class RobotBus(Protocol):
-    def read_positions(self) -> list[float]: ...
-    def write_positions(self, values: list[float]) -> None: ...
-    def enable_torque(self) -> None: ...
-    def close(self) -> None: ...
-
-
-@dataclass
-class Sample:
-    value: np.ndarray
-    capture_ns: int
+from .config import ExperimentConfig, load_experiment
+from .core.checks import positions
+from .core.protocol import Publisher
+from .core.source import Reader, Sample, Source
+from .inputs.base import InputDevice, JointInput
+from .recording import ACTION, EpisodeRecorder
+from .robots.base import Robot, RobotBus
+from .robots.safety import FollowerSafety, make_command
+from .sensors.audio.base import PcmAudio
+from .sensors.vision.base import ImageSensor
 
 
 class Experiment:
@@ -40,69 +28,54 @@ class Experiment:
 
     `controller` takes the current observation dict and returns a target vector or
     None. `sensors` maps source names to callables returning Sample or None.
-    For Rakuda YAML, `from_yaml` supplies the leader mapping by default.
+    For YAML experiments, `from_yaml` supplies the configured controller by default.
     """
 
-    def __init__(self, cfg: dict, robot: RobotBus, controller: Callable[[dict], list[float] | None] | None = None, sensors: dict[str, Callable[[], Sample | None]] | None = None, dataset=None):
+    def __init__(self, cfg: ExperimentConfig, robot: RobotBus, controller: Callable[[dict], list[float] | None] | None = None, sensors: dict[str, Callable[[], Sample | None]] | None = None, dataset=None):
         self.cfg = cfg
-        self.robot = FollowerSafety({**cfg["nodes"]["robot"], "robot_id": cfg["experiment"]["robot_id"]}, robot)
+        self.spec = cfg.robot
+        self.robot = FollowerSafety(self.spec.safety_config(cfg.robot_id), robot)
         self.robot.start()
         self.controller = controller
         self.sensors = sensors or {}
         self.recorder = EpisodeRecorder(cfg, dataset)
         self.publisher = Publisher("python-controller")
-        self.sources = {name: Publisher(name) for name in self.recorder.sources}
-        self.period_s = 1 / cfg["nodes"]["robot"]["control_hz"]
-        self.deadline_ms = cfg["nodes"].get("controller", {}).get("command_deadline_ms", 100)
-        self.seq = 0
+        self.specs: dict[str, InputDevice | Source] = {**cfg.inputs, **cfg.sensors}
+        self.publishers = {name: Publisher(name) for name in cfg.sources}
+        self.period_s = 1 / self.spec.control_hz
+        self.deadline_ms = cfg.controller_for(self.spec.name).deadline_ms if cfg.controllers else 100
         self.last_metrics: dict | None = None
         self._extra_closers: list[Callable[[], None]] = []
 
     @classmethod
     def from_yaml(cls, path: str | Path, *, hardware: bool = False, sensors: dict[str, Callable[[], Sample | None]] | None = None, dataset=None) -> Experiment:
         cfg = load_experiment(path)
-        mock = cfg["experiment"]["mode"] == "mock"
-        if not mock and not hardware:
+        if not cfg.mock and not hardware:
             raise ValueError("hardware=True is required to open real devices")
-        bus = open_bus(cfg["nodes"]["robot"], mock)
-        leader = open_bus(cfg["nodes"]["leader"], mock)
-        mapper = JointController({**cfg["nodes"]["controller"], "robot_id": cfg["experiment"]["robot_id"]})
-        source = Publisher("leader")
-
-        def leader_sensor() -> Sample:
-            data = leader.read_positions()
-            return Sample(np.asarray(data, dtype=np.float32), time.monotonic_ns())
-
-        defaults: dict[str, Callable[[], Sample | None]] = {}
-        if mock:
-            def mock_image(shape: tuple[int, int, int]) -> Callable[[], Sample]:
-                def read() -> Sample:
-                    return Sample(np.zeros(shape, np.uint8), time.monotonic_ns())
-
-                return read
-
-            for name in ("camera", "digit_left", "digit_right"):
-                shape = (cfg["nodes"][name]["height"], cfg["nodes"][name]["width"], 3)
-                defaults[name] = mock_image(shape)
-            size = int(cfg["nodes"]["audio"]["sample_rate"] / cfg["experiment"]["dataset_fps"])
-            def mock_audio() -> Sample:
-                return Sample(np.zeros(size, np.int16), time.monotonic_ns())
-
-            defaults["audio"] = mock_audio
-
+        mapper = cfg.controller_for(cfg.robot.name)
+        source = mapper.source
+        bus = cfg.robot.open_bus(cfg.mock)
+        readers: dict[str, Reader] = {}
         try:
-            instance = cls(cfg, bus, sensors={"leader": leader_sensor, **defaults, **(sensors or {})}, dataset=dataset)
+            readers[source.name] = source.open(cfg.mock, cfg.dataset_fps)
+            if cfg.mock:
+                for name, sensor in cfg.sensors.items():
+                    readers[name] = sensor.open(True, cfg.dataset_fps)
+            defaults = {name: reader.read for name, reader in readers.items()}
+            instance = cls(cfg, bus, sensors={**defaults, **(sensors or {})}, dataset=dataset)
         except Exception:
-            leader.close()
+            for reader in readers.values():
+                reader.close()
             bus.close()
             raise
-        instance._extra_closers.append(leader.close)
+        instance._extra_closers.extend(reader.close for reader in readers.values())
+        publisher = Publisher(source.name)
 
         def controller(obs: dict) -> list[float] | None:
-            sample = obs.get("leader")
+            sample = obs.get(source.name)
             if sample is None:
                 return None
-            msg = source.make("leader", {"positions": sample.value.tolist()}, sample.capture_ns)
+            msg = publisher.make(source.kind, source.encode(sample), sample.capture_ns)
             command = mapper.update(msg, obs["state"])
             return command.payload["positions"] if command else None
 
@@ -121,22 +94,24 @@ class Experiment:
     ) -> Experiment:
         if len(joint_names) != len(limits) or len(set(joint_names)) != len(joint_names) or not joint_names:
             raise ValueError("joint_names and limits must match")
-        for name, bound in zip(joint_names, limits, strict=True):
-            if bound.get("name") != name or not all(isinstance(bound.get(k), (int, float)) and math.isfinite(bound[k]) for k in ("min", "max", "max_step")) or not bound["min"] < bound["max"] or bound["max_step"] <= 0:
-                raise ValueError(f"invalid limits for {name}")
         if control_hz < fps:
             raise ValueError("control_hz must be >= fps")
-        nodes: dict[str, dict[str, Any]] = {"robot": {"limits": limits, "control_hz": control_hz, "unit": unit}, "controller": {"command_deadline_ms": 100}}
-        for name, shape in (image_shapes or {}).items():
-            if name in ("robot", "action", "audio") or len(shape) != 3 or shape[2] != 3:
-                raise ValueError("image sensor requires HWC RGB shape")
-            nodes[name] = {"type": "image", "height": shape[0], "width": shape[1]}
-        if audio_sample_rate is not None:
-            nodes["audio"] = {"type": "pcm_mono", "sample_rate": audio_sample_rate}
+        spec = Robot("robot", {"limits": limits, "control_hz": control_hz}, joint_names, unit)
+        inputs: dict[str, InputDevice] = {}
         if "leader" in (sensors or {}):
-            nodes["leader"] = {"type": "joint"}
-        nodes["recorder"] = {"max_age_ms": {name: 300 for name in nodes if name == "robot" or name == "leader" or nodes[name].get("type") in ("image", "pcm_mono")}}
-        cfg = {"experiment": {"robot_id": robot_id, "repo_id": repo_id, "output": str(output), "dataset_fps": fps}, "nodes": nodes}
+            inputs["leader"] = JointInput("leader", {}, joint_names, unit)
+        streams: dict[str, Source] = {}
+        for name, shape in (image_shapes or {}).items():
+            if name in ("robot", "leader", ACTION, "audio") or len(shape) != 3 or shape[2] != 3:
+                raise ValueError("image sensor requires HWC RGB shape")
+            streams[name] = ImageSensor(name, {"height": shape[0], "width": shape[1]})
+        if audio_sample_rate is not None:
+            streams["audio"] = PcmAudio("audio", {"sample_rate": audio_sample_rate})
+        cfg = ExperimentConfig(
+            robot_id=robot_id, repo_id=repo_id, output=str(output), dataset_fps=fps,
+            robots={"robot": spec}, inputs=inputs, sensors=streams,
+            max_age_ms={name: 300 for name in (*inputs, "robot", *streams)},
+        )
         return cls(cfg, robot, controller=controller, sensors=sensors, dataset=dataset)
 
     def start_episode(self, task: str) -> None:
@@ -154,12 +129,13 @@ class Experiment:
         """One checked control tick; policy overrides the configured controller."""
         now = time.monotonic_ns()
         try:
-            state = positions(self.robot.bus.read_positions(), len(self.robot.cfg["limits"]))
+            state = positions(self.robot.bus.read_positions(), len(self.spec.joint_names))
         except Exception:
             self.robot.stop()
             raise
         obs: dict[str, Any] = {"state": state}
-        self.recorder.ingest(self.sources["robot"].make("robot", {"positions": state, "mode": self.robot.mode}, now))
+        robot = self.spec.name
+        self.recorder.ingest(robot, self.publishers[robot].make("robot_state", {"positions": state, "mode": self.robot.mode}, now))
         for name, reader in self.sensors.items():
             try:
                 sample = reader()
@@ -167,16 +143,10 @@ class Experiment:
                 self.robot.stop()
                 raise
             obs[name] = sample
-            if sample is None or name not in self.sources:
+            spec = self.specs.get(name)
+            if sample is None or spec is None:
                 continue
-            value = np.asarray(sample.value)
-            if name == "leader":
-                payload: dict[str, Any] = {"positions": positions(value.tolist(), len(state))}
-            elif name == "audio":
-                payload = {"pcm": pack_array(value)}
-            else:
-                payload = {"image": pack_array(value)}
-            self.recorder.ingest(self.sources[name].make(name, payload, sample.capture_ns))
+            self.recorder.ingest(name, self.publishers[name].make(spec.kind, spec.encode(sample), sample.capture_ns))
         callback = policy if policy is not None else self.controller
         try:
             target = callback(obs) if callback else None
@@ -185,11 +155,11 @@ class Experiment:
             raise
         if target is not None:
             target = positions(target, len(state))
-            command = self.publisher.make("command", {"robot_id": self.cfg["experiment"]["robot_id"], "unit": self.robot.cfg.get("unit", "dynamixel_count"), "positions": target, "deadline_ns": now + int(self.deadline_ms * 1e6)}, now)
+            command = make_command(self.publisher, robot_id=self.cfg.robot_id, unit=self.spec.unit, target=target, now_ns=now, deadline_ms=self.deadline_ms)
             self.robot.accept(command)
         state_msg, action_msg = self.robot.tick()
-        self.recorder.ingest(state_msg)
-        self.recorder.ingest(action_msg)
+        self.recorder.ingest(robot, state_msg)
+        self.recorder.ingest(ACTION, action_msg)
         return {"observation": obs, "action": action_msg.payload, "mode": state_msg.payload["mode"]}
 
     def run(self, seconds: float, *, policy: Callable[[dict], list[float] | None] | None = None) -> list[dict]:

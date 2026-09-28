@@ -1,7 +1,7 @@
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 from roboloom import Experiment
-from roboloom.devices import MockBus
+from roboloom.drivers.mock import MockBus
 
 
 def create(output):

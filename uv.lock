@@ -1285,6 +1285,7 @@ source = { editable = "." }
 dependencies = [
     { name = "dora-rs" },
     { name = "dora-rs-cli" },
+    { name = "dynamixel-sdk" },
     { name = "numpy" },
     { name = "pyyaml" },
 ]
@@ -1292,7 +1293,6 @@ dependencies = [
 [package.optional-dependencies]
 hardware = [
     { name = "digit-interface" },
-    { name = "dynamixel-sdk" },
     { name = "pyrealsense2" },
     { name = "sounddevice" },
 ]
@@ -1317,7 +1317,7 @@ requires-dist = [
     { name = "digit-interface", marker = "extra == 'hardware'", specifier = ">=0.2,<1" },
     { name = "dora-rs", specifier = "==1.0.1" },
     { name = "dora-rs-cli", specifier = "==1.0.1" },
-    { name = "dynamixel-sdk", marker = "extra == 'hardware'", specifier = ">=3.7,<4" },
+    { name = "dynamixel-sdk", specifier = ">=3.7,<4" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'record'", specifier = "==0.6.1" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'test'", specifier = "==0.6.1" },
     { name = "numpy", specifier = ">=1.26,<3" },

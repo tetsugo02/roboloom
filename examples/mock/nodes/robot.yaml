@@ -1,4 +1,4 @@
-type: rakuda_follower
+type: rakuda2_follower
 port: mock://follower
 motor_ids:
 - 27

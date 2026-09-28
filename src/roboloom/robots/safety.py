@@ -1,88 +1,20 @@
-"""Controller mapping and follower safety state machine."""
+"""Final command check at the bus boundary and the follower mode state machine."""
 
 from __future__ import annotations
 
-import math
 import time
 
-from .config import JOINTS
-from .protocol import Envelope, Publisher
+from ..core.checks import positions
+from ..core.protocol import Envelope, Publisher
 
 
-def positions(value: object, dimension: int = len(JOINTS)) -> list[float]:
-    if not isinstance(value, (tuple, list)) or len(value) != dimension:
-        raise ValueError(f"expected {dimension} joint positions")
-    out = [float(x) for x in value]
-    if not all(math.isfinite(x) for x in out):
-        raise ValueError("joint positions must be finite")
-    return out
-
-
-class JointController:
-    def __init__(self, cfg: dict):
-        self.cfg = cfg
-        self.publisher = Publisher("controller")
-        self.last_input_ns = 0
-        self.last_seq = -1
-        self.last_boot: str | None = None
-        self.last_target: list[float] | None = None
-        self.last_target_ns = 0
-        self.aligned = False
-
-    def update(
-        self, leader: Envelope, follower: list[float], now_ns: int | None = None
-    ) -> Envelope | None:
-        now = time.monotonic_ns() if now_ns is None else now_ns
-        if (
-            leader.kind != "leader"
-            or now - leader.t_ready_ns > self.cfg["input_timeout_ms"] * 1e6
-            or leader.t_ready_ns > now
-        ):
-            self.aligned = False
-            return None
-        if leader.boot_id != self.last_boot:
-            self.last_boot, self.last_seq = leader.boot_id, -1
-            self.aligned = False
-        if leader.seq <= self.last_seq:
-            return None
-        self.last_seq = leader.seq
-        incoming = positions(leader.payload["positions"])
-        by_name = dict(zip(JOINTS, incoming, strict=True))
-        target = [
-            by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
-        ]
-        current = positions(follower)
-        if not self.aligned:
-            if (
-                max(abs(a - b) for a, b in zip(target, current, strict=True))
-                > self.cfg["alignment_tolerance"]
-            ):
-                return None
-            self.aligned = True
-            self.last_target = current
-            self.last_target_ns = now
-        dt = max((now - self.last_target_ns) / 1e9, 1e-6)
-        step = self.cfg["max_speed_counts_per_s"] * dt
-        previous = self.last_target
-        if previous is None:
-            raise RuntimeError("controller target missing after alignment")
-        limited = [
-            max(p - step, min(p + step, t))
-            for p, t in zip(previous, target, strict=True)
-        ]
-        self.last_target, self.last_target_ns = limited, now
-        deadline = now + int(self.cfg["command_deadline_ms"] * 1e6)
-        return self.publisher.make(
-            "command",
-            {
-                "robot_id": self.cfg["robot_id"],
-                "unit": "dynamixel_count",
-                "positions": limited,
-                "deadline_ns": deadline,
-                "leader_seq": leader.seq,
-            },
-            now,
-        )
+def make_command(
+    publisher: Publisher, *, robot_id: str, unit: str, target: list[float],
+    now_ns: int, deadline_ms: float, **extra: object,
+) -> Envelope:
+    """RobotCommand: target, unit and absolute deadline, validated again by FollowerSafety."""
+    payload = {"robot_id": robot_id, "unit": unit, "positions": target, "deadline_ns": now_ns + int(deadline_ms * 1e6), **extra}
+    return publisher.make("command", payload, now_ns)
 
 
 class FollowerSafety:
@@ -90,7 +22,7 @@ class FollowerSafety:
 
     def __init__(self, cfg: dict, bus):
         self.cfg, self.bus = cfg, bus
-        self.publisher = Publisher("robot")
+        self.publisher = Publisher(cfg.get("name", "robot"))
         self.mode = "IDLE"
         self.pending: Envelope | None = None
         self.last_boot: str | None = None
@@ -181,7 +113,7 @@ class FollowerSafety:
         interval = 0.0 if self.last_tick_ns is None else (now - self.last_tick_ns) / 1e6
         self.last_tick_ns = now
         state = self.publisher.make(
-            "robot",
+            "robot_state",
             {"positions": current, "mode": self.mode, "tick_interval_ms": interval},
             now,
         )

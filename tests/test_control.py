@@ -1,9 +1,9 @@
 import time
 
 from roboloom.config import load_experiment
-from roboloom.control import FollowerSafety, JointController
-from roboloom.devices import MockBus
-from roboloom.protocol import Envelope
+from roboloom.core.protocol import Envelope
+from roboloom.drivers.mock import MockBus
+from roboloom.robots.safety import FollowerSafety
 
 
 def command(seq, target, now, deadline=None):
@@ -70,14 +70,12 @@ def test_deadline_limit_and_write_failure():
 
 
 def test_controller_alignment_and_input_age():
-    cfg = load_experiment("examples/mock/experiment.yaml")["nodes"]["controller"]
-    cfg = {**cfg, "robot_id": "r"}
-    ctl = JointController(cfg)
+    ctl = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
     now = time.monotonic_ns()
-    bad = Envelope("leader", "leader", "boot", 0, now, now, {"positions": [3000] * 17})
+    bad = Envelope("joint_intent", "leader", "boot", 0, now, now, {"positions": [3000] * 17})
     assert ctl.update(bad, [2048] * 17, now) is None
-    aligned = Envelope("leader", "leader", "boot", 1, now, now, {"positions": [2048] * 17})
+    aligned = Envelope("joint_intent", "leader", "boot", 1, now, now, {"positions": [2048] * 17})
     assert ctl.update(aligned, [2048] * 17, now) is not None
     assert ctl.update(aligned, [2048] * 17, now) is None
-    old = Envelope("leader", "leader", "boot", 2, now - 1_000_000_000, now - 1_000_000_000, {"positions": [2048] * 17})
+    old = Envelope("joint_intent", "leader", "boot", 2, now - 1_000_000_000, now - 1_000_000_000, {"positions": [2048] * 17})
     assert ctl.update(old, [2048] * 17, now) is None
