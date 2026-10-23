@@ -301,3 +301,29 @@ def test_spring_holds_rest_with_capped_current_and_needs_a_capable_bus():
 
 def parse_and_build(groups):
     return build_laws(parse_groups(groups, JOINTS, "dev"), JOINTS)
+
+
+def test_range_can_name_a_measured_travel_file(tmp_path):
+    (tmp_path / "travel.yaml").write_text(
+        "travel:\n  a: [1000, 3000]\n  b: [1500, 2500]\n"
+    )
+    spec = {**GRAVITY, "range": "travel.yaml"}
+    laws = build_laws(
+        parse_groups(
+            [spec, {"group": "rest", "law": "free", "joints": ["c"]}], JOINTS, "dev"
+        ),
+        JOINTS,
+        str(tmp_path),
+        models={"arm": FlatGravity()},
+    )
+    assert laws[0].range == [(1000.0, 3000.0), (1500.0, 2500.0)]
+    (tmp_path / "travel.yaml").write_text("travel:\n  a: [1000, 3000]\n")
+    with pytest.raises(ValueError, match="no measured travel"):
+        build_laws(
+            parse_groups(
+                [spec, {"group": "rest", "law": "free", "joints": ["c"]}], JOINTS, "dev"
+            ),
+            JOINTS,
+            str(tmp_path),
+            models={"arm": FlatGravity()},
+        )

@@ -46,6 +46,12 @@ def main() -> None:
     )
     calib.add_argument("calibration")
     calib.add_argument("--joints", type=lambda text: text.split(","), default=None)
+    travel = sub.add_parser(
+        "measure-travel",
+        help="record each joint's travel while moving the limp arm (read-only)",
+    )
+    travel.add_argument("calibration")
+    travel.add_argument("--out", required=True)
     ident = sub.add_parser(
         "identify-gravity", help="collect holding currents and fit a gravity model"
     )
@@ -107,6 +113,11 @@ def main() -> None:
         from .tools import calibrate_joints
 
         print(calibrate_joints(args.calibration, args.joints))
+        return
+    if args.command == "measure-travel":
+        from .tools import measure_travel
+
+        print(measure_travel(args.calibration, args.out))
         return
     if args.command == "identify-gravity":
         from .tools import Calibration, collect_holding_currents, fit_gravity

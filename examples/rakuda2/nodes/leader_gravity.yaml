@@ -3,8 +3,9 @@
 #   arm joints run gravity_comp in current mode (Operating Mode 0) with Current Limit 300 mA.
 # Before use:
 #   1. identify ../calibration/gravity_right.yaml and gravity_left.yaml (see the calibration files).
-#   2. fill range with each joint's measured travel in counts. Runaway check: outside range+margin,
-#      or faster than max_velocity counts/s -> the arms go limp.
+#   2. measure each arm's travel (writes the files range points to). Runaway check: outside
+#      range+margin, or faster than max_velocity counts/s -> the arms go limp.
+#        uv run roboloom measure-travel ../calibration/leader_right.yaml --out ../calibration/travel_right.yaml
 #   3. with the arms supported and the dataflow stopped:
 #        uv run roboloom commission examples/rakuda2/experiment_gravity.yaml leader --hardware
 #      writes Operating Mode 0 and Current Limit 300 mA to the arm joints (EEPROM).
@@ -88,15 +89,7 @@ control:
   kd: 0.0
   ramp_s: 2.0
   max_velocity: 3000
-  range:
-  - &id001
-    - SET_FROM_TRAVEL
-    - SET_FROM_TRAVEL
-  - *id001
-  - *id001
-  - *id001
-  - *id001
-  - *id001
+  range: ../calibration/travel_right.yaml
   range_margin: 100
   barrier_mA_per_count: 0.5
 - group: left_arm
@@ -114,15 +107,7 @@ control:
   kd: 0.0
   ramp_s: 2.0
   max_velocity: 3000
-  range:
-  - &id002
-    - SET_FROM_TRAVEL
-    - SET_FROM_TRAVEL
-  - *id002
-  - *id002
-  - *id002
-  - *id002
-  - *id002
+  range: ../calibration/travel_left.yaml
   range_margin: 100
   barrier_mA_per_count: 0.5
 - group: trigger

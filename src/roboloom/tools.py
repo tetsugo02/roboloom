@@ -143,6 +143,64 @@ def calibrate_joints(path: str, joints: list[str] | None = None) -> str:
     return f"recorded zeros for {len(chosen)} joints in {path}; check directions, then set confirmed: true"
 
 
+def measure_travel(
+    path: str, out: str, min_span: int = 200, period_s: float = 1 / 30
+) -> str:
+    """Record each output joint's min/max counts while the operator moves the limp arm. Read-only."""
+    import select
+    import sys
+
+    from .drivers.dynamixel import DynamixelBus
+
+    cal = Calibration(path)
+    joints = cal.outputs or cal.names
+    index = [cal.names.index(j) for j in joints]
+    bus = DynamixelBus(cal.data["port"], cal.ids)
+    try:
+        if any(bus.read_register("torque_enable")):
+            raise SystemExit(
+                "torque is on; this command expects a limp arm moved by the operator"
+            )
+        first = bus.read_positions()
+        lo = {j: first[i] for j, i in zip(joints, index, strict=True)}
+        hi = dict(lo)
+        print(
+            f"Move {', '.join(joints)} slowly to both ends of their travel, one at a time.\n"
+            "Press Enter when every joint has reached both ends."
+        )
+        while not select.select([sys.stdin], [], [], 0)[0]:
+            positions = bus.read_positions()
+            for j, i in zip(joints, index, strict=True):
+                lo[j], hi[j] = min(lo[j], positions[i]), max(hi[j], positions[i])
+            spans = " ".join(f"{j.split('_')[-1]}={hi[j] - lo[j]:.0f}" for j in joints)
+            print(f"\rspan (counts): {spans}   ", end="", flush=True)
+            time.sleep(period_s)
+        sys.stdin.readline()
+        print()
+    finally:
+        bus.close()
+    short = [j for j in joints if hi[j] - lo[j] < min_span]
+    if short:
+        raise SystemExit(
+            f"moved less than {min_span} counts: {short}; nothing saved, measure again"
+        )
+    travel = {j: [int(lo[j]), int(hi[j])] for j in joints}
+    Path(out).write_text(
+        "# Measured joint travel (raw counts) for current-mode runaway checks.\n"
+        f"# Written by: roboloom measure-travel {path}\n"
+        + yaml.safe_dump(
+            {
+                "port": cal.data["port"],
+                "measured": time.strftime("%Y-%m-%d"),
+                "travel": travel,
+            },
+            sort_keys=False,
+        )
+    )
+    lines = [f"{j}: {a} .. {b} ({b - a} counts)" for j, (a, b) in travel.items()]
+    return "\n".join([*lines, f"saved {out}"])
+
+
 # -- gravity identification ----------------------------------------------------
 
 
@@ -250,16 +308,27 @@ def fit_gravity(
     poses = np.unique(data["pose"])
     samples = np.array([data["positions"][data["pose"] == p].mean(0) for p in poses])
     currents = np.array([data["currents_mA"][data["pose"] == p].mean(0) for p in poses])
-    spread = np.array([np.ptp(data["currents_mA"][data["pose"] == p], axis=0) / 2 for p in poses])
+    spread = np.array(
+        [np.ptp(data["currents_mA"][data["pose"] == p], axis=0) / 2 for p in poses]
+    )
     # Failed measurements (arm still moving, touched by hand): the two approaches disagree far
     # more than friction does, or the pose disagrees with every other pose.
     dropped = robust_outliers(spread, floor=15.0)
     first = Regressor(cal.urdf.read_text(), cal.joint_maps(), cal.outputs).fit(
-        samples[~dropped], currents[~dropped], shared=bool(cal.data.get("shared_parameters", False)))
-    model0 = RegressorGravityModel(cal.urdf.read_text(), cal.joint_maps(), cal.outputs, first.theta)
+        samples[~dropped],
+        currents[~dropped],
+        shared=bool(cal.data.get("shared_parameters", False)),
+    )
+    model0 = RegressorGravityModel(
+        cal.urdf.read_text(), cal.joint_maps(), cal.outputs, first.theta
+    )
     residual = np.array([model0.effort_mA(q) for q in samples]) - currents
     dropped |= robust_outliers(np.where(dropped[:, None], 0.0, residual), floor=15.0)
-    report_dropped = f"dropped poses {poses[dropped].tolist()} (approaches disagree or far off the fit)" if dropped.any() else ""
+    report_dropped = (
+        f"dropped poses {poses[dropped].tolist()} (approaches disagree or far off the fit)"
+        if dropped.any()
+        else ""
+    )
     poses, samples, currents = poses[~dropped], samples[~dropped], currents[~dropped]
     holdout = poses % holdout_every == holdout_every - 1
     if holdout.sum() < 2 or (~holdout).sum() < 8:
@@ -285,7 +354,7 @@ def fit_gravity(
     report = [
         *([report_dropped] if report_dropped else []),
         report_poses,
-        f"{'shared' if shared else 'per-joint'} parameters; calibrated directions: holdout RMS {calibrated[0]:.1f} mA (best {best_score:.1f} mA)"
+        f"{'shared' if shared else 'per-joint'} parameters; calibrated directions: holdout RMS {calibrated[0]:.1f} mA (best {best_score:.1f} mA)",
     ]
     ties = [
         [m.direction for m in trial]
@@ -319,7 +388,9 @@ def fit_gravity(
     worst = max(*fit.holdout_rms_mA, *fit.rms_mA)
     if worst > max_rms_mA:
         raise SystemExit(
-            "\n".join([*report, f"RMS {worst:.1f} mA above {max_rms_mA} mA; model not saved"])
+            "\n".join(
+                [*report, f"RMS {worst:.1f} mA above {max_rms_mA} mA; model not saved"]
+            )
         )
     # refit with every pose for the saved model
     from .dynamics.regressor import Regressor

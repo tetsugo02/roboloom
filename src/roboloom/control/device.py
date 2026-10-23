@@ -17,9 +17,12 @@ and hold their last goal, so a follower does not drop; `disable_torque` releases
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
+
+import yaml
 
 from ..core.checks import names as check_names
 from ..drivers.base import Health, JointState, read_health, read_state
@@ -94,9 +97,28 @@ def build_laws(
                     else Path(base_dir) / path
                 )
             )
+        cfg = g.cfg
+        if isinstance(cfg.get("range"), str):
+            cfg = {**cfg, "range": load_travel(cfg["range"], g.joints, base_dir)}
         indices = [joint_names.index(j) for j in g.joints]
-        laws.append(law_class(g.law)(g.name, indices, joint_names, g.cfg, gravity))
+        laws.append(law_class(g.law)(g.name, indices, joint_names, cfg, gravity))
     return laws
+
+
+def load_travel(
+    path: str, joints: Sequence[str], base_dir: str | None = None
+) -> list[list[float]]:
+    """[min, max] counts per joint from a travel file written by `roboloom measure-travel`."""
+    file = Path(path)
+    if not file.is_absolute() and base_dir is not None:
+        file = Path(base_dir) / file
+    if not file.exists():
+        raise ValueError(f"{file}: not measured yet; run roboloom measure-travel")
+    travel = (yaml.safe_load(file.read_text()) or {}).get("travel") or {}
+    missing = [j for j in joints if j not in travel]
+    if missing:
+        raise ValueError(f"{file}: no measured travel for {missing}")
+    return [[float(v) for v in travel[j]] for j in joints]
 
 
 def expected_modes(groups: list[GroupSpec]) -> dict[str, float]:
