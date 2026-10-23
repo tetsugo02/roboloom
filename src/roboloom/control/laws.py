@@ -154,7 +154,9 @@ class CurrentLaw(ControlLaw):
             for x in _per_joint(cfg.get("max_current_mA"), n, f"{name}.max_current_mA")
         ]
         self.kd = _per_joint(cfg.get("kd", 0.0), n, f"{name}.kd")  # mA per count/s
-        self.gain = float(cfg.get("gravity_gain", 1.0 if gravity else 0.0))
+        self.gain = _per_joint(  # one number, or one per joint to raise them one by one
+            cfg.get("gravity_gain", 1.0 if gravity else 0.0), n, f"{name}.gravity_gain"
+        )
         self.ramp_s = positive(cfg.get("ramp_s", 1.0), f"{name}.ramp_s")
         self.max_velocity = positive(
             cfg.get("max_velocity"), f"{name}.max_velocity"
@@ -194,10 +196,13 @@ class CurrentLaw(ControlLaw):
         self.elapsed = 0.0
 
     def gravity_mA(self, state: JointState) -> dict[int, float]:
-        if self.gravity is None or not self.gain:
+        if self.gravity is None or not any(self.gain):
             return {i: 0.0 for i in self.joints}
         effort = self.gravity.effort_mA([state.positions[i] for i in self.model_inputs])
-        return {i: self.gain * effort[self.model_outputs[i]] for i in self.joints}
+        return {
+            i: gain * effort[self.model_outputs[i]]
+            for gain, i in zip(self.gain, self.joints, strict=True)
+        }
 
     def shape(self, state: JointState, raw: dict[int, float], dt: float) -> Goals:
         self.elapsed += dt

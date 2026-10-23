@@ -17,7 +17,8 @@
 #      To go back to the plain leader, commission experiment_camera.yaml (mode 3) the same way.
 #   4. with the arms supported: roboloom watchdog-test experiment_gravity.yaml leader <joint> --hardware
 #      (records what a fired watchdog does; on XC330 it froze the current, see above).
-# Start with a low gravity_gain and raise it joint by joint.
+# Start with a low gravity_gain and raise it joint by joint: gravity_gain also takes one number
+#   per joint, e.g. [0.8, 0.8, 0.5, 0.5, 0.5, 0.5].
 # drive_mode: r_arm_grip reversed (5), l_arm_grip not (0) ON PURPOSE (symmetric triggers).
 type: rakuda2_leader
 port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0

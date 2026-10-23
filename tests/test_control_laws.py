@@ -340,3 +340,21 @@ def test_fired_bus_watchdog_releases_current_joints():
     with pytest.raises(WatchdogFired, match="b"):
         dev.command(None)
     assert bus.torque == [False, False, True]  # current joints released, position kept
+
+
+def test_gravity_gain_can_differ_per_joint():
+    dev, bus = device(
+        [
+            {**GRAVITY, "gravity_gain": [0.5, 0.0], "ramp_s": 0.1},
+            {"group": "c", "law": "free", "joints": ["c"]},
+        ],
+        [0, 0, 3],
+        FlatGravity(),
+    )
+    dev.read_state()
+    dev.enable_torque()
+    t = time.monotonic_ns()
+    for k in range(1, 3):
+        dev.read_state()
+        dev.command(None, t + int(k * 0.2e9))
+    assert bus.goal_current[:2] == [50.0, 0.0]
