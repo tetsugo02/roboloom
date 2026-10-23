@@ -91,7 +91,7 @@ control:
   - r_arm_wr_roll
   - r_arm_wr_yaw
   gravity_model: ../calibration/gravity_right.yaml
-  gravity_gain: [0.5, 0.5, 0, 0, 0, 0]  # see the explained % in the identify report
+  gravity_gain: [1.0, 1.0, 0, 0, 0, 0]  # shoulders only: see the explained % in the identify report
   max_current_mA: [150, 150, 100, 100, 60, 60]
   kd: 0.0
   ramp_s: 2.0
@@ -109,7 +109,7 @@ control:
   - l_arm_wr_roll
   - l_arm_wr_yaw
   gravity_model: ../calibration/gravity_left.yaml
-  gravity_gain: [0.5, 0.5, 0, 0, 0, 0]  # see the explained % in the identify report
+  gravity_gain: [1.0, 1.0, 0, 0, 0, 0]  # shoulders only: see the explained % in the identify report
   max_current_mA: [150, 150, 100, 100, 60, 60]
   kd: 0.0
   ramp_s: 2.0
