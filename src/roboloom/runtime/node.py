@@ -34,7 +34,9 @@ def _event(node):
         return None, None
     if event.get("type") != "INPUT":
         return None, None
-    return event["id"], None if event["id"] == "tick" else Envelope.decode(event["value"])
+    return event["id"], None if event["id"] == "tick" else Envelope.decode(
+        event["value"]
+    )
 
 
 def _session(node, cfg: ExperimentConfig):
@@ -56,7 +58,11 @@ def _session(node, cfg: ExperimentConfig):
                 raw, pending = pending.split(b"\n", 1)
                 cmd, _, task = raw.decode().strip().partition(" ")
                 if cmd in COMMANDS:
-                    _send(node, "control", p.make("session", {"command": cmd, "task": task}))
+                    _send(
+                        node,
+                        "control",
+                        p.make("session", {"command": cmd, "task": task}),
+                    )
                     if cmd == "quit":
                         return
             event_id, msg = _event(node)
@@ -64,13 +70,30 @@ def _session(node, cfg: ExperimentConfig):
                 print(msg.payload, flush=True)
                 with open(os.environ["ROBOLOOM_REPORT_PATH"], "a") as report:
                     report.write(json.dumps(msg.payload) + "\n")
-            elif event_id is not None and event_id.endswith(STATUS_SUFFIX) and msg is not None:
-                latest[event_id.removesuffix(STATUS_SUFFIX)] = {**msg.payload, "t_ns": msg.t_ready_ns}
+            elif (
+                event_id is not None
+                and event_id.endswith(STATUS_SUFFIX)
+                and msg is not None
+            ):
+                latest[event_id.removesuffix(STATUS_SUFFIX)] = {
+                    **msg.payload,
+                    "t_ns": msg.t_ready_ns,
+                }
             now = time.monotonic_ns()
-            if status_path and latest and now - written_ns > 200_000_000:  # at most 5 Hz
+            if (
+                status_path and latest and now - written_ns > 200_000_000
+            ):  # at most 5 Hz
                 tmp = f"{status_path}.tmp"
                 with open(tmp, "w") as out:
-                    json.dump({"t_ns": now, "experiment": cfg.path, "mode": cfg.mode, "nodes": latest}, out)
+                    json.dump(
+                        {
+                            "t_ns": now,
+                            "experiment": cfg.path,
+                            "mode": cfg.mode,
+                            "nodes": latest,
+                        },
+                        out,
+                    )
                 os.replace(tmp, status_path)
                 written_ns = now
     finally:
@@ -78,7 +101,9 @@ def _session(node, cfg: ExperimentConfig):
 
 
 def _quit(event_id, msg) -> bool:
-    return event_id == "session" and msg is not None and msg.payload["command"] == "quit"
+    return (
+        event_id == "session" and msg is not None and msg.payload["command"] == "quit"
+    )
 
 
 def _source(node, source: Source, cfg: ExperimentConfig, role: str):
@@ -101,16 +126,28 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
             if event_id == "tick":
                 sample = reader.read()
                 if sample is not None:
-                    _send(node, "sample", p.make(source.kind, source.encode(sample), sample.capture_ns))
+                    _send(
+                        node,
+                        "sample",
+                        p.make(source.kind, source.encode(sample), sample.capture_ns),
+                    )
                     samples.append(time.monotonic_ns())
                 else:
                     misses += 1
             now = time.monotonic_ns()
             if status.due(now):
-                rate = (len(samples) - 1) / ((samples[-1] - samples[0]) / 1e9) if len(samples) > 1 and samples[-1] > samples[0] else 0.0
+                rate = (
+                    (len(samples) - 1) / ((samples[-1] - samples[0]) / 1e9)
+                    if len(samples) > 1 and samples[-1] > samples[0]
+                    else 0.0
+                )
                 age_ms = (now - samples[-1]) / 1e6 if samples else None
                 level = "ok" if age_ms is not None and age_ms < 500 else "warn"
-                fields = {"rate_hz": round(rate, 1), "age_ms": None if age_ms is None else round(age_ms), "misses": misses}
+                fields = {
+                    "rate_hz": round(rate, 1),
+                    "age_ms": None if age_ms is None else round(age_ms),
+                    "misses": misses,
+                }
                 _send(node, "status", status.make(fields, level, now))
     finally:
         reader.close()
@@ -155,13 +192,19 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
             now = time.monotonic_ns()
             if status.due(now):
                 fields = {
-                    "mode": safety.mode, "reason": safety.reason, "armed": safety.armed,
+                    "mode": safety.mode,
+                    "reason": safety.reason,
+                    "armed": safety.armed,
                     "tick_ms": round(intervals[-1], 1) if intervals else None,
                     "tick_max_ms": round(max(intervals), 1) if intervals else None,
-                    "clamped_2s": sum(clamped), "rejected_2s": sum(rejected),
-                    "last_reject": safety.last_reject if any(rejected) else "", "error": error,
+                    "clamped_2s": sum(clamped),
+                    "rejected_2s": sum(rejected),
+                    "last_reject": safety.last_reject if any(rejected) else "",
+                    "error": error,
                 }
-                level = {"FAULT": "error", "ESTOP": "error", "RELEASED": "warn"}.get(safety.mode, "warn" if any(rejected) else "ok")
+                level = {"FAULT": "error", "ESTOP": "error", "RELEASED": "warn"}.get(
+                    safety.mode, "warn" if any(rejected) else "ok"
+                )
                 _send(node, "status", status.make(fields, level, now))
     finally:
         bus.close()
@@ -178,7 +221,10 @@ def _controller(node, controller: Controller):
         if _quit(event_id, msg):
             return
         if event_id == "robot" and msg is not None:
-            follower, follower_target = msg.payload["positions"], msg.payload.get("target")
+            follower, follower_target = (
+                msg.payload["positions"],
+                msg.payload.get("target"),
+            )
             if msg.payload["mode"] in ("FAULT", "ESTOP"):
                 controller.reset()
         elif event_id == "intent" and msg is not None and follower is not None:
@@ -211,7 +257,13 @@ def _recorder(node, cfg: ExperimentConfig):
 
     def save(metrics: dict) -> None:
         try:
-            done.put({"saved_frames": writer.save(), "episodes": writer.dataset.num_episodes, "metrics": metrics})
+            done.put(
+                {
+                    "saved_frames": writer.save(),
+                    "episodes": writer.dataset.num_episodes,
+                    "metrics": metrics,
+                }
+            )
         except Exception as exc:  # noqa: BLE001 - report session failure to operator
             done.put({"command": "save", "error": str(exc)})
 
@@ -225,24 +277,51 @@ def _recorder(node, cfg: ExperimentConfig):
             writer.poll()
             now = time.monotonic_ns()
             if status.due(now):
-                state = "saving" if saving is not None else "recording" if writer.active else "stopped" if writer.stopped else "idle"
+                state = (
+                    "saving"
+                    if saving is not None
+                    else "recording"
+                    if writer.active
+                    else "stopped"
+                    if writer.stopped
+                    else "idle"
+                )
                 fields = {
-                    "state": state, "task": writer.task if state != "idle" else "", "rows": writer.written,
-                    "elapsed_s": round((now - writer.t0_ns) / 1e9, 1) if writer.active else None,
-                    "missing": {k: v for k, v in writer.missing.items() if v}, "episodes": writer.dataset.num_episodes,
+                    "state": state,
+                    "task": writer.task if state != "idle" else "",
+                    "rows": writer.written,
+                    "elapsed_s": round((now - writer.t0_ns) / 1e9, 1)
+                    if writer.active
+                    else None,
+                    "missing": {k: v for k, v in writer.missing.items() if v},
+                    "episodes": writer.dataset.num_episodes,
                 }
-                level = "warn" if any(writer.missing.values()) and writer.active else "ok"
+                level = (
+                    "warn" if any(writer.missing.values()) and writer.active else "ok"
+                )
                 _send(node, "status", status.make(fields, level, now))
             if event_id in writer.samples and msg is not None:
                 writer.ingest(event_id, msg)
                 if event_id == cfg.robot.name and msg.payload.get("mode") != robot_mode:
                     robot_mode = msg.payload.get("mode")
-                    _send(node, "report", p.make("report", {"robot_mode": robot_mode, "reason": msg.payload.get("reason", "")}))
+                    _send(
+                        node,
+                        "report",
+                        p.make(
+                            "report",
+                            {
+                                "robot_mode": robot_mode,
+                                "reason": msg.payload.get("reason", ""),
+                            },
+                        ),
+                    )
             elif event_id == "session" and msg is not None:
                 command = msg.payload["command"]
                 try:
                     if saving is not None and command in ("start", "save", "discard"):
-                        raise RuntimeError("the previous episode is still being saved; retry shortly")
+                        raise RuntimeError(
+                            "the previous episode is still being saved; retry shortly"
+                        )
                     if command == "start":
                         writer.start(msg.payload["task"])
                     elif command == "stop":
@@ -250,7 +329,9 @@ def _recorder(node, cfg: ExperimentConfig):
                     elif command == "save":
                         if not writer.stopped:
                             raise RuntimeError("stop the episode first")
-                        saving = threading.Thread(target=save, args=(writer.metrics(),), name="save-episode")
+                        saving = threading.Thread(
+                            target=save, args=(writer.metrics(),), name="save-episode"
+                        )
                         saving.start()
                     elif command == "discard":
                         writer.discard()
@@ -261,7 +342,11 @@ def _recorder(node, cfg: ExperimentConfig):
                             _send(node, "report", p.make("report", done.get()))
                         return
                 except Exception as exc:  # noqa: BLE001 - report session failure to operator
-                    _send(node, "report", p.make("report", {"command": command, "error": str(exc)}))
+                    _send(
+                        node,
+                        "report",
+                        p.make("report", {"command": command, "error": str(exc)}),
+                    )
     finally:
         if saving is not None:
             saving.join()

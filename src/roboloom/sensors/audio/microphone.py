@@ -16,7 +16,14 @@ class SoundDeviceReader:
         self.device, self.sample_rate, self.size = device, sample_rate, size
 
     def read(self) -> Sample:
-        samples = self.sd.rec(self.size, samplerate=self.sample_rate, channels=1, dtype="int16", device=self.device, blocking=True)
+        samples = self.sd.rec(
+            self.size,
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="int16",
+            device=self.device,
+            blocking=True,
+        )
         return Sample(samples.reshape(-1), time.monotonic_ns())
 
     def close(self) -> None:

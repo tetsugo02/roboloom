@@ -38,16 +38,29 @@ class Envelope:
     t_receive_ns: int = 0
 
     def __post_init__(self) -> None:
-        if self.version != SCHEMA_VERSION or self.seq < 0 or self.t_capture_ns > self.t_ready_ns:
+        if (
+            self.version != SCHEMA_VERSION
+            or self.seq < 0
+            or self.t_capture_ns > self.t_ready_ns
+        ):
             raise ValueError("invalid message header")
 
     def encode(self) -> bytes:
-        header = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "payload"}
+        header = {
+            f.name: getattr(self, f.name) for f in fields(self) if f.name != "payload"
+        }
         payload, arrays, blobs = {}, [], []
         for key, value in self.payload.items():
             if isinstance(value, np.ndarray):
                 a = np.ascontiguousarray(value)
-                arrays.append({"key": key, "dtype": a.dtype.str, "shape": list(a.shape), "nbytes": a.nbytes})
+                arrays.append(
+                    {
+                        "key": key,
+                        "dtype": a.dtype.str,
+                        "shape": list(a.shape),
+                        "nbytes": a.nbytes,
+                    }
+                )
                 blobs.append(a.tobytes())
             else:
                 payload[key] = value
@@ -69,7 +82,12 @@ class Envelope:
         offset = 4 + size
         for spec in header.pop(_ARRAYS):
             end = offset + spec["nbytes"]
-            array = buffer[offset:end].view(np.dtype(spec["dtype"])).reshape(spec["shape"]).copy()
+            array = (
+                buffer[offset:end]
+                .view(np.dtype(spec["dtype"]))
+                .reshape(spec["shape"])
+                .copy()
+            )
             header["payload"][spec["key"]] = array
             offset = end
         if offset != len(buffer):
@@ -81,7 +99,9 @@ class Envelope:
     def header(self) -> dict:
         """Header and non-array payload, e.g. for reports and logs."""
         out = asdict(self)
-        out["payload"] = {k: v for k, v in self.payload.items() if not isinstance(v, np.ndarray)}
+        out["payload"] = {
+            k: v for k, v in self.payload.items() if not isinstance(v, np.ndarray)
+        }
         return out
 
 
@@ -93,6 +113,14 @@ class Publisher:
 
     def make(self, kind: str, payload: dict, capture: int | None = None) -> Envelope:
         ready = time.monotonic_ns()
-        msg = Envelope(kind, self.source_id, self.boot_id, self.seq, capture or ready, ready, payload)
+        msg = Envelope(
+            kind,
+            self.source_id,
+            self.boot_id,
+            self.seq,
+            capture or ready,
+            ready,
+            payload,
+        )
         self.seq += 1
         return msg

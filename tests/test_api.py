@@ -6,10 +6,18 @@ from roboloom.drivers.mock import MockBus
 
 def create(output):
     return Experiment.from_components(
-        robot_id="toy", robot=MockBus(dimension=2), joint_names=["a", "b"],
-        limits=[{"name": name, "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400} for name in ("a", "b")],
-        controller=lambda obs: [2048, 2048], output=output, repo_id="local/toy",
-        fps=5, control_hz=10,
+        robot_id="toy",
+        robot=MockBus(dimension=2),
+        joint_names=["a", "b"],
+        limits=[
+            {"name": name, "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
+            for name in ("a", "b")
+        ],
+        controller=lambda obs: [2048, 2048],
+        output=output,
+        repo_id="local/toy",
+        fps=5,
+        control_hz=10,
     )
 
 

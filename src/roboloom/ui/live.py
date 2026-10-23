@@ -89,15 +89,30 @@ def tail_alerts(path: Path, offset: int) -> tuple[list[Text], int]:
             data = f.read()
     except OSError:
         return [], offset
-    lines = [x for x in data.decode(errors="ignore").splitlines() if any(w in x for w in ALERT_WORDS)]
+    lines = [
+        x
+        for x in data.decode(errors="ignore").splitlines()
+        if any(w in x for w in ALERT_WORDS)
+    ]
     return [Text(x[-200:], style="red") for x in lines], offset + len(data)
 
 
 class LiveSession:
     """The operator screen for one running dataflow."""
 
-    def __init__(self, client: SessionClient, process: subprocess.Popen, log_path: Path, title: str):
-        self.client, self.process, self.log_path, self.title = client, process, log_path, title
+    def __init__(
+        self,
+        client: SessionClient,
+        process: subprocess.Popen,
+        log_path: Path,
+        title: str,
+    ):
+        self.client, self.process, self.log_path, self.title = (
+            client,
+            process,
+            log_path,
+            title,
+        )
         self.editor = LineEditor()
         self.messages: deque[Text] = deque(maxlen=8)
         self.confirm_release = False
@@ -106,7 +121,9 @@ class LiveSession:
 
     def prompt(self) -> Text:
         label = RELEASE_PROMPT if self.confirm_release else "roboloom> "
-        return Text(label, style="bold yellow" if self.confirm_release else "bold") + Text(self.editor.buffer + "▏")
+        return Text(
+            label, style="bold yellow" if self.confirm_release else "bold"
+        ) + Text(self.editor.buffer + "▏")
 
     def submit(self, line: str) -> None:
         if self.confirm_release:
@@ -125,7 +142,9 @@ class LiveSession:
         elif command not in ("start", "stop", "save", "discard", "estop", "quit"):
             self.messages.append(Text(f"unknown command: {command}", style="yellow"))
         elif command == "start" and not rest:
-            self.messages.append(Text("start needs a task, e.g. start pick up the cup", style="yellow"))
+            self.messages.append(
+                Text("start needs a task, e.g. start pick up the cup", style="yellow")
+            )
         else:
             self.client.send(line)
             self.messages.append(Text(f"> {line}", style="dim"))
@@ -133,7 +152,13 @@ class LiveSession:
                 self.quitting_since = time.monotonic()
 
     def view(self, prompt: Text | None = None):
-        return render(self.client.status(), self.messages, prompt or self.prompt(), title=self.title, log_path=self.log_path)
+        return render(
+            self.client.status(),
+            self.messages,
+            prompt or self.prompt(),
+            title=self.title,
+            log_path=self.log_path,
+        )
 
     def step(self, keys: KeyReader) -> None:
         try:
@@ -146,8 +171,13 @@ class LiveSession:
         self.messages.extend(describe_report(r) for r in self.client.new_reports())
         alerts, self.log_offset = tail_alerts(self.log_path, self.log_offset)
         self.messages.extend(alerts)
-        if self.quitting_since is not None and time.monotonic() - self.quitting_since > 10:
-            self.messages.append(Text("dataflow did not stop within 10 s; terminating", style="red"))
+        if (
+            self.quitting_since is not None
+            and time.monotonic() - self.quitting_since > 10
+        ):
+            self.messages.append(
+                Text("dataflow did not stop within 10 s; terminating", style="red")
+            )
             self.process.terminate()
             self.quitting_since = time.monotonic()
 
@@ -156,12 +186,22 @@ class LiveSession:
         # Ctrl-C becomes `quit`; the dataflow runs in its own session and does not see the signal.
         previous = signal.signal(signal.SIGINT, lambda *_: keys.keys.put("\x03"))
         try:
-            with keys, Live(self.view(), console=Console(), auto_refresh=False, transient=False) as live:
+            with (
+                keys,
+                Live(
+                    self.view(), console=Console(), auto_refresh=False, transient=False
+                ) as live,
+            ):
                 while self.process.poll() is None:
                     self.step(keys)
                     live.update(self.view(), refresh=True)
                     time.sleep(0.1)
-                self.messages.extend(describe_report(r) for r in self.client.new_reports())
-                live.update(self.view(Text(f"dataflow exited ({self.process.returncode})")), refresh=True)
+                self.messages.extend(
+                    describe_report(r) for r in self.client.new_reports()
+                )
+                live.update(
+                    self.view(Text(f"dataflow exited ({self.process.returncode})")),
+                    refresh=True,
+                )
         finally:
             signal.signal(signal.SIGINT, previous)

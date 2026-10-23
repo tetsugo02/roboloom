@@ -10,6 +10,9 @@ base classes next to it, and controllers state which of them they accept.
 from ..core.registry import Registry
 from .base import InputDevice
 
-INPUTS: Registry[InputDevice] = Registry("input", {
-    "rakuda2_leader": "roboloom.inputs.rakuda2.leader:RakudaLeader",
-})
+INPUTS: Registry[InputDevice] = Registry(
+    "input",
+    {
+        "rakuda2_leader": "roboloom.inputs.rakuda2.leader:RakudaLeader",
+    },
+)

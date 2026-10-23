@@ -10,12 +10,21 @@ import numpy as np
 
 
 def rpy_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
-    cr, sr, cp, sp, cy, sy = np.cos(roll), np.sin(roll), np.cos(pitch), np.sin(pitch), np.cos(yaw), np.sin(yaw)
-    return np.array([
-        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-        [-sp, cp * sr, cp * cr],
-    ])
+    cr, sr, cp, sp, cy, sy = (
+        np.cos(roll),
+        np.sin(roll),
+        np.cos(pitch),
+        np.sin(pitch),
+        np.cos(yaw),
+        np.sin(yaw),
+    )
+    return np.array(
+        [
+            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+            [-sp, cp * sr, cp * cr],
+        ]
+    )
 
 
 def axis_angle(axis: np.ndarray, angle: float) -> np.ndarray:
@@ -67,23 +76,51 @@ class UrdfTree:
         joints = []
         for el in ET.fromstring(text).findall("joint"):
             origin = el.find("origin")
-            xyz = np.array([float(v) for v in (origin.get("xyz", "0 0 0") if origin is not None else "0 0 0").split()])
-            rpy = [float(v) for v in (origin.get("rpy", "0 0 0") if origin is not None else "0 0 0").split()]
+            xyz = np.array(
+                [
+                    float(v)
+                    for v in (
+                        origin.get("xyz", "0 0 0") if origin is not None else "0 0 0"
+                    ).split()
+                ]
+            )
+            rpy = [
+                float(v)
+                for v in (
+                    origin.get("rpy", "0 0 0") if origin is not None else "0 0 0"
+                ).split()
+            ]
             axis_el = el.find("axis")
-            axis = np.array([float(v) for v in (axis_el.get("xyz", "1 0 0") if axis_el is not None else "1 0 0").split()])
+            axis = np.array(
+                [
+                    float(v)
+                    for v in (
+                        axis_el.get("xyz", "1 0 0") if axis_el is not None else "1 0 0"
+                    ).split()
+                ]
+            )
             parent, child = el.find("parent"), el.find("child")
             if parent is None or child is None:
                 raise ValueError(f"joint {el.get('name')} lacks parent or child")
-            joints.append(Joint(
-                el.get("name", ""), el.get("type", "fixed"), parent.get("link", ""), child.get("link", ""),
-                xyz, rpy_matrix(*rpy), axis / np.linalg.norm(axis),
-            ))
+            joints.append(
+                Joint(
+                    el.get("name", ""),
+                    el.get("type", "fixed"),
+                    parent.get("link", ""),
+                    child.get("link", ""),
+                    xyz,
+                    rpy_matrix(*rpy),
+                    axis / np.linalg.norm(axis),
+                )
+            )
         return cls(joints)
 
     def movable(self) -> list[str]:
         return [j.name for j in self.order if j.kind in ("revolute", "continuous")]
 
-    def frames(self, angles: Mapping[str, float]) -> tuple[dict[str, Frame], dict[str, Frame]]:
+    def frames(
+        self, angles: Mapping[str, float]
+    ) -> tuple[dict[str, Frame], dict[str, Frame]]:
         """World frames of every link, and of every movable joint (origin, axis in world = rotation @ axis)."""
         links = {self.root: Frame(np.zeros(3), np.eye(3))}
         joints = {}

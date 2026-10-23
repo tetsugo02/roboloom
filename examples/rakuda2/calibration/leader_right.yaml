@@ -12,7 +12,10 @@
 #       --out examples/rakuda2/calibration/gravity_right.yaml --collect --hardware
 port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
 urdf: ../../../src/roboloom/robots/rakuda2/model/assembly_2.urdf
-confirmed: false
+confirmed: true
+# shared_parameters: the output joints are all XC330-T288, so one set of link moments is fit for
+#   all of them (mA per N*m in common). Needs far fewer poses than independent per-joint fits.
+shared_parameters: true
 joints:
 - name: torso_yaw
   motor_id: 27

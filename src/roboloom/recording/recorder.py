@@ -33,13 +33,23 @@ ACTION = "action"  # stream of commands the robot actually sent
 
 
 class EpisodeRecorder:
-    def __init__(self, cfg: ExperimentConfig, dataset=None, grace_ms: float = 500, image_writer_threads: int = 4,
-                 streaming_encoding: bool = False, queue_s: float = 0.5):  # queue_s: dora input queues, see runtime.flow
+    def __init__(
+        self,
+        cfg: ExperimentConfig,
+        dataset=None,
+        grace_ms: float = 500,
+        image_writer_threads: int = 4,
+        streaming_encoding: bool = False,
+        queue_s: float = 0.5,
+    ):  # queue_s: dora input queues, see runtime.flow
         self.cfg = cfg
         self.sources = cfg.sources
         self.dataset: Any = dataset  # LeRobotDataset 0.6.1 has no py.typed marker.
         self.grace_ns = int(grace_ms * 1e6)
-        self.writer_options = {"image_writer_threads": image_writer_threads, "streaming_encoding": streaming_encoding}
+        self.writer_options = {
+            "image_writer_threads": image_writer_threads,
+            "streaming_encoding": streaming_encoding,
+        }
         self.period_ns = int(1e9 / cfg.dataset_fps)
         self.active = False
         self.stopped = False
@@ -58,7 +68,11 @@ class EpisodeRecorder:
 
     def _reset_stats(self) -> None:
         self.written = 0
-        self.stats: dict[str, list[float]] = {"control_interval_ms": [], "latency_ms": [], "queue_ms": []}
+        self.stats: dict[str, list[float]] = {
+            "control_interval_ms": [],
+            "latency_ms": [],
+            "queue_ms": [],
+        }
         self.missing = {key: 0 for key in self.sources}
         self.action_rows = self.clamped = 0
 
@@ -67,22 +81,37 @@ class EpisodeRecorder:
     def open_dataset(self) -> None:
         if self.dataset is not None:
             return
-        LeRobotDataset = import_module("lerobot.datasets.lerobot_dataset").LeRobotDataset
+        LeRobotDataset = import_module(
+            "lerobot.datasets.lerobot_dataset"
+        ).LeRobotDataset
 
         cfg = self.cfg
         root = Path(cfg.output).resolve()
         expected = features(cfg)
         if (root / "meta" / "info.json").exists():
-            self.dataset = LeRobotDataset.resume(repo_id=cfg.repo_id, root=root, **self.writer_options)
+            self.dataset = LeRobotDataset.resume(
+                repo_id=cfg.repo_id, root=root, **self.writer_options
+            )
             if self.dataset.fps != cfg.dataset_fps or any(
-                name not in self.dataset.features or any(self.dataset.features[name].get(key) != value for key, value in spec.items())
+                name not in self.dataset.features
+                or any(
+                    self.dataset.features[name].get(key) != value
+                    for key, value in spec.items()
+                )
                 for name, spec in expected.items()
             ):
-                raise ValueError("existing dataset schema or FPS differs from experiment")
+                raise ValueError(
+                    "existing dataset schema or FPS differs from experiment"
+                )
         else:
             self.dataset = LeRobotDataset.create(
-                repo_id=cfg.repo_id, fps=cfg.dataset_fps, features=expected, root=root,
-                robot_type=cfg.robot_type or cfg.robot_id, use_videos=True, **self.writer_options,
+                repo_id=cfg.repo_id,
+                fps=cfg.dataset_fps,
+                features=expected,
+                root=root,
+                robot_type=cfg.robot_type or cfg.robot_id,
+                use_videos=True,
+                **self.writer_options,
             )
 
     def start(self, task: str, now_ns: int | None = None, write: bool = True) -> None:
@@ -186,7 +215,12 @@ class EpisodeRecorder:
         """Drop samples no row at or after `next_ns` can select."""
         for source, items in self.samples.items():
             if source == ACTION:
-                self.samples[source] = [x for x in items if x.payload.get("valid") and x.payload.get("t_sent_ns", 0) >= next_ns]
+                self.samples[source] = [
+                    x
+                    for x in items
+                    if x.payload.get("valid")
+                    and x.payload.get("t_sent_ns", 0) >= next_ns
+                ]
                 continue
             keep = 0
             for i, s in enumerate(items):
@@ -196,7 +230,13 @@ class EpisodeRecorder:
 
     def _selected(self, source: str, t_ns: int) -> Envelope | None:
         age_limit = self.cfg.max_age_ms[source] * 1e6
-        eligible = [s for s in self.samples[source] if s.t_ready_ns <= t_ns and s.t_receive_ns <= t_ns and 0 <= t_ns - s.t_capture_ns <= age_limit]
+        eligible = [
+            s
+            for s in self.samples[source]
+            if s.t_ready_ns <= t_ns
+            and s.t_receive_ns <= t_ns
+            and 0 <= t_ns - s.t_capture_ns <= age_limit
+        ]
         return max(eligible, key=lambda s: (s.t_ready_ns, s.seq)) if eligible else None
 
     def _frame(self, t_ns: int, next_ns: int) -> dict:
@@ -214,23 +254,45 @@ class EpisodeRecorder:
                 "receive_ns": msg.t_receive_ns if msg else 0,
             }
             for key, dtype in META_FIELDS:
-                frame[f"observation.meta.{name}.{key}"] = np.asarray([values[key]], dtype=dtype)
+                frame[f"observation.meta.{name}.{key}"] = np.asarray(
+                    [values[key]], dtype=dtype
+                )
             frame.update(source.frame(msg, fps))
         dim = len(self.cfg.robot.joint_names)
-        actions = [x for x in self.samples[ACTION] if x.payload.get("valid") and t_ns <= x.payload.get("t_sent_ns", 0) < next_ns]
+        actions = [
+            x
+            for x in self.samples[ACTION]
+            if x.payload.get("valid")
+            and t_ns <= x.payload.get("t_sent_ns", 0) < next_ns
+        ]
         action = min(actions, key=lambda x: x.payload["t_sent_ns"]) if actions else None
-        frame["action"] = np.asarray(action.payload["positions"] if action else [0] * dim, dtype=np.float32)
-        frame["action.valid"] = np.asarray([float(action is not None)], dtype=np.float32)
-        frame["action.clamped"] = np.asarray([float(bool(action and action.payload.get("clamped")))], dtype=np.float32)
-        frame["action.seq"] = np.asarray([action.payload["command_seq"] if action else -1], dtype=np.int64)
-        frame["action.sent_ns"] = np.asarray([action.payload["t_sent_ns"] if action else 0], dtype=np.int64)
+        frame["action"] = np.asarray(
+            action.payload["positions"] if action else [0] * dim, dtype=np.float32
+        )
+        frame["action.valid"] = np.asarray(
+            [float(action is not None)], dtype=np.float32
+        )
+        frame["action.clamped"] = np.asarray(
+            [float(bool(action and action.payload.get("clamped")))], dtype=np.float32
+        )
+        frame["action.seq"] = np.asarray(
+            [action.payload["command_seq"] if action else -1], dtype=np.int64
+        )
+        frame["action.sent_ns"] = np.asarray(
+            [action.payload["t_sent_ns"] if action else 0], dtype=np.int64
+        )
         return frame
 
     def frames(self) -> list[dict]:
         """All rows of a stopped episode recorded with `write=False` (no pruning has happened)."""
         if not self.stopped:
             raise RuntimeError("stop the episode first")
-        return [self._frame(self.t0_ns + i * self.period_ns, self.t0_ns + (i + 1) * self.period_ns) for i in range(self._row_count())]
+        return [
+            self._frame(
+                self.t0_ns + i * self.period_ns, self.t0_ns + (i + 1) * self.period_ns
+            )
+            for i in range(self._row_count())
+        ]
 
     def metrics(self) -> dict:
         rows = max(self.written, 1)

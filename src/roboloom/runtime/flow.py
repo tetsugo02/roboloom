@@ -31,9 +31,20 @@ def build_flow(cfg: ExperimentConfig) -> dict:
 
     control_hz = cfg.robot.control_hz
     session = {"session": "session/control"}  # every node ends on `quit`
-    nodes = [node(name, session, ["sample", "status"], source.rate_hz(fps) or control_hz) for name, source in cfg.inputs.items()]
+    nodes = [
+        node(name, session, ["sample", "status"], source.rate_hz(fps) or control_hz)
+        for name, source in cfg.inputs.items()
+    ]
     nodes += [
-        node(name, {"intent": f"{c.source.name}/sample", "robot": f"{c.robot.name}/state", **session}, ["command", "status"])
+        node(
+            name,
+            {
+                "intent": f"{c.source.name}/sample",
+                "robot": f"{c.robot.name}/state",
+                **session,
+            },
+            ["command", "status"],
+        )
         for name, c in cfg.controllers.items()
     ]
     nodes += [
@@ -52,20 +63,47 @@ def build_flow(cfg: ExperimentConfig) -> dict:
         )
         for name, robot in cfg.robots.items()
     ]
-    nodes += [node(name, session, ["sample", "status"], sensor.rate_hz(fps) or control_hz) for name, sensor in cfg.sensors.items()]
+    nodes += [
+        node(name, session, ["sample", "status"], sensor.rate_hz(fps) or control_hz)
+        for name, sensor in cfg.sensors.items()
+    ]
     # Bounded recorder queues: while `save` encodes video the recorder does not read, and dora
     # hands a node all queued events in one reply (64 MB limit). Keep about `queue_s` per stream.
     queue_s = float(cfg.recorder.get("queue_s", 0.5))
 
     def bounded(output: str, rate_hz: float) -> dict:
-        return {"source": output, "queue_size": max(2, math.ceil(rate_hz * queue_s)), "queue_policy": "drop_oldest"}
+        return {
+            "source": output,
+            "queue_size": max(2, math.ceil(rate_hz * queue_s)),
+            "queue_policy": "drop_oldest",
+        }
 
-    rates = {**{n: s.rate_hz(fps) or control_hz for n, s in {**cfg.inputs, **cfg.sensors}.items()}, **{n: r.control_hz for n, r in cfg.robots.items()}}
-    recorded = {name: bounded(f"{name}/{'state' if name in cfg.robots else 'sample'}", rates[name]) for name in cfg.sources}
+    rates = {
+        **{
+            n: s.rate_hz(fps) or control_hz
+            for n, s in {**cfg.inputs, **cfg.sensors}.items()
+        },
+        **{n: r.control_hz for n, r in cfg.robots.items()},
+    }
+    recorded = {
+        name: bounded(
+            f"{name}/{'state' if name in cfg.robots else 'sample'}", rates[name]
+        )
+        for name in cfg.sources
+    }
     recorded[ACTION] = bounded(f"{cfg.robot.name}/{ACTION}", cfg.robot.control_hz)
     nodes.append(node("recorder", {**recorded, **session}, ["report", "status"]))
-    statuses = {f"{name}{STATUS_SUFFIX}": {"source": f"{name}/status", "queue_size": 2, "queue_policy": "drop_oldest"} for name in [n["id"] for n in nodes]}
-    nodes.append(node("session", {"report": "recorder/report", **statuses}, ["control"]))
+    statuses = {
+        f"{name}{STATUS_SUFFIX}": {
+            "source": f"{name}/status",
+            "queue_size": 2,
+            "queue_policy": "drop_oldest",
+        }
+        for name in [n["id"] for n in nodes]
+    }
+    nodes.append(
+        node("session", {"report": "recorder/report", **statuses}, ["control"])
+    )
     return {"nodes": nodes}
 
 

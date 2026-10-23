@@ -23,7 +23,9 @@ class RakudaLeader(JointInput):
         expected_registers(cfg, name)
         self.port = identity(cfg.get("port"), f"{name}.port")
 
-    def expected_eeprom(self) -> tuple[list[str], list[int], dict[str, dict[str, float]]]:
+    def expected_eeprom(
+        self,
+    ) -> tuple[list[str], list[int], dict[str, dict[str, float]]]:
         """Joints, motor IDs and the EEPROM values `roboloom commission` writes."""
         return list(JOINTS), list(MOTOR_IDS), expected_registers(self.cfg, self.name)
 

@@ -65,7 +65,10 @@ class Regressor:
             raise ValueError("every output joint must also be an input")
         self.output_urdf = [by_name[o].urdf for o in outputs]
         # bodies below each output joint: the model joints in its subtree (itself included)
-        self.bodies = {u: [b for b in tree.subtree_joints(u) if b in names] for u in self.output_urdf}
+        self.bodies = {
+            u: [b for b in tree.subtree_joints(u) if b in names]
+            for u in self.output_urdf
+        }
         # body frames are the child links of model joints; nothing else needs computing
         self.tree = tree.restricted(sorted(names))
 
@@ -87,8 +90,21 @@ class Regressor:
             out.append(np.asarray(row))
         return out
 
-    def fit(self, samples: np.ndarray, currents: np.ndarray, holdout: np.ndarray | None = None) -> Fit:
-        """`samples` N x inputs (counts), `currents` N x outputs (mA); `holdout` marks validation rows."""
+    def fit(
+        self,
+        samples: np.ndarray,
+        currents: np.ndarray,
+        holdout: np.ndarray | None = None,
+        shared: bool = False,
+    ) -> Fit:
+        """`samples` N x inputs (counts), `currents` N x outputs (mA); `holdout` marks validation rows.
+
+        `shared=True` fits one set of body moments for all output joints (plus one offset each).
+        Valid when the output joints use the same motor and gear, so mA per N*m is common;
+        it needs far fewer poses than the independent per-joint fit.
+        """
+        if shared:
+            return self._fit_shared(samples, currents, holdout)
         mask = np.zeros(len(samples), bool) if holdout is None else holdout
         rows = [self.rows(q) for q in samples]
         result = Fit([], [], [], [], [])
@@ -99,17 +115,78 @@ class Regressor:
             theta, _, rank, sv = np.linalg.lstsq(a[train], y[train], rcond=1e-6)
             result.theta.append(theta.tolist())
             result.rank.append(int(rank))
-            result.condition.append(float(sv[0] / sv[rank - 1]) if rank else float("inf"))
-            result.rms_mA.append(float(np.sqrt(np.mean((a[train] @ theta - y[train]) ** 2))))
+            result.condition.append(
+                float(sv[0] / sv[rank - 1]) if rank else float("inf")
+            )
+            result.rms_mA.append(
+                float(np.sqrt(np.mean((a[train] @ theta - y[train]) ** 2)))
+            )
             if mask.any():
-                result.holdout_rms_mA.append(float(np.sqrt(np.mean((a[mask] @ theta - y[mask]) ** 2))))
+                result.holdout_rms_mA.append(
+                    float(np.sqrt(np.mean((a[mask] @ theta - y[mask]) ** 2)))
+                )
+        return result
+
+    def _fit_shared(
+        self, samples: np.ndarray, currents: np.ndarray, holdout: np.ndarray | None
+    ) -> Fit:
+        mask = np.zeros(len(samples), bool) if holdout is None else holdout
+        bodies = list(
+            dict.fromkeys(b for u in self.output_urdf for b in self.bodies[u])
+        )
+        column = {b: 4 * k for k, b in enumerate(bodies)}
+        n_body, n_out = 4 * len(bodies), len(self.outputs)
+        sign = {
+            m.urdf: m.direction for m in self.inputs
+        }  # motor current sign vs URDF torque
+        a = np.zeros((len(samples), n_out, n_body + n_out))
+        for s, q in enumerate(samples):
+            for k, (u, row) in enumerate(
+                zip(self.output_urdf, self.rows(q), strict=True)
+            ):
+                for b_idx, b in enumerate(self.bodies[u]):
+                    a[s, k, column[b] : column[b] + 4] = (
+                        sign[u] * row[4 * b_idx : 4 * b_idx + 4]
+                    )
+                a[s, k, n_body + k] = 1.0
+        train = ~mask
+        theta, _, rank, sv = np.linalg.lstsq(
+            a[train].reshape(-1, n_body + n_out),
+            currents[train].reshape(-1),
+            rcond=1e-6,
+        )
+        result = Fit([], [], [], [], [])
+        for k, u in enumerate(self.output_urdf):
+            body = [sign[u] * theta[column[b] : column[b] + 4] for b in self.bodies[u]]
+            result.theta.append(
+                [*np.concatenate(body).tolist(), float(theta[n_body + k])]
+            )
+            result.rank.append(int(rank))
+            result.condition.append(
+                float(sv[0] / sv[rank - 1]) if rank else float("inf")
+            )
+            pred = a[:, k] @ theta
+            result.rms_mA.append(
+                float(np.sqrt(np.mean((pred[train] - currents[train, k]) ** 2)))
+            )
+            if mask.any():
+                result.holdout_rms_mA.append(
+                    float(np.sqrt(np.mean((pred[mask] - currents[mask, k]) ** 2)))
+                )
         return result
 
 
 class RegressorGravityModel:
     """`GravityModel` backed by a `Regressor` and identified parameters."""
 
-    def __init__(self, urdf_text: str, inputs: list[JointMap], outputs: list[str], theta: list[list[float]], meta: dict | None = None):
+    def __init__(
+        self,
+        urdf_text: str,
+        inputs: list[JointMap],
+        outputs: list[str],
+        theta: list[list[float]],
+        meta: dict | None = None,
+    ):
         self.regressor = Regressor(urdf_text, inputs, outputs)
         self.joint_names = tuple(m.name for m in inputs)
         self.output_joints = tuple(outputs)
@@ -120,9 +197,18 @@ class RegressorGravityModel:
                 raise ValueError("parameter count does not match the URDF bodies")
 
     def effort_mA(self, positions: Sequence[float]) -> list[float]:
-        return [float(row @ t) for row, t in zip(self.regressor.rows(positions), self.theta, strict=True)]
+        return [
+            float(row @ t)
+            for row, t in zip(self.regressor.rows(positions), self.theta, strict=True)
+        ]
 
-    def save(self, path: str | Path, urdf_path: str | Path, fit: Fit, extra: dict | None = None) -> None:
+    def save(
+        self,
+        path: str | Path,
+        urdf_path: str | Path,
+        fit: Fit,
+        extra: dict | None = None,
+    ) -> None:
         path = Path(path)
         urdf = Path(urdf_path).resolve()
         data = {
@@ -130,7 +216,9 @@ class RegressorGravityModel:
             "unit": "mA",
             "urdf": str(urdf.relative_to(path.parent.resolve(), walk_up=True)),
             "urdf_sha256": hashlib.sha256(urdf.read_bytes()).hexdigest(),
-            "created": datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+            "created": datetime.datetime.now(datetime.UTC).isoformat(
+                timespec="seconds"
+            ),
             "inputs": [vars(m) for m in self.regressor.inputs],
             "outputs": list(self.output_joints),
             "theta": [t.tolist() for t in self.theta],
@@ -152,5 +240,8 @@ class RegressorGravityModel:
         text = urdf.read_bytes()
         if hashlib.sha256(text).hexdigest() != data["urdf_sha256"]:
             raise ValueError(f"{path}: {urdf} changed since the model was identified")
-        inputs = [JointMap(m["name"], m["urdf"], float(m["zero"]), int(m["direction"])) for m in data["inputs"]]
+        inputs = [
+            JointMap(m["name"], m["urdf"], float(m["zero"]), int(m["direction"]))
+            for m in data["inputs"]
+        ]
         return cls(text.decode(), inputs, data["outputs"], data["theta"], data)

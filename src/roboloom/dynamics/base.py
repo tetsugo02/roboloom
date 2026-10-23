@@ -7,7 +7,9 @@ from typing import Protocol
 
 
 class GravityModel(Protocol):
-    joint_names: tuple[str, ...]  # joints whose positions the model reads, in input order
+    joint_names: tuple[
+        str, ...
+    ]  # joints whose positions the model reads, in input order
     output_joints: tuple[str, ...]  # joints it returns current for, in output order
 
     def effort_mA(self, positions: Sequence[float]) -> list[float]:

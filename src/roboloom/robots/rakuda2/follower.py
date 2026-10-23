@@ -24,7 +24,9 @@ class RakudaFollower(Robot):
         expected_registers(cfg, name)
         self.port = identity(cfg.get("port"), f"{name}.port")
 
-    def expected_eeprom(self) -> tuple[list[str], list[int], dict[str, dict[str, float]]]:
+    def expected_eeprom(
+        self,
+    ) -> tuple[list[str], list[int], dict[str, dict[str, float]]]:
         """Joints, motor IDs and the EEPROM values `roboloom commission` writes."""
         return list(JOINTS), list(MOTOR_IDS), expected_registers(self.cfg, self.name)
 
@@ -35,4 +37,6 @@ class RakudaFollower(Robot):
         return (self.port,)
 
     def open_bus(self, mock: bool) -> RobotBus:
-        return open_rakuda_bus(self.port, mock, FOLLOWER_MODELS, self.cfg, self.name, self.limits)
+        return open_rakuda_bus(
+            self.port, mock, FOLLOWER_MODELS, self.cfg, self.name, self.limits
+        )

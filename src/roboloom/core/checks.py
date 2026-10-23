@@ -6,7 +6,11 @@ import math
 
 
 def finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
 
 
 def positive(value: object, name: str) -> float:
@@ -22,7 +26,12 @@ def identity(value: object, name: str) -> str:
 
 
 def names(value: object, name: str) -> tuple[str, ...]:
-    if not isinstance(value, (list, tuple)) or not value or not all(isinstance(x, str) and x for x in value) or len(set(value)) != len(value):
+    if (
+        not isinstance(value, (list, tuple))
+        or not value
+        or not all(isinstance(x, str) and x for x in value)
+        or len(set(value)) != len(value)
+    ):
         raise ValueError(f"{name}: expected unique, non-empty joint names")
     return tuple(value)
 

@@ -30,19 +30,34 @@ def device(groups, modes, gravity=None):
     return JointDevice(bus, JOINTS, laws, "dev"), bus
 
 
-GRAVITY = {"group": "arm", "law": "gravity_comp", "joints": ["a", "b"], "max_current_mA": 80, "kd": 0.0, "ramp_s": 1.0,
-           "max_velocity": 2000, "range": [[1000, 3000], [1000, 3000]], "range_margin": 100}
+GRAVITY = {
+    "group": "arm",
+    "law": "gravity_comp",
+    "joints": ["a", "b"],
+    "max_current_mA": 80,
+    "kd": 0.0,
+    "ramp_s": 1.0,
+    "max_velocity": 2000,
+    "range": [[1000, 3000], [1000, 3000]],
+    "range_margin": 100,
+}
 
 
 def test_groups_must_cover_every_joint_once():
     with pytest.raises(ValueError, match="exactly once"):
-        parse_groups([{"group": "x", "law": "position", "joints": ["a", "b"]}], JOINTS, "dev")
+        parse_groups(
+            [{"group": "x", "law": "position", "joints": ["a", "b"]}], JOINTS, "dev"
+        )
     with pytest.raises(ValueError, match="law"):
-        parse_groups([{"group": "x", "law": "teleport", "joints": list(JOINTS)}], JOINTS, "dev")
+        parse_groups(
+            [{"group": "x", "law": "teleport", "joints": list(JOINTS)}], JOINTS, "dev"
+        )
 
 
 def test_modes_are_checked_never_written_on_enable():
-    dev, bus = device([{"group": "all", "law": "position", "joints": list(JOINTS)}], [3, 3, 0])
+    dev, bus = device(
+        [{"group": "all", "law": "position", "joints": list(JOINTS)}], [3, 3, 0]
+    )
     dev.read_state()
     with pytest.raises(RuntimeError, match="commission"):
         dev.enable_torque()
@@ -50,7 +65,16 @@ def test_modes_are_checked_never_written_on_enable():
 
 
 def test_gravity_comp_ramps_clips_and_zeroes_current_before_torque():
-    groups = [GRAVITY, {"group": "grip", "law": "current_position", "joints": ["c"], "goal_current_mA": 30, "target": 2400}]
+    groups = [
+        GRAVITY,
+        {
+            "group": "grip",
+            "law": "current_position",
+            "joints": ["c"],
+            "goal_current_mA": 30,
+            "target": 2400,
+        },
+    ]
     dev, bus = device(groups, [0, 0, 5], FlatGravity())
     bus.goal_current = [910.0, 910.0, 910.0]  # power-on value equals Current Limit
     dev.read_state()
@@ -67,7 +91,11 @@ def test_gravity_comp_ramps_clips_and_zeroes_current_before_torque():
 
 
 def test_runaway_and_bus_failure_leave_device_limp():
-    dev, bus = device([GRAVITY, {"group": "c", "law": "free", "joints": ["c"]}], [0, 0, 3], FlatGravity())
+    dev, bus = device(
+        [GRAVITY, {"group": "c", "law": "free", "joints": ["c"]}],
+        [0, 0, 3],
+        FlatGravity(),
+    )
     dev.read_state()
     dev.enable_torque()
     bus.values[0] = 3200  # beyond range + margin
@@ -83,11 +111,20 @@ def test_runaway_and_bus_failure_leave_device_limp():
 
 
 def test_follower_safety_drives_a_device_like_a_bus():
-    groups = [{"group": "arm", "law": "position", "joints": ["a", "b"]},
-              {"group": "grip", "law": "current_position", "joints": ["c"], "goal_current_mA": 300}]
+    groups = [
+        {"group": "arm", "law": "position", "joints": ["a", "b"]},
+        {
+            "group": "grip",
+            "law": "current_position",
+            "joints": ["c"],
+            "goal_current_mA": 300,
+        },
+    ]
     dev, bus = device(groups, [3, 3, 5])
     limit = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
-    safety = FollowerSafety({"robot_id": "r", "limits": [limit] * 3, "control_hz": 30}, dev)
+    safety = FollowerSafety(
+        {"robot_id": "r", "limits": [limit] * 3, "control_hz": 30}, dev
+    )
     safety.start()
     assert bus.torque == [True, True, True] and bus.goal_current[2] == 300
     safety.stop()
@@ -96,11 +133,20 @@ def test_follower_safety_drives_a_device_like_a_bus():
 
 
 def test_runtime_switch_changes_one_group_with_torque_off():
-    groups = [{"group": "arm", "law": "free", "joints": ["a", "b"]}, {"group": "c", "law": "position", "joints": ["c"]}]
+    groups = [
+        {"group": "arm", "law": "free", "joints": ["a", "b"]},
+        {"group": "c", "law": "position", "joints": ["c"]},
+    ]
     dev, bus = device(groups, [3, 3, 3])
     dev.read_state()
     dev.enable_torque()
-    new = build_laws(parse_groups([GRAVITY, {"group": "c", "law": "position", "joints": ["c"]}], JOINTS, "dev"), JOINTS, models={"arm": FlatGravity()})[0]
+    new = build_laws(
+        parse_groups(
+            [GRAVITY, {"group": "c", "law": "position", "joints": ["c"]}], JOINTS, "dev"
+        ),
+        JOINTS,
+        models={"arm": FlatGravity()},
+    )[0]
     dev.switch("arm", new)
     assert bus.modes[:2] == [0, 0] and bus.torque[:2] == [True, True]
     assert ("operating_mode", [0, 1], [0, 0]) in bus.eeprom_writes
@@ -118,8 +164,15 @@ def hardware_tree():
 def test_hardware_refuses_unvalidated_and_unprotected_current_laws():
     tree = hardware_tree()
     joints = [x["name"] for x in tree["robots"]["robot"]["limits"]]
-    impedance = {"group": "all", "law": "impedance", "joints": joints, "kp": 1.0, "max_current_mA": 500,
-                 "max_velocity": 2000, "range": [[1000, 3000]] * 17}
+    impedance = {
+        "group": "all",
+        "law": "impedance",
+        "joints": joints,
+        "kp": 1.0,
+        "max_current_mA": 500,
+        "max_velocity": 2000,
+        "range": [[1000, 3000]] * 17,
+    }
     tree["robots"]["robot"]["control"] = [impedance]
     del tree["robots"]["robot"]["registers"]["operating_mode"]
     with pytest.raises(ValueError, match="not validated"):
@@ -142,7 +195,13 @@ def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
     arms = [j for j in joints if not j.endswith("grip")]
     tree["inputs"]["leader"]["control"] = [
         {"group": "hand", "law": "free", "joints": arms},
-        {"group": "trigger", "law": "current_position", "joints": ["r_arm_grip", "l_arm_grip"], "goal_current_mA": 30, "target": 2400},
+        {
+            "group": "trigger",
+            "law": "current_position",
+            "joints": ["r_arm_grip", "l_arm_grip"],
+            "goal_current_mA": 30,
+            "target": 2400,
+        },
     ]
     cfg = parse_experiment(tree)
     leader = cfg.inputs["leader"]
@@ -158,7 +217,9 @@ def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
 
 
 def test_position_joints_keep_torque_when_a_write_fails():
-    dev, bus = device([{"group": "all", "law": "position", "joints": list(JOINTS)}], [3, 3, 3])
+    dev, bus = device(
+        [{"group": "all", "law": "position", "joints": list(JOINTS)}], [3, 3, 3]
+    )
     dev.read_state()
     dev.enable_torque()
 
@@ -175,22 +236,65 @@ def test_position_joints_keep_torque_when_a_write_fails():
 
 
 def test_spring_holds_rest_with_capped_current_and_needs_a_capable_bus():
-    dev, bus = device([{"group": "arm", "law": "free", "joints": ["a", "b"]},
-                       {"group": "trigger", "law": "spring", "joints": ["c"], "rest": 2600, "goal_current_mA": 20}], [3, 3, 5])
+    dev, bus = device(
+        [
+            {"group": "arm", "law": "free", "joints": ["a", "b"]},
+            {
+                "group": "trigger",
+                "law": "spring",
+                "joints": ["c"],
+                "rest": 2600,
+                "goal_current_mA": 20,
+            },
+        ],
+        [3, 3, 5],
+    )
     dev.read_state()
     dev.enable_torque()
-    assert bus.values[2] == 2600 and bus.goal_current[2] == 20 and bus.torque == [False, False, True]
+    assert (
+        bus.values[2] == 2600
+        and bus.goal_current[2] == 20
+        and bus.torque == [False, False, True]
+    )
     with pytest.raises(ValueError, match="rest"):
-        parse_and_build([{"group": "all", "law": "spring", "joints": list(JOINTS), "goal_current_mA": 20}])
+        parse_and_build(
+            [
+                {
+                    "group": "all",
+                    "law": "spring",
+                    "joints": list(JOINTS),
+                    "goal_current_mA": 20,
+                }
+            ]
+        )
 
     class PositionOnlyBus:
-        def read_positions(self): return [0.0] * 3
-        def write_goal_positions(self, indices, values): pass
-        def set_torque(self, indices, on): pass
-        def read_register(self, name): return [5] * 3
-        def close(self): pass
+        def read_positions(self):
+            return [0.0] * 3
 
-    laws = parse_and_build([{"group": "all", "law": "spring", "joints": list(JOINTS), "rest": 2600, "goal_current_mA": 20}])
+        def write_goal_positions(self, indices, values):
+            pass
+
+        def set_torque(self, indices, on):
+            pass
+
+        def read_register(self, name):
+            return [5] * 3
+
+        def close(self):
+            pass
+
+    laws = parse_and_build(
+        [
+            {
+                "group": "all",
+                "law": "spring",
+                "joints": list(JOINTS),
+                "rest": 2600,
+                "goal_current_mA": 20,
+            }
+        ]
+    )
     with pytest.raises(TypeError, match="write_goal_currents"):
         JointDevice(PositionOnlyBus(), JOINTS, laws)
 

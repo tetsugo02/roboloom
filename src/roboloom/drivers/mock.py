@@ -11,12 +11,18 @@ from .dynamixel_table import OPERATING_MODES
 
 
 class MockBus:
-    def __init__(self, initial: float = 2048, dimension: int = 17, modes: list[int] | None = None):
+    def __init__(
+        self, initial: float = 2048, dimension: int = 17, modes: list[int] | None = None
+    ):
         self.values = [float(initial)] * dimension
         self.velocities = [0.0] * dimension
         self.enabled = False
         self.torque = [False] * dimension
-        self.modes = list(modes) if modes is not None else [OPERATING_MODES["position"]] * dimension
+        self.modes = (
+            list(modes)
+            if modes is not None
+            else [OPERATING_MODES["position"]] * dimension
+        )
         self.goal_current = [0.0] * dimension
         self.health = Health([0] * dimension, [30.0] * dimension)
         self.eeprom_writes: list[tuple[str, list[int], list[int]]] = []
@@ -32,7 +38,9 @@ class MockBus:
 
     def read_state(self) -> JointState:
         self._check()
-        return JointState(self.values.copy(), self.velocities.copy(), self.goal_current.copy())
+        return JointState(
+            self.values.copy(), self.velocities.copy(), self.goal_current.copy()
+        )
 
     def read_health(self) -> Health:
         self._check()

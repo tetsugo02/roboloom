@@ -19,8 +19,12 @@ class ShapeCheckedReader:
 
     def read(self) -> Sample | None:
         sample = self.reader.read()
-        if sample is not None and (sample.value.shape != self.shape or sample.value.dtype != np.uint8):
-            raise ValueError(f"{self.name}: frame {sample.value.shape} {sample.value.dtype} != configured {self.shape} uint8")
+        if sample is not None and (
+            sample.value.shape != self.shape or sample.value.dtype != np.uint8
+        ):
+            raise ValueError(
+                f"{self.name}: frame {sample.value.shape} {sample.value.dtype} != configured {self.shape} uint8"
+            )
         return sample
 
     def close(self) -> None:
@@ -34,10 +38,18 @@ class ImageSensor(Source):
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
-        self.shape = (int(positive(cfg.get("height"), f"{name}.height")), int(positive(cfg.get("width"), f"{name}.width")), 3)
+        self.shape = (
+            int(positive(cfg.get("height"), f"{name}.height")),
+            int(positive(cfg.get("width"), f"{name}.width")),
+            3,
+        )
 
     def open(self, mock: bool, dataset_fps: float) -> Reader:
-        reader = ConstantReader(np.zeros(self.shape, np.uint8)) if mock else self.open_device()
+        reader = (
+            ConstantReader(np.zeros(self.shape, np.uint8))
+            if mock
+            else self.open_device()
+        )
         return ShapeCheckedReader(self.name, reader, self.shape)
 
     def open_device(self) -> Reader:
@@ -47,7 +59,13 @@ class ImageSensor(Source):
         return {"image": np.asarray(sample.value)}
 
     def features(self, dataset_fps: float) -> Features:
-        return {f"observation.images.{self.name}": {"dtype": "video", "shape": self.shape, "names": ["height", "width", "channels"]}}
+        return {
+            f"observation.images.{self.name}": {
+                "dtype": "video",
+                "shape": self.shape,
+                "names": ["height", "width", "channels"],
+            }
+        }
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
         image = msg.payload["image"] if msg else np.zeros(self.shape, np.uint8)

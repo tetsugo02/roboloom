@@ -13,22 +13,46 @@ from .base import Controller
 
 
 class JointController(Controller):
-    def __init__(self, name: str, cfg: dict, source: InputDevice, robot: Robot, robot_id: str):
+    def __init__(
+        self, name: str, cfg: dict, source: InputDevice, robot: Robot, robot_id: str
+    ):
         super().__init__(name, cfg, source, robot, robot_id)
         if not isinstance(source, JointInput):
-            raise TypeError(f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}")
+            raise TypeError(
+                f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}"
+            )
         if not cfg.get("unit") == source.unit == robot.unit:
-            raise ValueError(f"{name}: unit must match input {source.unit!r} and robot {robot.unit!r}")
+            raise ValueError(
+                f"{name}: unit must match input {source.unit!r} and robot {robot.unit!r}"
+            )
         mapping = cfg.get("joints")
-        if not isinstance(mapping, list) or not all(isinstance(j, dict) for j in mapping):
-            raise ValueError(f"{name} needs a complete, ordered, one-to-one joint mapping")
+        if not isinstance(mapping, list) or not all(
+            isinstance(j, dict) for j in mapping
+        ):
+            raise ValueError(
+                f"{name} needs a complete, ordered, one-to-one joint mapping"
+            )
         leaders = [j.get("leader") for j in mapping]
-        if [j.get("follower") for j in mapping] != list(robot.joint_names) or len(set(leaders)) != len(leaders) or not set(leaders) <= set(source.joint_names):
-            raise ValueError(f"{name} needs a complete, ordered, one-to-one joint mapping")
+        if (
+            [j.get("follower") for j in mapping] != list(robot.joint_names)
+            or len(set(leaders)) != len(leaders)
+            or not set(leaders) <= set(source.joint_names)
+        ):
+            raise ValueError(
+                f"{name} needs a complete, ordered, one-to-one joint mapping"
+            )
         for j in mapping:
-            if j.get("sign") not in (-1, 1) or not isinstance(j.get("offset"), (int, float)) or not math.isfinite(j["offset"]):
+            if (
+                j.get("sign") not in (-1, 1)
+                or not isinstance(j.get("offset"), (int, float))
+                or not math.isfinite(j["offset"])
+            ):
                 raise ValueError("joint sign must be +/-1 and offset finite")
-        for field in ("alignment_tolerance", "max_speed_counts_per_s", "input_timeout_ms"):
+        for field in (
+            "alignment_tolerance",
+            "max_speed_counts_per_s",
+            "input_timeout_ms",
+        ):
             positive(cfg.get(field), f"{name}.{field}")
         self.source_joints = source.joint_names
         self.last_seq = -1
@@ -46,11 +70,19 @@ class JointController(Controller):
     def status(self) -> dict:
         out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
         if self.worst is not None and self.state == "aligning":
-            out["worst_joint"], out["worst_diff"] = self.worst[0], round(self.worst[1], 1)
+            out["worst_joint"], out["worst_diff"] = (
+                self.worst[0],
+                round(self.worst[1], 1),
+            )
         return out
 
-    def update(self, intent: Envelope, follower: list[float], now_ns: int | None = None,
-               follower_target: list[float] | None = None) -> Envelope | None:
+    def update(
+        self,
+        intent: Envelope,
+        follower: list[float],
+        now_ns: int | None = None,
+        follower_target: list[float] | None = None,
+    ) -> Envelope | None:
         now = time.monotonic_ns() if now_ns is None else now_ns
         if (
             intent.kind != JointInput.kind
@@ -68,7 +100,9 @@ class JointController(Controller):
         self.last_seq = intent.seq
         incoming = positions(intent.payload["positions"], len(self.source_joints))
         by_name = dict(zip(self.source_joints, incoming, strict=True))
-        target = [by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]]
+        target = [
+            by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
+        ]
         current = positions(follower, len(self.robot.joint_names))
         if not self.aligned:
             diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
@@ -84,10 +118,15 @@ class JointController(Controller):
         step = self.cfg["max_speed_counts_per_s"] * dt
         # Step from what the follower holds, not from our own last output: while the robot is
         # not armed (or refuses a command) our targets would otherwise run ahead of it.
-        previous = list(follower_target) if follower_target is not None else self.last_target
+        previous = (
+            list(follower_target) if follower_target is not None else self.last_target
+        )
         if previous is None:
             raise RuntimeError("controller target missing after alignment")
-        limited = [max(p - step, min(p + step, t)) for p, t in zip(previous, target, strict=True)]
+        limited = [
+            max(p - step, min(p + step, t))
+            for p, t in zip(previous, target, strict=True)
+        ]
         self.last_target, self.last_target_ns = limited, now
         self.state = "following"
         return self.command(limited, now, input_seq=intent.seq)

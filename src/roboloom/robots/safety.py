@@ -19,11 +19,23 @@ MAX_CLAMP_DT_S = 0.1  # a stalled tick never widens the speed clamp beyond this
 
 
 def make_command(
-    publisher: Publisher, *, robot_id: str, unit: str, target: list[float],
-    now_ns: int, deadline_ms: float, **extra: object,
+    publisher: Publisher,
+    *,
+    robot_id: str,
+    unit: str,
+    target: list[float],
+    now_ns: int,
+    deadline_ms: float,
+    **extra: object,
 ) -> Envelope:
     """RobotCommand: target, unit and absolute deadline, validated again by FollowerSafety."""
-    payload = {"robot_id": robot_id, "unit": unit, "positions": target, "deadline_ns": now_ns + int(deadline_ms * 1e6), **extra}
+    payload = {
+        "robot_id": robot_id,
+        "unit": unit,
+        "positions": target,
+        "deadline_ns": now_ns + int(deadline_ms * 1e6),
+        **extra,
+    }
     return publisher.make("command", payload, now_ns)
 
 
@@ -35,8 +47,12 @@ class FollowerSafety:
     def __init__(self, cfg: dict, bus):
         self.cfg, self.bus = cfg, bus
         self.dim = len(cfg["limits"])
-        self.names = [limit.get("name", str(i)) for i, limit in enumerate(cfg["limits"])]
-        self.last_reject = ""  # why the latest command was refused, for the operator screen
+        self.names = [
+            limit.get("name", str(i)) for i, limit in enumerate(cfg["limits"])
+        ]
+        self.last_reject = (
+            ""  # why the latest command was refused, for the operator screen
+        )
         self.health = cfg.get("health") or {}
         self.period_s = 1 / cfg.get("control_hz", 30)
         self.publisher = Publisher(cfg.get("name", "robot"))
@@ -143,7 +159,9 @@ class FollowerSafety:
                     return f"joint {i} current {current:.0f} mA > {limit} mA"
         return None
 
-    def _checked(self, command: Envelope, now: int, dt: float) -> tuple[list[float] | None, bool, str]:
+    def _checked(
+        self, command: Envelope, now: int, dt: float
+    ) -> tuple[list[float] | None, bool, str]:
         """Return (target, clamped, reject reason). Out-of-range joints are clipped to the range
         (as YAM does); NaN, stale commands and jumps beyond `max_jump` are rejected."""
         try:
@@ -152,14 +170,24 @@ class FollowerSafety:
             return None, False, f"bad positions: {exc}"
         deadline = command.payload.get("deadline_ns", 0)
         if not command.t_ready_ns <= now <= deadline:
-            return None, False, f"stale command ({(now - command.t_ready_ns) / 1e6:.0f} ms old)"
+            return (
+                None,
+                False,
+                f"stale command ({(now - command.t_ready_ns) / 1e6:.0f} ms old)",
+            )
         reference = self.last_sent or self.hold_target or self.current or target
         clamped = False
         out = []
-        for name, x, ref, bound in zip(self.names, target, reference, self.cfg["limits"], strict=True):
+        for name, x, ref, bound in zip(
+            self.names, target, reference, self.cfg["limits"], strict=True
+        ):
             inside = min(bound["max"], max(bound["min"], x))
             if abs(inside - ref) > bound["max_jump"]:
-                return None, False, f"{name} jumps {inside - ref:+.0f} > max_jump {bound['max_jump']}"
+                return (
+                    None,
+                    False,
+                    f"{name} jumps {inside - ref:+.0f} > max_jump {bound['max_jump']}",
+                )
             step = bound["max_speed"] * dt
             limited = min(ref + step, max(ref - step, inside))
             clamped = clamped or limited != x
@@ -168,7 +196,12 @@ class FollowerSafety:
 
     def tick(self, now_ns: int | None = None) -> tuple[Envelope, Envelope]:
         now = time.monotonic_ns() if now_ns is None else now_ns
-        dt = min(MAX_CLAMP_DT_S, self.period_s if self.last_tick_ns is None else (now - self.last_tick_ns) / 1e9)
+        dt = min(
+            MAX_CLAMP_DT_S,
+            self.period_s
+            if self.last_tick_ns is None
+            else (now - self.last_tick_ns) / 1e9,
+        )
         sent, clamped, sent_ns, seq = False, False, 0, -1
         command: Envelope | None = None
         try:
@@ -200,9 +233,16 @@ class FollowerSafety:
         state_msg = self.publisher.make(
             "robot_state",
             {
-                "positions": state.positions, "velocities": state.velocities, "currents_mA": state.currents_mA,
-                "mode": self.mode, "reason": self.reason, "tick_interval_ms": interval,
-                "target": self.hold_target, "rejected": bool(command is not None and not sent and self.mode == "HOLD"),
+                "positions": state.positions,
+                "velocities": state.velocities,
+                "currents_mA": state.currents_mA,
+                "mode": self.mode,
+                "reason": self.reason,
+                "tick_interval_ms": interval,
+                "target": self.hold_target,
+                "rejected": bool(
+                    command is not None and not sent and self.mode == "HOLD"
+                ),
             },
             now,
         )
@@ -210,7 +250,10 @@ class FollowerSafety:
             "action",
             {
                 "positions": self.last_sent if sent else [0.0] * self.dim,
-                "valid": sent, "clamped": clamped, "command_seq": seq, "t_sent_ns": sent_ns,
+                "valid": sent,
+                "clamped": clamped,
+                "command_seq": seq,
+                "t_sent_ns": sent_ns,
             },
             now,
         )

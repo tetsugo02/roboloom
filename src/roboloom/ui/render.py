@@ -33,7 +33,11 @@ def register(role: str) -> Callable[[Renderer], Renderer]:
 
 
 def key_values(fields: dict, skip: Iterable[str] = ()) -> str:
-    return "  ".join(f"{k}={v}" for k, v in fields.items() if k not in skip and v not in (None, "", {}, []))
+    return "  ".join(
+        f"{k}={v}"
+        for k, v in fields.items()
+        if k not in skip and v not in (None, "", {}, [])
+    )
 
 
 def generic(fields: dict) -> tuple[str, str]:
@@ -92,7 +96,9 @@ def recorder(f: dict) -> tuple[str, str]:
     if f.get("state") == "recording":
         parts.append(f"{f.get('rows')} rows  {f.get('elapsed_s')} s")
     if f.get("missing"):
-        parts.append("missing " + ", ".join(f"{k}:{v}" for k, v in f["missing"].items()))
+        parts.append(
+            "missing " + ", ".join(f"{k}:{v}" for k, v in f["missing"].items())
+        )
     return str(f.get("state", "")), "  ".join(parts)
 
 
@@ -101,34 +107,63 @@ def node_table(status: dict | None, now_ns: int) -> Table:
     table.add_column("node", style="bold", no_wrap=True)
     table.add_column("role", style="dim", no_wrap=True)
     table.add_column("state", no_wrap=True)
-    table.add_column("detail", overflow="fold", ratio=1)  # the other columns fit their content
+    table.add_column(
+        "detail", overflow="fold", ratio=1
+    )  # the other columns fit their content
     nodes = (status or {}).get("nodes", {})
     order = {r: i for i, r in enumerate(ROLE_ORDER)}
-    for name, item in sorted(nodes.items(), key=lambda kv: (order.get(kv[1].get("role"), 99), kv[0])):
+    for name, item in sorted(
+        nodes.items(), key=lambda kv: (order.get(kv[1].get("role"), 99), kv[0])
+    ):
         role = item.get("role", "?")
         age_s = (now_ns - item.get("t_ns", 0)) / 1e9
         if age_s > STALE_S:
-            table.add_row(name, role, Text(f"no status {age_s:.0f} s", style="bold red"), "node stopped or blocked?")
+            table.add_row(
+                name,
+                role,
+                Text(f"no status {age_s:.0f} s", style="bold red"),
+                "node stopped or blocked?",
+            )
             continue
         state, detail = RENDERERS.get(role, generic)(item.get("fields", {}))
-        table.add_row(name, role, Text(state, style=LEVEL_STYLE.get(item.get("level", "ok"), "")), detail)
+        table.add_row(
+            name,
+            role,
+            Text(state, style=LEVEL_STYLE.get(item.get("level", "ok"), "")),
+            detail,
+        )
     if not nodes:
         table.add_row("-", "-", Text("waiting for nodes", style="yellow"), "")
     return table
 
 
-def render(status: dict | None, messages: Iterable[Text | str], prompt: Text | str, now_ns: int | None = None,
-           title: str = "roboloom", log_path: Path | None = None) -> RenderableType:
+def render(
+    status: dict | None,
+    messages: Iterable[Text | str],
+    prompt: Text | str,
+    now_ns: int | None = None,
+    title: str = "roboloom",
+    log_path: Path | None = None,
+) -> RenderableType:
     now = time.monotonic_ns() if now_ns is None else now_ns
     header = Text(title, style="bold")
     if status:
         experiment = Path(status.get("experiment", ""))
-        header.append(f"  {experiment.parent.name}/{experiment.name}  mode={status.get('mode')}", style="dim")
+        header.append(
+            f"  {experiment.parent.name}/{experiment.name}  mode={status.get('mode')}",
+            style="dim",
+        )
     if log_path is not None:
         header.append(f"  log: {log_path}", style="dim")
     lines = list(messages)[-8:]
-    log = Group(*(m if isinstance(m, Text) else Text(m) for m in lines)) if lines else Text("")
-    help_line = Text("start <task> | stop | save | discard | estop | release | quit", style="dim")
+    log = (
+        Group(*(m if isinstance(m, Text) else Text(m) for m in lines))
+        if lines
+        else Text("")
+    )
+    help_line = Text(
+        "start <task> | stop | save | discard | estop | release | quit", style="dim"
+    )
     return Group(
         header,
         Panel(node_table(status, now), title="nodes", border_style="blue"),
@@ -141,10 +176,14 @@ def render(status: dict | None, messages: Iterable[Text | str], prompt: Text | s
 def describe_report(report: dict) -> Text:
     """One message line for a recorder report."""
     if "error" in report:
-        return Text(f"{report.get('command', '')} failed: {report['error']}", style="bold red")
+        return Text(
+            f"{report.get('command', '')} failed: {report['error']}", style="bold red"
+        )
     if "saved_frames" in report:
         m = report.get("metrics", {})
-        missing = {k: round(v * 100, 1) for k, v in m.get("missing_rate", {}).items() if v}
+        missing = {
+            k: round(v * 100, 1) for k, v in m.get("missing_rate", {}).items() if v
+        }
         tick = m.get("control_interval_ms", {})
         text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {tick.get('p99', 0):.1f} ms max {tick.get('max', 0):.1f} ms"
         if missing:

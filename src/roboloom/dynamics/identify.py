@@ -27,8 +27,16 @@ def score(fit: Fit) -> float:
     return float(np.sqrt(np.mean(np.square(errors))))
 
 
-def search_directions(urdf: str, inputs: list[JointMap], outputs: list[str], samples: np.ndarray, currents: np.ndarray,
-                      holdout: np.ndarray, fixed: frozenset[str] | set[str] = frozenset()) -> list[tuple[float, list[JointMap], Fit]]:
+def search_directions(
+    urdf: str,
+    inputs: list[JointMap],
+    outputs: list[str],
+    samples: np.ndarray,
+    currents: np.ndarray,
+    holdout: np.ndarray,
+    fixed: frozenset[str] | set[str] = frozenset(),
+    shared: bool = False,
+) -> list[tuple[float, list[JointMap], Fit]]:
     """Fit every sign combination of the non-fixed inputs; best (lowest holdout RMS) first."""
     free = [k for k, m in enumerate(inputs) if m.name not in fixed]
     results = []
@@ -36,6 +44,6 @@ def search_directions(urdf: str, inputs: list[JointMap], outputs: list[str], sam
         trial = list(inputs)
         for k, sign in zip(free, signs, strict=True):
             trial[k] = replace(inputs[k], direction=sign * abs(inputs[k].direction))
-        fit = Regressor(urdf, trial, outputs).fit(samples, currents, holdout)
+        fit = Regressor(urdf, trial, outputs).fit(samples, currents, holdout, shared)
         results.append((score(fit), trial, fit))
     return sorted(results, key=lambda r: r[0])

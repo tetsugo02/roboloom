@@ -8,8 +8,11 @@ next to it subclasses one and only implements `open_device`.
 from ..core.registry import Registry
 from ..core.source import Source
 
-SENSORS: Registry[Source] = Registry("sensor", {
-    "realsense_rgb": "roboloom.sensors.vision.realsense:RealSenseRGB",
-    "digit": "roboloom.sensors.tactile.digit:DigitSensor",
-    "pcm_mono": "roboloom.sensors.audio.microphone:SoundDeviceMic",
-})
+SENSORS: Registry[Source] = Registry(
+    "sensor",
+    {
+        "realsense_rgb": "roboloom.sensors.vision.realsense:RealSenseRGB",
+        "digit": "roboloom.sensors.tactile.digit:DigitSensor",
+        "pcm_mono": "roboloom.sensors.audio.microphone:SoundDeviceMic",
+    },
+)

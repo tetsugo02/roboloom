@@ -23,8 +23,12 @@ class RunawayError(RuntimeError):
 
 @dataclass
 class Goals:
-    positions: dict[int, float] = field(default_factory=dict)  # device joint index -> goal position
-    currents_mA: dict[int, float] = field(default_factory=dict)  # device joint index -> goal current
+    positions: dict[int, float] = field(
+        default_factory=dict
+    )  # device joint index -> goal position
+    currents_mA: dict[int, float] = field(
+        default_factory=dict
+    )  # device joint index -> goal current
 
 
 def _per_joint(value: object, count: int, name: str) -> list[float]:
@@ -42,7 +46,14 @@ class ControlLaw(ABC):
     # motors lack e.g. current commands cannot select the law
     needs: ClassVar[tuple[str, ...]] = ()
 
-    def __init__(self, name: str, joints: list[int], joint_names: Sequence[str], cfg: dict, gravity: GravityModel | None = None):
+    def __init__(
+        self,
+        name: str,
+        joints: list[int],
+        joint_names: Sequence[str],
+        cfg: dict,
+        gravity: GravityModel | None = None,
+    ):
         self.name, self.joints, self.cfg = name, joints, cfg
         self.device_joints = tuple(joint_names)
         self.gravity = gravity
@@ -51,7 +62,9 @@ class ControlLaw(ABC):
         """Called when torque turns on, with the state measured just before."""
 
     @abstractmethod
-    def compute(self, state: JointState, target: Sequence[float] | None, dt: float) -> Goals: ...
+    def compute(
+        self, state: JointState, target: Sequence[float] | None, dt: float
+    ) -> Goals: ...
 
 
 class Free(ControlLaw):
@@ -67,7 +80,11 @@ class Position(ControlLaw):
     """Goal position = target; without a target, hold the last goal."""
 
     mode = "position"
-    needs: ClassVar[tuple[str, ...]] = ("write_goal_positions", "set_torque", "read_register")
+    needs: ClassVar[tuple[str, ...]] = (
+        "write_goal_positions",
+        "set_torque",
+        "read_register",
+    )
 
     def reset(self, state):
         self.goal = {i: state.positions[i] for i in self.joints}
@@ -86,8 +103,14 @@ class CurrentPosition(Position):
 
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         super().__init__(name, joints, joint_names, cfg, gravity)
-        self.limit = _per_joint(cfg.get("goal_current_mA"), len(joints), f"{name}.goal_current_mA")
-        self.fixed = None if cfg.get("target") is None else _per_joint(cfg["target"], len(joints), f"{name}.target")
+        self.limit = _per_joint(
+            cfg.get("goal_current_mA"), len(joints), f"{name}.goal_current_mA"
+        )
+        self.fixed = (
+            None
+            if cfg.get("target") is None
+            else _per_joint(cfg["target"], len(joints), f"{name}.target")
+        )
 
     def compute(self, state, target, dt):
         if self.fixed is not None:
@@ -108,8 +131,12 @@ class Spring(CurrentPosition):
 
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         if cfg.get("rest") is None:
-            raise ValueError(f"{name}: spring needs rest (counts, one per joint or one for all)")
-        super().__init__(name, joints, joint_names, {**cfg, "target": cfg["rest"]}, gravity)
+            raise ValueError(
+                f"{name}: spring needs rest (counts, one per joint or one for all)"
+            )
+        super().__init__(
+            name, joints, joint_names, {**cfg, "target": cfg["rest"]}, gravity
+        )
 
 
 class CurrentLaw(ControlLaw):
@@ -122,13 +149,24 @@ class CurrentLaw(ControlLaw):
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         super().__init__(name, joints, joint_names, cfg, gravity)
         n = len(joints)
-        self.max_current = [positive(x, f"{name}.max_current_mA") for x in _per_joint(cfg.get("max_current_mA"), n, f"{name}.max_current_mA")]
+        self.max_current = [
+            positive(x, f"{name}.max_current_mA")
+            for x in _per_joint(cfg.get("max_current_mA"), n, f"{name}.max_current_mA")
+        ]
         self.kd = _per_joint(cfg.get("kd", 0.0), n, f"{name}.kd")  # mA per count/s
         self.gain = float(cfg.get("gravity_gain", 1.0 if gravity else 0.0))
         self.ramp_s = positive(cfg.get("ramp_s", 1.0), f"{name}.ramp_s")
-        self.max_velocity = positive(cfg.get("max_velocity"), f"{name}.max_velocity")  # counts/s
+        self.max_velocity = positive(
+            cfg.get("max_velocity"), f"{name}.max_velocity"
+        )  # counts/s
         limits = cfg.get("range")
-        if not isinstance(limits, list) or len(limits) != n or not all(isinstance(r, list) and len(r) == 2 and r[0] < r[1] for r in limits):
+        if (
+            not isinstance(limits, list)
+            or len(limits) != n
+            or not all(
+                isinstance(r, list) and len(r) == 2 and r[0] < r[1] for r in limits
+            )
+        ):
             raise ValueError(f"{name}.range needs [min, max] counts per joint")
         self.range = [(float(lo), float(hi)) for lo, hi in limits]
         self.margin = positive(cfg.get("range_margin", 100), f"{name}.range_margin")
@@ -137,11 +175,20 @@ class CurrentLaw(ControlLaw):
         if gravity is not None:
             missing = set(gravity.output_joints) ^ {joint_names[i] for i in joints}
             if missing:
-                raise ValueError(f"{name}: gravity model joints differ from the group: {sorted(missing)}")
+                raise ValueError(
+                    f"{name}: gravity model joints differ from the group: {sorted(missing)}"
+                )
             if not set(gravity.joint_names) <= set(joint_names):
-                raise ValueError(f"{name}: gravity model reads joints the device does not have")
-            self.model_inputs = [list(joint_names).index(j) for j in gravity.joint_names]
-            self.model_outputs = {list(joint_names).index(j): k for k, j in enumerate(gravity.output_joints)}
+                raise ValueError(
+                    f"{name}: gravity model reads joints the device does not have"
+                )
+            self.model_inputs = [
+                list(joint_names).index(j) for j in gravity.joint_names
+            ]
+            self.model_outputs = {
+                list(joint_names).index(j): k
+                for k, j in enumerate(gravity.output_joints)
+            }
 
     def reset(self, state):
         self.elapsed = 0.0
@@ -160,8 +207,13 @@ class CurrentLaw(ControlLaw):
         for k, i in enumerate(self.joints):
             q, v = state.positions[i], velocities[i]
             lo, hi = self.range[k]
-            if abs(v) > self.max_velocity or not lo - self.margin <= q <= hi + self.margin:
-                raise RunawayError(f"{self.device_joints[i]}: q={q:.0f} v={v:.0f} outside the allowed range")
+            if (
+                abs(v) > self.max_velocity
+                or not lo - self.margin <= q <= hi + self.margin
+            ):
+                raise RunawayError(
+                    f"{self.device_joints[i]}: q={q:.0f} v={v:.0f} outside the allowed range"
+                )
             push = self.barrier * (max(0.0, lo - q) - max(0.0, q - hi))
             value = scale * (raw[i] - self.kd[k] * v) + push
             out[i] = max(-self.max_current[k], min(self.max_current[k], value))
@@ -197,5 +249,8 @@ class Impedance(CurrentLaw):
         if target is not None:
             self.goal = {i: float(target[i]) for i in self.joints}
         g = self.gravity_mA(state)
-        raw = {i: kp * (self.goal[i] - state.positions[i]) + g[i] for kp, i in zip(self.kp, self.joints, strict=True)}
+        raw = {
+            i: kp * (self.goal[i] - state.positions[i]) + g[i]
+            for kp, i in zip(self.kp, self.joints, strict=True)
+        }
         return self.shape(state, raw, dt)

@@ -30,22 +30,39 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     probe_cmd = sub.add_parser("probe", help="read-only inspection of a Dynamixel bus")
     probe_cmd.add_argument("port")
-    probe_cmd.add_argument("--ids", type=lambda text: [int(x) for x in text.split(",")], default=None)
+    probe_cmd.add_argument(
+        "--ids", type=lambda text: [int(x) for x in text.split(",")], default=None
+    )
     probe_cmd.add_argument("--baudrate", type=int, default=1_000_000)
-    com = sub.add_parser("commission", help="write the Operating Mode / Current Limit a node expects (EEPROM)")
+    com = sub.add_parser(
+        "commission",
+        help="write the Operating Mode / Current Limit a node expects (EEPROM)",
+    )
     com.add_argument("experiment")
     com.add_argument("node")
     com.add_argument("--hardware", action="store_true", required=True)
-    calib = sub.add_parser("calibrate-joints", help="record zero counts at the URDF zero pose (read-only)")
+    calib = sub.add_parser(
+        "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
+    )
     calib.add_argument("calibration")
     calib.add_argument("--joints", type=lambda text: text.split(","), default=None)
-    ident = sub.add_parser("identify-gravity", help="collect holding currents and fit a gravity model")
+    ident = sub.add_parser(
+        "identify-gravity", help="collect holding currents and fit a gravity model"
+    )
     ident.add_argument("calibration")
     ident.add_argument("--out", required=True)
-    ident.add_argument("--data", default=None, help="npz of holding currents (default: next to --out)")
-    ident.add_argument("--collect", action="store_true", help="collect new poses first (needs --hardware)")
+    ident.add_argument(
+        "--data", default=None, help="npz of holding currents (default: next to --out)"
+    )
+    ident.add_argument(
+        "--collect",
+        action="store_true",
+        help="collect new poses first (needs --hardware)",
+    )
     ident.add_argument("--hardware", action="store_true")
-    ident.add_argument("--delta", type=int, default=30, help="approach offset in counts")
+    ident.add_argument(
+        "--delta", type=int, default=30, help="approach offset in counts"
+    )
     ident.add_argument("--max-rms-mA", type=float, default=15.0)
     for name in ("validate", "run", "session"):
         cmd = sub.add_parser(name)
@@ -56,11 +73,23 @@ def main() -> None:
                 action="store_true",
                 help="explicitly allow opening real devices",
             )
-            cmd.add_argument("--plain", action="store_true", help="line-by-line prompt instead of the fixed screen")
+            cmd.add_argument(
+                "--plain",
+                action="store_true",
+                help="line-by-line prompt instead of the fixed screen",
+            )
         if name == "session":
             cmd.add_argument(
                 "operation",
-                choices=("start", "stop", "save", "discard", "estop", "release", "quit"),
+                choices=(
+                    "start",
+                    "stop",
+                    "save",
+                    "discard",
+                    "estop",
+                    "release",
+                    "quit",
+                ),
             )
             cmd.add_argument("task", nargs="?", default="")
     args = parser.parse_args()
@@ -90,7 +119,9 @@ def main() -> None:
                 raise SystemExit("--collect torques the arm; add --hardware")
             from .tools import confirm
 
-            if not confirm(f"{cal.data['port']}: output joints will hold each pose with torque on, moving {args.delta} counts."):
+            if not confirm(
+                f"{cal.data['port']}: output joints will hold each pose with torque on, moving {args.delta} counts."
+            ):
                 return
             collect_holding_currents(cal, data, args.delta)
         print(fit_gravity(cal, data, out, args.max_rms_mA))
@@ -123,7 +154,9 @@ def main() -> None:
             fifo.unlink(missing_ok=True)
 
 
-def run_dataflow(dora: str, flow: Path, fifo: Path, directory: Path, plain: bool) -> None:
+def run_dataflow(
+    dora: str, flow: Path, fifo: Path, directory: Path, plain: bool
+) -> None:
     """Start `dora run` and drive it from the fixed screen, or line by line without a terminal."""
     from .ui.client import SessionClient
 
@@ -131,21 +164,42 @@ def run_dataflow(dora: str, flow: Path, fifo: Path, directory: Path, plain: bool
     report.touch()
     live = not plain and sys.stdin.isatty() and sys.stdout.isatty()
     log_path = directory / "dora.log"
-    command = [dora, "run", "--log-level", "error", "--env", f"ROBOLOOM_SESSION_FIFO={fifo}",
-               "--env", f"ROBOLOOM_REPORT_PATH={report}", "--env", f"ROBOLOOM_STATUS_PATH={status}", str(flow)]
+    command = [
+        dora,
+        "run",
+        "--log-level",
+        "error",
+        "--env",
+        f"ROBOLOOM_SESSION_FIFO={fifo}",
+        "--env",
+        f"ROBOLOOM_REPORT_PATH={report}",
+        "--env",
+        f"ROBOLOOM_STATUS_PATH={status}",
+        str(flow),
+    ]
     client = SessionClient(fifo, report, status)
     if live:
         from .ui.live import LiveSession
 
         with open(log_path, "w") as log:
             # own session: terminal Ctrl-C reaches only this CLI, which sends `quit`
-            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+            process = subprocess.Popen(
+                command,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True,
+            )
             try:
                 LiveSession(client, process, log_path, "roboloom").run()
             finally:
                 _finish(process)
-        if process.returncode:  # the log lives in a temporary directory; show its end now
-            print(f"dora exited with {process.returncode}; end of its log:\n{log_path.read_text()[-4000:]}")
+        if (
+            process.returncode
+        ):  # the log lives in a temporary directory; show its end now
+            print(
+                f"dora exited with {process.returncode}; end of its log:\n{log_path.read_text()[-4000:]}"
+            )
         return
     process = subprocess.Popen(command)
     try:
@@ -180,7 +234,13 @@ def _plain_loop(client, process: subprocess.Popen) -> None:
             print(describe_report(item).plain, flush=True)
         if not line:
             continue
-        if line == "release" and input("Support the arms. Type yes to turn the follower torque off: ").strip() != "yes":
+        if (
+            line == "release"
+            and input(
+                "Support the arms. Type yes to turn the follower torque off: "
+            ).strip()
+            != "yes"
+        ):
             print("release cancelled")
             continue
         try:
@@ -195,7 +255,9 @@ def _plain_loop(client, process: subprocess.Popen) -> None:
                 items = client.new_reports()
                 for item in items:
                     print(describe_report(item).plain, flush=True)
-                if any("saved_frames" in x or x.get("command") == "save" for x in items):
+                if any(
+                    "saved_frames" in x or x.get("command") == "save" for x in items
+                ):
                     break
                 time.sleep(0.1)
             else:

@@ -13,12 +13,27 @@ LIMIT = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
 
 
 def command(seq, target, now, deadline=None):
-    return Envelope("command", "controller", "boot", seq, now, now, {"robot_id": "r", "unit": "dynamixel_count", "positions": target, "deadline_ns": deadline or now + 100_000_000})
+    return Envelope(
+        "command",
+        "controller",
+        "boot",
+        seq,
+        now,
+        now,
+        {
+            "robot_id": "r",
+            "unit": "dynamixel_count",
+            "positions": target,
+            "deadline_ns": deadline or now + 100_000_000,
+        },
+    )
 
 
 def safety(**cfg):
     bus = MockBus(dimension=1)
-    ctl = FollowerSafety({"robot_id": "r", "limits": [LIMIT], "control_hz": 30, **cfg}, bus)
+    ctl = FollowerSafety(
+        {"robot_id": "r", "limits": [LIMIT], "control_hz": 30, **cfg}, bus
+    )
     ctl.start()
     ctl.arm()
     return ctl, bus
@@ -123,21 +138,44 @@ def test_torque_false_records_state_only():
 def test_controller_alignment_and_input_age():
     ctl = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
     now = time.monotonic_ns()
-    bad = Envelope("joint_intent", "leader", "boot", 0, now, now, {"positions": [3000] * 17})
+    bad = Envelope(
+        "joint_intent", "leader", "boot", 0, now, now, {"positions": [3000] * 17}
+    )
     assert ctl.update(bad, [2048] * 17, now) is None
-    aligned = Envelope("joint_intent", "leader", "boot", 1, now, now, {"positions": [2048] * 17})
+    aligned = Envelope(
+        "joint_intent", "leader", "boot", 1, now, now, {"positions": [2048] * 17}
+    )
     assert ctl.update(aligned, [2048] * 17, now) is not None
     assert ctl.update(aligned, [2048] * 17, now) is None
-    old = Envelope("joint_intent", "leader", "boot", 2, now - 1_000_000_000, now - 1_000_000_000, {"positions": [2048] * 17})
+    old = Envelope(
+        "joint_intent",
+        "leader",
+        "boot",
+        2,
+        now - 1_000_000_000,
+        now - 1_000_000_000,
+        {"positions": [2048] * 17},
+    )
     assert ctl.update(old, [2048] * 17, now) is None
 
 
 def test_envelope_binary_round_trip():
     image = np.arange(48 * 64 * 3, dtype=np.uint8).reshape(48, 64, 3)
-    msg = Envelope("image", "camera", "boot", 3, 1, 2, {"image": image, "note": "x", "pcm": np.ones(4, np.int16)})
+    msg = Envelope(
+        "image",
+        "camera",
+        "boot",
+        3,
+        1,
+        2,
+        {"image": image, "note": "x", "pcm": np.ones(4, np.int16)},
+    )
     back = Envelope.decode(msg.encode())
     assert back.payload["note"] == "x" and back.seq == 3
-    assert np.array_equal(back.payload["image"], image) and back.payload["pcm"].dtype == np.int16
+    assert (
+        np.array_equal(back.payload["image"], image)
+        and back.payload["pcm"].dtype == np.int16
+    )
     import pyarrow as pa
 
     arrow = Envelope.decode(pa.array(np.frombuffer(msg.encode(), np.uint8)))
@@ -152,7 +190,9 @@ def test_out_of_range_is_clipped_and_rejects_say_why():
     ctl.hold_target = ctl.last_sent = [4090.0]
     ctl.accept(command(0, [4200], now))  # beyond max=4095 but within max_jump
     _, action = ctl.tick(now + 33_000_000)
-    assert action.payload["valid"] and action.payload["clamped"] and bus.values == [4095]
+    assert (
+        action.payload["valid"] and action.payload["clamped"] and bus.values == [4095]
+    )
     ctl.accept(command(1, [3000], now + 33_000_000))
     state, action = ctl.tick(now + 66_000_000)
     assert not action.payload["valid"] and state.payload["rejected"]
@@ -164,9 +204,13 @@ def test_out_of_range_is_clipped_and_rejects_say_why():
 
 def test_controller_steps_from_the_follower_target_not_its_own_output():
     ctl = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
-    now = time.monotonic_ns() - 5_000_000_000  # message times must not lie in the future
+    now = (
+        time.monotonic_ns() - 5_000_000_000
+    )  # message times must not lie in the future
     hold = [2048.0] * 17
-    intent = lambda seq, value, t: Envelope("joint_intent", "leader", "boot", seq, t, t, {"positions": [value] * 17})
+    intent = lambda seq, value, t: Envelope(
+        "joint_intent", "leader", "boot", seq, t, t, {"positions": [value] * 17}
+    )
     assert ctl.update(intent(0, 2048, now), hold, now, follower_target=hold) is not None
     # robot not armed yet: it keeps holding 2048 while the leader moves far away over 2 s
     for k in range(1, 61):

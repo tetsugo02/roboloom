@@ -37,7 +37,14 @@ REGISTERS = {
 # Present current, velocity and position are contiguous: one 10-byte sync read.
 STATE_ADDRESS, STATE_SIZE = 126, 10
 
-OPERATING_MODES = {"current": 0, "velocity": 1, "position": 3, "extended_position": 4, "current_position": 5, "pwm": 16}
+OPERATING_MODES = {
+    "current": 0,
+    "velocity": 1,
+    "position": 3,
+    "extended_position": 4,
+    "current_position": 5,
+    "pwm": 16,
+}
 
 COUNTS_PER_REV = 4096
 VELOCITY_RPM = 0.229  # per count, all X-series
@@ -61,4 +68,6 @@ def model_by_name(name: str) -> int:
     for number, model in MODELS.items():
         if model.name == name:
             return number
-    raise ValueError(f"unknown Dynamixel model {name!r}; add it to MODELS from the e-Manual")
+    raise ValueError(
+        f"unknown Dynamixel model {name!r}; add it to MODELS from the e-Manual"
+    )

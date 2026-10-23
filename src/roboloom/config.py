@@ -84,13 +84,18 @@ def read_experiment(path: str | Path) -> dict:
         if not isinstance(relative, str):
             raise TypeError(f"{where}: expected YAML path")
         file = (path.parent / relative).resolve()
-        return {**_read(file), "__dir__": str(file.parent)}  # resolves files a node names, e.g. gravity models
+        return {
+            **_read(file),
+            "__dir__": str(file.parent),
+        }  # resolves files a node names, e.g. gravity models
 
     for role in ROLES:
         group = raw.pop(role, None) or {}
         if not isinstance(group, dict):
             raise TypeError(f"{role}: expected mapping of node name to YAML path")
-        tree[role] = {name: node(relative, f"{role}.{name}") for name, relative in group.items()}
+        tree[role] = {
+            name: node(relative, f"{role}.{name}") for name, relative in group.items()
+        }
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
     tree["experiment"] = raw
@@ -114,17 +119,27 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         if name in RESERVED or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
             raise ValueError(f"invalid node name {name!r}")
 
-    robots = {name: ROBOTS.get(c.get("type"))(name, c) for name, c in tree["robots"].items()}
+    robots = {
+        name: ROBOTS.get(c.get("type"))(name, c) for name, c in tree["robots"].items()
+    }
     if len(robots) != 1:
         raise ValueError("exactly one robot per experiment is supported for now")
-    inputs = {name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()}
-    sensors = {name: SENSORS.get(c.get("type"))(name, c) for name, c in tree["sensors"].items()}
+    inputs = {
+        name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
+    }
+    sensors = {
+        name: SENSORS.get(c.get("type"))(name, c) for name, c in tree["sensors"].items()
+    }
     controllers = {}
     for name, c in tree["controllers"].items():
         source, robot = inputs.get(c.get("input")), robots.get(c.get("robot"))
         if source is None or robot is None:
-            raise ValueError(f"controllers.{name} must reference a configured input and robot")
-        controllers[name] = CONTROLLERS.get(c.get("type"))(name, c, source, robot, robot_id)
+            raise ValueError(
+                f"controllers.{name} must reference a configured input and robot"
+            )
+        controllers[name] = CONTROLLERS.get(c.get("type"))(
+            name, c, source, robot, robot_id
+        )
     for robot in robots.values():
         if [c.robot.name for c in controllers.values()].count(robot.name) != 1:
             raise ValueError(f"robot {robot.name!r} needs exactly one controller")
@@ -137,18 +152,37 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
             if check is not None:
                 check()
 
-    owners: list[Source | Robot] = [*inputs.values(), *robots.values(), *sensors.values()]
+    owners: list[Source | Robot] = [
+        *inputs.values(),
+        *robots.values(),
+        *sensors.values(),
+    ]
     devices = [d for spec in owners for d in spec.device_ids()]
     if len(set(devices)) != len(devices):
         raise ValueError("duplicate port or sensor ID")
 
     ages = tree["recorder"].get("max_age_ms", {})
     cfg = ExperimentConfig(
-        robot_id=robot_id, repo_id=repo_id, output=identity(e.get("output"), "output"),
-        dataset_fps=fps, robots=robots, inputs=inputs, sensors=sensors, controllers=controllers,
-        max_age_ms={name: positive(ages.get(name), f"max_age_ms.{name}") for name in (*inputs, *robots, *sensors)},
-        recorder={k: v for k, v in tree["recorder"].items() if k in ("grace_ms", "image_writer_threads", "streaming_encoding", "queue_s")},
-        mode=e["mode"], robot_type=e.get("robot_type", next(iter(robots.values())).robot_type),
+        robot_id=robot_id,
+        repo_id=repo_id,
+        output=identity(e.get("output"), "output"),
+        dataset_fps=fps,
+        robots=robots,
+        inputs=inputs,
+        sensors=sensors,
+        controllers=controllers,
+        max_age_ms={
+            name: positive(ages.get(name), f"max_age_ms.{name}")
+            for name in (*inputs, *robots, *sensors)
+        },
+        recorder={
+            k: v
+            for k, v in tree["recorder"].items()
+            if k
+            in ("grace_ms", "image_writer_threads", "streaming_encoding", "queue_s")
+        },
+        mode=e["mode"],
+        robot_type=e.get("robot_type", next(iter(robots.values())).robot_type),
         path=tree["path"],
     )
     if tree["session"].get("type") != "terminal":

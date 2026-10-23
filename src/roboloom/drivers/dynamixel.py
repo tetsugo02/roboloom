@@ -31,7 +31,11 @@ def _signed(raw: int, size: int) -> int:
 
 def latency_timer_ms(port: str) -> int | None:
     """FTDI latency timer of a /dev/ttyUSB* port (by-id links resolved); None if not FTDI."""
-    path = Path("/sys/bus/usb-serial/devices") / Path(os.path.realpath(port)).name / "latency_timer"
+    path = (
+        Path("/sys/bus/usb-serial/devices")
+        / Path(os.path.realpath(port)).name
+        / "latency_timer"
+    )
     try:
         return int(path.read_text())
     except (OSError, ValueError):
@@ -41,7 +45,13 @@ def latency_timer_ms(port: str) -> int | None:
 class DynamixelBus:
     """Sync I/O in the given motor order. `models` are the expected model numbers."""
 
-    def __init__(self, port: str, motor_ids: list[int], models: list[int] | None = None, baudrate: int = 1_000_000):
+    def __init__(
+        self,
+        port: str,
+        motor_ids: list[int],
+        models: list[int] | None = None,
+        baudrate: int = 1_000_000,
+    ):
         self.ids = list(motor_ids)
         self.models = list(models) if models is not None else None
         self.port_name = port
@@ -54,7 +64,9 @@ class DynamixelBus:
         if self.models is not None and len(self.models) != len(self.ids):
             raise ValueError("one model per motor ID required")
 
-    def _read(self, address: int, size: int, fields: list[tuple[int, int]] | None = None) -> list[list[int]]:
+    def _read(
+        self, address: int, size: int, fields: list[tuple[int, int]] | None = None
+    ) -> list[list[int]]:
         """Sync-read `size` bytes from `address`; return signed `fields` (address, size) per motor."""
         group = self._readers.get((address, size))
         if group is None:
@@ -69,10 +81,17 @@ class DynamixelBus:
         for motor_id in self.ids:
             if not group.isAvailable(motor_id, address, size):
                 raise ConnectionError(f"missing motor {motor_id}")
-            out.append([_signed(group.getData(motor_id, a, n), n) for a, n in fields or [(address, size)]])
+            out.append(
+                [
+                    _signed(group.getData(motor_id, a, n), n)
+                    for a, n in fields or [(address, size)]
+                ]
+            )
         return out
 
-    def _write(self, address: int, size: int, values: list[int], ids: list[int] | None = None) -> None:
+    def _write(
+        self, address: int, size: int, values: list[int], ids: list[int] | None = None
+    ) -> None:
         group = dxl.GroupSyncWrite(self.port, self.packet, address, size)
         for motor_id, value in zip(ids or self.ids, values, strict=True):
             data = list(int(value).to_bytes(size, "little", signed=True))
@@ -88,7 +107,9 @@ class DynamixelBus:
     def _current_unit(self) -> list[float]:
         if self._units is None:
             models = self.models or self.read_register("model_number")
-            self._units = [MODELS[m].current_mA if m in MODELS else float("nan") for m in models]
+            self._units = [
+                MODELS[m].current_mA if m in MODELS else float("nan") for m in models
+            ]
         return self._units
 
     def read_positions(self) -> list[float]:
@@ -101,7 +122,9 @@ class DynamixelBus:
         return JointState(
             positions=[float(x) for x in position],
             velocities=[v * per_s for v in velocity],
-            currents_mA=[c * unit for c, unit in zip(current, self._current_unit(), strict=True)],
+            currents_mA=[
+                c * unit for c, unit in zip(current, self._current_unit(), strict=True)
+            ],
         )
 
     def read_health(self) -> Health:
@@ -124,20 +147,38 @@ class DynamixelBus:
 
     def write_goal_positions(self, indices: list[int], values: list[float]) -> None:
         reg = REGISTERS["goal_position"]
-        self._write(reg.address, reg.size, [round(x) for x in values], [self.ids[i] for i in indices])
+        self._write(
+            reg.address,
+            reg.size,
+            [round(x) for x in values],
+            [self.ids[i] for i in indices],
+        )
 
     def write_goal_currents(self, indices: list[int], values_mA: list[float]) -> None:
         """Goal Current in mA, converted per motor model; the motor clips at Current Limit."""
         units = self._current_unit()
-        counts = [max(-32767, min(32767, round(v / units[i]))) for i, v in zip(indices, values_mA, strict=True)]
+        counts = [
+            max(-32767, min(32767, round(v / units[i])))
+            for i, v in zip(indices, values_mA, strict=True)
+        ]
         reg = REGISTERS["goal_current"]
         self._write(reg.address, reg.size, counts, [self.ids[i] for i in indices])
 
     def read_goal_currents(self) -> list[float]:
-        return [c * u for c, u in zip(self.read_register("goal_current"), self._current_unit(), strict=True)]
+        return [
+            c * u
+            for c, u in zip(
+                self.read_register("goal_current"), self._current_unit(), strict=True
+            )
+        ]
 
     def set_torque(self, indices: list[int], on: bool) -> None:
-        self._write(REGISTERS["torque_enable"].address, 1, [int(on)] * len(indices), [self.ids[i] for i in indices])
+        self._write(
+            REGISTERS["torque_enable"].address,
+            1,
+            [int(on)] * len(indices),
+            [self.ids[i] for i in indices],
+        )
 
     def write_eeprom(self, name: str, indices: list[int], values: list[int]) -> None:
         """EEPROM write for commissioning only; the motors must already have torque off."""
@@ -160,7 +201,9 @@ class DynamixelBus:
         count = 0 if not period_ms else round(period_ms / WATCHDOG_MS)
         if not 0 <= count <= 127:
             raise ValueError("bus watchdog must be 20..2540 ms")
-        self._write(REGISTERS["bus_watchdog"].address, 1, [0] * len(self.ids))  # clears a fired watchdog
+        self._write(
+            REGISTERS["bus_watchdog"].address, 1, [0] * len(self.ids)
+        )  # clears a fired watchdog
         if count:
             self._write(REGISTERS["bus_watchdog"].address, 1, [count] * len(self.ids))
         if self.read_register("bus_watchdog") != [count] * len(self.ids):
@@ -170,7 +213,12 @@ class DynamixelBus:
         self.port.closePort()
 
 
-def verify(bus: DynamixelBus, joints: list[str], expect: dict[str, dict[str, float]], limits: list[dict] | None = None) -> list[str]:
+def verify(
+    bus: DynamixelBus,
+    joints: list[str],
+    expect: dict[str, dict[str, float]],
+    limits: list[dict] | None = None,
+) -> list[str]:
     """Compare EEPROM and model with the configuration; return human-readable mismatches.
 
     `expect` maps a register to per-joint values. Current registers use mA and
@@ -201,8 +249,13 @@ def verify(bus: DynamixelBus, joints: list[str], expect: dict[str, dict[str, flo
             if not ok:
                 problems.append(f"{joint}: {name} {shown} != expected {want}")
     if limits is not None:
-        low, high = bus.read_register("min_position_limit"), bus.read_register("max_position_limit")
+        low, high = (
+            bus.read_register("min_position_limit"),
+            bus.read_register("max_position_limit"),
+        )
         for joint, limit, lo, hi in zip(joints, limits, low, high, strict=True):
             if not lo <= limit["min"] < limit["max"] <= hi:
-                problems.append(f"{joint}: software limits [{limit['min']}, {limit['max']}] outside EEPROM [{lo}, {hi}]")
+                problems.append(
+                    f"{joint}: software limits [{limit['min']}, {limit['max']}] outside EEPROM [{lo}, {hi}]"
+                )
     return problems

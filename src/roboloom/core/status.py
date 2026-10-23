@@ -25,15 +25,21 @@ class StatusReporter:
         now = time.monotonic_ns() if now_ns is None else now_ns
         return self.last_ns is None or now - self.last_ns >= self.period_ns
 
-    def maybe(self, fields: dict, level: str = "ok", now_ns: int | None = None) -> Envelope | None:
+    def maybe(
+        self, fields: dict, level: str = "ok", now_ns: int | None = None
+    ) -> Envelope | None:
         """A status message when the period has passed, else None."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         return self.make(fields, level, now) if self.due(now) else None
 
-    def make(self, fields: dict, level: str = "ok", now_ns: int | None = None) -> Envelope:
+    def make(
+        self, fields: dict, level: str = "ok", now_ns: int | None = None
+    ) -> Envelope:
         """A status message now; callers that build fields only when `due` use this."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         if level not in LEVELS:
             raise ValueError(f"status level must be one of {LEVELS}")
         self.last_ns = now
-        return self.publisher.make("status", {"role": self.role, "level": level, "fields": fields}, now)
+        return self.publisher.make(
+            "status", {"role": self.role, "level": level, "fields": fields}, now
+        )

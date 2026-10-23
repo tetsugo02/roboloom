@@ -27,7 +27,11 @@ class PcmAudio(Source):
         return dataset_fps
 
     def open(self, mock: bool, dataset_fps: float) -> Reader:
-        return ConstantReader(np.zeros(self.chunk(dataset_fps), np.int16)) if mock else self.open_device(dataset_fps)
+        return (
+            ConstantReader(np.zeros(self.chunk(dataset_fps), np.int16))
+            if mock
+            else self.open_device(dataset_fps)
+        )
 
     def open_device(self, dataset_fps: float) -> Reader:
         raise RuntimeError(f"{self.name}: no device driver; pass a reader instead")
@@ -36,10 +40,22 @@ class PcmAudio(Source):
         return {"pcm": np.asarray(sample.value)}
 
     def features(self, dataset_fps: float) -> Features:
-        return {f"observation.audio.{self.name}": {"dtype": "int16", "shape": (self.chunk(dataset_fps),), "names": None}}
+        return {
+            f"observation.audio.{self.name}": {
+                "dtype": "int16",
+                "shape": (self.chunk(dataset_fps),),
+                "names": None,
+            }
+        }
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
         size = self.chunk(dataset_fps)
-        data = np.asarray(msg.payload["pcm"]).reshape(-1) if msg else np.zeros(size, np.int16)
-        pcm = np.pad(data[:size], (0, max(0, size - len(data))), constant_values=0).astype(np.int16)
+        data = (
+            np.asarray(msg.payload["pcm"]).reshape(-1)
+            if msg
+            else np.zeros(size, np.int16)
+        )
+        pcm = np.pad(
+            data[:size], (0, max(0, size - len(data))), constant_values=0
+        ).astype(np.int16)
         return {f"observation.audio.{self.name}": pcm}

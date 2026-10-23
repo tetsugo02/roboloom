@@ -35,7 +35,9 @@ class DigitSensor(TactileImageSensor):
             raise ValueError(f"{name}.resolution must be one of {sorted(RESOLUTIONS)}")
         height, width = RESOLUTIONS[resolution]
         if (cfg.get("height"), cfg.get("width")) != (height, width):
-            raise ValueError(f"{name}: {resolution} frames are height {height}, width {width}")
+            raise ValueError(
+                f"{name}: {resolution} frames are height {height}, width {width}"
+            )
         super().__init__(name, cfg)
         self.resolution = resolution
         self.serial = identity(cfg.get("serial"), f"{name}.serial")
@@ -49,7 +51,9 @@ class DigitSensor(TactileImageSensor):
 
         stream = Digit.STREAMS[self.resolution]
         if self.fps not in stream["fps"].values():
-            raise ValueError(f"{self.name}: {self.resolution} supports fps {sorted(stream['fps'].values())}")
+            raise ValueError(
+                f"{self.name}: {self.resolution} supports fps {sorted(stream['fps'].values())}"
+            )
         digit = Digit(serial=self.serial, name=self.cfg.get("name", self.serial))
         digit.connect()
         try:

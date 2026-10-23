@@ -20,6 +20,8 @@ class Registry[T]:
 
     def get(self, type_name: object) -> type[T]:
         if not isinstance(type_name, str) or type_name not in self._entries:
-            raise ValueError(f"unsupported {self.kind} type {type_name!r}; expected one of {', '.join(self.names())}")
+            raise ValueError(
+                f"unsupported {self.kind} type {type_name!r}; expected one of {', '.join(self.names())}"
+            )
         module, _, attribute = self._entries[type_name].partition(":")
         return getattr(import_module(module), attribute)

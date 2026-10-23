@@ -31,7 +31,14 @@ class Experiment:
     For YAML experiments, `from_yaml` supplies the configured controller by default.
     """
 
-    def __init__(self, cfg: ExperimentConfig, robot: RobotBus, controller: Callable[[dict], list[float] | None] | None = None, sensors: dict[str, Callable[[], Sample | None]] | None = None, dataset=None):
+    def __init__(
+        self,
+        cfg: ExperimentConfig,
+        robot: RobotBus,
+        controller: Callable[[dict], list[float] | None] | None = None,
+        sensors: dict[str, Callable[[], Sample | None]] | None = None,
+        dataset=None,
+    ):
         self.cfg = cfg
         self.spec = cfg.robot
         self.robot = FollowerSafety(self.spec.safety_config(cfg.robot_id), robot)
@@ -43,19 +50,30 @@ class Experiment:
         self.specs: dict[str, InputDevice | Source] = {**cfg.inputs, **cfg.sensors}
         self.publishers = {name: Publisher(name) for name in cfg.sources}
         self.period_s = 1 / self.spec.control_hz
-        self.deadline_ms = cfg.controller_for(self.spec.name).deadline_ms if cfg.controllers else 100
+        self.deadline_ms = (
+            cfg.controller_for(self.spec.name).deadline_ms if cfg.controllers else 100
+        )
         self.last_metrics: dict | None = None
         self._extra_closers: list[Callable[[], None]] = []
 
     @classmethod
-    def from_yaml(cls, path: str | Path, *, hardware: bool = False, sensors: dict[str, Callable[[], Sample | None]] | None = None, dataset=None) -> Experiment:
+    def from_yaml(
+        cls,
+        path: str | Path,
+        *,
+        hardware: bool = False,
+        sensors: dict[str, Callable[[], Sample | None]] | None = None,
+        dataset=None,
+    ) -> Experiment:
         cfg = load_experiment(path)
         if not cfg.mock and not hardware:
             raise ValueError("hardware=True is required to open real devices")
         mapper = cfg.controller_for(cfg.robot.name)
         source = mapper.source
         if getattr(source, "actuated", False):
-            raise ValueError(f"{source.name}: actuated leaders run only in the dora dataflow")
+            raise ValueError(
+                f"{source.name}: actuated leaders run only in the dora dataflow"
+            )
         bus = cfg.robot.open_device(cfg.mock)
         readers: dict[str, Reader] = {}
         try:
@@ -64,7 +82,9 @@ class Experiment:
                 for name, sensor in cfg.sensors.items():
                     readers[name] = sensor.open(True, cfg.dataset_fps)
             defaults = {name: reader.read for name, reader in readers.items()}
-            instance = cls(cfg, bus, sensors={**defaults, **(sensors or {})}, dataset=dataset)
+            instance = cls(
+                cfg, bus, sensors={**defaults, **(sensors or {})}, dataset=dataset
+            )
         except Exception:
             for reader in readers.values():
                 reader.close()
@@ -86,32 +106,56 @@ class Experiment:
 
     @classmethod
     def from_components(
-        cls, *, robot_id: str, robot: RobotBus, joint_names: list[str], limits: list[dict],
+        cls,
+        *,
+        robot_id: str,
+        robot: RobotBus,
+        joint_names: list[str],
+        limits: list[dict],
         controller: Callable[[dict], list[float] | None] | None = None,
         sensors: dict[str, Callable[[], Sample | None]] | None = None,
         image_shapes: dict[str, tuple[int, int, int]] | None = None,
-        audio_sample_rate: int | None = None, fps: int = 10, control_hz: int = 30,
-        output: str | Path = "dataset", repo_id: str = "local/experiment", unit: str = "dynamixel_count",
+        audio_sample_rate: int | None = None,
+        fps: int = 10,
+        control_hz: int = 30,
+        output: str | Path = "dataset",
+        repo_id: str = "local/experiment",
+        unit: str = "dynamixel_count",
         dataset=None,
     ) -> Experiment:
-        if len(joint_names) != len(limits) or len(set(joint_names)) != len(joint_names) or not joint_names:
+        if (
+            len(joint_names) != len(limits)
+            or len(set(joint_names)) != len(joint_names)
+            or not joint_names
+        ):
             raise ValueError("joint_names and limits must match")
         if control_hz < fps:
             raise ValueError("control_hz must be >= fps")
-        spec = Robot("robot", {"limits": limits, "control_hz": control_hz}, joint_names, unit)
+        spec = Robot(
+            "robot", {"limits": limits, "control_hz": control_hz}, joint_names, unit
+        )
         inputs: dict[str, InputDevice] = {}
         if "leader" in (sensors or {}):
             inputs["leader"] = JointInput("leader", {}, joint_names, unit)
         streams: dict[str, Source] = {}
         for name, shape in (image_shapes or {}).items():
-            if name in ("robot", "leader", ACTION, "audio") or len(shape) != 3 or shape[2] != 3:
+            if (
+                name in ("robot", "leader", ACTION, "audio")
+                or len(shape) != 3
+                or shape[2] != 3
+            ):
                 raise ValueError("image sensor requires HWC RGB shape")
             streams[name] = ImageSensor(name, {"height": shape[0], "width": shape[1]})
         if audio_sample_rate is not None:
             streams["audio"] = PcmAudio("audio", {"sample_rate": audio_sample_rate})
         cfg = ExperimentConfig(
-            robot_id=robot_id, repo_id=repo_id, output=str(output), dataset_fps=fps,
-            robots={"robot": spec}, inputs=inputs, sensors=streams,
+            robot_id=robot_id,
+            repo_id=repo_id,
+            output=str(output),
+            dataset_fps=fps,
+            robots={"robot": spec},
+            inputs=inputs,
+            sensors=streams,
             max_age_ms={name: 300 for name in (*inputs, "robot", *streams)},
         )
         return cls(cfg, robot, controller=controller, sensors=sensors, dataset=dataset)
@@ -127,11 +171,15 @@ class Experiment:
     def stop_inference(self) -> None:
         self.robot.stop()
 
-    def step(self, *, policy: Callable[[dict], list[float] | None] | None = None) -> dict:
+    def step(
+        self, *, policy: Callable[[dict], list[float] | None] | None = None
+    ) -> dict:
         """One checked control tick; policy overrides the configured controller."""
         now = time.monotonic_ns()
         try:
-            state = positions(self.robot.bus.read_positions(), len(self.spec.joint_names))
+            state = positions(
+                self.robot.bus.read_positions(), len(self.spec.joint_names)
+            )
         except Exception:
             self.robot.stop()
             raise
@@ -147,7 +195,12 @@ class Experiment:
             spec = self.specs.get(name)
             if sample is None or spec is None:
                 continue
-            self.recorder.ingest(name, self.publishers[name].make(spec.kind, spec.encode(sample), sample.capture_ns))
+            self.recorder.ingest(
+                name,
+                self.publishers[name].make(
+                    spec.kind, spec.encode(sample), sample.capture_ns
+                ),
+            )
         callback = policy if policy is not None else self.controller
         try:
             target = callback(obs) if callback else None
@@ -156,15 +209,31 @@ class Experiment:
             raise
         if target is not None:
             target = positions(target, len(state))
-            command = make_command(self.publisher, robot_id=self.cfg.robot_id, unit=self.spec.unit, target=target, now_ns=now, deadline_ms=self.deadline_ms)
+            command = make_command(
+                self.publisher,
+                robot_id=self.cfg.robot_id,
+                unit=self.spec.unit,
+                target=target,
+                now_ns=now,
+                deadline_ms=self.deadline_ms,
+            )
             self.robot.accept(command)
         state_msg, action_msg = self.robot.tick()
         self.recorder.ingest(robot, state_msg)
         self.recorder.ingest(ACTION, action_msg)
         self.recorder.poll()
-        return {"observation": obs, "action": action_msg.payload, "mode": state_msg.payload["mode"]}
+        return {
+            "observation": obs,
+            "action": action_msg.payload,
+            "mode": state_msg.payload["mode"],
+        }
 
-    def run(self, seconds: float, *, policy: Callable[[dict], list[float] | None] | None = None) -> list[dict]:
+    def run(
+        self,
+        seconds: float,
+        *,
+        policy: Callable[[dict], list[float] | None] | None = None,
+    ) -> list[dict]:
         results = []
         end = time.monotonic() + seconds
         next_tick = time.monotonic()

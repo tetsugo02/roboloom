@@ -12,7 +12,9 @@ PATH = "examples/mock/experiment.yaml"
 def test_validate_rejects_duplicate_devices_and_bad_mapping():
     tree = read_experiment(PATH)
     duplicate = deepcopy(tree)
-    duplicate["sensors"]["digit_right"]["serial"] = duplicate["sensors"]["digit_left"]["serial"]
+    duplicate["sensors"]["digit_right"]["serial"] = duplicate["sensors"]["digit_left"][
+        "serial"
+    ]
     with pytest.raises(ValueError, match="duplicate"):
         parse_experiment(duplicate)
     wrong = deepcopy(tree)
@@ -21,7 +23,10 @@ def test_validate_rejects_duplicate_devices_and_bad_mapping():
         parse_experiment(wrong)
     flow = build_flow(parse_experiment(tree))
     assert len(flow["nodes"]) == 9
-    assert next(x for x in flow["nodes"] if x["id"] == "robot")["restart_policy"] == "never"
+    assert (
+        next(x for x in flow["nodes"] if x["id"] == "robot")["restart_policy"]
+        == "never"
+    )
 
 
 def test_unknown_types_and_dangling_references_fail_before_opening_devices():
@@ -66,7 +71,11 @@ def test_hardware_example_refuses_placeholders_then_parses():
     tree["robots"]["robot"]["port"] = "SET_FOLLOWER_BY_ID_PORT"
     with pytest.raises(ValueError, match="identity"):
         parse_experiment(tree)
-    assert set(parse_experiment(read_experiment("examples/rakuda2/experiment_camera.yaml")).sensors) == {"camera"}
+    assert set(
+        parse_experiment(
+            read_experiment("examples/rakuda2/experiment_camera.yaml")
+        ).sensors
+    ) == {"camera"}
     cfg = parse_experiment(filled_hardware_tree())
     assert not cfg.mock and set(cfg.sensors) == {"camera", "digit_left", "digit_right"}
     assert features(cfg)["observation.images.digit_left"]["shape"] == (320, 240, 3)

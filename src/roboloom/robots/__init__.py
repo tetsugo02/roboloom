@@ -8,6 +8,9 @@ its joint/motor description (`spec`). Its leader arm, if any, is an input in
 from ..core.registry import Registry
 from .base import Robot
 
-ROBOTS: Registry[Robot] = Registry("robot", {
-    "rakuda2_follower": "roboloom.robots.rakuda2.follower:RakudaFollower",
-})
+ROBOTS: Registry[Robot] = Registry(
+    "robot",
+    {
+        "rakuda2_follower": "roboloom.robots.rakuda2.follower:RakudaFollower",
+    },
+)

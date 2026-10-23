@@ -75,4 +75,3 @@ class Source(ABC):
 
     @abstractmethod
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]: ...
-

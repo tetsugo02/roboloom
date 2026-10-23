@@ -59,7 +59,9 @@ class ActuatedReader:
     def read(self) -> Sample:
         state = self.device.read_state()
         self.device.command(None)
-        return Sample(np.asarray(state.positions, dtype=np.float64), time.monotonic_ns())
+        return Sample(
+            np.asarray(state.positions, dtype=np.float64), time.monotonic_ns()
+        )
 
     def on_session(self, command: str, argument: str = "") -> None:
         if command in ("estop", "release", "quit"):
@@ -80,12 +82,24 @@ class JointInput(InputDevice):
 
     kind = "joint_intent"
 
-    def __init__(self, name: str, cfg: dict, joint_names: Sequence[str] | None = None, unit: str | None = None):
+    def __init__(
+        self,
+        name: str,
+        cfg: dict,
+        joint_names: Sequence[str] | None = None,
+        unit: str | None = None,
+    ):
         super().__init__(name, cfg)
-        self.joint_names = names(cfg.get("joints") if joint_names is None else joint_names, f"{name}.joints")
+        self.joint_names = names(
+            cfg.get("joints") if joint_names is None else joint_names, f"{name}.joints"
+        )
         self.unit = unit or cfg.get("unit", "dynamixel_count")
         self.rate_hz(0)
-        self.control: list[GroupSpec] | None = parse_groups(cfg["control"], self.joint_names, name) if "control" in cfg else None
+        self.control: list[GroupSpec] | None = (
+            parse_groups(cfg["control"], self.joint_names, name)
+            if "control" in cfg
+            else None
+        )
         if self.control:
             build_laws(self.control, self.joint_names, cfg.get("__dir__"))
 
@@ -108,17 +122,33 @@ class JointInput(InputDevice):
         if not self.actuated or self.control is None:
             return BusReader(bus)
         try:
-            device = JointDevice(bus, self.joint_names, build_laws(self.control, self.joint_names, self.cfg.get("__dir__")), self.name)
+            device = JointDevice(
+                bus,
+                self.joint_names,
+                build_laws(self.control, self.joint_names, self.cfg.get("__dir__")),
+                self.name,
+            )
             return ActuatedReader(device)
         except BaseException:
             bus.close()
             raise
 
     def encode(self, sample: Sample) -> dict:
-        return {"positions": positions(np.asarray(sample.value).tolist(), len(self.joint_names)), "unit": self.unit}
+        return {
+            "positions": positions(
+                np.asarray(sample.value).tolist(), len(self.joint_names)
+            ),
+            "unit": self.unit,
+        }
 
     def features(self, dataset_fps: float) -> Features:
-        return {f"observation.{self.name}": {"dtype": "float32", "shape": (len(self.joint_names),), "names": None}}
+        return {
+            f"observation.{self.name}": {
+                "dtype": "float32",
+                "shape": (len(self.joint_names),),
+                "names": None,
+            }
+        }
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
         values = msg.payload["positions"] if msg else [0] * len(self.joint_names)

@@ -37,18 +37,30 @@ class GroupSpec:
     cfg: dict
 
 
-def parse_groups(raw: object, joint_names: tuple[str, ...], owner: str) -> list[GroupSpec]:
+def parse_groups(
+    raw: object, joint_names: tuple[str, ...], owner: str
+) -> list[GroupSpec]:
     """`control: [{group, law, joints, ...}]`; every joint in exactly one group."""
     if not isinstance(raw, list) or not raw:
         raise ValueError(f"{owner}.control must be a non-empty list of groups")
     groups: list[GroupSpec] = []
     seen: list[str] = []
     for item in raw:
-        if not isinstance(item, dict) or not isinstance(item.get("group"), str) or item.get("law") not in LAWS:
-            raise ValueError(f"{owner}.control: each group needs a name and law in {sorted(LAWS)}")
-        joints = check_names(item.get("joints"), f"{owner}.control.{item['group']}.joints")
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("group"), str)
+            or item.get("law") not in LAWS
+        ):
+            raise ValueError(
+                f"{owner}.control: each group needs a name and law in {sorted(LAWS)}"
+            )
+        joints = check_names(
+            item.get("joints"), f"{owner}.control.{item['group']}.joints"
+        )
         if not set(joints) <= set(joint_names):
-            raise ValueError(f"{owner}.control.{item['group']}: unknown joints {sorted(set(joints) - set(joint_names))}")
+            raise ValueError(
+                f"{owner}.control.{item['group']}: unknown joints {sorted(set(joints) - set(joint_names))}"
+            )
         seen += joints
         groups.append(GroupSpec(item["group"], item["law"], joints, item))
     if sorted(seen) != sorted(joint_names):
@@ -63,15 +75,25 @@ def law_class(law: str) -> type[ControlLaw]:
     return getattr(import_module(module), cls)
 
 
-def build_laws(groups: list[GroupSpec], joint_names: tuple[str, ...], base_dir: str | None = None,
-               models: dict[str, GravityModel] | None = None) -> list[ControlLaw]:
+def build_laws(
+    groups: list[GroupSpec],
+    joint_names: tuple[str, ...],
+    base_dir: str | None = None,
+    models: dict[str, GravityModel] | None = None,
+) -> list[ControlLaw]:
     """Instantiate each group's law. `models` injects gravity models by group name (tests, tools)."""
     laws = []
     for g in groups:
         gravity: GravityModel | None = (models or {}).get(g.name)
         if gravity is None and g.cfg.get("gravity_model"):
             path = Path(g.cfg["gravity_model"])
-            gravity = load_gravity_model(str(path if path.is_absolute() or base_dir is None else Path(base_dir) / path))
+            gravity = load_gravity_model(
+                str(
+                    path
+                    if path.is_absolute() or base_dir is None
+                    else Path(base_dir) / path
+                )
+            )
         indices = [joint_names.index(j) for j in g.joints]
         laws.append(law_class(g.law)(g.name, indices, joint_names, g.cfg, gravity))
     return laws
@@ -87,28 +109,52 @@ def expected_modes(groups: list[GroupSpec]) -> dict[str, float]:
     return out
 
 
-def check_hardware(groups: list[GroupSpec], cfg: dict, owner: str, current_limits_mA: dict[str, float]) -> None:
+def check_hardware(
+    groups: list[GroupSpec], cfg: dict, owner: str, current_limits_mA: dict[str, float]
+) -> None:
     """Refuse current-mode laws on hardware without watchdog and EEPROM current limits."""
     for g in groups:
         cls = law_class(g.law)
         if not cls.hardware_validated and g.cfg.get("allow_unvalidated") is not True:
-            raise ValueError(f"{owner}.control.{g.name}: {g.law} is not validated on hardware; set allow_unvalidated: true to override")
+            raise ValueError(
+                f"{owner}.control.{g.name}: {g.law} is not validated on hardware; set allow_unvalidated: true to override"
+            )
         if cls.current_mode:
             if not cfg.get("bus_watchdog_ms"):
-                raise ValueError(f"{owner}: current-mode law {g.law} needs bus_watchdog_ms")
+                raise ValueError(
+                    f"{owner}: current-mode law {g.law} needs bus_watchdog_ms"
+                )
             limits = g.cfg.get("max_current_mA")
             per_joint = limits if isinstance(limits, list) else [limits] * len(g.joints)
             for joint, allowed in zip(g.joints, per_joint, strict=True):
                 eeprom = current_limits_mA.get(joint)
                 if eeprom is None or eeprom > allowed:
-                    raise ValueError(f"{owner}: {joint} needs registers.current_limit <= {allowed} mA for {g.law} (motor-side clip)")
+                    raise ValueError(
+                        f"{owner}: {joint} needs registers.current_limit <= {allowed} mA for {g.law} (motor-side clip)"
+                    )
 
 
 class JointDevice:
-    def __init__(self, bus, joint_names: tuple[str, ...], laws: list[ControlLaw], name: str = "device"):
-        missing = sorted({f"{law.name} ({type(law).__name__}) needs {m}" for law in laws for m in law.needs if not hasattr(bus, m)})
+    def __init__(
+        self,
+        bus,
+        joint_names: tuple[str, ...],
+        laws: list[ControlLaw],
+        name: str = "device",
+    ):
+        missing = sorted(
+            {
+                f"{law.name} ({type(law).__name__}) needs {m}"
+                for law in laws
+                for m in law.needs
+                if not hasattr(bus, m)
+            }
+        )
         if missing:
-            raise TypeError(f"{name}: {type(bus).__name__} cannot run these control laws: " + "; ".join(missing))
+            raise TypeError(
+                f"{name}: {type(bus).__name__} cannot run these control laws: "
+                + "; ".join(missing)
+            )
         self.bus, self.joint_names, self.laws, self.name = bus, joint_names, laws, name
         self.state: JointState | None = None
         self.target: list[float] | None = None
@@ -143,7 +189,9 @@ class JointDevice:
             self.bus.write_goal_currents(current, [0.0] * len(current))
             reader = getattr(self.bus, "read_goal_currents", None)
             if reader is not None and any(abs(reader()[i]) > 1e-6 for i in current):
-                raise ConnectionError(f"{self.name}: goal current did not read back as zero")
+                raise ConnectionError(
+                    f"{self.name}: goal current did not read back as zero"
+                )
         for law in self.laws:
             law.reset(state)
         self.enabled = True
@@ -187,11 +235,16 @@ class JointDevice:
         modes = reader("operating_mode")
         wrong = [
             f"{self.joint_names[i]} is mode {modes[i]}, {law.name} needs {law.mode}"
-            for law in self.laws if law.mode is not None for i in law.joints
+            for law in self.laws
+            if law.mode is not None
+            for i in law.joints
             if modes[i] != OPERATING_MODES[law.mode]
         ]
         if wrong:
-            raise RuntimeError(f"{self.name}: operating modes differ; run `roboloom commission`:\n  " + "\n  ".join(wrong))
+            raise RuntimeError(
+                f"{self.name}: operating modes differ; run `roboloom commission`:\n  "
+                + "\n  ".join(wrong)
+            )
 
     def command(self, target: list[float] | None, now_ns: int | None = None) -> None:
         if not self.enabled:
@@ -240,7 +293,9 @@ class JointDevice:
             self.bus.write_goal_currents(joints, [0.0] * len(joints))
         self.bus.set_torque(joints, False)
         if law.mode is not None and law.mode != old.mode:
-            self.bus.write_eeprom("operating_mode", joints, [OPERATING_MODES[law.mode]] * len(joints))
+            self.bus.write_eeprom(
+                "operating_mode", joints, [OPERATING_MODES[law.mode]] * len(joints)
+            )
         if law.current_mode:
             self.bus.write_goal_currents(joints, [0.0] * len(joints))
         self.laws[index] = law

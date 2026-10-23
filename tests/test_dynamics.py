@@ -19,7 +19,11 @@ URDF = """<robot name="toy">
   <joint name="t" type="fixed"><parent link="l2"/><child link="tip"/><origin xyz="0.2 0 0"/></joint>
 </robot>"""
 
-INPUTS = [JointMap("yaw", "yaw", 2048, 1), JointMap("a", "j1", 2048, 1), JointMap("b", "j2", 2048, -1)]
+INPUTS = [
+    JointMap("yaw", "yaw", 2048, 1),
+    JointMap("a", "j1", 2048, 1),
+    JointMap("b", "j2", 2048, -1),
+]
 OUTPUTS = ["a", "b"]
 
 
@@ -34,12 +38,20 @@ def physics(counts):
     x2 = 0.3 * np.cos(q1) + 0.2 * np.cos(q1 + q2) + 0.03 * np.sin(q1 + q2)
     tau1 = 9.81 * (1.0 * x1 + 0.5 * x2)
     tau2 = 9.81 * 0.5 * (0.2 * np.cos(q1 + q2) + 0.03 * np.sin(q1 + q2))
-    return np.array([100 * tau1, 100 * -tau2 + 3.0])  # joint b's motor counts the other way
+    return np.array(
+        [100 * tau1, 100 * -tau2 + 3.0]
+    )  # joint b's motor counts the other way
 
 
 def poses(n, seed=0):
     rng = np.random.default_rng(seed)
-    out = np.column_stack([2048 + rng.uniform(-1500, 1500, n), 2048 + rng.uniform(-900, 900, n), 2048 + rng.uniform(-900, 900, n)])
+    out = np.column_stack(
+        [
+            2048 + rng.uniform(-1500, 1500, n),
+            2048 + rng.uniform(-900, 900, n),
+            2048 + rng.uniform(-900, 900, n),
+        ]
+    )
     return out
 
 
@@ -47,7 +59,13 @@ def test_forward_kinematics_matches_planar_solution():
     tree = UrdfTree.parse(URDF)
     links, _ = tree.frames({"j1": 0.4, "j2": -0.3})
     tip = links["tip"].origin
-    expected = np.array([0.3 * np.cos(0.4) + 0.2 * np.cos(0.1), 0, 0.1 - 0.3 * np.sin(0.4) - 0.2 * np.sin(0.1)])
+    expected = np.array(
+        [
+            0.3 * np.cos(0.4) + 0.2 * np.cos(0.1),
+            0,
+            0.1 - 0.3 * np.sin(0.4) - 0.2 * np.sin(0.1),
+        ]
+    )
     assert np.allclose(tip, expected)
     assert tree.movable() == ["yaw", "j1", "j2"]
     assert tree.subtree_joints("j1") == ["j1", "j2"]
@@ -77,7 +95,9 @@ def test_direction_search_and_zero_refinement_recover_calibration():
     samples = poses(40)
     currents = np.array([physics(q) for q in samples])
     wrong = [JointMap(m.name, m.urdf, m.zero, 1) for m in INPUTS]
-    ranked = search_directions(URDF, wrong, OUTPUTS, samples, currents, holdout_mask(40), fixed={"yaw"})
+    ranked = search_directions(
+        URDF, wrong, OUTPUTS, samples, currents, holdout_mask(40), fixed={"yaw"}
+    )
     # A planar chain cannot tell all angles flipped from mirrored mass: two exact fits tie,
     # so directions must come from calibration and the search only checks them.
     ties = [[m.direction for m in trial] for score, trial, _ in ranked if score < 1e-6]
@@ -89,3 +109,25 @@ def test_direction_search_and_zero_refinement_recover_calibration():
     fit = Regressor(URDF, shifted, OUTPUTS).fit(samples, currents, holdout_mask(40))
     assert max(fit.holdout_rms_mA) < 1e-6
     assert COUNTS_PER_RAD == pytest.approx(651.9, abs=0.1)
+
+
+def test_shared_parameters_fit_with_few_poses():
+    # same motor on both joints: one set of body moments; b's motor counts (and current) are reversed
+    train, test = poses(6), poses(20, seed=3)
+    currents = np.array([physics(q) for q in train])
+    shared = Regressor(URDF, INPUTS, OUTPUTS).fit(train, currents, shared=True)
+    model = RegressorGravityModel(URDF, INPUTS, OUTPUTS, shared.theta)
+    for q in test:
+        assert np.allclose(model.effort_mA(q), physics(q), atol=1e-6)
+    ranked = search_directions(
+        URDF,
+        INPUTS,
+        OUTPUTS,
+        np.vstack([train, test]),
+        np.array([physics(q) for q in np.vstack([train, test])]),
+        holdout_mask(26),
+        fixed={"yaw"},
+        shared=True,
+    )
+    ties = sorted([m.direction for m in trial] for score, trial, _ in ranked if score < 1e-6)
+    assert ties == [[1, -1, 1], [1, 1, -1]]  # the planar mirror ambiguity remains with shared parameters
