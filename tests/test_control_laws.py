@@ -400,5 +400,6 @@ def test_release_trial_reports_drift_and_leaves_torque_off():
         dev, law, [1.0, 1.0], 0.1, 0.1, 0.02, sleep, lambda: None
     )
     assert law.gain == [1.0, 1.0]
-    assert result["a"][0] < 0 and result["b"][0] == 0
+    q0, model, sent, drift, _ = result["a"]
+    assert q0 == 2048 and model == 100 and sent > 0 and drift < 0 and result["b"][3] == 0
     assert not any(bus.torque)

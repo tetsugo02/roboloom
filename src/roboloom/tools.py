@@ -178,17 +178,20 @@ def release_trial(
     period_s: float,
     sleep=time.sleep,
     signal=lambda: print("\a  LET GO now", flush=True),
-) -> dict[str, tuple[float, float]]:
+) -> dict[str, tuple[float, float, float, float, float]]:
     """Enable `law` with `gains`, let the operator release the arm, and watch it.
 
-    Returns per joint (drift in counts over `watch_s`, peak |velocity| counts/s). Torque
-    is off again afterwards; a runaway stops the trial early (the device is limp).
+    Returns per joint, at the release: position (counts), g(q) at gain 1 and the sent
+    current (mA); then the drift in counts over `watch_s` and the peak |velocity|
+    (counts/s). Torque is off again afterwards; a runaway stops the trial early.
     """
     law.gain = list(gains)
     device.read_state()
     device.enable_torque()
     names = [device.joint_names[i] for i in law.joints]
     start: list[float] = []
+    model: list[float] = []
+    sent: list[float] = []
     peak = [0.0] * len(names)
     try:
         for tick in range(round((settle_s + watch_s) / period_s)):
@@ -203,17 +206,22 @@ def release_trial(
                     for p, i in zip(peak, law.joints, strict=True)
                 ]
             device.command(None)
+            if len(start) and not sent:
+                model = [law.model_mA.get(i, float("nan")) for i in law.joints]
+                sent = [device.last_currents.get(i, 0.0) for i in law.joints]
             sleep(period_s)
     except RuntimeError as exc:  # RunawayError / WatchdogFired: the device went limp
         print(f"  stopped: {exc}")
     finally:
         device.disable_torque()
     end = device.read_state().positions
-    if not start:
-        start = [end[i] for i in law.joints]
+    nan = [float("nan")] * len(names)
+    start, model, sent = start or nan, model or nan, sent or nan
     return {
-        n: (end[i] - q0, v)
-        for n, i, q0, v in zip(names, law.joints, start, peak, strict=True)
+        n: (q0, g, c, end[i] - q0, v)
+        for n, i, q0, g, c, v in zip(
+            names, law.joints, start, model, sent, peak, strict=True
+        )
     }
 
 
@@ -222,6 +230,7 @@ def gravity_check(experiment: str, node: str, group: str, poses: int = 3) -> str
     gain 0, and compare how far and how fast each joint moves."""
     from .control.device import JointDevice, build_laws
     from .control.laws import CurrentLaw
+    from .control.trace import Trace
     from .inputs.base import JointInput
 
     cfg = load_experiment(experiment)
@@ -238,6 +247,10 @@ def gravity_check(experiment: str, node: str, group: str, poses: int = 3) -> str
         if other is not law and isinstance(other, CurrentLaw):
             other.gain = [0.0] * len(other.joints)
     device = JointDevice(owner.open_bus(False), owner.joint_names, laws, node)
+    trace_path = (
+        Path("logs") / f"gravity-check-{group}-{time.strftime('%Y%m%d-%H%M%S')}.npz"
+    )
+    device.trace = Trace(trace_path, owner.joint_names)
     period = 1 / float(owner.cfg.get("poll_hz", 60))
     rows = []
     try:
@@ -253,11 +266,23 @@ def gravity_check(experiment: str, node: str, group: str, poses: int = 3) -> str
                 result = release_trial(
                     device, law, gains, law.ramp_s + 0.5, 1.5, period
                 )
-                rows += [(pose + 1, label, j, d, v) for j, (d, v) in result.items()]
+                rows += [(pose + 1, label, j, *r) for j, r in result.items()]
     finally:
-        device.close()
-    lines = [f"{'pose':>4} {'run':<12} {'joint':<16} {'drift':>7} {'peak v':>7}"]
-    lines += [f"{p:>4} {r:<12} {j:<16} {d:>7.0f} {v:>7.0f}" for p, r, j, d, v in rows]
+        try:
+            device.trace.save()
+        finally:
+            device.close()
+    lines = [
+        (
+            f"{'pose':>4} {'run':<12} {'joint':<16} {'q':>5} {'g(q)':>5} {'sent':>5} "
+            f"{'drift':>6} {'peak v':>6}"
+        )
+    ]
+    lines += [
+        f"{p:>4} {r:<12} {j:<16} {q:>5.0f} {g:>5.0f} {c:>5.0f} {d:>6.0f} {v:>6.0f}"
+        for p, r, j, q, g, c, d, v in rows
+    ]
+    lines.append(f"trace: {trace_path}")
     lines.append(
         "drift: counts moved in 1.5 s after letting go; compensation works where the "
         "compensated drift is much smaller than the gain-0 drift"
