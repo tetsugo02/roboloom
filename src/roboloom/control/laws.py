@@ -192,6 +192,11 @@ class CurrentLaw(ControlLaw):
                 for k, j in enumerate(gravity.output_joints)
             }
 
+    def driven(self, k: int) -> bool:
+        """A joint this law pushes. One it does not (gain and kd 0) carries no current inside
+        its range and cannot run away, so falling limp is not checked against max_velocity."""
+        return self.kd[k] != 0 or (self.gravity is not None and self.gain[k] != 0)
+
     def reset(self, state):
         self.elapsed = 0.0
 
@@ -213,9 +218,8 @@ class CurrentLaw(ControlLaw):
             q, v = state.positions[i], velocities[i]
             lo, hi = self.range[k]
             if (
-                abs(v) > self.max_velocity
-                or not lo - self.margin <= q <= hi + self.margin
-            ):
+                self.driven(k) and abs(v) > self.max_velocity
+            ) or not lo - self.margin <= q <= hi + self.margin:
                 raise RunawayError(
                     f"{self.device_joints[i]}: q={q:.0f} v={v:.0f} outside the allowed range"
                 )
@@ -245,6 +249,9 @@ class Impedance(CurrentLaw):
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         super().__init__(name, joints, joint_names, cfg, gravity)
         self.kp = _per_joint(cfg.get("kp"), len(joints), f"{name}.kp")  # mA per count
+
+    def driven(self, k: int) -> bool:
+        return True
 
     def reset(self, state):
         super().reset(state)

@@ -467,12 +467,30 @@ def fit_gravity(
             )
         )
     fit = calibrated[2]
+    # An RMS is only small relative to how much the current varies: a joint whose holding
+    # current hardly changes passes any RMS limit while the model explains none of it.
+    explained = 1 - np.square(fit.holdout_rms_mA) / np.maximum(
+        currents.var(axis=0), 1e-9
+    )
     report += [
-        f"{o}: rank {r}, holdout RMS {h:.1f} mA, train {t:.1f} mA"
-        for o, r, h, t in zip(
-            cal.outputs, fit.rank, fit.holdout_rms_mA, fit.rms_mA, strict=True
+        f"{o}: rank {r}, holdout RMS {h:.1f} mA, train {t:.1f} mA, "
+        f"current std {sd:.1f} mA, explained {e:.0%}"
+        for o, r, h, t, sd, e in zip(
+            cal.outputs,
+            fit.rank,
+            fit.holdout_rms_mA,
+            fit.rms_mA,
+            currents.std(axis=0),
+            explained,
+            strict=True,
         )
     ]
+    weak = [o for o, e in zip(cal.outputs, explained, strict=True) if e < 0.5]
+    if weak:
+        report.append(
+            f"warning: the model explains under half of the measured current on {weak}; "
+            "keep their gravity_gain at 0"
+        )
     # A small holdout can be lucky: the training error must also be within the limit.
     worst = max(*fit.holdout_rms_mA, *fit.rms_mA)
     if worst > max_rms_mA:

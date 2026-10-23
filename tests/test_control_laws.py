@@ -358,3 +358,23 @@ def test_gravity_gain_can_differ_per_joint():
         dev.read_state()
         dev.command(None, t + int(k * 0.2e9))
     assert bus.goal_current[:2] == [50.0, 0.0]
+
+
+def test_undriven_joint_may_fall_fast_but_not_leave_its_range():
+    dev, bus = device(
+        [
+            {**GRAVITY, "gravity_gain": [0.5, 0.0]},
+            {"group": "c", "law": "free", "joints": ["c"]},
+        ],
+        [0, 0, 3],
+        FlatGravity(),
+    )
+    dev.read_state()
+    dev.enable_torque()
+    bus.velocities = [0.0, -5000.0, 0.0]  # b is not driven: a limp fall, not a runaway
+    dev.read_state()
+    dev.command(None)
+    bus.velocities = [-5000.0, 0.0, 0.0]  # a is driven
+    dev.read_state()
+    with pytest.raises(RunawayError, match="a:"):
+        dev.command(None)
