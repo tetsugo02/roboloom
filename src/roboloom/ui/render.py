@@ -82,6 +82,10 @@ def _source(f: dict) -> tuple[str, str]:
     detail = f"{f.get('rate_hz', 0)} Hz  age {age} ms"
     if f.get("misses"):
         detail += f"  misses {f['misses']}"
+    if f.get("current_mA"):  # actuated leader: sent/measured mA of the pushed joints
+        detail += "\nmA sent/measured: " + "  ".join(
+            f"{j} {c[0]}/{c[1]}" for j, c in f["current_mA"].items()
+        )
     return state, detail
 
 

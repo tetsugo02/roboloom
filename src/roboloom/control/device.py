@@ -30,6 +30,7 @@ from ..drivers.dynamixel_table import OPERATING_MODES
 from ..dynamics.base import GravityModel, load_gravity_model
 from . import LAWS
 from .laws import ControlLaw
+from .trace import Trace
 
 
 @dataclass
@@ -186,6 +187,8 @@ class JointDevice:
         self.target: list[float] | None = None
         self.enabled = False
         self.last_ns: int | None = None
+        self.trace: Trace | None = None
+        self.last_currents: dict[int, float] = {}
 
     def _indices(self, predicate) -> list[int]:
         return sorted(i for law in self.laws if predicate(law) for i in law.joints)
@@ -306,6 +309,14 @@ class JointDevice:
                 goals = law.compute(self.state, target, dt)
                 positions.update(goals.positions)
                 currents.update(goals.currents_mA)
+            self.last_currents = currents
+            if self.trace is not None:
+                model = {
+                    i: v
+                    for law in self.laws
+                    for i, v in getattr(law, "model_mA", {}).items()
+                }
+                self.trace.add(now, self.state, model, currents)
             if currents:
                 self.check_watchdog()
                 keys = sorted(currents)

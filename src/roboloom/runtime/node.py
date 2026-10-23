@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 from roboloom.config import ExperimentConfig, load_experiment
 from roboloom.controllers.base import Controller
@@ -109,6 +110,10 @@ def _quit(event_id, msg) -> bool:
 def _source(node, source: Source, cfg: ExperimentConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
+    log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
+    if log_dir and hasattr(reader, "start_trace"):
+        reader.start_trace(Path(log_dir) / f"{source.name}_trace.npz")
+    extra = getattr(reader, "status", None)
     p = Publisher(source.name)
     status = StatusReporter(Publisher(source.name), role)
     on_session = getattr(reader, "on_session", None)
@@ -147,6 +152,7 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
                     "rate_hz": round(rate, 1),
                     "age_ms": None if age_ms is None else round(age_ms),
                     "misses": misses,
+                    **(extra() if extra is not None else {}),
                 }
                 _send(node, "status", status.make(fields, level, now))
     finally:

@@ -156,8 +156,16 @@ def test_gravity_leader_example_parses_and_runs_in_mock(tmp_path):
     tree["experiment"]["mode"] = "mock"
     cfg = parse_experiment(tree)
     reader = cfg.inputs["leader"].open(True, cfg.dataset_fps)
-    assert len(reader.read().value) == 17
+    reader.start_trace(tmp_path / "leader_trace.npz")
+    for _ in range(3):
+        assert len(reader.read().value) == 17
+    assert "r_arm_grip" in reader.status()["current_mA"]  # the trigger spring pushes
     reader.close()
+    trace = np.load(tmp_path / "leader_trace.npz")
+    assert trace["positions"].shape == (3, 17)
+    grip = list(trace["joints"]).index("r_arm_grip")
+    assert np.isfinite(trace["commanded_mA"][:, grip]).all()
+    assert np.isnan(trace["commanded_mA"][:, 0]).all()  # torso is free
 
 
 def test_commission_writes_only_differences_after_confirmation(tmp_path, monkeypatch):

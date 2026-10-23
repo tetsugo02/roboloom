@@ -10,4 +10,4 @@ wheels/
 .venv
 datasets/
 
-.codegraph/
+.codegraph/logs/

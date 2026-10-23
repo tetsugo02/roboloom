@@ -173,14 +173,25 @@ def main() -> None:
         if fifo.exists():
             raise SystemExit(f"session FIFO already exists: {fifo}")
         os.mkfifo(fifo, 0o600)
+        log_dir = (
+            Path("logs") / f"{Path(cfg.path).stem}-{time.strftime('%Y%m%d-%H%M%S')}"
+        )
+        log_dir.mkdir(parents=True, exist_ok=True)
         try:
-            run_dataflow(dora, flow, fifo, Path(directory), args.plain)
+            run_dataflow(
+                dora, flow, fifo, Path(directory), args.plain, log_dir.resolve()
+            )
         finally:
             fifo.unlink(missing_ok=True)
 
 
 def run_dataflow(
-    dora: str, flow: Path, fifo: Path, directory: Path, plain: bool
+    dora: str,
+    flow: Path,
+    fifo: Path,
+    directory: Path,
+    plain: bool,
+    log_dir: Path | None = None,
 ) -> None:
     """Start `dora run` and drive it from the fixed screen, or line by line without a terminal."""
     from .ui.client import SessionClient
@@ -188,7 +199,8 @@ def run_dataflow(
     report, status = directory / "report.jsonl", directory / "status.json"
     report.touch()
     live = not plain and sys.stdin.isatty() and sys.stdout.isatty()
-    log_path = directory / "dora.log"
+    log_dir = log_dir or directory  # kept after the run: dora.log and device traces
+    log_path = log_dir / "dora.log"
     command = [
         dora,
         "run",
@@ -200,6 +212,8 @@ def run_dataflow(
         f"ROBOLOOM_REPORT_PATH={report}",
         "--env",
         f"ROBOLOOM_STATUS_PATH={status}",
+        "--env",
+        f"ROBOLOOM_LOG_DIR={log_dir}",
         str(flow),
     ]
     client = SessionClient(fifo, report, status)
@@ -225,12 +239,14 @@ def run_dataflow(
             print(
                 f"dora exited with {process.returncode}; end of its log:\n{log_path.read_text()[-4000:]}"
             )
+        print(f"logs: {log_dir}")
         return
     process = subprocess.Popen(command)
     try:
         _plain_loop(client, process)
     finally:
         _finish(process)
+    print(f"logs: {log_dir}")
 
 
 def _finish(process: subprocess.Popen) -> None:

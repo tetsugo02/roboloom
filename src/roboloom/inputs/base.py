@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -15,6 +16,7 @@ from ..control.device import (
     check_hardware,
     parse_groups,
 )
+from ..control.trace import Trace
 from ..core.checks import names, positions, positive
 from ..core.protocol import Envelope
 from ..core.source import Features, Reader, Sample, Source
@@ -67,11 +69,34 @@ class ActuatedReader:
         if command in ("estop", "release", "quit"):
             self.device.disable_torque()
 
+    def start_trace(self, path: str | Path) -> None:
+        """Record every control tick; written on close (see `roboloom.control.trace`)."""
+        self.device.trace = Trace(path, self.device.joint_names)
+
+    def status(self) -> dict:
+        """Sent and measured current (mA) of the joints a law is pushing, for the screen."""
+        state = self.device.state
+        measured = (state.currents_mA if state else None) or []
+        return {
+            "current_mA": {
+                self.device.joint_names[i]: [
+                    round(v),
+                    round(measured[i]) if i < len(measured) else None,
+                ]
+                for i, v in sorted(self.device.last_currents.items())
+                if abs(v) >= 0.5
+            }
+        }
+
     def close(self) -> None:
         try:
             self.device.disable_torque()
         finally:
-            self.device.close()
+            try:
+                if self.device.trace is not None:
+                    self.device.trace.save()
+            finally:
+                self.device.close()
 
 
 class JointInput(InputDevice):

@@ -174,6 +174,7 @@ class CurrentLaw(ControlLaw):
         self.margin = positive(cfg.get("range_margin", 100), f"{name}.range_margin")
         self.barrier = float(cfg.get("barrier_mA_per_count", 0.5))
         self.elapsed = 0.0
+        self.model_mA: dict[int, float] = {}  # last g(q) at gain 1, for traces
         if gravity is not None:
             missing = set(gravity.output_joints) ^ {joint_names[i] for i in joints}
             if missing:
@@ -204,6 +205,7 @@ class CurrentLaw(ControlLaw):
         if self.gravity is None or not any(self.gain):
             return {i: 0.0 for i in self.joints}
         effort = self.gravity.effort_mA([state.positions[i] for i in self.model_inputs])
+        self.model_mA = {i: effort[self.model_outputs[i]] for i in self.joints}
         return {
             i: gain * effort[self.model_outputs[i]]
             for gain, i in zip(self.gain, self.joints, strict=True)
