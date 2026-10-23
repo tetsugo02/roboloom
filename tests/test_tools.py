@@ -182,3 +182,65 @@ def test_commission_writes_only_differences_after_confirmation(tmp_path, monkeyp
     grips = [w for w in bus.writes if w[0] == "operating_mode" and w[2][0] == 5]
     assert grips and sorted(grips[0][1]) == [9, 16]
     FakeDynamixel.instances.clear()
+
+
+class WatchdogMotor:
+    """One current-mode motor whose watchdog fires after `period_ms` without traffic."""
+
+    def __init__(self, stops: bool):
+        self.stops, self.torque, self.goal, self.watchdog = stops, 0, 0.0, 0
+        self.period_ms, self.silent_ms = 0.0, 0.0
+
+    def tick(self, ms):
+        self.silent_ms += ms
+        if self.watchdog > 0 and self.torque and self.silent_ms > self.period_ms:
+            self.watchdog = -1
+            if self.stops:
+                self.goal = 0.0
+
+    def _talk(self):
+        self.silent_ms = 0.0
+
+    def read_register(self, name):
+        self._talk()
+        return {
+            "operating_mode": [0],
+            "torque_enable": [self.torque],
+            "bus_watchdog": [self.watchdog],
+            "hardware_error": [0],
+        }[name]
+
+    def write_goal_currents(self, indices, values):
+        self._talk()
+        if self.watchdog >= 0:
+            self.goal = values[0]
+
+    def read_goal_currents(self):
+        self._talk()
+        return [self.goal]
+
+    def set_bus_watchdog(self, period_ms):
+        self._talk()
+        self.watchdog = round((period_ms or 0) / 20)
+        self.period_ms = period_ms or 0.0
+
+    def set_torque(self, indices, on):
+        self._talk()
+        self.torque = int(on)
+
+    def read_state(self):
+        from roboloom.drivers.base import JointState
+
+        self._talk()
+        return JointState([2048.0], [0.0], [self.goal])
+
+
+@pytest.mark.parametrize("stops", [True, False])
+def test_watchdog_trial_reads_what_the_motor_did(stops):
+    motor = WatchdogMotor(stops)
+    r = tools.watchdog_trial(motor, 30.0, 100, sleep=lambda s: motor.tick(s * 1000))
+    assert r["current_before_mA"] == 30.0 and r["watchdog_before"] == 5
+    assert r["watchdog_after"] == -1
+    assert r["current_after_mA"] == (0.0 if stops else 30.0)
+    assert r["goal_accepted_after_fire_mA"] == (0.0 if stops else 30.0)
+    assert motor.torque == 0 and motor.watchdog == 0 and motor.goal == 0.0

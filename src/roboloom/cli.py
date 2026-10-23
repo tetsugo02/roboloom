@@ -41,6 +41,15 @@ def main() -> None:
     com.add_argument("experiment")
     com.add_argument("node")
     com.add_argument("--hardware", action="store_true", required=True)
+    wd = sub.add_parser(
+        "watchdog-test",
+        help="bench test: does the Bus Watchdog stop a current-mode motor (torques it)",
+    )
+    wd.add_argument("experiment")
+    wd.add_argument("node")
+    wd.add_argument("joint")
+    wd.add_argument("--current-mA", type=float, default=30.0)
+    wd.add_argument("--hardware", action="store_true", required=True)
     calib = sub.add_parser(
         "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
     )
@@ -108,6 +117,11 @@ def main() -> None:
         from .tools import commission
 
         print(commission(args.experiment, args.node))
+        return
+    if args.command == "watchdog-test":
+        from .tools import watchdog_test
+
+        print(watchdog_test(args.experiment, args.node, args.joint, args.current_mA))
         return
     if args.command == "calibrate-joints":
         from .tools import calibrate_joints
