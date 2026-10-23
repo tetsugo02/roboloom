@@ -50,6 +50,15 @@ def main() -> None:
     wd.add_argument("joint")
     wd.add_argument("--current-mA", type=float, default=30.0)
     wd.add_argument("--hardware", action="store_true", required=True)
+    gc = sub.add_parser(
+        "gravity-check",
+        help="release the arm with and without gravity compensation and compare (torques it)",
+    )
+    gc.add_argument("experiment")
+    gc.add_argument("node")
+    gc.add_argument("group", help="control group, e.g. right_arm")
+    gc.add_argument("--poses", type=int, default=3)
+    gc.add_argument("--hardware", action="store_true", required=True)
     calib = sub.add_parser(
         "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
     )
@@ -122,6 +131,11 @@ def main() -> None:
         from .tools import watchdog_test
 
         print(watchdog_test(args.experiment, args.node, args.joint, args.current_mA))
+        return
+    if args.command == "gravity-check":
+        from .tools import gravity_check
+
+        print(gravity_check(args.experiment, args.node, args.group, args.poses))
         return
     if args.command == "calibrate-joints":
         from .tools import calibrate_joints

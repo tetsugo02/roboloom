@@ -378,3 +378,27 @@ def test_undriven_joint_may_fall_fast_but_not_leave_its_range():
     dev.read_state()
     with pytest.raises(RunawayError, match="a:"):
         dev.command(None)
+
+
+def test_release_trial_reports_drift_and_leaves_torque_off():
+    from roboloom import tools
+
+    dev, bus = device(
+        [GRAVITY, {"group": "c", "law": "free", "joints": ["c"]}],
+        [0, 0, 3],
+        FlatGravity(),
+    )
+    law = dev.laws[0]
+    ticks = []
+
+    def sleep(_):
+        ticks.append(1)
+        if len(ticks) > 5:
+            bus.values[0] -= 10  # the arm sinks after the release
+
+    result = tools.release_trial(
+        dev, law, [1.0, 1.0], 0.1, 0.1, 0.02, sleep, lambda: None
+    )
+    assert law.gain == [1.0, 1.0]
+    assert result["a"][0] < 0 and result["b"][0] == 0
+    assert not any(bus.torque)

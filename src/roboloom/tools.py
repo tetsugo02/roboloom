@@ -166,6 +166,105 @@ def watchdog_test(
     return "\n".join(lines)
 
 
+# -- gravity compensation check ---------------------------------------------------
+
+
+def release_trial(
+    device,
+    law,
+    gains: list[float],
+    settle_s: float,
+    watch_s: float,
+    period_s: float,
+    sleep=time.sleep,
+    signal=lambda: print("\a  LET GO now", flush=True),
+) -> dict[str, tuple[float, float]]:
+    """Enable `law` with `gains`, let the operator release the arm, and watch it.
+
+    Returns per joint (drift in counts over `watch_s`, peak |velocity| counts/s). Torque
+    is off again afterwards; a runaway stops the trial early (the device is limp).
+    """
+    law.gain = list(gains)
+    device.read_state()
+    device.enable_torque()
+    names = [device.joint_names[i] for i in law.joints]
+    start: list[float] = []
+    peak = [0.0] * len(names)
+    try:
+        for tick in range(round((settle_s + watch_s) / period_s)):
+            state = device.read_state()
+            if tick == round(settle_s / period_s):
+                signal()
+                start = [state.positions[i] for i in law.joints]
+            if start:
+                velocities = state.velocities or [0.0] * len(state.positions)
+                peak = [
+                    max(p, abs(velocities[i]))
+                    for p, i in zip(peak, law.joints, strict=True)
+                ]
+            device.command(None)
+            sleep(period_s)
+    except RuntimeError as exc:  # RunawayError / WatchdogFired: the device went limp
+        print(f"  stopped: {exc}")
+    finally:
+        device.disable_torque()
+    end = device.read_state().positions
+    if not start:
+        start = [end[i] for i in law.joints]
+    return {
+        n: (end[i] - q0, v)
+        for n, i, q0, v in zip(names, law.joints, start, peak, strict=True)
+    }
+
+
+def gravity_check(experiment: str, node: str, group: str, poses: int = 3) -> str:
+    """Objective A/B: at the same pose, release the arm with the configured gains and with
+    gain 0, and compare how far and how fast each joint moves."""
+    from .control.device import JointDevice, build_laws
+    from .control.laws import CurrentLaw
+    from .inputs.base import JointInput
+
+    cfg = load_experiment(experiment)
+    owner = cfg.inputs.get(node)
+    control = owner.control if isinstance(owner, JointInput) else None
+    if not isinstance(owner, JointInput) or not control or cfg.mock:
+        raise SystemExit(f"{node}: not an actuated hardware input in {experiment}")
+    laws = build_laws(control, owner.joint_names, owner.cfg.get("__dir__"))
+    law = next((x for x in laws if x.name == group), None)
+    if not isinstance(law, CurrentLaw) or law.gravity is None:
+        raise SystemExit(f"{group}: not a gravity-compensated group of {node}")
+    configured = list(law.gain)
+    for other in laws:  # only the tested arm pushes
+        if other is not law and isinstance(other, CurrentLaw):
+            other.gain = [0.0] * len(other.joints)
+    device = JointDevice(owner.open_bus(False), owner.joint_names, laws, node)
+    period = 1 / float(owner.cfg.get("poll_hz", 60))
+    rows = []
+    try:
+        for pose in range(poses):
+            for label, gains in (
+                ("compensated", configured),
+                ("gain 0", [0.0] * len(configured)),
+            ):
+                input(
+                    f"pose {pose + 1}/{poses}, {label}: hold the arm still in a pose "
+                    f"(the same pose for both runs), press Enter, let go at the beep: "
+                )
+                result = release_trial(
+                    device, law, gains, law.ramp_s + 0.5, 1.5, period
+                )
+                rows += [(pose + 1, label, j, d, v) for j, (d, v) in result.items()]
+    finally:
+        device.close()
+    lines = [f"{'pose':>4} {'run':<12} {'joint':<16} {'drift':>7} {'peak v':>7}"]
+    lines += [f"{p:>4} {r:<12} {j:<16} {d:>7.0f} {v:>7.0f}" for p, r, j, d, v in rows]
+    lines.append(
+        "drift: counts moved in 1.5 s after letting go; compensation works where the "
+        "compensated drift is much smaller than the gain-0 drift"
+    )
+    return "\n".join(lines)
+
+
 # -- calibration file ------------------------------------------------------------
 
 
