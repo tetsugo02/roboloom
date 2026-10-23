@@ -20,6 +20,7 @@ def features(cfg: ExperimentConfig) -> Features:
     out: Features = {
         "action": {"dtype": "float32", "shape": (dim,), "names": None},
         "action.valid": {"dtype": "float32", "shape": (1,), "names": None},
+        "action.clamped": {"dtype": "float32", "shape": (1,), "names": None},
         "action.seq": {"dtype": "int64", "shape": (1,), "names": None},
         "action.sent_ns": {"dtype": "int64", "shape": (1,), "names": None},
     }

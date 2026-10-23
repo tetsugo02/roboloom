@@ -7,8 +7,24 @@ from typing import Any
 import numpy as np
 
 from ...core.checks import positive
-from ...core.protocol import Envelope, pack_array, unpack_array
+from ...core.protocol import Envelope
 from ...core.source import ConstantReader, Features, Reader, Sample, Source
+
+
+class ShapeCheckedReader:
+    """Rejects frames whose shape or dtype differs from the configured feature."""
+
+    def __init__(self, name: str, reader: Reader, shape: tuple[int, int, int]):
+        self.name, self.reader, self.shape = name, reader, shape
+
+    def read(self) -> Sample | None:
+        sample = self.reader.read()
+        if sample is not None and (sample.value.shape != self.shape or sample.value.dtype != np.uint8):
+            raise ValueError(f"{self.name}: frame {sample.value.shape} {sample.value.dtype} != configured {self.shape} uint8")
+        return sample
+
+    def close(self) -> None:
+        self.reader.close()
 
 
 class ImageSensor(Source):
@@ -21,17 +37,18 @@ class ImageSensor(Source):
         self.shape = (int(positive(cfg.get("height"), f"{name}.height")), int(positive(cfg.get("width"), f"{name}.width")), 3)
 
     def open(self, mock: bool, dataset_fps: float) -> Reader:
-        return ConstantReader(np.zeros(self.shape, np.uint8)) if mock else self.open_device()
+        reader = ConstantReader(np.zeros(self.shape, np.uint8)) if mock else self.open_device()
+        return ShapeCheckedReader(self.name, reader, self.shape)
 
     def open_device(self) -> Reader:
         raise RuntimeError(f"{self.name}: no device driver; pass a reader instead")
 
     def encode(self, sample: Sample) -> dict:
-        return {"image": pack_array(np.asarray(sample.value))}
+        return {"image": np.asarray(sample.value)}
 
     def features(self, dataset_fps: float) -> Features:
         return {f"observation.images.{self.name}": {"dtype": "video", "shape": self.shape, "names": ["height", "width", "channels"]}}
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
-        image = unpack_array(msg.payload["image"]) if msg else np.zeros(self.shape, np.uint8)
+        image = msg.payload["image"] if msg else np.zeros(self.shape, np.uint8)
         return {f"observation.images.{self.name}": image.astype(np.uint8)}

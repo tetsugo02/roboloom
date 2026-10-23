@@ -1,0 +1,113 @@
+# Actuated leader: arms gravity-compensated (current mode), triggers spring back to 2400.
+# Before use:
+#   1. identify gravity_right.yaml / gravity_left.yaml (see ../calibration/).
+#   2. fill range from `roboloom probe` (counts); runaway check: outside range+margin or
+#      faster than max_velocity counts/s -> the leader goes limp.
+#   3. `roboloom commission experiment_gravity.yaml leader --hardware` sets the arm joints to
+#      current mode and Current Limit 300 mA (EEPROM), with the arm supported and torque off.
+#   4. bench-test bus_watchdog_ms on XC330/XM430 with the arm supported before teleoperation.
+# Start with a low gravity_gain and raise it joint by joint.
+type: rakuda2_leader
+port: SET_LEADER_BY_ID_PORT
+motor_ids:
+- 27
+- 28
+- 29
+- 1
+- 3
+- 5
+- 7
+- 9
+- 11
+- 31
+- 2
+- 4
+- 6
+- 8
+- 10
+- 12
+- 30
+poll_hz: 30
+bus_watchdog_ms: 100
+registers:
+  current_limit:
+    r_arm_sh_pitch1: 300
+    r_arm_sh_roll: 300
+    r_arm_sh_pitch2: 300
+    r_arm_el_yaw: 300
+    r_arm_wr_roll: 300
+    r_arm_wr_yaw: 300
+    l_arm_sh_pitch1: 300
+    l_arm_sh_roll: 300
+    l_arm_sh_pitch2: 300
+    l_arm_el_yaw: 300
+    l_arm_wr_roll: 300
+    l_arm_wr_yaw: 300
+    r_arm_grip: 30
+    l_arm_grip: 30
+control:
+- group: body
+  law: free
+  joints:
+  - torso_yaw
+  - head_yaw
+  - head_pitch
+- group: right_arm
+  law: gravity_comp
+  joints:
+  - r_arm_sh_pitch1
+  - r_arm_sh_roll
+  - r_arm_sh_pitch2
+  - r_arm_el_yaw
+  - r_arm_wr_roll
+  - r_arm_wr_yaw
+  gravity_model: ../calibration/gravity_right.yaml
+  gravity_gain: 0.5
+  max_current_mA: 300
+  kd: 0.0
+  ramp_s: 2.0
+  max_velocity: 3000
+  range:
+  - &id001
+    - SET_FROM_PROBE
+    - SET_FROM_PROBE
+  - *id001
+  - *id001
+  - *id001
+  - *id001
+  - *id001
+  range_margin: 100
+  barrier_mA_per_count: 0.5
+- group: left_arm
+  law: gravity_comp
+  joints:
+  - l_arm_sh_pitch1
+  - l_arm_sh_roll
+  - l_arm_sh_pitch2
+  - l_arm_el_yaw
+  - l_arm_wr_roll
+  - l_arm_wr_yaw
+  gravity_model: ../calibration/gravity_left.yaml
+  gravity_gain: 0.5
+  max_current_mA: 300
+  kd: 0.0
+  ramp_s: 2.0
+  max_velocity: 3000
+  range:
+  - &id002
+    - SET_FROM_PROBE
+    - SET_FROM_PROBE
+  - *id002
+  - *id002
+  - *id002
+  - *id002
+  - *id002
+  range_margin: 100
+  barrier_mA_per_count: 0.5
+- group: trigger
+  law: current_position
+  joints:
+  - r_arm_grip
+  - l_arm_grip
+  goal_current_mA: 30
+  target: 2400

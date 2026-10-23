@@ -36,11 +36,21 @@ class JointController(Controller):
         self.last_target: list[float] | None = None
         self.last_target_ns = 0
         self.aligned = False
+        self.state = "waiting_input"
+        self.worst: tuple[str, float] | None = None  # joint farthest from alignment
 
     def reset(self) -> None:
         self.aligned = False
+        self.state = "robot_fault"
 
-    def update(self, intent: Envelope, follower: list[float], now_ns: int | None = None) -> Envelope | None:
+    def status(self) -> dict:
+        out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
+        if self.worst is not None and self.state == "aligning":
+            out["worst_joint"], out["worst_diff"] = self.worst[0], round(self.worst[1], 1)
+        return out
+
+    def update(self, intent: Envelope, follower: list[float], now_ns: int | None = None,
+               follower_target: list[float] | None = None) -> Envelope | None:
         now = time.monotonic_ns() if now_ns is None else now_ns
         if (
             intent.kind != JointInput.kind
@@ -48,6 +58,7 @@ class JointController(Controller):
             or intent.t_ready_ns > now
         ):
             self.aligned = False
+            self.state = "input_stale"
             return None
         if intent.boot_id != self.last_boot:
             self.last_boot, self.last_seq = intent.boot_id, -1
@@ -60,16 +71,23 @@ class JointController(Controller):
         target = [by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]]
         current = positions(follower, len(self.robot.joint_names))
         if not self.aligned:
-            if max(abs(a - b) for a, b in zip(target, current, strict=True)) > self.cfg["alignment_tolerance"]:
+            diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
+            worst = max(range(len(diffs)), key=diffs.__getitem__)
+            self.worst = (self.robot.joint_names[worst], diffs[worst])
+            if diffs[worst] > self.cfg["alignment_tolerance"]:
+                self.state = "aligning"
                 return None
             self.aligned = True
             self.last_target = current
             self.last_target_ns = now
         dt = max((now - self.last_target_ns) / 1e9, 1e-6)
         step = self.cfg["max_speed_counts_per_s"] * dt
-        previous = self.last_target
+        # Step from what the follower holds, not from our own last output: while the robot is
+        # not armed (or refuses a command) our targets would otherwise run ahead of it.
+        previous = list(follower_target) if follower_target is not None else self.last_target
         if previous is None:
             raise RuntimeError("controller target missing after alignment")
         limited = [max(p - step, min(p + step, t)) for p, t in zip(previous, target, strict=True)]
         self.last_target, self.last_target_ns = limited, now
+        self.state = "following"
         return self.command(limited, now, input_seq=intent.seq)

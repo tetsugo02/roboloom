@@ -77,7 +77,12 @@ leader への切替時は follower との姿勢差を確認し，急な移動を
 
 安全の最終判定は，実機に書き込む robot ノードが担当する．controller の出力を無条件には信用せず，指令の期限，次元，NaN，関節・速度・電流などの制限，通信異常を確認する．`IDLE`，`ALIGNING`，`ACTIVE`，`HOLD`，`FAULT`，`ESTOP` の状態と遷移を機体ごとに定義する．`FAULT` と `ESTOP` からの自動復帰は行わない．robot ノードを自動再起動するかどうかも安全試験後に決め，初期案では自動再起動しない．
 
-HOLD 時の姿勢維持やトルク遮断は，機体の機構，重力負荷，ブレーキの有無で意味が変わる．Rakuda の HOLD を「トルクを入れて保持」とする案は実機で温度・電流・落下のリスクを確認してから確定する．Dynamixel の EEPROM 制限も，対象モーターと制御モードで有効な項目を調べ，起動時はまず値を読み出して照合する．設定の自動書き換えは別の校正手順として扱う．
+HOLD は，最後に送った目標を固定して送り続ける．実測位置を毎回目標にし直すと，重力で姿勢が下がっていくからである．HOLD 時の姿勢維持やトルク遮断は，機体の機構，重力負荷，ブレーキの有無で意味が変わる．Rakuda の HOLD を「トルクを入れて保持」とする案は実機で温度・電流・落下のリスクを確認してから確定する．Dynamixel の EEPROM 制限も，対象モーターと制御モードで有効な項目を調べ，起動時はまず値を読み出して照合する．設定の自動書き換えは別の校正手順として扱う（2026-10-23 実装）．
+- 起動時は，モデル番号，Operating Mode，Current Limit，位置リミットなどを読むだけにする．
+- EEPROM を書くのは，明示的に実行する `roboloom commission` だけとし，対象は Operating Mode と Current Limit に限る．書く前にトルクオフと操作者の確認を必要とする．
+- 位置リミットは，電流モードと電流制限つき位置モードでは効かない．このため，電流モードの制御則は速度と範囲による暴走検知を持ち，Bus Watchdog と EEPROM の Current Limit を必須条件にする．
+
+制御モードは，関節グループごとに差し替える制御則（`free`，`position`，`current_position`，`gravity_comp`，`impedance`）として実装する．leader と follower は同じ仕組みを使い，将来のバイラテラル制御は，相手側の effort を入力に持つ制御則として追加する．
 
 ソフトウェア非常停止は robot ノードに直接届く経路を設ける．ノードや PC 自体が停止した場合にも働く物理的な停止手段は別途必要であり，ソフトウェアの状態機械で代替したことにはしない．
 
@@ -167,8 +172,21 @@ extras はインストールする機器を選ぶためのものであり，全�
 5. RealSense，DIGIT，録音ライブラリ，LeRobot の依存が同じ uv 環境で共存できるか確かめる．
 6. VR を別 PC から使う場合の座標系，通信遅延，時計同期，追跡喪失時の動作を入力機器の選定後に定める．
 
+## 11．YAM 実装から取り入れる点
+
+YAM（双腕 YAM アームのテレオペ，収集，MolmoAct 評価の実装）の安全ガードと，方策出力を滑らかに送る工夫を [YAM 実装の分析](docs/yam-safety-and-smoothness.md) にまとめた．複数の機体に対応するため，YAM の工夫は汎用の契約と機体能力に分けて取り入れる．YAM の数値と，DM モーター固有の機能はそのまま移さない．
+
+- **機体能力の申告**：`Robot` に能力（通信ウォッチドッグ，解放手段，障害時の安全状態，エラーコード，電流・温度，オンボード PD，運動学モデル）を宣言させる．robot ノードは起動時に申告と実機の値を照合する．安全に必要な能力がなければ，起動を拒否するか，明示した代わりの動作を選ぶ．
+- **安全判定の二段階化**：§5 の最終判定を，最後に送った値を基準にした変化量の soft clamp（送って記録する）と，NaN・期限・範囲・大きな飛びの hard reject（HOLD または FAULT）に分ける．上限は tick あたりではなく物理量で持つ．（2026-10-23 実装：`max_speed`，`max_jump`，`action.clamped`）
+- **重力補償**：Rakuda の follower は Dynamixel の位置制御で，外からトルクを足す口がない．このため今回は leader（電流モード）にだけ入れる．g(q) は URDF の関節軸と，実測した保持電流から同定する（CAD の質量は使わない）．follower の電流制御（`impedance`）は模擬だけで試験し，実機では明示的に許可しない限り拒否する．
+- **方策の経路**：§4 の `ActionChunk` は，消費数で時刻を揃える置換式 queue（step clock，観測時点の `s_obs`，エポック）と，前の値を持ち越す補間で実行する．RTC 誘導は方策の能力として扱う．queue が空になったら送らず，robot ノードが期限切れとして保持する．
+- **セッションの順序**：方策の準備と互換性検査を通電の前に終える．終了は park → 確認 → release とし，release の手段は機体能力から選ぶ．
+- **GIL と GC**：YAM が単一プロセスのために必要とした対処は，§3 のノード分割（方策，センサー，recorder を別プロセスにする）に置き換える．robot ノード内の GC と，共有資源の競合は残るので，周期を測って確かめる．
+- **記録と測定**：`observation.state` には実測と最後の指令の両方を残す．tick 周期，clamp の割合，queue が空になった割合，継ぎ目の段差，追従誤差を測定項目に加える．
+
 ## 参考資料
 
+- YAM：`/home/tetsugo_local/workspace/YAM`（HEAD `839fb55`）．分析は [docs/yam-safety-and-smoothness.md](docs/yam-safety-and-smoothness.md)．
 - 現行 robopy：`src/robopy/robots/rakuda/rakuda_robot.py`，`src/robopy/robots/common/robot.py`，`src/robopy/robots/so101/so101_spacemouse.py`，`src/robopy/utils/worker/rakuda_save_worker.py`，`pyproject.toml`．
 - dora-rs：[v1.0.1 リリース](https://github.com/dora-rs/dora/releases/tag/v1.0.1)，[Python API](https://dora-rs.ai/dora/languages/python)，[dataflow とキュー](https://dora-rs.ai/dora/concepts/dataflow-yaml)，[CLI の PyPI 配布](https://pypi.org/project/dora-rs-cli/)，[Python API の PyPI 配布](https://pypi.org/project/dora-rs/)．
 - LeRobot：[公開版の一覧](https://pypi.org/project/lerobot/)，[LeRobotDataset API](https://huggingface.co/docs/lerobot/main/api/datasets)，[公式記録ループ](https://github.com/huggingface/lerobot/blob/main/src/lerobot/scripts/lerobot_record.py)．後二者は `main` の資料であり，実装時には固定版と照合する．

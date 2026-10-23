@@ -8,6 +8,21 @@
 - `[ ]`：未完了。`暫定実装` は試すためのコードがある状態、`未実装` は対応するコードがない状態、`要検証` はコードがあっても通過条件の証拠がない状態。
 - 段階の完了は、その段階の全 TODO と通過条件を満たしてから付ける。後段の試作があっても前段の完了を意味しない。
 
+**2026-10-23 追加：** 実機の Rakuda-2 で収集するための経路を実装した。実機では未確認である。
+- 実機の例と、`SET_` で残した要測定値（`examples/rakuda2/`）
+- `probe`、起動時の EEPROM 照合
+- 2 進の Envelope、逐次確定の recorder
+- soft clamp と hard reject、HOLD の目標固定、健全性の FAULT、`release`
+- 差し替え可能な制御則、leader の重力補償と同定ツール、`commission`
+
+**2026-10-23 実機での初回収集（`examples/rakuda2/experiment_camera.yaml`：RealSense のみ、DIGIT なし）：**
+- leader 操作で収集し、保存と読み戻しまでできた。
+  - 1 エピソード 881 フレーム、15 fps。
+  - 指令が有効だった行は 99.8%、欠損は 0%、制御周期の p99 は 34.8 ms（30 Hz のとき）。
+- 制御を 30 Hz から 60 Hz に上げると、follower の細かい振動が減った。例の設定は 60 Hz にしてある。
+- leader のトリガーのばね（`spring`）は、20 mA ではギアの摩擦に負けて効かなかった。robopy と同じ 30 mA にして効くことを確かめた（`commission` で EEPROM の Current Limit を書き換えた）。
+- 未確認：関節リミットは EEPROM の範囲のまま、follower のグリッパーの把持力（54 mA）、DIGIT を含めた構成、HOLD 中の温度。
+
 **現在地：段階 1〜3 の模擬構成と LeRobot 保存を試作中。段階 0 の実測、実機安全試験、段階 2 の既知軌道での往復検証は未完了。段階 4〜5 は構想段階。** `README.md` の使用例と `tests/` は模擬・単体の根拠であり、実機試験の根拠ではない。
 
 | 現在あるもの | 今試していること | まだ示せていないこと |
@@ -32,7 +47,12 @@
 - [x] **模擬単体試験まで** `HOLD`、`FAULT`、`ESTOP` の基本動作とラッチ、自動再起動しない設定を用意する（`src/roboloom/robots/safety.py`、`src/roboloom/runtime/flow.py`）。
 - [ ] **暫定実装・要検証** 固定版の dora CLI/API で `validate`、模擬 dataflow の起動・終了・セッション操作を一連で実行し、使用する Python 環境とログを記録する。現テストは dataflow の形と関数単位を確認しており、プロセスを通した試験ではない。
 - [ ] **暫定実装・要検証** 指令断、古い指令、重複、通信失敗、ノード停止、過負荷を注入し、robot ノードが自律的に安全状態へ入ることを dataflow 上で確かめる。離散操作の受信確認と状態遷移を定義する。
-- [ ] **未実施** Rakuda の停止手段、HOLD 中の電流・温度・落下リスク、Dynamixel の対象モードと EEPROM 制限を実機で確認する。起動時のレジスタ照合を実装し、必要なら校正手順を別に作る（`src/roboloom/drivers/dynamixel.py` は現状レジスタを照合しない）。
+- [ ] **一部実装・実機未確認** Rakuda の停止手段、HOLD 中の電流・温度・落下リスク、Dynamixel の対象モードと EEPROM 制限を実機で確認する。
+  - コードはある：起動時のレジスタ照合（`drivers/dynamixel.py` の `verify`）、`probe`、`commission`。
+  - 実機の試験はまだない：HOLD 中の電流と温度、Shutdown の挙動、Bus Watchdog の挙動（モデル・モードごと）。
+- [ ] **暫定実装・要検証** leader の重力補償（`control/laws.py` の `gravity_comp`、`dynamics/`、`calibrate-joints`、`identify-gravity`）。
+  - 模擬と合成データでは試験した。
+  - 実機では次が未実施：URDF の対応・零点・向きの確認、同定、腕を支えた状態での `kill -9`、USB 抜去、電源投入の試験。
 - [ ] **未実施** 実機で期限切れ・停止・再開・通信断を試し、指令間隔と追従誤差を段階 0 と比較する。timer とノード内待機の採否は、この結果から決める。
 
 **通過条件：** 模擬異常注入と実機安全試験の記録があり、決めた制御周期・期限を満たす。現在のコードだけでは未通過。

@@ -41,6 +41,7 @@ class ExperimentConfig:
     sensors: dict[str, Source] = field(default_factory=dict)
     controllers: dict[str, Controller] = field(default_factory=dict)
     max_age_ms: dict[str, float] = field(default_factory=dict)
+    recorder: dict = field(default_factory=dict)
     mode: str = "mock"
     robot_type: str = ""
     path: str = ""
@@ -82,7 +83,8 @@ def read_experiment(path: str | Path) -> dict:
     def node(relative: object, where: str) -> dict:
         if not isinstance(relative, str):
             raise TypeError(f"{where}: expected YAML path")
-        return _read((path.parent / relative).resolve())
+        file = (path.parent / relative).resolve()
+        return {**_read(file), "__dir__": str(file.parent)}  # resolves files a node names, e.g. gravity models
 
     for role in ROLES:
         group = raw.pop(role, None) or {}
@@ -129,6 +131,12 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         if robot.control_hz < fps:
             raise ValueError("control_hz must be >= dataset_fps")
 
+    if e["mode"] == "hardware":
+        for owner in [*inputs.values(), *robots.values()]:
+            check = getattr(owner, "check_hardware", None)
+            if check is not None:
+                check()
+
     owners: list[Source | Robot] = [*inputs.values(), *robots.values(), *sensors.values()]
     devices = [d for spec in owners for d in spec.device_ids()]
     if len(set(devices)) != len(devices):
@@ -139,6 +147,7 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         robot_id=robot_id, repo_id=repo_id, output=identity(e.get("output"), "output"),
         dataset_fps=fps, robots=robots, inputs=inputs, sensors=sensors, controllers=controllers,
         max_age_ms={name: positive(ages.get(name), f"max_age_ms.{name}") for name in (*inputs, *robots, *sensors)},
+        recorder={k: v for k, v in tree["recorder"].items() if k in ("grace_ms", "image_writer_threads", "streaming_encoding", "queue_s")},
         mode=e["mode"], robot_type=e.get("robot_type", next(iter(robots.values())).robot_type),
         path=tree["path"],
     )

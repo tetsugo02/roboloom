@@ -1,0 +1,5 @@
+type: realsense_rgb
+serial: '142122070848'
+width: 640
+height: 480
+fps: 30

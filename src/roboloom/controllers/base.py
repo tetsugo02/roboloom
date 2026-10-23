@@ -24,9 +24,18 @@ class Controller(ABC):
         )
 
     @abstractmethod
-    def update(self, intent: Envelope, follower: list[float], now_ns: int | None = None) -> Envelope | None:
-        """Return the next command, or None when the robot must not move."""
+    def update(self, intent: Envelope, follower: list[float], now_ns: int | None = None,
+               follower_target: list[float] | None = None) -> Envelope | None:
+        """Return the next command, or None when the robot must not move.
+
+        `follower_target` is the goal the robot currently holds or tracks; controllers limit
+        their steps from it so they never drift away from what the follower actually does.
+        """
 
     @abstractmethod
     def reset(self) -> None:
         """Require re-alignment, e.g. after the robot latched FAULT or ESTOP."""
+
+    def status(self) -> dict:
+        """Why the controller is (not) commanding, for the operator screen. Override to add fields."""
+        return {}

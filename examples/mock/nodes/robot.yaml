@@ -23,68 +23,94 @@ limits:
 - name: torso_yaw
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: head_yaw
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: head_pitch
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_sh_pitch1
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_sh_roll
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_sh_pitch2
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_el_yaw
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_wr_roll
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_wr_yaw
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: r_arm_grip
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_sh_pitch1
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_sh_roll
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_sh_pitch2
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_el_yaw
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_wr_roll
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_wr_yaw
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
 - name: l_arm_grip
   min: 0
   max: 4095
-  max_step: 200
+  max_speed: 3000
+  max_jump: 400
+registers:
+  operating_mode:
+    default: 3
+    r_arm_grip: 5
+    l_arm_grip: 5
+record_effort: true
+health:
+  every_ticks: 10
+  max_temperature_c: 70

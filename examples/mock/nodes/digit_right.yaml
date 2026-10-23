@@ -1,6 +1,7 @@
 type: digit
 serial: mock-digit-right
 name: right
-width: 64
-height: 48
-fps: 10
+resolution: QVGA
+height: 320
+width: 240
+fps: 30

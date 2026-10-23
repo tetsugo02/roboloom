@@ -1,0 +1,56 @@
+# Gravity identification map for the Rakuda-2 leader right arm.
+# urdf: proposed from the URDF chain order (shoulder -> wrist). It is NOT verified that
+#   motor r_arm_sh_pitch1 moves URDF joint shoulder_pitch_right_dof, and so on: check each one.
+# zero: raw count at URDF angle 0 (`roboloom calibrate-joints` records it).
+# direction: +1 if increasing counts turn the joint in the URDF's positive direction, -1 if not.
+# confirmed: set true only after the mapping, zeros and directions are checked.
+# Usage:
+#   uv run roboloom calibrate-joints examples/rakuda2/calibration/leader_right.yaml
+#   uv run roboloom identify-gravity examples/rakuda2/calibration/leader_right.yaml \
+#       --out examples/rakuda2/calibration/gravity_right.yaml --collect --hardware
+port: SET_LEADER_BY_ID_PORT
+urdf: ../../../src/roboloom/robots/rakuda2/model/assembly_2.urdf
+confirmed: false
+joints:
+- name: torso_yaw
+  motor_id: 27
+  urdf: torso_yaw_dof
+  zero: 2048
+  direction: SET
+- name: r_arm_sh_pitch1
+  motor_id: 1
+  urdf: shoulder_pitch_right_dof
+  zero: 2048
+  direction: SET
+- name: r_arm_sh_roll
+  motor_id: 3
+  urdf: shoulder_roll_right_dof
+  zero: 2048
+  direction: SET
+- name: r_arm_sh_pitch2
+  motor_id: 5
+  urdf: elbow_yaw_right_dof
+  zero: 2048
+  direction: SET
+- name: r_arm_el_yaw
+  motor_id: 7
+  urdf: elbow_pitch_right_dof
+  zero: 2048
+  direction: SET
+- name: r_arm_wr_roll
+  motor_id: 9
+  urdf: wrist_yaw_right_dof
+  zero: 2048
+  direction: SET
+- name: r_arm_wr_yaw
+  motor_id: 11
+  urdf: wrist_pitch_right_dof
+  zero: 2048
+  direction: SET
+outputs:
+- r_arm_sh_pitch1
+- r_arm_sh_roll
+- r_arm_sh_pitch2
+- r_arm_el_yaw
+- r_arm_wr_roll
+- r_arm_wr_yaw

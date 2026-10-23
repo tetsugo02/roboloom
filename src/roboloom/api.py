@@ -38,7 +38,7 @@ class Experiment:
         self.robot.start()
         self.controller = controller
         self.sensors = sensors or {}
-        self.recorder = EpisodeRecorder(cfg, dataset)
+        self.recorder = EpisodeRecorder(cfg, dataset, **cfg.recorder)
         self.publisher = Publisher("python-controller")
         self.specs: dict[str, InputDevice | Source] = {**cfg.inputs, **cfg.sensors}
         self.publishers = {name: Publisher(name) for name in cfg.sources}
@@ -54,7 +54,9 @@ class Experiment:
             raise ValueError("hardware=True is required to open real devices")
         mapper = cfg.controller_for(cfg.robot.name)
         source = mapper.source
-        bus = cfg.robot.open_bus(cfg.mock)
+        if getattr(source, "actuated", False):
+            raise ValueError(f"{source.name}: actuated leaders run only in the dora dataflow")
+        bus = cfg.robot.open_device(cfg.mock)
         readers: dict[str, Reader] = {}
         try:
             readers[source.name] = source.open(cfg.mock, cfg.dataset_fps)
@@ -135,7 +137,6 @@ class Experiment:
             raise
         obs: dict[str, Any] = {"state": state}
         robot = self.spec.name
-        self.recorder.ingest(robot, self.publishers[robot].make("robot_state", {"positions": state, "mode": self.robot.mode}, now))
         for name, reader in self.sensors.items():
             try:
                 sample = reader()
@@ -160,6 +161,7 @@ class Experiment:
         state_msg, action_msg = self.robot.tick()
         self.recorder.ingest(robot, state_msg)
         self.recorder.ingest(ACTION, action_msg)
+        self.recorder.poll()
         return {"observation": obs, "action": action_msg.payload, "mode": state_msg.payload["mode"]}
 
     def run(self, seconds: float, *, policy: Callable[[dict], list[float] | None] | None = None) -> list[dict]:
@@ -186,6 +188,10 @@ class Experiment:
 
     def estop(self) -> None:
         self.robot.stop(estop=True)
+
+    def release(self) -> None:
+        """Torque off after stop; support the arm first. Latched until the robot is reopened."""
+        self.robot.release()
 
     def close(self) -> None:
         try:

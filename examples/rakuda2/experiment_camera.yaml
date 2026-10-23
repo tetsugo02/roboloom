@@ -1,0 +1,17 @@
+# Rakuda-2 collection with the RealSense only (no DIGIT). Separate dataset: different features.
+# Run: uv run roboloom run examples/rakuda2/experiment_camera.yaml --hardware
+robot_id: rakuda2
+repo_id: local/rakuda2-camera
+output: ../../datasets/rakuda2-camera
+mode: hardware
+dataset_fps: 15
+inputs:
+  leader: nodes/leader.yaml
+controllers:
+  controller: nodes/controller.yaml
+robots:
+  robot: nodes/robot.yaml
+sensors:
+  camera: nodes/camera.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml
