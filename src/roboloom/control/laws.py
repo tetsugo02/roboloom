@@ -232,15 +232,44 @@ class CurrentLaw(ControlLaw):
 
 
 class GravityComp(CurrentLaw):
-    """Hand-guided joint that does not fall: current = gain * g(q) - kd * qdot + range barrier."""
+    """Hand-guided joint that does not fall: current = gain * g(q) - kd * qdot + range barrier.
+
+    Optional breakaway hold (`hold_mA` > 0): a spring of `hold_kp` mA/count pulls the joint
+    to an anchor, but never harder than `hold_mA`; pushed harder, the anchor slides along
+    with the hand. The arm stays where it is left, also where g(q) is off by up to
+    `hold_mA`, and moves once the operator pushes with more than that (like friction).
+    """
 
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         if gravity is None:
             raise ValueError(f"{name}: gravity_comp needs a gravity model")
         super().__init__(name, joints, joint_names, cfg, gravity)
+        n = len(joints)
+        self.hold = _per_joint(cfg.get("hold_mA", 0.0), n, f"{name}.hold_mA")
+        self.hold_kp = positive(cfg.get("hold_kp", 1.0), f"{name}.hold_kp")  # mA/count
+        self.anchor: dict[int, float] = {}
+
+    def driven(self, k: int) -> bool:
+        return self.hold[k] > 0 or super().driven(k)
+
+    def reset(self, state):
+        super().reset(state)
+        self.anchor = {i: state.positions[i] for i in self.joints}
+
+    def hold_mA(self, state: JointState) -> dict[int, float]:
+        out = {}
+        for k, i in enumerate(self.joints):
+            if self.hold[k] <= 0:
+                out[i] = 0.0
+                continue
+            q, limit = state.positions[i], self.hold[k] / self.hold_kp
+            self.anchor[i] = min(q + limit, max(q - limit, self.anchor.get(i, q)))
+            out[i] = self.hold_kp * (self.anchor[i] - q)
+        return out
 
     def compute(self, state, target, dt):
-        return self.shape(state, self.gravity_mA(state), dt)
+        g, h = self.gravity_mA(state), self.hold_mA(state)
+        return self.shape(state, {i: g[i] + h[i] for i in self.joints}, dt)
 
 
 class Impedance(CurrentLaw):

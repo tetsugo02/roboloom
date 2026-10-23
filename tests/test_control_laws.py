@@ -401,5 +401,41 @@ def test_release_trial_reports_drift_and_leaves_torque_off():
     )
     assert law.gain == [1.0, 1.0]
     q0, model, sent, drift, _ = result["a"]
-    assert q0 == 2048 and model == 100 and sent > 0 and drift < 0 and result["b"][3] == 0
+    assert (
+        q0 == 2048 and model == 100 and sent > 0 and drift < 0 and result["b"][3] == 0
+    )
     assert not any(bus.torque)
+
+
+def test_breakaway_hold_resists_up_to_hold_mA_then_slides():
+    dev, bus = device(
+        [
+            {
+                **GRAVITY,
+                "gravity_gain": 0.0,
+                "hold_mA": [20, 0],
+                "hold_kp": 1.0,
+                "ramp_s": 0.01,
+            },
+            {"group": "c", "law": "free", "joints": ["c"]},
+        ],
+        [0, 0, 3],
+        FlatGravity(),
+    )
+    dev.read_state()
+    dev.enable_torque()
+    t = time.monotonic_ns()
+    steps = iter(range(1, 100))
+
+    def at(q):
+        bus.values[0] = q
+        dev.read_state()
+        dev.command(None, t + next(steps) * int(0.02e9))
+        return bus.goal_current[0]
+
+    assert at(2048) == 0
+    assert at(2038) == 10  # pushed 10 counts: pulls back with 10 mA
+    assert at(2000) == 20  # pushed harder: capped at hold_mA, the anchor slides
+    assert at(2000) == 20
+    assert at(2010) == 10  # let go of the push: the anchor stayed at 2020
+    assert bus.goal_current[1] == 0  # no hold on b

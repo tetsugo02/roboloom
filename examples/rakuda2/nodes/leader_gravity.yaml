@@ -91,7 +91,12 @@ control:
   - r_arm_wr_roll
   - r_arm_wr_yaw
   gravity_model: ../calibration/gravity_right.yaml
-  gravity_gain: [1.0, 1.0, 0, 0.8, 0, 0]  # shoulders and elbow: see the explained % in the identify report
+  # gravity-check (2026-10-23, right arm sideways): x1 fell like x0, x2 held, x-2 fell:
+  # the sign is right and the identified g(q) is about half the real load.
+  gravity_gain: [1.8, 1.8, 0, 1.6, 0, 0]
+  # breakaway hold: stays where left, moves when pushed harder than hold_mA
+  hold_mA: [30, 30, 0, 20, 0, 10]
+  hold_kp: 1.0
   max_current_mA: [150, 150, 100, 100, 60, 60]
   kd: 0.0
   ramp_s: 2.0
@@ -109,7 +114,12 @@ control:
   - l_arm_wr_roll
   - l_arm_wr_yaw
   gravity_model: ../calibration/gravity_left.yaml
-  gravity_gain: [1.0, 1.0, 0, 0.8, 0, 0]  # shoulders and elbow: see the explained % in the identify report
+  # gravity-check (2026-10-23, right arm sideways): x1 fell like x0, x2 held, x-2 fell:
+  # the sign is right and the identified g(q) is about half the real load.
+  gravity_gain: [1.8, 1.8, 0, 1.6, 0, 0]
+  # breakaway hold: stays where left, moves when pushed harder than hold_mA
+  hold_mA: [30, 30, 0, 20, 0, 10]
+  hold_kp: 1.0
   max_current_mA: [150, 150, 100, 100, 60, 60]
   kd: 0.0
   ramp_s: 2.0
