@@ -27,6 +27,7 @@ class MockBus:
         self.health = Health([0] * dimension, [30.0] * dimension)
         self.eeprom_writes: list[tuple[str, list[int], list[int]]] = []
         self.fail = False  # fault injection: every read and write raises
+        self.watchdog = [0] * dimension  # -1 once fired (fault injection)
 
     def _check(self) -> None:
         if self.fail:
@@ -52,6 +53,8 @@ class MockBus:
             return self.modes.copy()
         if name == "torque_enable":
             return [int(t) for t in self.torque]
+        if name == "bus_watchdog":
+            return self.watchdog.copy()
         raise KeyError(name)
 
     def write_positions(self, values: list[float]) -> None:

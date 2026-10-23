@@ -242,5 +242,5 @@ def test_watchdog_trial_reads_what_the_motor_did(stops):
     assert r["current_before_mA"] == 30.0 and r["watchdog_before"] == 5
     assert r["watchdog_after"] == -1
     assert r["current_after_mA"] == (0.0 if stops else 30.0)
-    assert r["goal_accepted_after_fire_mA"] == (0.0 if stops else 30.0)
+    assert r["goal_after_zero_write_mA"] == (0.0 if stops else 30.0)
     assert motor.torque == 0 and motor.watchdog == 0 and motor.goal == 0.0

@@ -112,8 +112,8 @@ def watchdog_trial(
         state = bus.read_state()
         out["current_after_mA"] = state.currents_mA[0] if state.currents_mA else None
         out["hardware_error_after"] = bus.read_register("hardware_error")[0]
-        bus.write_goal_currents([0], [current_mA])  # a fired watchdog must refuse goals
-        out["goal_accepted_after_fire_mA"] = bus.read_goal_currents()[0]
+        bus.write_goal_currents([0], [0.0])  # does a fired watchdog refuse new goals?
+        out["goal_after_zero_write_mA"] = bus.read_goal_currents()[0]
     finally:
         bus.set_torque([0], False)
         bus.set_bus_watchdog(None)  # clears the fired state

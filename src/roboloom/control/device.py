@@ -156,6 +156,10 @@ def check_hardware(
                     )
 
 
+class WatchdogFired(RuntimeError):
+    """The motors stopped accepting goals because the control loop went silent too long."""
+
+
 class JointDevice:
     def __init__(
         self,
@@ -268,6 +272,25 @@ class JointDevice:
                 + "\n  ".join(wrong)
             )
 
+    def check_watchdog(self) -> None:
+        """A fired Bus Watchdog freezes Goal Current at its last value (the motor keeps
+        pushing; bench-tested on XC330, 2026-10-23) and rejects new goals silently, so a
+        stalled control loop must be caught here: the caller limps the joints."""
+        reader = getattr(self.bus, "read_register", None)
+        if reader is None:
+            return
+        watchdog = reader("bus_watchdog")
+        fired = [
+            self.joint_names[i]
+            for i in self._indices(lambda law: law.current_mode)
+            if watchdog[i] < 0
+        ]
+        if fired:
+            raise WatchdogFired(
+                f"{self.name}: bus watchdog fired on {fired} (control loop stalled); "
+                "goal currents are frozen, releasing"
+            )
+
     def command(self, target: list[float] | None, now_ns: int | None = None) -> None:
         if not self.enabled:
             raise RuntimeError(f"{self.name}: torque is not enabled")
@@ -284,6 +307,7 @@ class JointDevice:
                 positions.update(goals.positions)
                 currents.update(goals.currents_mA)
             if currents:
+                self.check_watchdog()
                 keys = sorted(currents)
                 self.bus.write_goal_currents(keys, [currents[i] for i in keys])
             if positions:

@@ -1,6 +1,11 @@
 # Actuated leader: arms gravity-compensated (current mode), triggers are the return spring.
 # Same motors and EEPROM checks as leader.yaml (probe 2026-10-23); differences:
-#   arm joints run gravity_comp in current mode (Operating Mode 0) with Current Limit 300 mA.
+#   arm joints run gravity_comp in current mode (Operating Mode 0).
+# Current Limit (EEPROM) is the only guard that holds when the host goes silent: a fired Bus
+#   Watchdog froze Goal Current on XC330 instead of zeroing it (watchdog-test, 2026-10-23).
+#   So it is kept just above need: predicted |g(q)| over the measured travel is <= 90 mA
+#   (shoulders), <= 27 mA (sh_pitch2, el_yaw), <= 6 mA (wrists), plus up to 50 mA of range
+#   barrier. The control loop still checks the watchdog every tick and releases if it fired.
 # Before use:
 #   1. identify ../calibration/gravity_right.yaml and gravity_left.yaml (see the calibration files).
 #   2. measure each arm's travel (writes the files range points to). Runaway check: outside
@@ -8,9 +13,10 @@
 #        uv run roboloom measure-travel ../calibration/leader_right.yaml --out ../calibration/travel_right.yaml
 #   3. with the arms supported and the dataflow stopped:
 #        uv run roboloom commission examples/rakuda2/experiment_gravity.yaml leader --hardware
-#      writes Operating Mode 0 and Current Limit 300 mA to the arm joints (EEPROM).
+#      writes Operating Mode 0 and the Current Limits below to the arm joints (EEPROM).
 #      To go back to the plain leader, commission experiment_camera.yaml (mode 3) the same way.
-#   4. bench-test bus_watchdog_ms on XC330/XM430 with the arms supported before teleoperation.
+#   4. with the arms supported: roboloom watchdog-test experiment_gravity.yaml leader <joint> --hardware
+#      (records what a fired watchdog does; on XC330 it froze the current, see above).
 # Start with a low gravity_gain and raise it joint by joint.
 # drive_mode: r_arm_grip reversed (5), l_arm_grip not (0) ON PURPOSE (symmetric triggers).
 type: rakuda2_leader
@@ -49,18 +55,18 @@ registers:
     l_arm_el_yaw: 512
     l_arm_wr_yaw: 512
   current_limit:
-    r_arm_sh_pitch1: 300
-    r_arm_sh_roll: 300
-    r_arm_sh_pitch2: 300
-    r_arm_el_yaw: 300
-    r_arm_wr_roll: 300
-    r_arm_wr_yaw: 300
-    l_arm_sh_pitch1: 300
-    l_arm_sh_roll: 300
-    l_arm_sh_pitch2: 300
-    l_arm_el_yaw: 300
-    l_arm_wr_roll: 300
-    l_arm_wr_yaw: 300
+    r_arm_sh_pitch1: 150
+    r_arm_sh_roll: 150
+    r_arm_sh_pitch2: 100
+    r_arm_el_yaw: 100
+    r_arm_wr_roll: 60
+    r_arm_wr_yaw: 60
+    l_arm_sh_pitch1: 150
+    l_arm_sh_roll: 150
+    l_arm_sh_pitch2: 100
+    l_arm_el_yaw: 100
+    l_arm_wr_roll: 60
+    l_arm_wr_yaw: 60
     r_arm_grip: 30
     l_arm_grip: 30
   return_delay:
@@ -85,7 +91,7 @@ control:
   - r_arm_wr_yaw
   gravity_model: ../calibration/gravity_right.yaml
   gravity_gain: 0.5
-  max_current_mA: 300
+  max_current_mA: [150, 150, 100, 100, 60, 60]
   kd: 0.0
   ramp_s: 2.0
   max_velocity: 3000
@@ -103,7 +109,7 @@ control:
   - l_arm_wr_yaw
   gravity_model: ../calibration/gravity_left.yaml
   gravity_gain: 0.5
-  max_current_mA: 300
+  max_current_mA: [150, 150, 100, 100, 60, 60]
   kd: 0.0
   ramp_s: 2.0
   max_velocity: 3000

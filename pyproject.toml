@@ -44,7 +44,7 @@ include = ["src", "tests", "main.py"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.12"
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
 
 [dependency-groups]
 dev = [

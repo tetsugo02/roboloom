@@ -327,3 +327,16 @@ def test_range_can_name_a_measured_travel_file(tmp_path):
             str(tmp_path),
             models={"arm": FlatGravity()},
         )
+
+
+def test_fired_bus_watchdog_releases_current_joints():
+    from roboloom.control.device import WatchdogFired
+
+    groups = [GRAVITY, {"group": "c", "law": "position", "joints": ["c"]}]
+    dev, bus = device(groups, [0, 0, 3], FlatGravity())
+    dev.read_state()
+    dev.enable_torque()
+    bus.watchdog[1] = -1  # the loop stalled: the motor froze its goal current
+    with pytest.raises(WatchdogFired, match="b"):
+        dev.command(None)
+    assert bus.torque == [False, False, True]  # current joints released, position kept
