@@ -131,3 +131,18 @@ def test_shared_parameters_fit_with_few_poses():
     )
     ties = sorted([m.direction for m in trial] for score, trial, _ in ranked if score < 1e-6)
     assert ties == [[1, -1, 1], [1, 1, -1]]  # the planar mirror ambiguity remains with shared parameters
+
+
+def test_robust_outliers_flags_failed_measurements_only():
+    from roboloom.dynamics.identify import robust_outliers
+
+    rng = np.random.default_rng(0)
+    values = rng.normal(0, 5, (40, 3))
+    values[7, 1] = 120.0  # one failed pose
+    mask = robust_outliers(values, floor=15.0)
+    assert mask.tolist().count(True) == 1 and mask[7]
+    values[:, 0] = np.linspace(-200, 200, 40)  # a wide but regular spread is not an outlier
+    assert robust_outliers(values, floor=15.0).sum() == 1
+    many = np.zeros((20, 1))
+    many[:10] = 500.0  # half the data disagreeing: never drop more than max_fraction
+    assert robust_outliers(many, floor=15.0, max_fraction=0.1).sum() <= 2

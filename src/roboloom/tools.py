@@ -236,8 +236,8 @@ def fit_gravity(
     max_rms_mA: float,
     holdout_every: int = 4,
 ) -> str:
-    from .dynamics.identify import search_directions
-    from .dynamics.regressor import RegressorGravityModel
+    from .dynamics.identify import robust_outliers, search_directions
+    from .dynamics.regressor import Regressor, RegressorGravityModel
 
     if cal.data.get("confirmed") is not True:
         raise SystemExit(
@@ -250,6 +250,17 @@ def fit_gravity(
     poses = np.unique(data["pose"])
     samples = np.array([data["positions"][data["pose"] == p].mean(0) for p in poses])
     currents = np.array([data["currents_mA"][data["pose"] == p].mean(0) for p in poses])
+    spread = np.array([np.ptp(data["currents_mA"][data["pose"] == p], axis=0) / 2 for p in poses])
+    # Failed measurements (arm still moving, touched by hand): the two approaches disagree far
+    # more than friction does, or the pose disagrees with every other pose.
+    dropped = robust_outliers(spread, floor=15.0)
+    first = Regressor(cal.urdf.read_text(), cal.joint_maps(), cal.outputs).fit(
+        samples[~dropped], currents[~dropped], shared=bool(cal.data.get("shared_parameters", False)))
+    model0 = RegressorGravityModel(cal.urdf.read_text(), cal.joint_maps(), cal.outputs, first.theta)
+    residual = np.array([model0.effort_mA(q) for q in samples]) - currents
+    dropped |= robust_outliers(np.where(dropped[:, None], 0.0, residual), floor=15.0)
+    report_dropped = f"dropped poses {poses[dropped].tolist()} (approaches disagree or far off the fit)" if dropped.any() else ""
+    poses, samples, currents = poses[~dropped], samples[~dropped], currents[~dropped]
     holdout = poses % holdout_every == holdout_every - 1
     if holdout.sum() < 2 or (~holdout).sum() < 8:
         raise SystemExit("collect more poses (at least 12)")
@@ -272,6 +283,7 @@ def fit_gravity(
     else:
         report_best = ""
     report = [
+        *([report_dropped] if report_dropped else []),
         report_poses,
         f"{'shared' if shared else 'per-joint'} parameters; calibrated directions: holdout RMS {calibrated[0]:.1f} mA (best {best_score:.1f} mA)"
     ]

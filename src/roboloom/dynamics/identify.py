@@ -47,3 +47,21 @@ def search_directions(
         fit = Regressor(urdf, trial, outputs).fit(samples, currents, holdout, shared)
         results.append((score(fit), trial, fit))
     return sorted(results, key=lambda r: r[0])
+
+
+def robust_outliers(values: np.ndarray, floor: float, max_fraction: float = 0.1) -> np.ndarray:
+    """Rows (N x joints) far outside the bulk: |v - median| > max(4 robust sigma, floor) on any joint.
+
+    At most `max_fraction` of the rows are flagged, worst first, so a poor model cannot
+    discard the data that disagrees with it.
+    """
+    center = np.median(values, axis=0)
+    sigma = 1.4826 * np.median(np.abs(values - center), axis=0)
+    excess = np.abs(values - center) / np.maximum(4 * sigma, floor)
+    worst = excess.max(axis=1)
+    flagged = np.flatnonzero(worst > 1)
+    keep = int(max_fraction * len(values))
+    flagged = flagged[np.argsort(-worst[flagged])][:keep]
+    mask = np.zeros(len(values), bool)
+    mask[flagged] = True
+    return mask
