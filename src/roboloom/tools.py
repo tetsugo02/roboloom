@@ -492,7 +492,12 @@ def fit_gravity(
             "keep their gravity_gain at 0"
         )
     # A small holdout can be lucky: the training error must also be within the limit.
-    worst = max(*fit.holdout_rms_mA, *fit.rms_mA)
+    # Joints the model does not explain are only usable at gain 0 (warned above), so the
+    # limit applies to the joints it can compensate.
+    usable = [k for k, e in enumerate(explained) if e >= 0.5]
+    if not usable:
+        raise SystemExit("\n".join([*report, "no joint is explained; model not saved"]))
+    worst = max(max(fit.holdout_rms_mA[k], fit.rms_mA[k]) for k in usable)
     if worst > max_rms_mA:
         raise SystemExit(
             "\n".join(

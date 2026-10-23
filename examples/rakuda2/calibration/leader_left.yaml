@@ -31,7 +31,7 @@ joints:
   motor_id: 4
   urdf: shoulder_roll_left_dof
   zero: 2048
-  direction: 1
+  direction: -1
 - name: l_arm_sh_pitch2
   motor_id: 6
   urdf: elbow_yaw_left_dof

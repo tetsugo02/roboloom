@@ -26,12 +26,12 @@ joints:
   motor_id: 1
   urdf: shoulder_pitch_right_dof
   zero: 2048
-  direction: 1
+  direction: -1
 - name: r_arm_sh_roll
   motor_id: 3
   urdf: shoulder_roll_right_dof
   zero: 2048
-  direction: 1
+  direction: -1
 - name: r_arm_sh_pitch2
   motor_id: 5
   urdf: elbow_yaw_right_dof
@@ -41,7 +41,7 @@ joints:
   motor_id: 7
   urdf: elbow_pitch_right_dof
   zero: 2048
-  direction: 1
+  direction: -1
 - name: r_arm_wr_roll
   motor_id: 9
   urdf: wrist_yaw_right_dof
