@@ -58,6 +58,12 @@ def main() -> None:
     gc.add_argument("node")
     gc.add_argument("group", help="control group, e.g. right_arm")
     gc.add_argument("--poses", type=int, default=3)
+    gc.add_argument(
+        "--scales",
+        type=lambda text: [float(x) for x in text.split(",")],
+        default=[1.0, 0.0],
+        help="multiples of the configured gains to try at each pose, e.g. 1,0,2,-2",
+    )
     gc.add_argument("--hardware", action="store_true", required=True)
     calib = sub.add_parser(
         "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
@@ -135,7 +141,11 @@ def main() -> None:
     if args.command == "gravity-check":
         from .tools import gravity_check
 
-        print(gravity_check(args.experiment, args.node, args.group, args.poses))
+        print(
+            gravity_check(
+                args.experiment, args.node, args.group, args.poses, args.scales
+            )
+        )
         return
     if args.command == "calibrate-joints":
         from .tools import calibrate_joints

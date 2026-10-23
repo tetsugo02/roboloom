@@ -6,6 +6,7 @@ All commands that write to motors require `--hardware` and an explicit `yes`.
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -225,9 +226,16 @@ def release_trial(
     }
 
 
-def gravity_check(experiment: str, node: str, group: str, poses: int = 3) -> str:
-    """Objective A/B: at the same pose, release the arm with the configured gains and with
-    gain 0, and compare how far and how fast each joint moves."""
+def gravity_check(
+    experiment: str,
+    node: str,
+    group: str,
+    poses: int = 3,
+    scales: Sequence[float] = (1.0, 0.0),
+) -> str:
+    """Objective A/B: at the same pose, release the arm once per scale of the configured
+    gains (default: as configured, then 0) and compare how far and how fast each joint moves.
+    A negative scale pushes the other way: it tells a wrong sign from too little current."""
     from .control.device import JointDevice, build_laws
     from .control.laws import CurrentLaw
     from .control.trace import Trace
@@ -255,10 +263,9 @@ def gravity_check(experiment: str, node: str, group: str, poses: int = 3) -> str
     rows = []
     try:
         for pose in range(poses):
-            for label, gains in (
-                ("compensated", configured),
-                ("gain 0", [0.0] * len(configured)),
-            ):
+            for scale in scales:
+                label = f"gain x{scale:g}"
+                gains = [scale * g for g in configured]
                 input(
                     f"pose {pose + 1}/{poses}, {label}: hold the arm still in a pose "
                     f"(the same pose for both runs), press Enter, let go at the beep: "
