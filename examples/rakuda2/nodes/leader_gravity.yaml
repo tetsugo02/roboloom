@@ -1,14 +1,19 @@
-# Actuated leader: arms gravity-compensated (current mode), triggers spring back to 2400.
+# Actuated leader: arms gravity-compensated (current mode), triggers are the return spring.
+# Same motors and EEPROM checks as leader.yaml (probe 2026-10-23); differences:
+#   arm joints run gravity_comp in current mode (Operating Mode 0) with Current Limit 300 mA.
 # Before use:
-#   1. identify gravity_right.yaml / gravity_left.yaml (see ../calibration/).
-#   2. fill range from `roboloom probe` (counts); runaway check: outside range+margin or
-#      faster than max_velocity counts/s -> the leader goes limp.
-#   3. `roboloom commission experiment_gravity.yaml leader --hardware` sets the arm joints to
-#      current mode and Current Limit 300 mA (EEPROM), with the arm supported and torque off.
-#   4. bench-test bus_watchdog_ms on XC330/XM430 with the arm supported before teleoperation.
+#   1. identify ../calibration/gravity_right.yaml and gravity_left.yaml (see the calibration files).
+#   2. fill range with each joint's measured travel in counts. Runaway check: outside range+margin,
+#      or faster than max_velocity counts/s -> the arms go limp.
+#   3. with the arms supported and the dataflow stopped:
+#        uv run roboloom commission examples/rakuda2/experiment_gravity.yaml leader --hardware
+#      writes Operating Mode 0 and Current Limit 300 mA to the arm joints (EEPROM).
+#      To go back to the plain leader, commission experiment_camera.yaml (mode 3) the same way.
+#   4. bench-test bus_watchdog_ms on XC330/XM430 with the arms supported before teleoperation.
 # Start with a low gravity_gain and raise it joint by joint.
+# drive_mode: r_arm_grip reversed (5), l_arm_grip not (0) ON PURPOSE (symmetric triggers).
 type: rakuda2_leader
-port: SET_LEADER_BY_ID_PORT
+port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
 motor_ids:
 - 27
 - 28
@@ -27,9 +32,21 @@ motor_ids:
 - 10
 - 12
 - 30
-poll_hz: 30
-bus_watchdog_ms: 100
+poll_hz: 60
 registers:
+  drive_mode:
+    default: 0
+    r_arm_grip: 5
+  homing_offset:
+    default: 0
+    r_arm_sh_pitch1: 15
+    r_arm_sh_roll: -20
+    r_arm_el_yaw: -512
+    r_arm_wr_yaw: -512
+    l_arm_sh_pitch1: -160
+    l_arm_sh_roll: 20
+    l_arm_el_yaw: 512
+    l_arm_wr_yaw: 512
   current_limit:
     r_arm_sh_pitch1: 300
     r_arm_sh_roll: 300
@@ -45,6 +62,10 @@ registers:
     l_arm_wr_yaw: 300
     r_arm_grip: 30
     l_arm_grip: 30
+  return_delay:
+    default: 0
+  shutdown:
+    default: 52
 control:
 - group: body
   law: free
@@ -69,8 +90,8 @@ control:
   max_velocity: 3000
   range:
   - &id001
-    - SET_FROM_PROBE
-    - SET_FROM_PROBE
+    - SET_FROM_TRAVEL
+    - SET_FROM_TRAVEL
   - *id001
   - *id001
   - *id001
@@ -95,8 +116,8 @@ control:
   max_velocity: 3000
   range:
   - &id002
-    - SET_FROM_PROBE
-    - SET_FROM_PROBE
+    - SET_FROM_TRAVEL
+    - SET_FROM_TRAVEL
   - *id002
   - *id002
   - *id002
@@ -105,9 +126,10 @@ control:
   range_margin: 100
   barrier_mA_per_count: 0.5
 - group: trigger
-  law: current_position
+  law: spring
   joints:
   - r_arm_grip
   - l_arm_grip
+  rest: 2500
   goal_current_mA: 30
-  target: 2400
+bus_watchdog_ms: 100

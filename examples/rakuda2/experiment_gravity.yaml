@@ -1,7 +1,7 @@
-# Same as experiment.yaml with the gravity-compensated leader.
+# experiment_camera.yaml with the gravity-compensated leader (same dataset: same features).
 robot_id: rakuda2
-repo_id: local/rakuda2
-output: ../../datasets/rakuda2
+repo_id: local/rakuda2-camera
+output: ../../datasets/rakuda2-camera
 mode: hardware
 dataset_fps: 15
 inputs:
@@ -12,7 +12,5 @@ robots:
   robot: nodes/robot.yaml
 sensors:
   camera: nodes/camera.yaml
-  digit_left: nodes/digit_left.yaml
-  digit_right: nodes/digit_right.yaml
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
