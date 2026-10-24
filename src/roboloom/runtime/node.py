@@ -40,6 +40,30 @@ def _event(node):
     )
 
 
+def _start_warning(
+    cfg: ExperimentConfig, latest: dict[str, dict], now_ns: int
+) -> str | None:
+    """Reject start before broadcasting it to the robot and recorder."""
+    for name in cfg.controllers:
+        status = latest.get(name)
+        # Reports arrive at 4 Hz; never start from missing or outdated readiness.
+        if status is None or not 0 <= now_ns - status["t_ns"] <= 1_000_000_000:
+            return f"{name}: no recent controller status; wait and retry start"
+        fields = status["fields"]
+        state = fields.get("state")
+        if state == "aligning":
+            return (
+                f"{name}: move the leader: {fields.get('worst_joint')} differs by "
+                f"{fields.get('worst_diff')} (tolerance {fields.get('tolerance')}); "
+                "align the leader with the follower, then retry start"
+            )
+        if state != "following":
+            return (
+                f"{name}: controller is {state}; wait until following, then retry start"
+            )
+    return None
+
+
 def _session(node, cfg: ExperimentConfig):
     """Forward terminal commands; collect reports and the latest status of every node for the CLI."""
     p = Publisher("session")
@@ -49,6 +73,12 @@ def _session(node, cfg: ExperimentConfig):
     pending = b""
     latest: dict[str, dict] = {}
     written_ns = 0
+
+    def report(payload: dict) -> None:
+        print(payload, flush=True)
+        with open(os.environ["ROBOLOOM_REPORT_PATH"], "a") as out:
+            out.write(json.dumps(payload) + "\n")
+
     try:
         while True:
             try:
@@ -59,6 +89,11 @@ def _session(node, cfg: ExperimentConfig):
                 raw, pending = pending.split(b"\n", 1)
                 cmd, _, task = raw.decode().strip().partition(" ")
                 if cmd in COMMANDS:
+                    if cmd == "start":
+                        warning = _start_warning(cfg, latest, time.monotonic_ns())
+                        if warning is not None:
+                            report({"command": cmd, "warning": warning})
+                            continue
                     _send(
                         node,
                         "control",
@@ -68,9 +103,7 @@ def _session(node, cfg: ExperimentConfig):
                         return
             event_id, msg = _event(node)
             if event_id == "report" and msg is not None:
-                print(msg.payload, flush=True)
-                with open(os.environ["ROBOLOOM_REPORT_PATH"], "a") as report:
-                    report.write(json.dumps(msg.payload) + "\n")
+                report(msg.payload)
             elif (
                 event_id is not None
                 and event_id.endswith(STATUS_SUFFIX)

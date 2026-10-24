@@ -178,7 +178,12 @@ def render(
 
 
 def describe_report(report: dict) -> Text:
-    """One message line for a recorder report."""
+    """One message line for a recorder report or session warning."""
+    if "warning" in report:
+        return Text(
+            f"{report.get('command', '')} not started: {report['warning']}",
+            style="bold yellow",
+        )
     if "error" in report:
         return Text(
             f"{report.get('command', '')} failed: {report['error']}", style="bold red"

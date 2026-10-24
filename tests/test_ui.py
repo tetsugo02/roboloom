@@ -113,6 +113,13 @@ def test_render_known_unknown_and_stale_nodes():
 
 
 def test_report_lines():
+    warning = describe_report(
+        {"command": "start", "warning": "l_arm_wr_yaw differs by 380.0 (tolerance 150)"}
+    )
+    assert warning.style == "bold yellow"
+    assert warning.plain == (
+        "start not started: l_arm_wr_yaw differs by 380.0 (tolerance 150)"
+    )
     assert (
         "saved 10 frames"
         in describe_report(
