@@ -3,8 +3,9 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
+from conftest import rakuda2_tree
 
-from roboloom.config import parse_experiment, read_experiment
+from roboloom.config import parse_experiment
 from roboloom.control.device import JointDevice, build_laws, parse_groups
 from roboloom.control.laws import RunawayError
 from roboloom.drivers.mock import MockBus
@@ -153,12 +154,7 @@ def test_runtime_switch_changes_one_group_with_torque_off():
 
 
 def hardware_tree():
-    tree = read_experiment("examples/rakuda2/experiment.yaml")
-    tree["inputs"]["leader"]["port"] = "/dev/serial/by-id/leader"
-    tree["robots"]["robot"]["port"] = "/dev/serial/by-id/follower"
-    for limit in tree["robots"]["robot"]["limits"]:
-        limit["min"], limit["max"] = 1000, 3000
-    return tree
+    return rakuda2_tree()
 
 
 def test_hardware_refuses_unvalidated_and_unprotected_current_laws():

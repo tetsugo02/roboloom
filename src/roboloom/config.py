@@ -102,7 +102,53 @@ def read_experiment(path: str | Path) -> dict:
     return tree
 
 
+PLACEHOLDER = "SET_"
+PROJECT_ROOT = ".roboloom"
+
+
+def placeholders(value: object, where: str = "") -> list[str]:
+    """Locations of template values still to be measured or filled (strings starting SET_)."""
+    if isinstance(value, str):
+        return [f"{where}: {value}"] if value.startswith(PLACEHOLDER) else []
+    if isinstance(value, dict):
+        return [
+            hit
+            for k, v in value.items()
+            if not str(k).startswith("__")
+            for hit in placeholders(v, f"{where}.{k}" if where else str(k))
+        ]
+    if isinstance(value, list):
+        return [
+            hit for i, v in enumerate(value) for hit in placeholders(v, f"{where}[{i}]")
+        ]
+    return []
+
+
+def resolve_experiment(arg: str | Path, root: str | Path = PROJECT_ROOT) -> Path:
+    """An experiment file, or a name under the project root: `rakuda2` is
+    `.roboloom/rakuda2/experiment.yaml`, `rakuda2/experiment_gravity` its sibling."""
+    path = Path(arg)
+    if path.is_file():
+        return path
+    for candidate in (
+        Path(root) / path / "experiment.yaml",
+        Path(root) / f"{path}.yaml",
+    ):
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        f"{arg}: no such experiment file, nor {Path(root) / path}/experiment.yaml "
+        "(create one with `roboloom init <robot>`)"
+    )
+
+
 def parse_experiment(tree: dict) -> ExperimentConfig:
+    missing = placeholders({k: v for k, v in tree.items() if k != "path"})
+    if missing:
+        raise ValueError(
+            "template values still to fill (see the README next to the experiment):\n  "
+            + "\n  ".join(missing)
+        )
     e = tree["experiment"]
     robot_id = identity(e.get("robot_id"), "robot_id")
     repo_id = identity(e.get("repo_id"), "repo_id")

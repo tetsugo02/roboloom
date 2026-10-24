@@ -1,0 +1,5 @@
+# roboloom: commit the YAML configuration; keep raw measurements, logs and data out
+*.npz
+logs/
+datasets/
+*.fifo

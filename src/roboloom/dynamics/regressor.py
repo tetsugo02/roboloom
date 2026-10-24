@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from ..core.resources import is_package_ref, resolve
 from .kinematics import UrdfTree
 
 GRAVITY = np.array([0.0, 0.0, -1.0])  # magnitude is absorbed by the parameters
@@ -209,12 +210,15 @@ class RegressorGravityModel:
         fit: Fit,
         extra: dict | None = None,
     ) -> None:
+        """`urdf_path` is a file (stored relative to the model) or a `roboloom:` reference."""
         path = Path(path)
-        urdf = Path(urdf_path).resolve()
+        urdf = resolve(urdf_path)
         data = {
             "kind": "regressor_gravity",
             "unit": "mA",
-            "urdf": str(urdf.relative_to(path.parent.resolve(), walk_up=True)),
+            "urdf": urdf_path
+            if is_package_ref(urdf_path)
+            else str(urdf.relative_to(path.parent.resolve(), walk_up=True)),
             "urdf_sha256": hashlib.sha256(urdf.read_bytes()).hexdigest(),
             "created": datetime.datetime.now(datetime.UTC).isoformat(
                 timespec="seconds"
@@ -236,7 +240,7 @@ class RegressorGravityModel:
         data = yaml.safe_load(path.read_text())
         if data.get("kind") != "regressor_gravity" or data.get("unit") != "mA":
             raise ValueError(f"{path}: not a regressor gravity model in mA")
-        urdf = (path.parent / data["urdf"]).resolve()
+        urdf = resolve(data["urdf"], path.parent)
         text = urdf.read_bytes()
         if hashlib.sha256(text).hexdigest() != data["urdf_sha256"]:
             raise ValueError(f"{path}: {urdf} changed since the model was identified")

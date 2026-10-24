@@ -12,7 +12,8 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from .config import load_experiment
+from .config import load_experiment, placeholders
+from .core.resources import is_package_ref, resolve
 from .drivers.dynamixel_table import MODELS, OPERATING_MODES
 
 POSITION_MODES = {
@@ -306,6 +307,9 @@ class Calibration:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.data = yaml.safe_load(self.path.read_text())
+        missing = placeholders(self.data)
+        if missing:
+            raise SystemExit(f"{path}: fill first: " + ", ".join(missing))
         joints = self.data.get("joints")
         if not isinstance(joints, list) or not joints:
             raise ValueError(f"{path}: joints list required")
@@ -315,7 +319,13 @@ class Calibration:
         self.outputs = list(self.data.get("outputs") or [])
         if not set(self.outputs) <= set(self.names):
             raise ValueError(f"{path}: outputs must be calibration joints")
-        self.urdf = (self.path.parent / self.data["urdf"]).resolve()
+        # what a saved model records: the package reference itself, or the resolved file
+        self.urdf_ref: str | Path = (
+            self.data["urdf"]
+            if is_package_ref(self.data["urdf"])
+            else resolve(self.data["urdf"], self.path.parent)
+        )
+        self.urdf = resolve(self.data["urdf"], self.path.parent)
 
     def joint_maps(self):
         from .dynamics.regressor import JointMap
@@ -642,8 +652,15 @@ def fit_gravity(
     final.holdout_rms_mA = fit.holdout_rms_mA
     RegressorGravityModel(urdf, maps, cal.outputs, final.theta).save(
         out,
-        cal.urdf,
+        cal.urdf_ref,
         final,
-        {"calibration": str(cal.path.resolve()), "data": str(data_path.resolve())},
+        {  # relative to the model, so a committed project still points at its files
+            "calibration": str(
+                cal.path.resolve().relative_to(out.resolve().parent, walk_up=True)
+            ),
+            "data": str(
+                data_path.resolve().relative_to(out.resolve().parent, walk_up=True)
+            ),
+        },
     )
     return "\n".join([*report, f"saved {out}"])

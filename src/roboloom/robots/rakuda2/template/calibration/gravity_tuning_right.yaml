@@ -1,0 +1,15 @@
+# Gravity compensation tuning for the right arm. Written by `roboloom tune-gravity`;
+# edit by hand only while it is not running. See docs/gravity-tuning.md for what the values mean.
+#   gain: multiple of the identified g(q). ~1.0 if the model is right; raise while a released
+#         joint sinks, lower while it rises. 0 turns gravity compensation off for the joint.
+#   hold_mA: breakaway hold. The joint stays where it is left and moves once pushed harder
+#         than this. 0 = off. Costs that much extra force when starting to move.
+#   hold_kp: spring of the hold, mA per count (hold_mA / hold_kp counts before it slides).
+hold_kp: 1.0
+joints:
+  r_arm_sh_pitch1: {gain: 1.0, hold_mA: 0.0, hint: 'arm forward, horizontal (elbow straight)'}
+  r_arm_sh_roll: {gain: 1.0, hold_mA: 0.0, hint: 'arm out to the side, horizontal'}
+  r_arm_sh_pitch2: {gain: 0.0, hold_mA: 0.0, hint: 'rotates about the upper arm: little gravity load'}
+  r_arm_el_yaw: {gain: 1.0, hold_mA: 0.0, hint: 'upper arm down, forearm horizontal (elbow at 90 deg)'}
+  r_arm_wr_roll: {gain: 0.0, hold_mA: 0.0, hint: 'rotates about the forearm: little gravity load'}
+  r_arm_wr_yaw: {gain: 1.0, hold_mA: 0.0, hint: 'forearm horizontal, hand bent up or down'}

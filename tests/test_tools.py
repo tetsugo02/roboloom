@@ -6,10 +6,11 @@ from typing import ClassVar
 import numpy as np
 import pytest
 import yaml
+from conftest import TEMPLATE, rakuda2_tree
 from test_dynamics import INPUTS, URDF, physics, poses
 
 from roboloom import tools
-from roboloom.config import parse_experiment, read_experiment
+from roboloom.config import parse_experiment
 from roboloom.dynamics.regressor import Fit, JointMap, Regressor, RegressorGravityModel
 from roboloom.tools import Calibration, fit_gravity
 
@@ -116,7 +117,7 @@ def synthetic_models(tmp_path):
     paths = {}
     for side, p in (("right", "r"), ("left", "l")):
         cal = yaml.safe_load(
-            Path(f"examples/rakuda2/calibration/leader_{side}.yaml").read_text()
+            (TEMPLATE / f"calibration/leader_{side}.yaml").read_text()
         )
         maps = [JointMap(j["name"], j["urdf"], 2048, 1) for j in cal["joints"]]
         reg = Regressor(RAKUDA_URDF.read_text(), maps, cal["outputs"])
@@ -135,11 +136,7 @@ def synthetic_models(tmp_path):
 
 def gravity_tree(tmp_path):
     paths = synthetic_models(tmp_path)
-    tree = read_experiment("examples/rakuda2/experiment_gravity.yaml")
-    tree["inputs"]["leader"]["port"] = "/dev/serial/by-id/leader"
-    tree["robots"]["robot"]["port"] = "/dev/serial/by-id/follower"
-    for limit in tree["robots"]["robot"]["limits"]:
-        limit["min"], limit["max"] = 1000, 3000
+    tree = rakuda2_tree("experiment_gravity")
     for group in tree["inputs"]["leader"]["control"]:
         if group["law"] == "gravity_comp":
             group["gravity_model"] = str(paths[group["group"].split("_")[0]])

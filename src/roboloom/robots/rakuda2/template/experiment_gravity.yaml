@@ -1,12 +1,11 @@
-# Rakuda-2 collection with the RealSense only (no DIGIT). Separate dataset: different features.
-# Run: uv run roboloom run examples/rakuda2/experiment_camera.yaml --hardware
+# experiment_camera.yaml with the gravity-compensated leader (same dataset: same features).
 robot_id: rakuda2
 repo_id: local/rakuda2-camera
-output: ../../datasets/rakuda2-camera
+output: datasets/rakuda2-camera
 mode: hardware
 dataset_fps: 15
 inputs:
-  leader: nodes/leader.yaml
+  leader: nodes/leader_gravity.yaml
 controllers:
   controller: nodes/controller.yaml
 robots:

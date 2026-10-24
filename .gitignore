@@ -12,3 +12,4 @@ datasets/
 
 .codegraph/
 logs/
+*.npz

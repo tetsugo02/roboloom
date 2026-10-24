@@ -1,0 +1,62 @@
+# Gravity identification map for the Rakuda-2 leader left arm.
+# urdf: proposed from the URDF chain order (shoulder -> wrist). It is NOT verified that
+#   motor l_arm_sh_pitch1 moves URDF joint shoulder_pitch_left_dof, and so on: check each one.
+# zero: raw count at URDF angle 0. 2048 (motor centre) is a first guess; the fit report shows
+#   whether it is good enough (offsets that only rotate the links below are absorbed by the fit).
+# direction: signs found on the lab unit (mirrored between the arms: sh_roll -1 on both, sh_pitch1
+#   and el_yaw -1 on the right only). identify-gravity tries every sign combination and refuses
+#   to save when another combination fits much better, printing it; copy those signs here.
+# confirmed: set true only after the mapping, zeros and directions are checked.
+# Usage:
+#   uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/leader_left.yaml
+#   uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_left.yaml \
+#       --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect --hardware
+port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
+urdf: roboloom:robots/rakuda2/model/assembly_2.urdf
+confirmed: true
+# shared_parameters: the output joints are all XC330-T288, so one set of link moments is fit for
+#   all of them (mA per N*m in common). Needs far fewer poses than independent per-joint fits.
+shared_parameters: true
+joints:
+- name: torso_yaw
+  motor_id: 27
+  urdf: torso_yaw_dof
+  zero: 2048
+  direction: 1
+- name: l_arm_sh_pitch1
+  motor_id: 2
+  urdf: shoulder_pitch_left_dof
+  zero: 2048
+  direction: 1
+- name: l_arm_sh_roll
+  motor_id: 4
+  urdf: shoulder_roll_left_dof
+  zero: 2048
+  direction: -1
+- name: l_arm_sh_pitch2
+  motor_id: 6
+  urdf: elbow_yaw_left_dof
+  zero: 2048
+  direction: 1
+- name: l_arm_el_yaw
+  motor_id: 8
+  urdf: elbow_pitch_left_dof
+  zero: 2048
+  direction: 1
+- name: l_arm_wr_roll
+  motor_id: 10
+  urdf: wrist_yaw_left_dof
+  zero: 2048
+  direction: 1
+- name: l_arm_wr_yaw
+  motor_id: 12
+  urdf: wrist_pitch_left_dof
+  zero: 2048
+  direction: 1
+outputs:
+- l_arm_sh_pitch1
+- l_arm_sh_roll
+- l_arm_sh_pitch2
+- l_arm_el_yaw
+- l_arm_wr_roll
+- l_arm_wr_yaw

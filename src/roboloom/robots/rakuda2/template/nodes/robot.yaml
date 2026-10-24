@@ -1,4 +1,4 @@
-# Values from `roboloom probe` on 2026-10-23 (follower: FT1JD4T5). Re-run probe after any motor change.
+# Fill from `roboloom probe <port>` (see ../README.md). Re-run probe after any motor change.
 # registers: EEPROM values the node verifies at startup and refuses to run on mismatch.
 # Fill them from `roboloom probe`; current_limit in mA, return_delay in microseconds.
 # limits: min/max are only the EEPROM bounds for now (no extra protection); narrow them to the
@@ -10,7 +10,7 @@
 # torque: set false for the first run to record states and sensors without moving the follower.
 # bus_watchdog_ms: leave null until the watchdog behaviour is bench-tested on these motors.
 type: rakuda2_follower
-port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT1JD4T5-if00-port0
+port: SET_FOLLOWER_PORT  # /dev/serial/by-id/... of the follower U2D2
 motor_ids:
 - 27
 - 28
@@ -43,12 +43,7 @@ registers:
     r_arm_grip: 5
     l_arm_grip: 5
   homing_offset:
-    default: 0
-    torso_yaw: 15
-    r_arm_sh_pitch1: -20
-    r_arm_sh_roll: -15
-    l_arm_sh_roll: -5
-    l_arm_wr_yaw: 15
+    default: 0  # add per-joint offsets from `roboloom probe`
   current_limit:
     r_arm_grip: 54
     l_arm_grip: 54

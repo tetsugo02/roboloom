@@ -1,8 +1,8 @@
 # Rakuda-2 hardware collection: leader teleop, RealSense, left/right DIGIT.
-# Run: uv run roboloom run examples/rakuda2/experiment.yaml --hardware
+# Run: uv run roboloom run rakuda2/experiment --hardware
 robot_id: rakuda2
 repo_id: local/rakuda2
-output: ../../datasets/rakuda2
+output: datasets/rakuda2
 mode: hardware
 dataset_fps: 15
 inputs:

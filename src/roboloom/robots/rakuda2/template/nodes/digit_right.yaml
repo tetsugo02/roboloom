@@ -1,0 +1,7 @@
+type: digit
+serial: SET_DIGIT_RIGHT_SERIAL
+name: right
+resolution: QVGA
+height: 320
+width: 240
+fps: 30

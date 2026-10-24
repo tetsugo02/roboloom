@@ -28,6 +28,11 @@ def send_session(path: str, line: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="roboloom")
     sub = parser.add_subparsers(dest="command", required=True)
+    init = sub.add_parser(
+        "init", help="create .roboloom/<robot>/ from the robot's configuration template"
+    )
+    init.add_argument("robot")
+    init.add_argument("--root", default=".roboloom")
     probe_cmd = sub.add_parser("probe", help="read-only inspection of a Dynamixel bus")
     probe_cmd.add_argument("port")
     probe_cmd.add_argument(
@@ -123,6 +128,18 @@ def main() -> None:
             )
             cmd.add_argument("task", nargs="?", default="")
     args = parser.parse_args()
+    if getattr(args, "experiment", None):
+        from .config import resolve_experiment
+
+        try:
+            args.experiment = str(resolve_experiment(args.experiment))
+        except FileNotFoundError as exc:
+            raise SystemExit(str(exc)) from None
+    if args.command == "init":
+        from .project import init_project
+
+        print(init_project(args.robot, args.root))
+        return
     if args.command == "probe":
         from .probe import probe
 
@@ -175,7 +192,10 @@ def main() -> None:
             collect_holding_currents(cal, data, args.delta)
         print(fit_gravity(cal, data, out, args.max_rms_mA))
         return
-    cfg = load_experiment(args.experiment)
+    try:
+        cfg = load_experiment(args.experiment)
+    except (ValueError, TypeError, FileNotFoundError) as exc:  # configuration, not a bug
+        raise SystemExit(f"{args.experiment}: {exc}") from None
     if args.command == "session":
         send_session(
             args.experiment, " ".join(x for x in (args.operation, args.task) if x)

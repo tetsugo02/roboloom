@@ -1,0 +1,23 @@
+# Measured joint travel (raw counts) for current-mode runaway checks.
+# Written by: roboloom measure-travel examples/rakuda2/calibration/leader_right.yaml
+port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
+measured: '2026-10-23'
+travel:
+  r_arm_sh_pitch1:
+  - 570
+  - 3994
+  r_arm_sh_roll:
+  - 922
+  - 3027
+  r_arm_sh_pitch2:
+  - 450  # 552 measured; teleop reached 466 (trace 2026-10-23 17:36)
+  - 3431
+  r_arm_el_yaw:
+  - 1191
+  - 3367
+  r_arm_wr_roll:
+  - -208
+  - 3839
+  r_arm_wr_yaw:
+  - 404
+  - 2607

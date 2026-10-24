@@ -1,4 +1,4 @@
-# Values from `roboloom probe` on 2026-10-23 (leader: FT7923HA). Re-run probe after any motor change.
+# Lab unit, values from `roboloom probe` on 2026-10-23 (leader FT7923HA). Re-run probe after any motor change.
 # registers: EEPROM values the node verifies at startup and refuses to run on mismatch.
 # Fill them from `roboloom probe`; current_limit in mA, return_delay in microseconds.
 # drive_mode: r_arm_grip is reversed (5) and l_arm_grip is not (0) ON PURPOSE, so the two triggers

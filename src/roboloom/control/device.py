@@ -101,9 +101,41 @@ def build_laws(
         cfg = g.cfg
         if isinstance(cfg.get("range"), str):
             cfg = {**cfg, "range": load_travel(cfg["range"], g.joints, base_dir)}
+        if cfg.get("tuning") is not None:
+            cfg = {**cfg, **load_tuning(cfg["tuning"], g.joints, base_dir, g.name, cfg)}
         indices = [joint_names.index(j) for j in g.joints]
         laws.append(law_class(g.law)(g.name, indices, joint_names, cfg, gravity))
     return laws
+
+
+TUNED = ("gravity_gain", "hold_mA", "hold_kp")
+
+
+def tuning_path(path: str, base_dir: str | None = None) -> Path:
+    file = Path(path)
+    return file if file.is_absolute() or base_dir is None else Path(base_dir) / file
+
+
+def load_tuning(
+    path: str, joints: Sequence[str], base_dir: str | None, group: str, cfg: dict
+) -> dict:
+    """gravity_gain / hold_mA per joint and hold_kp from a file written by `roboloom tune-gravity`."""
+    inline = [k for k in TUNED if k in cfg]
+    if inline:
+        raise ValueError(f"{group}: {inline} are set both inline and in tuning {path}")
+    file = tuning_path(path, base_dir)
+    if not file.exists():
+        raise ValueError(f"{file}: no tuning file; run roboloom tune-gravity")
+    data = yaml.safe_load(file.read_text()) or {}
+    per_joint = data.get("joints") or {}
+    missing = [j for j in joints if j not in per_joint]
+    if missing:
+        raise ValueError(f"{file}: no tuning for {missing}")
+    return {
+        "gravity_gain": [float(per_joint[j].get("gain", 0.0)) for j in joints],
+        "hold_mA": [float(per_joint[j].get("hold_mA", 0.0)) for j in joints],
+        "hold_kp": float(data.get("hold_kp", 1.0)),
+    }
 
 
 def load_travel(
