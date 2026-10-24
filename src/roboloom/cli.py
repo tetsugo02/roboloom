@@ -236,9 +236,13 @@ def main() -> None:
         if fifo.exists():
             raise SystemExit(f"session FIFO already exists: {fifo}")
         os.mkfifo(fifo, 0o600)
+        # next to the experiment, so a project keeps its own logs (ignored by git)
         log_dir = (
-            Path("logs") / f"{Path(cfg.path).stem}-{time.strftime('%Y%m%d-%H%M%S')}"
+            Path(cfg.path).parent
+            / "logs"
+            / f"{Path(cfg.path).stem}-{time.strftime('%Y%m%d-%H%M%S')}"
         )
+
         log_dir.mkdir(parents=True, exist_ok=True)
         try:
             run_dataflow(

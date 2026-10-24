@@ -257,7 +257,9 @@ def gravity_check(
             other.gain = [0.0] * len(other.joints)
     device = JointDevice(owner.open_bus(False), owner.joint_names, laws, node)
     trace_path = (
-        Path("logs") / f"gravity-check-{group}-{time.strftime('%Y%m%d-%H%M%S')}.npz"
+        Path(cfg.path).parent
+        / "logs"
+        / f"gravity-check-{group}-{time.strftime('%Y%m%d-%H%M%S')}.npz"
     )
     device.trace = Trace(trace_path, owner.joint_names)
     period = 1 / float(owner.cfg.get("poll_hz", 60))

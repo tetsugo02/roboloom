@@ -122,22 +122,27 @@ follower の安全判定：
 
 重力モデル（`dynamics/`）は、URDF の関節軸だけを使い、保持電流の実測から同定します。CAD の質量は使いません。
 
-## 実機 Rakuda-2 での収集（`examples/rakuda2/`）
+## 実機のプロジェクト（`roboloom init`）
 
-この順で進めます。実機を動かす手順は、腕を支えられる状態で行ってください。
+実機の設定は、ロボットごとのテンプレートから作ります。
 
-1. FTDI の latency timer を 1 ms にする（例：`echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB0/latency_timer`）。
-2. `uv run roboloom probe /dev/serial/by-id/usb-FTDI_...` を両ポートで実行する。読み取りだけを行い、leader（XC330）と follower（XM540/XM430）を判別する。
-3. 表示された値で、`nodes/leader.yaml` と `nodes/robot.yaml` の `SET_` の箇所（ポート、関節リミット）と `registers` を埋める。
-4. 最初は `robot.yaml` の `torque: false` のまま `uv run roboloom run examples/rakuda2/experiment.yaml --hardware` を実行し、全センサーと両腕の状態だけを記録して、データの経路を確かめる。
-5. `torque: true` にして、leader 操作で収集する。終了時は `stop` → `release`（腕を支える）→ `quit` の順にする。
+```bash
+uv run roboloom init rakuda2      # .roboloom/rakuda2/ と .roboloom/.gitignore を作る
+uv run roboloom validate rakuda2  # 埋めていない SET_ の値を、場所つきで一覧にする
+```
 
-leader の重力補償（`experiment_gravity.yaml`）を使う手順：
+- 機体ごとに測る値は、テンプレートでは `SET_…` になっています。ポート、センサーのシリアル番号などです。
+- `SET_` が残っているあいだ、`run` や `validate` などは場所を示して止まります。
+- 埋める手順は、`.roboloom/rakuda2/README.md` にあります。probe、commission、identify-gravity、measure-travel、tune-gravity の順です。
+- 実験は、`.roboloom` からの名前で指定できます（例：`roboloom run rakuda2/experiment_gravity --hardware`）。ファイルのパスでも指定できます。
+- YAML（設定、重力モデル、可動域、調整値）は git に入れます。測定の生データ（`*.npz`）、ログ、データセットは `.gitignore` で除きます。ログは、実験ファイルの隣の `logs/` に置かれます。
+- このリポジトリの `.roboloom/rakuda2/` は、研究室の機体の設定です。
 
-1. `calibration/leader_*.yaml` の URDF 対応、零点（`calibrate-joints`）、向きを確かめる。
-2. `identify-gravity --collect --hardware` でモデルを作る。
-3. `commission` でモードと Current Limit を書く。
-4. Bus Watchdog の挙動を、腕を支えた状態で試験してから使う。
+実機を動かす手順は、腕を支えられる状態で行ってください。
+- 最初は `nodes/robot.yaml` の `torque: false` のまま収集して、データの経路を確かめます。
+- 終了するときは `stop` → `release`（腕を支える）→ `quit` の順にします。
+
+leader の重力補償の調整（gain と hold の意味、`tune-gravity` の使い方）は、[docs/gravity-tuning.md](docs/gravity-tuning.md) を参照してください。
 
 recorder は取得、利用可能、受信、送信の単調時計時刻を区別します。各フレーム時刻までに recorder が受信済みの観測を選び、`action[t]` はその後最初に送信成功した tick の指令を保存します。欠損はゼロ値と有効フラグで表します。保存後も同じ dataset へ次のエピソードを追記し、再起動時は既存 dataset のスキーマと FPS を確認して再開します。
 
@@ -153,7 +158,7 @@ src/roboloom/
   control/      制御則（laws）と JointDevice（device）。leader と follower が共有する
   dynamics/     重力モデルの契約、URDF 運動学、同定（regressor、identify）
   robots/       Robot の契約（base）、FollowerSafety（safety）
-    rakuda2/    spec（関節・モーター ID・モデル。leader も参照）、follower（rakuda2_follower）、model（URDF）
+    rakuda2/    spec（関節・モーター ID・モデル。leader も参照）、follower（rakuda2_follower）、model（URDF）、template（init が写す設定一式）
   sensors/
     vision/     ImageSensor（base）、realsense_rgb
     tactile/    TactileImageSensor（base）、digit
@@ -163,7 +168,8 @@ src/roboloom/
   ui/           操作画面（rich Live）、状態の描画、session との受け渡し
   config.py     実験 YAML の読み込みと、ノード間の整合性検査
   probe.py      Dynamixel バスの読み取り専用の調査
-  tools.py      commission、calibrate-joints、identify-gravity
+  tools.py      commission、calibrate-joints、identify-gravity、measure-travel、gravity-check、tune-gravity
+  project.py    roboloom init（robots/<robot>/template から .roboloom/<robot>/ を作る）
   api.py        Python から使う Experiment
 ```
 

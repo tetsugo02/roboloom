@@ -9,13 +9,13 @@
 - 段階の完了は、その段階の全 TODO と通過条件を満たしてから付ける。後段の試作があっても前段の完了を意味しない。
 
 **2026-10-23 追加：** 実機の Rakuda-2 で収集するための経路を実装した。実機では未確認である。
-- 実機の例と、`SET_` で残した要測定値（`examples/rakuda2/`）
+- 実機のテンプレートと、`SET_` で残した要測定値（`src/roboloom/robots/rakuda2/template/`、`roboloom init` で `.roboloom/rakuda2/` に写す）
 - `probe`、起動時の EEPROM 照合
 - 2 進の Envelope、逐次確定の recorder
 - soft clamp と hard reject、HOLD の目標固定、健全性の FAULT、`release`
 - 差し替え可能な制御則、leader の重力補償と同定ツール、`commission`
 
-**2026-10-23 実機での初回収集（`examples/rakuda2/experiment_camera.yaml`：RealSense のみ、DIGIT なし）：**
+**2026-10-23 実機での初回収集（現在の `.roboloom/rakuda2/experiment_camera.yaml`：RealSense のみ、DIGIT なし）：**
 - leader 操作で収集し、保存と読み戻しまでできた。
   - 1 エピソード 881 フレーム、15 fps。
   - 指令が有効だった行は 99.8%、欠損は 0%、制御周期の p99 は 34.8 ms（30 Hz のとき）。
@@ -35,6 +35,11 @@
   - 作動中は目標値が書けない（e-Manual）ので、制御ループが 100 ms 以上止まると、電流がそのまま固まる。
   - 対策 1：制御の各周期で Watchdog を読み、作動していたら電流モードの関節を脱力させて止める（`JointDevice.check_watchdog`）。
   - 対策 2：PC が止まったときに効く守りは、EEPROM の Current Limit だけになる。そこで必要な分のすぐ上まで下げた。肩 150 mA、肘 100 mA、手首 60 mA。
+- **同定した g(q) は、実際に必要な電流の約半分だった**（`gravity-check`、右の sh_roll、腕を横に水平）。
+  - 倍率 ×1（59 mA）は、補償なしと同じように落ちた。×2（114 mA）では留まった。×−2 では速く落ちた。
+  - したがって、電流の向きは正しく、量が足りない。原因は、位置制御で保持電流を測るとギアの静止摩擦で値がゆがむこと。
+  - 当面は、関節ごとの gain（肩 1.8、肘 1.6）と、押し負けたら動く保持（`hold_mA`）で補う。調整は `tune-gravity` で行う（`docs/gravity-tuning.md`）。
+  - 未完了：電流制御での同定（電流を少しずつ上げて動き出す値と、下げて落ち始める値の中間をとる）。
 
 **現在地：段階 1〜3 の模擬構成と LeRobot 保存を試作中。段階 0 の実測、実機安全試験、段階 2 の既知軌道での往復検証は未完了。段階 4〜5 は構想段階。** `README.md` の使用例と `tests/` は模擬・単体の根拠であり、実機試験の根拠ではない。
 
