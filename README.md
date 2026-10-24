@@ -16,11 +16,11 @@ with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
     experiment.start_episode("handover")
     experiment.run(3.0)
     experiment.stop_episode()
-    experiment.save_episode()       # LeRobotDataset に確定
+    experiment.save_episode()  # LeRobotDataset に確定
 
     experiment.start_episode("retry")
     experiment.run(1.0)
-    experiment.discard_episode()    # このエピソードだけ破棄
+    experiment.discard_episode()  # このエピソードだけ破棄
 
     experiment.start_inference()
     result = experiment.step(policy=lambda obs: obs["state"])
@@ -34,12 +34,16 @@ from roboloom import Experiment
 from roboloom.drivers.mock import MockBus
 
 experiment = Experiment.from_components(
-    robot_id="my_robot", robot=MockBus(dimension=2),
+    robot_id="my_robot",
+    robot=MockBus(dimension=2),
     joint_names=["j1", "j2"],
-    limits=[{"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
-            {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}],
+    limits=[
+        {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+        {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+    ],
     controller=lambda obs: [2048, 2048],
-    output="datasets/my_robot", repo_id="local/my_robot",
+    output="datasets/my_robot",
+    repo_id="local/my_robot",
 )
 ```
 
