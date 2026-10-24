@@ -213,8 +213,10 @@ def test_controller_steps_from_the_follower_target_not_its_own_output():
     )
     assert ctl.update(intent(0, 2048, now), hold, now, follower_target=hold) is not None
     # robot not armed yet: it keeps holding 2048 while the leader moves far away over 2 s
+    cmd = None
     for k in range(1, 61):
         t = now + k * 33_000_000
         cmd = ctl.update(intent(k, 2048 + 20 * k, t), hold, t, follower_target=hold)
+    assert cmd is not None
     step = 500 * 0.033  # max_speed_counts_per_s in the mock controller
     assert max(abs(x - 2048) for x in cmd.payload["positions"]) <= step + 1e-6

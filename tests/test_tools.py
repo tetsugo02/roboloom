@@ -12,6 +12,7 @@ from test_dynamics import INPUTS, URDF, physics, poses
 from roboloom import tools
 from roboloom.config import parse_experiment
 from roboloom.dynamics.regressor import Fit, JointMap, Regressor, RegressorGravityModel
+from roboloom.inputs.base import ActuatedReader, JointInput
 from roboloom.tools import Calibration, fit_gravity
 
 RAKUDA_URDF = Path("src/roboloom/robots/rakuda2/model/assembly_2.urdf")
@@ -116,9 +117,7 @@ def synthetic_models(tmp_path):
     shutil.copy(RAKUDA_URDF, tmp_path / "assembly_2.urdf")
     paths = {}
     for side, p in (("right", "r"), ("left", "l")):
-        cal = yaml.safe_load(
-            (TEMPLATE / f"calibration/leader_{side}.yaml").read_text()
-        )
+        cal = yaml.safe_load((TEMPLATE / f"calibration/leader_{side}.yaml").read_text())
         maps = [JointMap(j["name"], j["urdf"], 2048, 1) for j in cal["joints"]]
         reg = Regressor(RAKUDA_URDF.read_text(), maps, cal["outputs"])
         theta = [[0.0] * (4 * len(reg.bodies[u]) + 1) for u in reg.output_urdf]
@@ -149,10 +148,12 @@ def test_gravity_leader_example_parses_and_runs_in_mock(tmp_path):
     cfg = parse_experiment(
         deepcopy(tree)
     )  # hardware checks: watchdog and current limits present
-    assert cfg.inputs["leader"].actuated
+    leader = cfg.inputs["leader"]
+    assert isinstance(leader, JointInput) and leader.actuated
     tree["experiment"]["mode"] = "mock"
     cfg = parse_experiment(tree)
     reader = cfg.inputs["leader"].open(True, cfg.dataset_fps)
+    assert isinstance(reader, ActuatedReader)
     reader.start_trace(tmp_path / "leader_trace.npz")
     for _ in range(3):
         assert len(reader.read().value) == 17

@@ -7,8 +7,9 @@ from conftest import rakuda2_tree
 
 from roboloom.config import parse_experiment
 from roboloom.control.device import JointDevice, build_laws, parse_groups
-from roboloom.control.laws import RunawayError
+from roboloom.control.laws import GravityComp, RunawayError
 from roboloom.drivers.mock import MockBus
+from roboloom.inputs.base import ActuatedReader, JointInput
 from roboloom.robots.safety import FollowerSafety
 
 JOINTS = ("a", "b", "c")
@@ -201,8 +202,10 @@ def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
     ]
     cfg = parse_experiment(tree)
     leader = cfg.inputs["leader"]
+    assert isinstance(leader, JointInput)
     assert leader.actuated
     reader = leader.open(True, cfg.dataset_fps)
+    assert isinstance(reader, ActuatedReader)
     sample = reader.read()
     assert np.asarray(sample.value).shape == (17,)
     bus = reader.device.bus
@@ -312,7 +315,9 @@ def test_range_can_name_a_measured_travel_file(tmp_path):
         str(tmp_path),
         models={"arm": FlatGravity()},
     )
-    assert laws[0].range == [(1000.0, 3000.0), (1500.0, 2500.0)]
+    law = laws[0]
+    assert isinstance(law, GravityComp)
+    assert law.range == [(1000.0, 3000.0), (1500.0, 2500.0)]
     (tmp_path / "travel.yaml").write_text("travel:\n  a: [1000, 3000]\n")
     with pytest.raises(ValueError, match="no measured travel"):
         build_laws(
@@ -385,6 +390,7 @@ def test_release_trial_reports_drift_and_leaves_torque_off():
         FlatGravity(),
     )
     law = dev.laws[0]
+    assert isinstance(law, GravityComp)
     ticks = []
 
     def sleep(_):
@@ -455,14 +461,18 @@ def test_tuning_session_changes_values_live_and_saves_them(tmp_path):
         [0, 0, 3],
         FlatGravity(),
     )
-    session = TuningSession(dev, dev.laws[0], path, {"a": 1, "b": 2})
+    law = dev.laws[0]
+    assert isinstance(law, GravityComp)
+    session = TuningSession(dev, law, path, {"a": 1, "b": 2})
     session.start()
     t = time.monotonic_ns()
     session.step(t + int(0.1e9))
     assert bus.goal_current[0] == 80  # 100 mA clipped
-    assert "gain 1.1" in session.key("]")
+    message = session.key("]")
+    assert message is not None and "gain 1.1" in message
     session.key("=")
-    assert session.key("0").endswith("OFF (compare)")
+    message = session.key("0")
+    assert message is not None and message.endswith("OFF (compare)")
     session.step(t + int(0.2e9))
     assert bus.goal_current[0] == 0  # gravity term off, hold anchored at the pose
     session.key("0")
@@ -477,4 +487,5 @@ def test_tuning_session_changes_values_live_and_saves_them(tmp_path):
     session.step(t + int(0.3e9))
     assert session.stopped and not any(bus.torque)
     bus.values[0] = 2048
-    assert "re-enabled" in session.key("r") and bus.torque[0]
+    message = session.key("r")
+    assert message is not None and "re-enabled" in message and bus.torque[0]

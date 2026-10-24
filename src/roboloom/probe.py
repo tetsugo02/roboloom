@@ -46,7 +46,7 @@ def probe(
                 raise ConnectionError(
                     f"broadcast ping failed: {packet.getTxRxResult(result)}"
                 )
-            ids = sorted(found)
+            ids = sorted(found) if found is not None else []
     finally:
         handler.closePort()
     if not ids:

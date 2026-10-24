@@ -144,8 +144,9 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
-    if log_dir and hasattr(reader, "start_trace"):
-        reader.start_trace(Path(log_dir) / f"{source.name}_trace.npz")
+    start_trace = getattr(reader, "start_trace", None)
+    if log_dir and start_trace is not None:
+        start_trace(Path(log_dir) / f"{source.name}_trace.npz")
     extra = getattr(reader, "status", None)
     p = Publisher(source.name)
     status = StatusReporter(Publisher(source.name), role)

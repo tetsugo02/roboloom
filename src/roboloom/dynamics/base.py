@@ -7,10 +7,15 @@ from typing import Protocol
 
 
 class GravityModel(Protocol):
-    joint_names: tuple[
-        str, ...
-    ]  # joints whose positions the model reads, in input order
-    output_joints: tuple[str, ...]  # joints it returns current for, in output order
+    @property
+    def joint_names(self) -> tuple[str, ...]:
+        """Joints whose positions the model reads, in input order."""
+        ...
+
+    @property
+    def output_joints(self) -> tuple[str, ...]:
+        """Joints it returns current for, in output order."""
+        ...
 
     def effort_mA(self, positions: Sequence[float]) -> list[float]:
         """Holding current per output joint for raw positions of `joint_names`."""

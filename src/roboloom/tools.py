@@ -100,10 +100,11 @@ def watchdog_trial(
         bus.set_bus_watchdog(period_ms)
         bus.set_torque([0], True)
         bus.write_goal_currents([0], [current_mA])
+        currents_mA: list[float] | None = None
         for _ in range(10):  # keep talking: the watchdog must not fire yet
             sleep(period_ms / 4000)
-            state = bus.read_state()
-        out["current_before_mA"] = state.currents_mA[0] if state.currents_mA else None
+            currents_mA = bus.read_state().currents_mA
+        out["current_before_mA"] = currents_mA[0] if currents_mA else None
         out["watchdog_before"] = bus.read_register("bus_watchdog")[0]
         sleep(
             3 * period_ms / 1000

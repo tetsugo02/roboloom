@@ -24,6 +24,7 @@ def test_status_reporter_is_throttled():
     assert reporter.maybe({"mode": "HOLD"}, now_ns=S) is not None
     assert reporter.maybe({"mode": "HOLD"}, now_ns=S + S // 10) is None
     msg = reporter.maybe({"mode": "ACTIVE"}, "ok", now_ns=S + S // 2)
+    assert msg is not None
     assert msg.payload == {"role": "robot", "level": "ok", "fields": {"mode": "ACTIVE"}}
 
 

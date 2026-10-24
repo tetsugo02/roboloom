@@ -8,6 +8,7 @@ values, torque enable and Bus Watchdog.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import dynamixel_sdk as dxl
@@ -216,7 +217,7 @@ class DynamixelBus:
 def verify(
     bus: DynamixelBus,
     joints: list[str],
-    expect: dict[str, dict[str, float]],
+    expect: Mapping[str, Mapping[str, float]],
     limits: list[dict] | None = None,
 ) -> list[str]:
     """Compare EEPROM and model with the configuration; return human-readable mismatches.

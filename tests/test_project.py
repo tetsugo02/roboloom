@@ -3,6 +3,7 @@ import yaml
 
 from roboloom.config import placeholders, resolve_experiment
 from roboloom.control.device import build_laws, parse_groups
+from roboloom.control.laws import GravityComp
 from roboloom.core.resources import resolve
 from roboloom.project import init_project
 
@@ -73,6 +74,7 @@ def test_tuning_file_sets_gain_and_hold_per_joint(tmp_path):
     }
     groups = parse_groups([group], ("a", "b"), "dev")
     (law,) = build_laws(groups, ("a", "b"), str(tmp_path), {"arm": Flat()})
+    assert isinstance(law, GravityComp)
     assert law.gain == [1.5, 0.0] and law.hold == [20.0, 0.0] and law.hold_kp == 2.0
     groups = parse_groups([{**group, "gravity_gain": 1.0}], ("a", "b"), "dev")
     with pytest.raises(ValueError, match="both inline and in tuning"):

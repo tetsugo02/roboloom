@@ -17,7 +17,7 @@ and hold their last goal, so a follower does not drop; `disable_torque` releases
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -29,7 +29,7 @@ from ..drivers.base import Health, JointState, read_health, read_state
 from ..drivers.dynamixel_table import OPERATING_MODES
 from ..dynamics.base import GravityModel, load_gravity_model
 from . import LAWS
-from .laws import ControlLaw
+from .laws import ControlLaw, _per_joint
 from .trace import Trace
 
 
@@ -83,7 +83,7 @@ def build_laws(
     groups: list[GroupSpec],
     joint_names: tuple[str, ...],
     base_dir: str | None = None,
-    models: dict[str, GravityModel] | None = None,
+    models: Mapping[str, GravityModel] | None = None,
 ) -> list[ControlLaw]:
     """Instantiate each group's law. `models` injects gravity models by group name (tests, tools)."""
     laws = []
@@ -179,8 +179,9 @@ def check_hardware(
                 raise ValueError(
                     f"{owner}: current-mode law {g.law} needs bus_watchdog_ms"
                 )
-            limits = g.cfg.get("max_current_mA")
-            per_joint = limits if isinstance(limits, list) else [limits] * len(g.joints)
+            per_joint = _per_joint(
+                g.cfg.get("max_current_mA"), len(g.joints), f"{g.name}.max_current_mA"
+            )
             for joint, allowed in zip(g.joints, per_joint, strict=True):
                 eeprom = current_limits_mA.get(joint)
                 if eeprom is None or eeprom > allowed:
