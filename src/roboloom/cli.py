@@ -70,6 +70,14 @@ def main() -> None:
         help="multiples of the configured gains to try at each pose, e.g. 1,0,2,-2",
     )
     gc.add_argument("--hardware", action="store_true", required=True)
+    tune = sub.add_parser(
+        "tune-gravity",
+        help="tune gravity compensation joint by joint with a live guide (torques the arm)",
+    )
+    tune.add_argument("experiment")
+    tune.add_argument("node")
+    tune.add_argument("group", help="gravity_comp group, e.g. right_arm")
+    tune.add_argument("--hardware", action="store_true")
     calib = sub.add_parser(
         "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
     )
@@ -164,6 +172,13 @@ def main() -> None:
             )
         )
         return
+    if args.command == "tune-gravity":
+        from .tools import tune_gravity
+
+        if not load_experiment(args.experiment).mock and not args.hardware:
+            raise SystemExit("tune-gravity on hardware torques the arm; add --hardware")
+        print(tune_gravity(args.experiment, args.node, args.group))
+        return
     if args.command == "calibrate-joints":
         from .tools import calibrate_joints
 
@@ -194,7 +209,11 @@ def main() -> None:
         return
     try:
         cfg = load_experiment(args.experiment)
-    except (ValueError, TypeError, FileNotFoundError) as exc:  # configuration, not a bug
+    except (
+        ValueError,
+        TypeError,
+        FileNotFoundError,
+    ) as exc:  # configuration, not a bug
         raise SystemExit(f"{args.experiment}: {exc}") from None
     if args.command == "session":
         send_session(

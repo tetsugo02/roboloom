@@ -298,6 +298,52 @@ def gravity_check(
     return "\n".join(lines)
 
 
+def tune_gravity(experiment: str, node: str, group: str) -> str:
+    """Live, joint-by-joint tuning of one gravity_comp group; saves to its tuning file."""
+    from .control.device import JointDevice, build_laws, tuning_path
+    from .control.laws import CurrentLaw, GravityComp
+    from .control.tuning import TuningSession
+    from .inputs.base import JointInput
+    from .ui.tune import run
+
+    cfg = load_experiment(experiment)
+    owner = cfg.inputs.get(node)
+    control = owner.control if isinstance(owner, JointInput) else None
+    if not isinstance(owner, JointInput) or not control:
+        raise SystemExit(f"{node}: not an actuated input in {experiment}")
+    spec = next((g for g in control if g.name == group), None)
+    if spec is None or spec.law != "gravity_comp" or not spec.cfg.get("tuning"):
+        raise SystemExit(
+            f"{group}: needs a gravity_comp group with `tuning:` (the file this tool writes)"
+        )
+    laws = build_laws(control, owner.joint_names, owner.cfg.get("__dir__"))
+    law = next(x for x in laws if x.name == group)
+    assert isinstance(law, GravityComp)
+    for other in laws:  # only the tuned arm pushes; the others stay limp
+        if other is not law and isinstance(other, GravityComp):
+            other.gain = [0.0] * len(other.joints)
+            other.hold = [0.0] * len(other.joints)
+        elif other is not law and isinstance(other, CurrentLaw):
+            other.gain = [0.0] * len(other.joints)
+    ids = dict(zip(owner.joint_names, owner.cfg.get("motor_ids") or [], strict=False))
+    device = JointDevice(owner.open_bus(cfg.mock), owner.joint_names, laws, node)
+    session = TuningSession(
+        device,
+        law,
+        tuning_path(spec.cfg["tuning"], owner.cfg.get("__dir__")),
+        ids,
+    )
+    try:
+        result = run(
+            session,
+            1 / float(owner.cfg.get("poll_hz", 60)),
+            f"tune-gravity  {node}.{group}  ({'mock' if cfg.mock else 'hardware'})",
+        )
+    finally:
+        device.close()
+    return f"{result}: {session.path}"
+
+
 # -- calibration file ------------------------------------------------------------
 
 

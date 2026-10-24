@@ -435,3 +435,46 @@ def test_breakaway_hold_resists_up_to_hold_mA_then_slides():
     assert at(2000) == 20
     assert at(2010) == 10  # let go of the push: the anchor stayed at 2020
     assert bus.goal_current[1] == 0  # no hold on b
+
+
+def test_tuning_session_changes_values_live_and_saves_them(tmp_path):
+    import yaml
+
+    from roboloom.control.tuning import TuningSession
+
+    path = tmp_path / "tuning.yaml"
+    path.write_text(
+        "# header kept\nhold_kp: 1.0\njoints:\n"
+        "  a: {gain: 1.0, hold_mA: 0, hint: 'arm out'}\n  b: {gain: 0.0, hold_mA: 0}\n"
+    )
+    dev, bus = device(
+        [
+            {**GRAVITY, "gravity_gain": [1.0, 0.0], "ramp_s": 0.01},
+            {"group": "c", "law": "free", "joints": ["c"]},
+        ],
+        [0, 0, 3],
+        FlatGravity(),
+    )
+    session = TuningSession(dev, dev.laws[0], path, {"a": 1, "b": 2})
+    session.start()
+    t = time.monotonic_ns()
+    session.step(t + int(0.1e9))
+    assert bus.goal_current[0] == 80  # 100 mA clipped
+    assert "gain 1.1" in session.key("]")
+    session.key("=")
+    assert session.key("0").endswith("OFF (compare)")
+    session.step(t + int(0.2e9))
+    assert bus.goal_current[0] == 0  # gravity term off, hold anchored at the pose
+    session.key("0")
+    session.key("j")
+    assert session.rows()[1].joint == "b" and session.selected == 1
+    session.key("s")
+    saved = yaml.safe_load(path.read_text())
+    assert path.read_text().startswith("# header kept")
+    assert saved["joints"]["a"] == {"gain": 1.1, "hold_mA": 5.0, "hint": "arm out"}
+    assert not session.dirty
+    bus.values[0] = 9000  # far outside the range: runaway, the device goes limp
+    session.step(t + int(0.3e9))
+    assert session.stopped and not any(bus.torque)
+    bus.values[0] = 2048
+    assert "re-enabled" in session.key("r") and bus.torque[0]
