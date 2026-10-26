@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sys
 from pathlib import Path
 
 import yaml
@@ -22,8 +23,9 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             inputs = {**inputs, "tick": f"dora/timer/hz/{int(tick)}"}
         return {
             "id": name,
-            "path": script,
-            "args": f"{name} {cfg.path}",
+            # this interpreter, so nodes import the same roboloom without an activated venv
+            "path": sys.executable,
+            "args": f"{script} {name} {cfg.path}",
             "inputs": inputs,
             "outputs": outputs,
             "restart_policy": "never",

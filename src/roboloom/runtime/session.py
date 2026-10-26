@@ -20,6 +20,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -82,7 +83,10 @@ def log_dir_for(cfg: ExperimentConfig) -> Path:
 
 
 def _dora() -> str:
-    dora = shutil.which("dora")
+    # the venv's own dora too, when the interpreter runs without an activated venv
+    dora = shutil.which("dora") or shutil.which(
+        "dora", path=str(Path(sys.executable).parent)
+    )
     if dora is None:
         raise ConfigError("dora CLI unavailable; install dependencies with uv sync")
     return dora
@@ -221,8 +225,6 @@ class Session:
             cfg, process, SessionClient(fifo, report, status), logs, workdir, fifo
         )
         if operator == "auto":
-            import sys
-
             from ..operator import TerminalOperator
 
             operator = TerminalOperator() if sys.stdin.isatty() else None
