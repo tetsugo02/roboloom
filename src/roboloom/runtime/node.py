@@ -14,6 +14,7 @@ from pathlib import Path
 
 from roboloom.config import ExperimentConfig, load_experiment
 from roboloom.controllers.base import Controller
+from roboloom.controllers.policy import PolicyController
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
@@ -40,7 +41,7 @@ def _event(node):
     )
 
 
-READY = ("following", "ready")  # controller states that may start an episode
+READY = ("following", "ready", "running")  # controller states that may start an episode
 
 
 def start_warning(
@@ -307,6 +308,74 @@ def _controller(node, controller: Controller):
             _send(node, "status", status.make(fields, level, now))
 
 
+def _policy(node, controller: PolicyController):
+    """Infer and send commands on the node's timer while an episode runs.
+
+    `ROBOLOOM_POLICY` ("module:callable") and `ROBOLOOM_POLICY_KWARGS` (JSON) override the
+    configured policy, so `roboloom infer --policy` needs no edited YAML."""
+    status = StatusReporter(Publisher(controller.name), "controller")
+    kwargs = os.environ.get("ROBOLOOM_POLICY_KWARGS")
+    try:
+        controller.load(
+            os.environ.get("ROBOLOOM_POLICY") or None,
+            json.loads(kwargs) if kwargs else None,
+        )
+    except Exception as exc:  # noqa: BLE001 - shown on the operator screen; start refused
+        controller.state, controller.error = "failed", f"loading the policy: {exc}"
+    commands: deque[int] = deque(maxlen=60)
+    warmed = False
+    while True:
+        event_id, msg = _event(node)
+        if _quit(event_id, msg):
+            return
+        if event_id == "robot" and msg is not None:
+            controller.observe(controller.robot.name, msg)
+            if not warmed:
+                # The first message on a dora connection stalls the receiving robot loop
+                # about 130 ms (measured in mock). Send it now, while the robot is not
+                # armed and ignores commands, instead of at the start of the first episode.
+                _send(
+                    node,
+                    "command",
+                    controller.command(
+                        list(msg.payload["positions"]), time.monotonic_ns()
+                    ),
+                )
+                warmed = True
+        elif (
+            event_id is not None and event_id.startswith("observe_") and msg is not None
+        ):
+            controller.observe(event_id.removeprefix("observe_"), msg)
+        elif event_id == "session" and msg is not None and controller.state != "failed":
+            command = msg.payload["command"]
+            if command == "start":
+                controller.start(msg.payload.get("task", ""))
+            elif command in ("stop", "discard", "estop", "release"):
+                controller.stop()
+        elif event_id == "tick":
+            try:
+                command = controller.tick()
+            except Exception as exc:  # noqa: BLE001 - a bad policy output stops the episode
+                controller.stop()
+                controller.state, controller.error = "failed", str(exc)
+                command = None
+            if command is not None:
+                _send(node, "command", command)
+                commands.append(time.monotonic_ns())
+        now = time.monotonic_ns()
+        if status.due(now):
+            fields = controller.status()
+            fields["command_hz"] = len([t for t in commands if now - t < 1e9])
+            level = (
+                "error"
+                if controller.state == "failed"
+                else "ok"
+                if controller.state in ("ready", "running")
+                else "warn"
+            )
+            _send(node, "status", status.make(fields, level, now))
+
+
 def _recorder(node, cfg: ExperimentConfig):
     """Records episodes. `save` (video encoding) runs on a worker thread so this loop keeps
     draining dora events; otherwise queued frames exceed dora's per-reply size limit and are lost."""
@@ -451,7 +520,11 @@ def main() -> None:
     elif name in cfg.robots:
         _robot(node, cfg.robots[name], cfg)
     elif name in cfg.controllers:
-        _controller(node, cfg.controllers[name])
+        controller = cfg.controllers[name]
+        if isinstance(controller, PolicyController):
+            _policy(node, controller)
+        else:
+            _controller(node, controller)
     elif name in cfg.inputs:
         _source(node, cfg.inputs[name], cfg, "input")
     elif name in cfg.sensors:

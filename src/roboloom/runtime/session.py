@@ -126,11 +126,14 @@ class Session:
         experiment: str | Path | ExperimentConfig,
         *,
         hardware: bool = False,
+        policy: str | None = None,
+        policy_kwargs: dict | None = None,
         log_dir: str | Path | None = None,
         timeout: float = 60.0,
     ) -> Session:
         """Validate and start the dataflow; returns once every node reports status.
-        Real devices open only with `hardware=True`."""
+        Real devices open only with `hardware=True`. `policy` ("module:callable") and
+        `policy_kwargs` replace the policy of a `type: policy` controller."""
         cfg = (
             experiment
             if isinstance(experiment, ExperimentConfig)
@@ -140,6 +143,10 @@ class Session:
             raise HardwareError(
                 f"{cfg.path} opens real devices; pass hardware=True (--hardware)"
             )
+        if (policy or policy_kwargs) and not any(
+            not c.uses_input for c in cfg.controllers.values()
+        ):
+            raise ConfigError(f"{cfg.path} has no `type: policy` controller")
         dora = _dora()
         fifo = fifo_for(cfg)
         fifo.parent.mkdir(parents=True, exist_ok=True)
@@ -160,12 +167,16 @@ class Session:
         except BaseException:
             workdir.cleanup()
             raise
-        env = {
+        env: dict[str, object] = {
             "ROBOLOOM_SESSION_FIFO": fifo,
             "ROBOLOOM_REPORT_PATH": report,
             "ROBOLOOM_STATUS_PATH": status,
             "ROBOLOOM_LOG_DIR": logs,
         }
+        if policy:
+            env["ROBOLOOM_POLICY"] = policy
+        if policy_kwargs:
+            env["ROBOLOOM_POLICY_KWARGS"] = json.dumps(policy_kwargs)
         command = [dora, "run", "--log-level", "error"]
         for key, value in env.items():
             command += ["--env", f"{key}={value}"]

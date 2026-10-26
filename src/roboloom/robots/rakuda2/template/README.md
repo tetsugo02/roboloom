@@ -10,6 +10,7 @@ measurements (`*.npz`), logs and datasets.
 | `experiment.yaml` | leader teleop + RealSense + 2 DIGIT | — |
 | `experiment_camera.yaml` | the same without DIGIT | — |
 | `experiment_gravity.yaml` | camera set, gravity-compensated leader | — |
+| `experiment_policy.yaml`, `nodes/policy.yaml` | a policy drives the follower (inference) | your policy |
 | `nodes/robot.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
 | `nodes/camera.yaml`, `nodes/digit_*.yaml` | sensor serials | step 1 |
 | `calibration/leader_<side>.yaml` | joint map for gravity identification | step 4 |
@@ -29,7 +30,11 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    (startup refuses to run on any mismatch and lists them). Set the FTDI latency timer to
    1 ms (`echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB*/latency_timer`). `rs-enumerate-devices` and the DIGIT labels give the
    sensor serials.
-2. `uv run roboloom validate rakuda2`, then `uv run roboloom run rakuda2/experiment_camera --hardware`.
+2. `uv run roboloom validate rakuda2`, then `uv run roboloom run rakuda2/experiment_camera --hardware`
+   (operator screen, many episodes), or one fixed-length episode:
+   `uv run roboloom record rakuda2/experiment_camera --task "pick up the cup" --seconds 30 --hardware`.
+   From Python, `roboloom.Session` does the same and can name tasks automatically
+   (docs/python-api.md in the roboloom repository).
 
 ## Gravity-compensated leader (optional)
 
@@ -42,3 +47,11 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
 7. `uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware`, then `left_arm`:
    joint by joint, set how much weight is removed (gain) and how hard a push must be before
    the arm moves (hold). What the numbers mean: docs/gravity-tuning.md in the roboloom repository.
+
+## Inference
+
+8. `uv run roboloom infer rakuda2/experiment_policy --seconds 20 --hardware` first runs the
+   template's `hold` policy, which keeps the arm where it is: it checks the inference path.
+   Then pass yours: `--policy my_lab.policies:load --policy-kwargs '{"checkpoint": "..."}'`
+   (or set `factory`/`kwargs` in `nodes/policy.yaml`). Add `--task` to record the run into
+   `datasets/rakuda2_eval`.

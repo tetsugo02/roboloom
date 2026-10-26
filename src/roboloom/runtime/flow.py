@@ -35,18 +35,19 @@ def build_flow(cfg: ExperimentConfig) -> dict:
         node(name, session, ["sample", "status"], source.rate_hz(fps) or control_hz)
         for name, source in cfg.inputs.items()
     ]
-    nodes += [
-        node(
-            name,
-            {
-                "intent": f"{c.source.name}/sample",
-                "robot": f"{c.robot.name}/state",
-                **session,
-            },
-            ["command", "status"],
+
+    def latest(output: str) -> dict:
+        return {"source": output, "queue_size": 1, "queue_policy": "drop_oldest"}
+
+    for name, c in cfg.controllers.items():
+        inputs: dict[str, object] = {"robot": f"{c.robot.name}/state", **session}
+        if c.source is not None:
+            inputs["intent"] = f"{c.source.name}/sample"
+        # a policy reads the newest sample of what it observes, on its own timer
+        inputs.update({f"observe_{n}": latest(f"{n}/sample") for n in c.observes()})
+        nodes.append(
+            node(name, inputs, ["command", "status"], getattr(c, "rate_hz", None))
         )
-        for name, c in cfg.controllers.items()
-    ]
     nodes += [
         node(
             name,

@@ -1,4 +1,4 @@
-"""`roboloom record`: fixed-length episodes on the operator screen, through a `Session`.
+"""`roboloom record` and `roboloom infer`: fixed-length episodes on the operator screen, through a `Session`.
 
 Enter starts each episode once the controller is ready; `q` (or Ctrl-C) discards the
 episode in progress and stops, `e` latches the follower in ESTOP. Without a terminal
@@ -11,6 +11,7 @@ import queue
 import sys
 import time
 from collections import deque
+from collections.abc import Callable
 
 from rich.console import Console, RenderableType
 from rich.live import Live
@@ -38,28 +39,41 @@ def describe(result: EpisodeResult) -> Text:
 
 
 def record(
-    session: Session, task: Task, seconds: float, episodes: int = 1
+    session: Session,
+    task: Task,
+    seconds: float,
+    episodes: int = 1,
+    keep: Callable[[EpisodeResult], bool] | None = None,
 ) -> list[EpisodeResult]:
+    """Run `episodes` episodes of `seconds`; `keep` as in `Session.record`."""
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        return _plain(session, task, seconds, episodes)
-    return _screen(session, task, seconds, episodes)
+        return _plain(session, task, seconds, episodes, keep)
+    return _screen(session, task, seconds, episodes, keep)
 
 
 def _plain(
-    session: Session, task: Task, seconds: float, episodes: int
+    session: Session,
+    task: Task,
+    seconds: float,
+    episodes: int,
+    keep: Callable[[EpisodeResult], bool] | None,
 ) -> list[EpisodeResult]:
     print("waiting until the controller is ready ...", flush=True)
     session.wait_ready(timeout=120)
     results = []
     for k in range(episodes):
         print(f"episode {k + 1}/{episodes}: recording {seconds:g} s", flush=True)
-        results.append(session.record(task, seconds))
+        results.append(session.record(task, seconds, keep=keep))
         print(describe(results[-1]).plain, flush=True)
     return results
 
 
 def _screen(
-    session: Session, task: Task, seconds: float, episodes: int
+    session: Session,
+    task: Task,
+    seconds: float,
+    episodes: int,
+    keep: Callable[[EpisodeResult], bool] | None,
 ) -> list[EpisodeResult]:
     messages: deque[Text] = deque(maxlen=8)
     results: list[EpisodeResult] = []
@@ -115,7 +129,7 @@ def _screen(
                 left = max(0.0, end - time.monotonic())
                 live.update(view(f"{label}, {left:.0f} s left"), refresh=True)
 
-            results.append(session.record(task, seconds, on_tick=tick))
+            results.append(session.record(task, seconds, keep=keep, on_tick=tick))
             messages.append(describe(results[-1]))
-            live.update(view("saved"), refresh=True)
+            live.update(view("done"), refresh=True)
     return results

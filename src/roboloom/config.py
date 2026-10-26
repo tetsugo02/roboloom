@@ -181,14 +181,23 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
     }
     controllers = {}
     for name, c in tree["controllers"].items():
+        cls = CONTROLLERS.get(c.get("type"))
         source, robot = inputs.get(c.get("input")), robots.get(c.get("robot"))
-        if source is None or robot is None:
+        if robot is None or (cls.uses_input and source is None):
             raise ValueError(
-                f"controllers.{name} must reference a configured input and robot"
+                f"controllers.{name} must reference a configured "
+                f"{'input and robot' if cls.uses_input else 'robot'}"
             )
-        controllers[name] = CONTROLLERS.get(c.get("type"))(
-            name, c, source, robot, robot_id
-        )
+        controller = cls(name, c, source if cls.uses_input else None, robot, robot_id)
+        unknown = set(controller.observes()) - {*inputs, *sensors}
+        if unknown:
+            raise ValueError(
+                f"controllers.{name} observes unknown nodes {sorted(unknown)}"
+            )
+        bind = getattr(controller, "bind", None)
+        if bind is not None:
+            bind({**inputs, **sensors})
+        controllers[name] = controller
     for robot in robots.values():
         if [c.robot.name for c in controllers.values()].count(robot.name) != 1:
             raise ValueError(f"robot {robot.name!r} needs exactly one controller")

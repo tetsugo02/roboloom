@@ -1,5 +1,8 @@
-"""Python interface for collection and one-step policy inference.
+"""In-process collection and one-step policy inference, for tests and simple robots.
 
+Everything runs in the caller's process and thread, so a slow policy or sensor delays the
+control loop. For a real robot use `roboloom.Session`, which runs the experiment's dora
+dataflow (control loops, sensors and recorder in their own processes).
 Device buses and sensors are injected; importing this module never opens hardware.
 The dora runner uses the same controller, safety and recorder components.
 """
@@ -15,6 +18,7 @@ from .config import ExperimentConfig, load_experiment
 from .core.checks import positions
 from .core.protocol import Publisher
 from .core.source import Reader, Sample, Source
+from .errors import ConfigError
 from .inputs.base import InputDevice, JointInput
 from .recording import ACTION, EpisodeRecorder
 from .robots.base import Robot, RobotBus
@@ -70,9 +74,15 @@ class Experiment:
             raise ValueError("hardware=True is required to open real devices")
         mapper = cfg.controller_for(cfg.robot.name)
         source = mapper.source
+        if source is None:
+            raise ConfigError(
+                f"{mapper.name}: policy controllers run in the dora dataflow; "
+                "use roboloom.Session (or pass a policy to step())"
+            )
         if getattr(source, "actuated", False):
-            raise ValueError(
-                f"{source.name}: actuated leaders run only in the dora dataflow"
+            raise ConfigError(
+                f"{source.name}: a leader whose motors run control laws needs its own "
+                "process; use roboloom.Session, which runs the dataflow"
             )
         bus = cfg.robot.open_device(cfg.mock)
         readers: dict[str, Reader] = {}

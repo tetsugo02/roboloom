@@ -4,12 +4,13 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from conftest import mock_project
 
 from roboloom.errors import HardwareError
-from roboloom.runtime.session import EpisodeInfo, Session
+from roboloom.runtime.session import EpisodeInfo, Session, SessionError
 
 pytestmark = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 
@@ -79,3 +80,42 @@ def test_quality_limits_become_warnings():
     warnings = assess(metrics, {})
     assert len(warnings) == 2 and "camera" in warnings[0] and "130 ms" in warnings[1]
     assert assess(metrics, {"max_missing_rate": 0.5, "max_interval_ms": 200}) == []
+
+
+def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypatch):
+    project = mock_project(tmp_path / ".roboloom")
+    tests = str(Path(__file__).parent.resolve())
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
+    )
+    with Session.launch(
+        project / "experiment_policy.yaml",
+        policy="policies:creep",
+        policy_kwargs={"step": 5.0},
+    ) as s:
+        s.wait_ready(30)  # the policy is loaded
+        assert s.status()["policy"]["fields"]["state"] == "ready"
+        result = s.record("creep", 1.5)
+        policy = s.status()["policy"]["fields"]
+    assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
+    assert policy["state"] == "ready" and "infer_ms" in policy, policy
+
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+    dataset = LeRobotDataset(
+        "local/rakuda2_eval", root=project / "datasets" / "rakuda2_eval"
+    )
+    first = [float(dataset[i]["observation.state"][0]) for i in range(len(dataset))]
+    assert first[-1] > first[0] + 20  # the policy moved joint 0 up
+
+
+def test_a_policy_that_fails_to_load_blocks_start(tmp_path, monkeypatch):
+    project = mock_project(tmp_path / ".roboloom")
+    tests = str(Path(__file__).parent.resolve())
+    monkeypatch.setenv("PYTHONPATH", tests)
+    with Session.launch(
+        project / "experiment_policy.yaml", policy="policies:broken"
+    ) as s:
+        with pytest.raises(SessionError, match="failed"):
+            s.wait_ready(3)
+        assert "reset() and infer()" in s.status()["policy"]["fields"]["error"]

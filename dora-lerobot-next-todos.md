@@ -41,6 +41,15 @@
   - 当面は、関節ごとの gain（肩 1.8、肘 1.6）と、押し負けたら動く保持（`hold_mA`）で補う。調整は `tune-gravity` で行う（`docs/gravity-tuning.md`）。
   - 未完了：電流制御での同定（電流を少しずつ上げて動き出す値と、下げて落ち始める値の中間をとる）。
 
+**2026-10-26 Python API（`Session`）と方策ノード：**
+- 収集と推論は、どちらも dora の dataflow で動かす。Python の `Session` と CLI の `record`／`infer`／`run` は、出来事（開始、停止、保存、task 名）を送るだけで、制御のループは回さない。
+- **dora の接続で最初に届くメッセージが、受け手の robot ノードを約 130 ms 止めた**（模擬、`experiment_policy`）。
+  - 方策ノードが最初の episode の開始で初めて command を送ると、その episode の制御周期の最大値が 129〜134 ms になった。2 回目以降の episode では 18 ms 以下だった。GC の最大値は 10.7 ms で、GC は原因ではない。
+  - 対策：方策ノードは、robot が武装していない（command を無視する）うちに 1 回 command を送る。これで最初の episode の最大値も 18 ms 以下になった。
+  - 未確認：実機の leader で見た 128 ms の停止（Watchdog 作動）が同じ原因か。leader は起動直後から sample を送り続けているので、別の原因の可能性が高い。`gc_max_ms`（状態表示）と、episode ごとの `control_interval_ms` で切り分ける。
+- 未検証：利用者のプロセスで方策オブジェクトを直接動かす（dora の dynamic node）。`dora run`（coordinator なし）で使えるか確かめていない。
+- 未実装：非同期の行動チャンク（推論中も前のチャンクを実行し、重なりを混ぜる）。今は同期型で、推論中は command が止まり、期限を過ぎると robot は HOLD に入る。
+
 **現在地：段階 1〜3 の模擬構成と LeRobot 保存を試作中。段階 0 の実測、実機安全試験、段階 2 の既知軌道での往復検証は未完了。段階 4〜5 は構想段階。** `README.md` の使用例と `tests/` は模擬・単体の根拠であり、実機試験の根拠ではない。
 
 | 現在あるもの | 今試していること | まだ示せていないこと |
@@ -48,7 +57,7 @@
 | 9 ノードの模擬 dataflow | dora で責務と周期を分ける構成 | プロセスを通した安定動作と実機での周期改善 |
 | Rakuda joint controller と `FollowerSafety` | 関節対応、期限・値の基本検査、模擬バスでの停止 | 実機の HOLD／停止の安全性と通信断時の動作 |
 | `EpisodeRecorder` と LeRobot writer | 因果的な行の選択、欠損表示、模擬データの保存・再開 | 既知軌道での観測・指令対応、実機カメラと音声の収録品質 |
-| `Experiment.from_components` | 注入したバス・センサー・controller による Python API | dora dataflow での複数機体・入力源の対応 |
+| `Session`（dataflow の指揮）と `Experiment`（1 プロセス） | task の自動命名、1 episode の収録、方策ノードによる推論（模擬で end-to-end 試験） | 実機での収録・推論、非同期チャンク、dynamic node |
 
 ## 0．基準測定と目標値
 

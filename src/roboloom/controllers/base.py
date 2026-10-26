@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import ClassVar
 
 from ..core.checks import positive
 from ..core.protocol import Envelope, Publisher
@@ -12,8 +13,17 @@ from ..robots.safety import make_command
 
 
 class Controller(ABC):
+    # False for controllers that do not follow one operator input (e.g. a policy); they get
+    # `source=None` and name what they read in `observes()`.
+    uses_input: ClassVar[bool] = True
+
     def __init__(
-        self, name: str, cfg: dict, source: InputDevice, robot: Robot, robot_id: str
+        self,
+        name: str,
+        cfg: dict,
+        source: InputDevice | None,
+        robot: Robot,
+        robot_id: str,
     ):
         self.name, self.cfg, self.source, self.robot, self.robot_id = (
             name,
@@ -55,6 +65,10 @@ class Controller(ABC):
     @abstractmethod
     def reset(self) -> None:
         """Require re-alignment, e.g. after the robot latched FAULT or ESTOP."""
+
+    def observes(self) -> list[str]:
+        """Inputs and sensors whose samples this controller reads besides its input."""
+        return []
 
     def status(self) -> dict:
         """Why the controller is (not) commanding, for the operator screen. Override to add fields."""

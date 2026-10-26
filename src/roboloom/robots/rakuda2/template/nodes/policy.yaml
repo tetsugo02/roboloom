@@ -1,0 +1,15 @@
+# A policy as the follower's controller (roboloom.controllers.policy).
+# factory: "module:callable" returning an object with reset() and infer(observation);
+#   the observation has the dataset's keys (observation.state, observation.images.camera,
+#   ..., task) and infer returns joint targets in counts: [17] or a chunk [H, 17].
+# action_horizon: steps of a chunk sent before inferring again (synchronous chunking).
+# While infer runs no command is sent; past command_deadline_ms the follower holds.
+type: policy
+robot: robot
+factory: roboloom.policy:hold
+kwargs: {}
+observe: [camera, digit_left, digit_right]
+rate_hz: 15
+action_horizon: 8
+max_speed_counts_per_s: 1024
+command_deadline_ms: 300

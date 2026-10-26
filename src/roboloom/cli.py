@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -120,6 +121,24 @@ def main() -> None:
     rec.add_argument("--seconds", type=float, required=True)
     rec.add_argument("--episodes", type=int, default=1)
     rec.add_argument(
+        "--hardware", action="store_true", help="explicitly allow opening real devices"
+    )
+    inf = sub.add_parser(
+        "infer", help="run a policy experiment for fixed-length episodes"
+    )
+    inf.add_argument("experiment")
+    inf.add_argument("--seconds", type=float, required=True)
+    inf.add_argument("--episodes", type=int, default=1)
+    inf.add_argument(
+        "--policy", help="module:callable returning the policy (default: the YAML's)"
+    )
+    inf.add_argument(
+        "--policy-kwargs", type=json.loads, default=None, help="JSON arguments"
+    )
+    inf.add_argument(
+        "--task", default="", help="task given to the policy; with it, runs are saved"
+    )
+    inf.add_argument(
         "--hardware", action="store_true", help="explicitly allow opening real devices"
     )
     sess = sub.add_parser("session", help="send one command to a running `run`")
@@ -241,12 +260,29 @@ def _dispatch(args: argparse.Namespace) -> None:
             validate_flow(cfg, Path(directory))
         print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
         return
-    session = Session.launch(cfg, hardware=args.hardware)
+    policy = getattr(args, "policy", None)
+    session = Session.launch(
+        cfg,
+        hardware=args.hardware,
+        policy=policy,
+        policy_kwargs=getattr(args, "policy_kwargs", None),
+    )
     try:
         if args.command == "record":
             from .ui.record import record
 
             record(session, args.task, args.seconds, args.episodes)
+        elif args.command == "infer":
+            from .ui.record import record
+
+            # a task names the run and keeps it; without one nothing is saved
+            record(
+                session,
+                args.task or "inference",
+                args.seconds,
+                args.episodes,
+                keep=lambda _: bool(args.task),
+            )
         elif not args.plain and sys.stdin.isatty() and sys.stdout.isatty():
             from .ui.live import LiveSession
 
