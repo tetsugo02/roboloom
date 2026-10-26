@@ -48,7 +48,9 @@ class BusReader:
 class ActuatedReader:
     """Leader whose motors run control laws (e.g. gravity compensation) while it is read.
 
-    Each read runs one control step. Any failure leaves its current-mode joints limp
+    Each read runs one control step. After `estop` or `release` the leader stays limp
+    (no re-enable until the dataflow restarts) and reads keep publishing its positions.
+    Any failure leaves its current-mode joints limp
     (JointDevice) and propagates; closing the reader releases every joint, so the node stops publishing and the follower's command deadline
     expires into HOLD.
     """
@@ -60,7 +62,8 @@ class ActuatedReader:
 
     def read(self) -> Sample:
         state = self.device.read_state()
-        self.device.command(None)
+        if self.device.enabled:
+            self.device.command(None)
         return Sample(
             np.asarray(state.positions, dtype=np.float64), time.monotonic_ns()
         )

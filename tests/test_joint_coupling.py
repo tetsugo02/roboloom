@@ -181,6 +181,9 @@ def test_position_locks_only_selected_leader_joints_and_seeds_before_torque() ->
         assert bus.values == [1200, 2000, 2500]
         reader.on_session("estop")
         assert not any(bus.torque)
+        bus.values = [1300.0, 1900.0, 2400.0]
+        sample = reader.read()  # a limp leader keeps publishing, it does not crash
+        assert list(sample.value) == bus.values and not any(bus.torque)
     finally:
         reader.close()
 
