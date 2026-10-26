@@ -1,6 +1,6 @@
 # YAM 実装の分析：安全ガードと方策出力の滑らかな送信
 
-作成日：2026-10-22．対象：`/home/tetsugo_local/workspace/YAM`（HEAD `839fb55`）．状態：調査メモ．roboloom への取り込み方針は §5 と [次期設計](../dora-lerobot-next-design.md) の §11 にまとめる．
+作成日：2026-10-22．対象：`/home/tetsugo_local/workspace/YAM`（HEAD `839fb55`）．状態：調査メモ．roboloom への取り込み方針は §5 と [次期設計](../../dora-lerobot-next-design.md) の §11 にまとめる．
 
 YAM は双腕 YAM アーム（DM4340/4310 モーター，CAN）で，テレオペ，データ収集，MolmoAct-v2 の評価を行う実装である．本文の行番号は上記 HEAD のもので，パスは `gello_software/` を `gs/`，`i2rt/i2rt/` を `i2/` と略す．コードは読んだだけで，実機での挙動は確かめていない．数値は特記がない限り実運用の設定 `gs/configs/yam_left.yaml` の値である．
 
@@ -195,7 +195,7 @@ i2rt：目標をラッチ → 重力補償トルク ×1.3 とグリッパー力�
 
 ### 5.3 方策用の経路
 
-方策の出力は `ActionChunk` として扱い，[次期設計](../dora-lerobot-next-design.md) §4 の案を具体化する．
+方策の出力は `ActionChunk` として扱い，[次期設計](../../dora-lerobot-next-design.md) §4 の案を具体化する．
 
 - `policy-*` ノードがチャンクを出し，`controller-policy` が queue，step clock，補間を持つ．YAM の `s_obs`，`start_step`，エポックの考え方をそのまま使う．時刻は経過時間でなく消費数で揃える．
 - RTC 誘導は方策の能力として扱う．推論ループに手を入れられない方策では，誘導なしの置換式 queue と補間だけを使う．
@@ -214,7 +214,7 @@ i2rt：目標をラッチ → 重力補償トルク ×1.3 とグリッパー力�
 
 YAM は推論，カメラの一部，記録，CAN の送信スレッドを同じ Python プロセスに置いている．このため，GIL を長く握る処理が 250 Hz のスレッドを止め，ウォッチドッグで腕が落ちた．YAM の対処は，処理の時期をずらすこと（通電前，解放後），`gc.freeze()`，カメラの別プロセス化である．
 
-roboloom では，[次期設計](../dora-lerobot-next-design.md) §3 の方針どおり，dora-rs のノードとしてプロセスを分ける．Python ノードはそれぞれ別のインタプリタで動くので，GIL はノードごとに独立する．YAM の各問題を次のように置き換える．
+roboloom では，[次期設計](../../dora-lerobot-next-design.md) §3 の方針どおり，dora-rs のノードとしてプロセスを分ける．Python ノードはそれぞれ別のインタプリタで動くので，GIL はノードごとに独立する．YAM の各問題を次のように置き換える．
 
 | YAM の問題と対処 | roboloom（dora-rs）での扱い | 残るもの・確かめること |
 | --- | --- | --- |

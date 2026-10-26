@@ -1,0 +1,44 @@
+# Settings shared by every language. Each language's config (mkdocs.yml, mkdocs.en.yml)
+# INHERITs this file and sets its own docs_dir, site_dir, site_url, language and nav.
+site_name: roboloom
+theme:
+  name: material
+  custom_dir: docs/overrides
+  # Fonts are loaded by docs/overrides/main.html so that Japanese and serif families can be added.
+  font: false
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: lucide/moon
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: lucide/sun
+        name: Light mode
+extra:
+  # Language switcher in the header (top right). Links are relative to the site root of
+  # the current language, so both languages must be built side by side under site/.
+  alternate:
+    - name: 日本語
+      link: ../ja/
+      lang: ja
+    - name: English
+      link: ../en/
+      lang: en
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - tables
