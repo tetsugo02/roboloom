@@ -4,6 +4,28 @@ Rakuda の leader 操作、RGB、左右 DIGIT、モノラル PCM を収集し、
 
 ## Python interface
 
+roboloom の操作は、どれも Python の関数として使えます。CLI はそれを呼ぶだけの薄い層です。対応表と例は [docs/python-api.md](docs/python-api.md) にあります。
+
+- **`Session`**（実機の収集と推論）
+  - 実験の dora dataflow を起動します。
+  - 開始・停止・保存・task 名を送ります。task 名は関数で自動命名できます。
+  - 方策は、dataflow の中の方策ノードで動きます。
+- **`roboloom.setup`**（セットアップと計測）
+  - commission、可動域、重力の同定・確認・調整を行います。
+  - 結果をデータで返します。操作者とのやりとりは `Operator` に任せます。
+- **`Experiment`**（1 プロセス）：試験と簡単な機体のためのもので、下で説明します。
+
+```python
+from roboloom import Session
+
+with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
+    s.wait_ready()
+    for _ in range(3):
+        s.record(lambda info: f"pick up the cup #{info.index}", seconds=20)
+```
+
+`Experiment` は、バス、センサー、controller を呼び出し側のスレッドで動かします。
+
 ```bash
 uv sync --extra record
 uv run python main.py
@@ -47,7 +69,14 @@ experiment = Experiment.from_components(
 )
 ```
 
-`from_yaml` は初期 Rakuda 構成を読み込みます。模擬構成の leader は自動的に開きます。追加センサーは `sensors={"camera": ..., "digit_left": ..., "digit_right": ..., "audio": ...}` で渡します。機器ごとに独立した取得周期が必要な本番収集には下記の dora dataflow を使います。
+`from_yaml` について：
+- 実験ファイルのパスでも、`.roboloom/` の下の名前でも指定できます。
+- 模擬構成では、leader を自動で開きます。
+- 追加のセンサーは、`sensors={"camera": ..., "digit_left": ..., "digit_right": ..., "audio": ...}` で渡します。
+- 次の実験は拒否します。これらは `Session` で動かします。
+  - モーターを制御する leader（Rakuda-2 のトリガーのばね、重力補償）を使う実験。
+  - 方策の controller を使う実験。
+- 機器ごとに独立した取得周期が必要な本番の収集には、`Session`（下の dora dataflow）を使います。
 
 ## dora dataflow
 
@@ -66,7 +95,7 @@ uv run roboloom run examples/mock/experiment.yaml
 - recorder：記録中のタスク、行数、欠損。
 - 2 秒以上状態が届かないノードは赤で表示します。
 
-その下にメッセージ（保存結果、エラー、状態の変化）と入力行があります。dora 自身の出力は一時ディレクトリの `dora.log` に送り、エラーらしい行だけをメッセージ欄に写します。Ctrl-C は `quit` と同じです。パイプなど端末でないとき、または `--plain` を付けたときは、従来の行入力で動きます。
+その下にメッセージ（保存結果、エラー、状態の変化）と入力行があります。dora 自身の出力は、実験ファイルの隣の `logs/<実験名>-<時刻>/dora.log` に送り、エラーらしい行だけをメッセージ欄に写します。Ctrl-C は `quit` と同じです。パイプなど端末でないとき、または `--plain` を付けたときは、従来の行入力で動きます。
 
 表示する項目は、各ノードが `status` 出力に載せる `fields` で決まります（`core/status.py`）。新しいロボットやセンサーは、`fields` を足すだけで `key=value` として表示されます。専用の表示にしたいときは、`ui/render.py` の `RENDERERS` に role ごとの関数を 1 つ登録します。
 
@@ -76,6 +105,27 @@ uv run roboloom run examples/mock/experiment.yaml
 - `release`：follower のトルクを切る。HOLD 中だけ受け付け、CLI が「腕を支えて yes」と確認する。
 
 別端末からは `uv run roboloom session examples/mock/experiment.yaml start handover` の形でも操作できます。
+
+決まった長さのエピソードを録って終わるとき（`--episodes` で回数を指定、既定 1）：
+
+```bash
+uv run roboloom record examples/mock/experiment.yaml --task handover --seconds 10
+```
+
+- 動作：
+  - controller が準備できたら、Enter で開始します。
+  - `q` はエピソードを破棄して終わります。
+  - `e` は非常停止です。
+- 保存したとき：
+  - 欠損率、有効な行動の割合、制御周期の最大値が `recorder.quality` の上限を超えていれば、警告を出します。
+
+方策で動かす（`type: policy` の controller を持つ実験。テンプレートの `experiment_policy.yaml`）：
+
+```bash
+uv run roboloom infer rakuda2/experiment_policy --policy my_lab.policies:load --seconds 30 --hardware
+```
+
+`--task` を付けると、その走行を保存します（評価データ）。
 
 hardware 構成を実行するときだけ `run --hardware` が必要です。
 
@@ -158,7 +208,7 @@ src/roboloom/
   drivers/      機器バス（Dynamixel、模擬バス）。inputs と robots が共有する
   inputs/       操作入力の契約（InputDevice、JointInput）
     rakuda2/    leader（rakuda2_leader）
-  controllers/  入力から RobotCommand への変換。joint
+  controllers/  入力から RobotCommand への変換。joint、policy（方策ノード）
   control/      制御則（laws）と JointDevice（device）。leader と follower が共有する
   dynamics/     重力モデルの契約、URDF 運動学、同定（regressor、identify）
   robots/       Robot の契約（base）、FollowerSafety（safety）
@@ -168,7 +218,7 @@ src/roboloom/
     tactile/    TactileImageSensor（base）、digit
     audio/      PcmAudio（base）、pcm_mono（microphone）
   recording/    時刻整列、LeRobot スキーマ、指標
-  runtime/      dora dataflow の生成とノードの実行
+  runtime/      dora dataflow の生成、ノードの実行、Session（dataflow の起動と指揮）
   ui/           操作画面（rich Live）、状態の描画、session との受け渡し
   config.py     実験 YAML の読み込みと、ノード間の整合性検査
   probe.py      Dynamixel バスの読み取り専用の調査
@@ -176,7 +226,8 @@ src/roboloom/
   operator.py   Operator（CLI は TerminalOperator、スクリプトと試験は ScriptedOperator）
   errors.py     利用者が対処できるエラー（ConfigError、SetupError、HardwareError、Cancelled）
   project.py    roboloom init（robots/<robot>/template から .roboloom/<robot>/ を作る）
-  api.py        Python から使う Experiment
+  api.py        1 プロセスの Experiment（試験・簡単な機体）
+  policy.py     方策の契約（reset、infer）と読み込み。hold（その場に留まる）
 ```
 
 依存の向きは `core` ← `drivers` ← `dynamics` ← `control` ← `robots`/`inputs`/`sensors` ← `controllers` ← `recording`/`config` ← `runtime`/`api`/`cli` です。各役割のパッケージは `__init__.py` に `type` 名から実装への対応表（`ROBOTS`、`INPUTS`、`CONTROLLERS`、`SENSORS`）を持ちます。実装のモジュールは選ばれたときにだけ import されます。

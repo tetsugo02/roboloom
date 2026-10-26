@@ -119,3 +119,19 @@ def test_a_policy_that_fails_to_load_blocks_start(tmp_path, monkeypatch):
         with pytest.raises(SessionError, match="failed"):
             s.wait_ready(3)
         assert "reset() and infer()" in s.status()["policy"]["fields"]["error"]
+
+
+def test_node_failures_are_read_from_the_dora_log(tmp_path):
+    session = Session.__new__(Session)
+    session.log_path = tmp_path / "dora.log"
+    session.log_path.write_text("starting\n")
+    assert session.node_errors() == []
+    session.log_path.write_text(
+        "\x1b[31mERROR\x1b[0m node_failure: node exited with error: ExitCode(1) node_id=recorder\n"
+        "  File 'recorder.py', line 104\n"
+        "ValueError: existing dataset schema or FPS differs from experiment: /data\n"
+    )
+    errors = session.node_errors()
+    assert errors[0].startswith("ERROR node_failure") and errors[-1].startswith(
+        "ValueError: existing dataset"
+    )

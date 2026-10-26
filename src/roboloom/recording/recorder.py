@@ -101,7 +101,8 @@ class EpisodeRecorder:
                 for name, spec in expected.items()
             ):
                 raise ValueError(
-                    "existing dataset schema or FPS differs from experiment"
+                    f"existing dataset schema or FPS differs from experiment: {root} "
+                    "(set another `output` in the experiment, or move the old dataset)"
                 )
         else:
             self.dataset = LeRobotDataset.create(

@@ -16,6 +16,7 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -62,6 +63,10 @@ class EpisodeResult:
 
 
 Task = str | Callable[[EpisodeInfo], str]
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+FAILED = ("exited with code", "exited with error")  # dora's node-failure lines
+ERROR_LINE = re.compile(r"^[A-Za-z_.]*(Error|Exception): ")  # a traceback's last line
 
 
 def log_dir_for(cfg: ExperimentConfig) -> Path:
@@ -259,11 +264,34 @@ class Session:
     def _pull(self) -> None:
         self._reports += self.client.new_reports()
 
+    def node_errors(self) -> list[str]:
+        """Error lines of failed nodes in dora.log (a node can die while dora keeps running)."""
+        try:
+            text = ANSI.sub("", self.log_path.read_text(errors="ignore"))
+        except OSError:
+            return []
+        if not any(marker in text for marker in FAILED):
+            return []
+        return [
+            line.strip()
+            for line in text.splitlines()
+            if any(marker in line for marker in FAILED)
+            or ERROR_LINE.match(line.strip())
+        ][-6:]
+
     def _check_alive(self) -> None:
         if not self.alive:
             tail = self.log_path.read_text()[-2000:] if self.log_path.exists() else ""
             raise SessionError(
                 f"the dataflow exited ({self.process.returncode}); log {self.log_path}:\n{tail}"
+            )
+        errors = self.node_errors()
+        if errors:
+            raise SessionError(
+                "a node failed; log "
+                + str(self.log_path)
+                + ":\n  "
+                + "\n  ".join(errors)
             )
 
     def _wait_nodes(self, timeout: float) -> None:
