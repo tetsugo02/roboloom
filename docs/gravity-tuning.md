@@ -106,7 +106,7 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardw
     - 可動域＋`range_margin` の外に出た。
     - 電流をかけている関節が `max_velocity` を超えて動いた。
   - 腕を支えてから `r` で再開します。
-- **Watchdog：** 制御が 100 ms 以上止まると Watchdog が作動します。毎周期これを確かめ、作動していたら腕を脱力させます。
+- **Watchdog：** 制御が `bus_watchdog_ms`（500 ms）以上止まると Watchdog が作動します。毎周期これを確かめ、作動していたら腕を脱力させます。100 ms では、たまに起きる 130 ms 程度の遅れで作動してしまいました。
 
 ## 7．同定の限界と、根本的な直し方
 

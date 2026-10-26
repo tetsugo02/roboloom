@@ -123,3 +123,14 @@ def test_discard_mid_episode_clears_written_rows():
     assert dataset.frames
     recorder.discard()
     assert not dataset.frames and not recorder.active
+
+
+def test_numpy_scalars_in_a_payload_encode_as_json_numbers():
+    import numpy as np
+
+    from roboloom.core.protocol import Envelope, Publisher
+
+    msg = Publisher("x").make(
+        "status", {"fields": {"missing": {"leader": np.int64(3)}}}
+    )
+    assert Envelope.decode(msg.encode()).payload["fields"]["missing"]["leader"] == 3

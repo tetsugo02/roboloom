@@ -202,9 +202,10 @@ class EpisodeRecorder:
         t_ns = self.t0_ns + k * self.period_ns
         row = self._frame(t_ns, t_ns + self.period_ns)
         for key in self.sources:
-            self.missing[key] += row[f"observation.meta.{key}.valid"][0] == 0
-        self.action_rows += row["action.valid"][0] == 1
-        self.clamped += row["action.clamped"][0] == 1
+            # int(): numpy bools would make the counters numpy ints, which JSON rejects
+            self.missing[key] += int(row[f"observation.meta.{key}.valid"][0] == 0)
+        self.action_rows += int(row["action.valid"][0] == 1)
+        self.clamped += int(row["action.clamped"][0] == 1)
         if self.write:
             self.dataset.add_frame(row)
         self.written += 1

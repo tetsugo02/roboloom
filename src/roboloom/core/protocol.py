@@ -25,6 +25,13 @@ class _ArrowArray(Protocol):
     def to_numpy(self, zero_copy_only: bool = ...) -> np.ndarray: ...
 
 
+def _json_scalar(value: object) -> object:
+    """numpy scalars (e.g. a count summed from arrays) in a payload or status field."""
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 @dataclass
 class Envelope:
     kind: str
@@ -66,7 +73,7 @@ class Envelope:
                 payload[key] = value
         header["payload"] = payload
         header[_ARRAYS] = arrays
-        raw = json.dumps(header, separators=(",", ":")).encode()
+        raw = json.dumps(header, separators=(",", ":"), default=_json_scalar).encode()
         return b"".join([struct.pack("<I", len(raw)), raw, *blobs])
 
     @classmethod

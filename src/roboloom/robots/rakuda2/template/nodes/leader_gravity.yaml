@@ -106,4 +106,7 @@ control:
   - l_arm_grip
   rest: 2500
   goal_current_mA: 30
-bus_watchdog_ms: 100
+# bus_watchdog_ms: on XC330 a fired watchdog freezes the current and refuses new goals, so it
+#   does not stop the arm; the control loop only detects it and releases. 100 ms tripped on a
+#   single 128 ms stall (2026-10-26); 500 ms still catches a hung loop.
+bus_watchdog_ms: 500
