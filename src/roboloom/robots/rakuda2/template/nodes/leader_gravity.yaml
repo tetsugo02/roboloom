@@ -59,6 +59,8 @@ registers:
 control:
 - group: body
   law: free
+  # To lock selected joints at startup, split this group and use law: position for them.
+  # Remove those joints from this free group; every joint must occur exactly once.
   joints:
   - torso_yaw
   - head_yaw

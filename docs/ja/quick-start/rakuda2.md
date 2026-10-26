@@ -119,6 +119,8 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader left_arm --hardwa
 
 ## 6. Teleoperationでデータ収集
 
+収集前に，必要なら [leaderの関節固定と腰yaw相殺](../controllers/leader.md) を設定します．使用する `leader*.yaml` の `control` と `controller.yaml` の `couplings` を変更します．固定するleader関節は起動前にfollowerへ揃えます．通常・重力補償付き構成のどちらでも使える設定ですが，組み合わせの実機動作は未検証です．
+
 重力補償付き構成の既定は **RealSenseのみ** です．DIGITも記録するときは [Rakuda2の構成例](../robots/rakuda2.md) に従いセンサーと保存先を変更します．通常leader + RealSense + DIGITなら `rakuda2` を指定します．
 
 followerを動かす前に，機体の安全範囲・低速での追従・停止・脱力を確認し，`nodes/robot.yaml` を `torque: true` に変更します．両腕を支え，dataflow停止状態でEEPROMの確認を済ませてから起動します．

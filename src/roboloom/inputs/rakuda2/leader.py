@@ -1,4 +1,4 @@
-"""Rakuda2 leader arm: the follower's joints, read-only, published as joint intents."""
+"""Rakuda2 leader: joint intents with optional per-group motor control laws."""
 
 from __future__ import annotations
 

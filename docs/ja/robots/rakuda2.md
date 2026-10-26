@@ -10,6 +10,7 @@ followerは `type: rakuda2_follower`，操作入力は `type: rakuda2_leader` �
 
 - 通常のleader：腕・胴体・頭部は脱力，トリガーはばねとして制御します．
 - 重力補償付きleader：左右腕を `gravity_comp` で制御し，同定した重力モデル・可動域・調整値を使います．
+- 必要なleader関節は `position` で起動時の姿勢に固定できます．首カメラの腰yaw相殺は `joint` controllerの `couplings` で指定します．通常・重力補償付きleaderのどちらでも設定でき，既定は無効です．[設定例と制約](../controllers/leader.md)を参照してください．組み合わせの検証は模擬環境までです．
 - 開始前にleaderとfollowerを揃えます．`aligning` の間は開始が拒否され，関節差が警告表示されます．揃えてから再試行できます．
 
 ## 対応センサー

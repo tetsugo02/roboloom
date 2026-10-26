@@ -12,7 +12,7 @@ Every roboloom operation is available as a Python function. The CLI (`roboloom .
 | Tune gravity compensation | `roboloom tune-gravity <exp> leader right_arm --hardware` | `setup.open_tuning(...)` → `TuningSession` |
 | Record an episode | `roboloom record <exp> --task ... --seconds 30 --hardware` | `Session.launch(...)` → `record(...)` |
 | Run with a policy | `roboloom infer <exp> --policy pkg:make --seconds 30 --hardware` | `Session.launch(exp, policy="pkg:make")` → `record(...)` |
-| Record continuously from the operation screen | `roboloom run <exp> --hardware` | (the screen is CLI only) |
+| Record continuously from the operation screen | `roboloom run <exp> --hardware` | The `Session.launch(...)` status screen and `start()` / `stop()` / `save()` |
 
 An experiment can be specified either by file path or by its name under `.roboloom/` (`rakuda2`, `rakuda2/experiment_gravity`).
 
@@ -51,11 +51,23 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 - Experiments that open real hardware require `hardware=True`.
 - Leaving the `with` block does the following:
   - Discards any in-progress episode.
+  - If an actuated leader is present and an `operator` is configured, asks you to support its arms and press Enter.
   - Stops the dataflow.
+  - The leader goes limp; the follower keeps its torque and last target.
 - Logs are kept in `logs/<experiment name>-<time>/` next to the experiment file.
   - `dora.log`
   - The leader trace
   - The location is available as `s.log_dir`.
+
+### Status screen and exit confirmation
+
+- `Session.launch(..., screen="auto")` is the default. When stdout is a terminal, a background thread updates the same node-status table and messages panel as the CLI at 10 Hz.
+  - Set `screen=False` to disable the display. It is hidden by default when stdout is not a terminal, such as in a pipe.
+  - Your script's `print()` output appears above the screen. The screen reads no keys, so you can use `input()` and API calls to operate the session. It does not add the keyboard controls of CLI `record`.
+  - Save results and quality warnings also appear in the messages panel.
+- `operator="auto"` is the default. When stdin is a terminal, the session asks you to support the leader's arms before exiting. Support them before pressing Enter.
+  - With `operator=None`, or when stdin is not a terminal, this confirmation is skipped. Setting only `screen=False` does not disable it.
+  - The follower keeps holding after the session ends. Support its arms or lower them to a safe pose before switching off its power.
 
 ### Automatic task naming
 

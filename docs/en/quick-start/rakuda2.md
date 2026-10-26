@@ -119,6 +119,8 @@ If the arm drops, increase gain; if it rises, decrease it. If starting to move f
 
 ## 6. Collect data with teleoperation
 
+Before collecting, optionally configure [leader joint locking and torso-yaw compensation](../controllers/leader.md). Edit `control` in the active `leader*.yaml` and `couplings` in `controller.yaml`. Align the leader joints to be locked with the follower before launch. These settings work with both standard and gravity-compensated configurations, but the combination has not been tested on hardware.
+
 The default for the gravity-compensated configuration is **RealSense only**. To also record DIGIT, change the sensors and save location following the [Rakuda2 configuration examples](../robots/rakuda2.md). For the standard leader + RealSense + DIGIT, specify `rakuda2`.
 
 Before moving the follower, verify the robot's safe range, low-speed following, stop, and torque off, then change `nodes/robot.yaml` to `torque: true`. Support both arms, and start after completing the EEPROM check with the dataflow stopped.

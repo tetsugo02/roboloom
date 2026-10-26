@@ -10,6 +10,7 @@ The current operation guide covers the [Leader](../controllers/leader.md). Joint
 
 - Standard leader: the arms, torso, and head have torque off; the trigger is controlled as a spring.
 - Leader with gravity compensation: the left and right arms are controlled with `gravity_comp`, using the identified gravity model, range of motion, and tuning values.
+- Selected leader joints can be locked at their startup pose with `position`. Configure torso-yaw compensation for the neck camera through `couplings` in the `joint` controller. Both standard and gravity-compensated leaders can use these options; they are disabled by default. See the [examples and limitations](../controllers/leader.md). The combination has been verified only in mock environments.
 - Align the leader and follower before starting. While in `aligning`, start is refused and the joint differences are shown as a warning. You can retry after aligning.
 
 ## Supported sensors

@@ -8,6 +8,13 @@ alignment_tolerance: 150
 max_speed_counts_per_s: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
+# Optional measured-motion compensation, applied after mapping and before speed limits.
+# For head-camera yaw compensation (verify motor directions on your robot):
+# couplings:
+# - {joint: head_yaw, source: torso_yaw, scale: -1.0, reference: 2048}
+# reference: follower torso count at which the mapped head target is used unchanged
+# (torso facing forward). The head leader can be locked separately.
+couplings: []
 joints:
 - leader: torso_yaw
   follower: torso_yaw

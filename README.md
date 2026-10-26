@@ -4,6 +4,8 @@
 
 Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．`robopy` は実行時依存ではありません．
 
+leaderの関節固定は `control` の `law: position`，首カメラの腰yaw相殺はjoint controllerの `couplings` で設定できます（既定は無効，組み合わせは模擬検証まで）．設定例と制約は [Leader](docs/ja/controllers/leader.md)（[English](docs/en/controllers/leader.md)）にあります．
+
 ## Python interface
 
 roboloom の操作は，どれも Python の関数として使えます．CLI はそれを呼ぶだけの薄い層です．対応表と例は [docs/ja/reference/python-api.md](docs/ja/reference/python-api.md) にあります．

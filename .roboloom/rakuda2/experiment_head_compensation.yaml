@@ -1,0 +1,17 @@
+# Trial copied from experiment_gravity.yaml; uses its measured calibration and camera.
+# Independent config and dataset; original experiments are unchanged.
+robot_id: rakuda2
+repo_id: local/rakuda2-head-compensation
+output: datasets/rakuda2-head-compensation
+mode: hardware
+dataset_fps: 15
+inputs:
+  leader: nodes/leader_head_compensation.yaml
+controllers:
+  controller: nodes/controller_head_compensation.yaml
+robots:
+  robot: nodes/robot.yaml
+sensors:
+  camera: nodes/camera.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml

@@ -43,6 +43,51 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    From Python, `roboloom.Session` does the same and can name tasks automatically
    (docs/en/reference/python-api.md in the roboloom repository).
 
+## Lock selected leader joints and compensate torso yaw (optional)
+
+Both options are disabled by default. They have been checked with mock buses and
+controllers; check motor directions, travel, and tracking on your robot before use.
+Existing projects are not changed by a package update.
+
+In the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml`, replace `body` with:
+
+```yaml
+- group: body
+  law: free
+  joints: [torso_yaw]
+- group: fixed_head
+  law: position
+  joints: [head_yaw, head_pitch]
+```
+
+Keep the arm and trigger groups. In older files, remove these three joints from
+`hand` instead. Every joint must occur exactly once. `position` seeds the measured
+startup pose before torque enable and holds it; align these leader joints with the
+follower before launch. Locking starts at Session launch, persists through `stop`,
+and releases on `estop`, `release`, or `quit`. The motors must already be in position
+mode (3); startup checks this without changing EEPROM. Use the normal `commission`
+workflow if the modes differ. Follower `torque: false` does not disable leader locking.
+
+In `nodes/controller.yaml`, replace `couplings: []` with:
+
+```yaml
+couplings:
+  - joint: head_yaw
+    source: torso_yaw
+    scale: -1.0
+    reference: 2048
+```
+
+The controller subtracts the measured follower torso displacement from `reference`
+(the torso count facing forward) from the mapped head target. This example assumes
+matching yaw axis signs and count units. The reference is fixed, not the pose at
+alignment, so the alignment tolerance does not offset the head; align the follower
+camera heading with the leader's neck before launch. Speed and robot safety limits still apply, so limits and
+tracking lag leave camera heading errors. This is relative yaw compensation, not full
+camera stabilization. It applies to joint teleoperation, not policy outputs. Other
+robots can use their own joint names and scale. Details: docs/en/controllers/leader.md
+(Japanese: docs/ja/controllers/leader.md) in the roboloom repository.
+
 ## Gravity-compensated leader (optional)
 
 3. `calibration/leader_<side>.yaml`: set `port`, check the joint map, set `confirmed: true`.

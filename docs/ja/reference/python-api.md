@@ -12,7 +12,7 @@ roboloom の操作は，どれも Python の関数として使えます．CLI（
 | 重力補償を調整する | `roboloom tune-gravity <exp> leader right_arm --hardware` | `setup.open_tuning(...)` → `TuningSession` |
 | エピソードを録る | `roboloom record <exp> --task ... --seconds 30 --hardware` | `Session.launch(...)` → `record(...)` |
 | 方策で動かす | `roboloom infer <exp> --policy pkg:make --seconds 30 --hardware` | `Session.launch(exp, policy="pkg:make")` → `record(...)` |
-| 操作画面で続けて録る | `roboloom run <exp> --hardware` | （画面は CLI だけ） |
+| 操作画面で続けて録る | `roboloom run <exp> --hardware` | `Session.launch(...)` の状態画面と `start()`／`stop()`／`save()` |
 
 実験は，ファイルのパスでも，`.roboloom/` の下の名前（`rakuda2`，`rakuda2/experiment_gravity`）でも指定できます．
 
@@ -51,11 +51,23 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 - 実機を開く実験では，`hardware=True` が必要です．
 - `with` を抜けると，次のことをします．
   - 途中のエピソードがあれば破棄する．
+  - モーターを制御する leader があり，`operator` が設定されていれば，腕を支えて Enter を押すように求める．
   - dataflow を止める．
+  - leader は脱力し，follower はトルクと最後の目標を保持する．
 - ログは，実験ファイルの隣の `logs/<実験名>-<時刻>/` に残ります．
   - `dora.log`
   - leader のトレース
   - 場所は `s.log_dir` で分かります．
+
+### 状態画面と終了時の確認
+
+- `Session.launch(..., screen="auto")` が既定です．標準出力が端末なら，CLI と同じノードの状態表とメッセージ欄を，別スレッドで 10 Hz で更新します．
+  - `screen=False` で表示を切れます．パイプなど標準出力が端末でない場合，既定では表示しません．
+  - スクリプトの `print()` は画面の上に出ます．画面はキーを読まないので，`input()` や API 呼び出しで操作できます．CLI の `record` のようなキー操作は追加しません．
+  - 保存結果と品質の警告もメッセージ欄に出ます．
+- `operator="auto"` が既定です．標準入力が端末なら，終了前に leader の腕を支える確認を出します．腕を支えてから Enter を押してください．
+  - `operator=None`，または標準入力が端末でない場合は，この確認を出しません．`screen=False` だけでは確認は無効になりません．
+  - follower は終了後も保持を続けます．電源を切る前に，腕を支えるか安全な姿勢に下ろしてください．
 
 ### task 名の自動命名
 

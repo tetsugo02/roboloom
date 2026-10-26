@@ -10,6 +10,7 @@ from ..core.protocol import Envelope
 from ..inputs.base import InputDevice, JointInput
 from ..robots.base import Robot
 from .base import Controller
+from .coupling import JointCouplings
 
 
 class JointController(Controller):
@@ -55,6 +56,9 @@ class JointController(Controller):
         ):
             positive(cfg.get(field), f"{name}.{field}")
         self.source_joints = source.joint_names
+        self.couplings = JointCouplings(
+            cfg.get("couplings", []), robot.joint_names, name
+        )
         self.last_seq = -1
         self.last_boot: str | None = None
         self.last_target: list[float] | None = None
@@ -104,6 +108,7 @@ class JointController(Controller):
             by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
         ]
         current = positions(follower, len(self.robot.joint_names))
+        target = self.couplings.apply(target, current)
         if not self.aligned:
             diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
             worst = max(range(len(diffs)), key=diffs.__getitem__)

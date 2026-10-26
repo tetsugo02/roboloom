@@ -46,12 +46,17 @@ registers:
   shutdown:
     default: 52
 control:
-- group: hand
+- group: body
   law: free
+  # To hold at the measured startup pose, use law: position (Operating Mode 3).
+  # To lock only the head, split this into torso_yaw/free and head_yaw,head_pitch/position.
   joints:
   - torso_yaw
   - head_yaw
   - head_pitch
+- group: hand
+  law: free
+  joints:
   - r_arm_sh_pitch1
   - r_arm_sh_roll
   - r_arm_sh_pitch2
