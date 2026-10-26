@@ -300,6 +300,7 @@ def _dispatch(args: argparse.Namespace) -> None:
                 session.log_path,
                 "roboloom",
                 limp_on_quit=session.actuated,
+                held=session.held,
             ).run()
         else:
             _plain_loop(session.client, session.process)

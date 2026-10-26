@@ -250,10 +250,17 @@ class Session:
         """Inputs whose motors run control laws; they go limp when the session ends."""
         return [n for n, i in self.cfg.inputs.items() if getattr(i, "actuated", False)]
 
-    def close(self, timeout: float = 15.0) -> None:
-        """Discard an unfinished episode (the follower holds), ask the operator to support
-        any actuated leader, stop every node and wait for the dataflow to exit. The
-        follower keeps its torque and last target after the session."""
+    @property
+    def held(self) -> list[str]:
+        """Followers with torque; they keep holding after the session unless released."""
+        return [n for n, r in self.cfg.robots.items() if r.torque]
+
+    def close(self, timeout: float = 15.0, *, release: bool | None = None) -> None:
+        """Discard an unfinished episode, stop every node and wait for the dataflow to exit.
+
+        An actuated leader goes limp. The follower torque goes off when `release` is
+        true; when it is None, the operator is asked (Enter releases, `hold` keeps the
+        follower holding) and without an operator the follower keeps holding."""
         try:
             if self.alive:
                 try:
@@ -263,16 +270,11 @@ class Session:
                     pass
                 if self.screen is not None:
                     self.screen.stop()
-                if self.actuated and self.operator is not None:
-                    try:
-                        self.operator.prompt(
-                            f"Support the arms of {', '.join(self.actuated)}: it goes limp "
-                            "when the session ends (the follower keeps holding). "
-                            "Press Enter to end: "
-                        )
-                    except (KeyboardInterrupt, EOFError):
-                        pass
+                if self.operator is not None and release is None:
+                    release = self._ask_close()
                 try:
+                    if release and self.held:
+                        self.client.send("release")
                     self.client.send("quit")
                 except OSError:
                     pass
@@ -468,6 +470,27 @@ class Session:
         """Stop the robot and drop the episode in progress."""
         self.wait_report(self.send("discard"))
         self._episode = None
+
+    def _ask_close(self) -> bool:
+        """Ask the operator to support what goes limp; True releases the follower."""
+        assert self.operator is not None
+        if not (self.actuated or self.held):
+            return False
+        try:
+            if not self.held:
+                self.operator.prompt(
+                    f"Support the arms of {', '.join(self.actuated)}: it goes limp "
+                    "when the session ends. Press Enter to end: "
+                )
+                return False
+            answer = self.operator.prompt(
+                f"Support the arms of {', '.join(self.actuated + self.held)}: Enter ends "
+                f"with the follower torque off; 'hold' ends with {', '.join(self.held)} "
+                "holding: "
+            )
+        except (KeyboardInterrupt, EOFError):
+            return False  # nobody confirmed supporting the arms
+        return answer.strip().lower() != "hold"
 
     def estop(self) -> None:
         """Latch the follower in ESTOP (stays until the dataflow restarts)."""

@@ -53,9 +53,10 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 - Experiments that open real hardware require `hardware=True`.
 - Leaving the `with` block does the following:
   - Discards any in-progress episode.
-  - If an actuated leader is present and an `operator` is configured, asks you to support its arms and press Enter.
+  - If an `operator` is configured, asks you to support the arms. Enter releases the follower too; typing `hold` keeps the follower holding.
   - Stops the dataflow.
-  - The leader goes limp; the follower keeps its torque and last target.
+  - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target.
+  - To decide from a script, call `s.close(release=True)` (release) or `s.close(release=False)` (hold).
 - Logs are kept in `logs/<experiment name>-<time>/` next to the experiment file.
   - `dora.log`
   - The leader trace
@@ -67,9 +68,12 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
   - Set `screen=False` to disable the display. It is hidden by default when stdout is not a terminal, such as in a pipe.
   - Your script's `print()` output appears above the screen. The screen reads no keys, so you can use `input()` and API calls to operate the session. It does not add the keyboard controls of CLI `record`.
   - Save results and quality warnings also appear in the messages panel.
-- `operator="auto"` is the default. When stdin is a terminal, the session asks you to support the leader's arms before exiting. Support them before pressing Enter.
-  - With `operator=None`, or when stdin is not a terminal, this confirmation is skipped. Setting only `screen=False` does not disable it.
-  - The follower keeps holding after the session ends. Support its arms or lower them to a safe pose before switching off its power.
+- `operator="auto"` is the default. When stdin is a terminal, the session asks you to support the leader and follower arms before exiting.
+  - Support the arms and press Enter to end with the follower torque off as well.
+  - Type `hold` to end with the follower still holding.
+  - When the follower has `torque: false`, only the leader confirmation is shown.
+  - With `operator=None`, or when stdin is not a terminal, this confirmation is skipped and the follower keeps holding. Setting only `screen=False` does not disable it.
+  - If the follower is left holding, support its arms or lower them to a safe pose before switching off its power.
 
 ### Automatic task naming
 

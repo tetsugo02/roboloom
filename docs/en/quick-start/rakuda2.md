@@ -60,7 +60,7 @@ release
 quit
 ```
 
-At the `release` confirmation, support the follower arms. `quit` also releases the leader's torque, so support the leader arms as well before exiting. At this stage, keep the follower at `torque: false` and check the observation and recording path.
+At the `release` confirmation, support the follower arms. `quit` also releases the leader's torque, so support the leader arms as well before exiting. At the `quit` confirmation, Enter also turns the follower torque off; `hold` exits with the follower holding. At this stage, keep the follower at `torque: false` and check the observation and recording path.
 
 ## 3. Set zero points, directions, and travel for gravity compensation
 
@@ -136,7 +136,7 @@ uv run roboloom run rakuda2/experiment_gravity --hardware
 4. Stop with `stop`. `stop` holds the follower and does not turn off torque.
 5. Save with `save`, or discard with `discard`. Check the saved result's warnings for missing-data rate, valid-command rate, and control period.
 6. Collect another episode with the next `start <task>`.
-7. To finish, do `stop` → save or discard → support the arms and `release` → support the leader too and `quit`, in that order.
+7. To finish, do `stop` → save or discard → support the leader and follower arms and `quit` → Enter (the follower goes limp too), in that order. To exit with the follower holding, type `hold` at the confirmation.
 
 `estop` on a fault is latched and does not recover automatically. Operate with physical support and stop means available.
 

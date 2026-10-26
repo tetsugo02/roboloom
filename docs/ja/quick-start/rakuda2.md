@@ -60,7 +60,7 @@ release
 quit
 ```
 
-`release` の確認時はfollowerの腕を支えます．`quit` でleaderも脱力するため，leaderの腕も支えてから終了します．この段階ではfollowerの `torque: false` を維持し，観測・記録経路を確認します．
+`release` の確認時はfollowerの腕を支えます．`quit` でleaderも脱力するため，leaderの腕も支えてから終了します．`quit` の確認では，Enterでfollowerのトルクも切って終了し，`hold` でfollowerを保持したまま終了します．この段階ではfollowerの `torque: false` を維持し，観測・記録経路を確認します．
 
 ## 3. 重力補償用の零点・方向・可動域を設定
 
@@ -136,7 +136,7 @@ uv run roboloom run rakuda2/experiment_gravity --hardware
 4. `stop` で止めます．`stop` はfollowerを保持し，脱力はしません．
 5. `save` で保存，または `discard` で破棄します．保存結果の欠損率・指令の有効率・制御周期の警告を確認します．
 6. 次の `start <task>` で別エピソードを収集できます．
-7. 終了時は `stop` → 保存または破棄 → 腕を支えて `release` → leaderも支えて `quit` の順にします．
+7. 終了時は `stop` → 保存または破棄 → leaderとfollowerの腕を支えて `quit` → Enter（followerも脱力）の順にします．followerを保持したまま終える場合は，確認に `hold` と入力します．
 
 異常時の `estop` はラッチされ，自動復帰しません．物理的な支持・停止手段を使える状態で操作してください．
 

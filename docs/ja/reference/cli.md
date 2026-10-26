@@ -29,6 +29,6 @@
 | `discard` | エピソードを破棄する |
 | `release` | HOLD中のfollowerを，腕を支えた確認後に脱力する |
 | `estop` | 非常停止する |
-| `quit` | dataflowを終了する |
+| `quit` | 腕を支えた確認後にdataflowを終了する．Enterでfollowerも脱力，`hold` でfollowerは保持 |
 
 `stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../quick-start/rakuda2.md) にあります．既存の方策APIなど，leader以外の詳細は [Python API](python-api.md) を参照してください．

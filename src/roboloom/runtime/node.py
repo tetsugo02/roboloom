@@ -239,6 +239,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                 elif command in ("estop", "quit"):
                     safety.stop(estop=True)
                 elif command == "release":
+                    safety.stop()  # the operator confirmed: stop following, then let go
                     try:
                         safety.release()
                     except RuntimeError as exc:

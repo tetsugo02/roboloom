@@ -53,9 +53,10 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 - 実機を開く実験では，`hardware=True` が必要です．
 - `with` を抜けると，次のことをします．
   - 途中のエピソードがあれば破棄する．
-  - モーターを制御する leader があり，`operator` が設定されていれば，腕を支えて Enter を押すように求める．
+  - `operator` が設定されていれば，腕を支えるように求める．Enter で follower も脱力し，`hold` と入力すると follower は保持を続ける．
   - dataflow を止める．
-  - leader は脱力し，follower はトルクと最後の目標を保持する．
+  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．
+  - スクリプトから決めるときは `s.close(release=True)`（脱力）または `s.close(release=False)`（保持）を呼ぶ．
 - ログは，実験ファイルの隣の `logs/<実験名>-<時刻>/` に残ります．
   - `dora.log`
   - leader のトレース
@@ -67,9 +68,12 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
   - `screen=False` で表示を切れます．パイプなど標準出力が端末でない場合，既定では表示しません．
   - スクリプトの `print()` は画面の上に出ます．画面はキーを読まないので，`input()` や API 呼び出しで操作できます．CLI の `record` のようなキー操作は追加しません．
   - 保存結果と品質の警告もメッセージ欄に出ます．
-- `operator="auto"` が既定です．標準入力が端末なら，終了前に leader の腕を支える確認を出します．腕を支えてから Enter を押してください．
-  - `operator=None`，または標準入力が端末でない場合は，この確認を出しません．`screen=False` だけでは確認は無効になりません．
-  - follower は終了後も保持を続けます．電源を切る前に，腕を支えるか安全な姿勢に下ろしてください．
+- `operator="auto"` が既定です．標準入力が端末なら，終了前に leader と follower の腕を支える確認を出します．
+  - 腕を支えてから Enter を押すと，follower のトルクも切って終了します．
+  - `hold` と入力すると，follower は保持を続けたまま終了します．
+  - follower が `torque: false` のときは，leader の確認だけを出します．
+  - `operator=None`，または標準入力が端末でない場合は，この確認を出さず，follower は保持を続けます．`screen=False` だけでは確認は無効になりません．
+  - 保持を続けた follower は，電源を切る前に腕を支えるか安全な姿勢に下ろしてください．
 
 ### task 名の自動命名
 

@@ -218,7 +218,7 @@ uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所�
 
 実機を動かす手順は，腕を支えられる状態で行ってください．
 - テンプレートの `nodes/robot.yaml` は `torque: true` です．初回の収集前に `torque: false` へ変更し，followerを動かさずデータの経路を確かめます（leaderの制御は独立して通電します）．
-- 終了するときは `stop` → `release`（腕を支える）→ `quit` の順にします．
+- 終了するときは `stop` → 腕を支えて `quit` → Enter（followerも脱力）の順にします．followerを保持したまま終えるときは，確認に `hold` と入力します．
 
 leader の重力補償の調整（gain と hold の意味，`tune-gravity` の使い方）は，[docs/ja/reference/gravity-tuning.md](docs/ja/reference/gravity-tuning.md) を参照してください．
 

@@ -119,7 +119,8 @@ robots can use their own joint names and scale. Details: [Leader](https://tetsug
 `digit_left: nodes/digit_left.yaml` and `digit_right: nodes/digit_right.yaml` under
 `sensors`, fill their serials, and use a separate `repo_id` and `output` because the
 dataset features change. To finish an operator-screen run: `stop`, `save` or `discard`,
-support the follower and confirm `release`, then support the leader and `quit`.
+support the leader and follower arms, `quit`, then Enter (the follower goes limp
+too) or `hold` (the follower keeps holding).
 
 ## Inference
 

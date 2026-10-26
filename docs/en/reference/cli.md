@@ -29,6 +29,6 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 | `discard` | Discard the episode |
 | `release` | Turn off the torque of a follower in HOLD, after confirming the arms are supported |
 | `estop` | Emergency stop |
-| `quit` | Exit the dataflow |
+| `quit` | Exit the dataflow after confirming the arms are supported. Enter also releases the follower; `hold` keeps it holding |
 
 `stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Quick start](../quick-start/rakuda2.md). For details beyond the leader, such as the existing policy API, see [Python API](python-api.md).

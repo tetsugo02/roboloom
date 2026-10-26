@@ -161,3 +161,65 @@ def test_no_screen_or_question_without_a_terminal(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     with Session.launch(project / "experiment_camera.yaml") as s:  # pytest: not a tty
         assert s.screen is None and s.operator is None
+
+
+@pytest.mark.parametrize(("answer", "released"), [("", True), ("hold", False)])
+def test_closing_releases_the_follower_unless_the_operator_says_hold(
+    tmp_path, answer, released
+):
+    from roboloom.operator import ScriptedOperator
+
+    project = mock_project(tmp_path / ".roboloom")
+    operator = ScriptedOperator(prompts=[answer])
+    sent: list[str] = []
+    with Session.launch(
+        project / "experiment.yaml", screen=False, operator=operator
+    ) as s:
+        assert s.held == ["robot"]
+        s.wait_ready(30)
+        send = s.client.send
+        s.client.send = lambda line: (sent.append(line), send(line))[1]  # type: ignore[method-assign]
+    assert "Enter ends with the follower torque off" in operator.log[-1]
+    assert sent == (["release", "quit"] if released else ["quit"])
+
+
+def test_release_while_following_stops_then_turns_the_torque_off(tmp_path):
+    import time
+
+    project = mock_project(tmp_path / ".roboloom")
+    with Session.launch(project / "experiment.yaml", screen=False, operator=None) as s:
+        s.wait_ready(30)
+        s.start("released mid-episode")
+        s.release(confirm=True)
+        deadline = time.monotonic() + 5
+        mode = None
+        while time.monotonic() < deadline and mode != "RELEASED":
+            mode = s.status().get("robot", {}).get("fields", {}).get("mode")
+            time.sleep(0.1)
+        assert mode == "RELEASED"
+
+
+def test_live_quit_releases_the_follower_unless_hold(tmp_path):
+    from roboloom.ui.live import LiveSession
+
+    class Client:
+        def __init__(self) -> None:
+            self.sent: list[str] = []
+
+        def send(self, line: str) -> None:
+            self.sent.append(line)
+
+    for answer, expected in (("", ["release", "quit"]), ("hold", ["quit"]), ("no", [])):
+        client = Client()
+        live = LiveSession(
+            client,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            tmp_path / "dora.log",
+            "test",
+            limp_on_quit=["leader"],
+            held=["robot"],
+        )
+        live.submit("quit")
+        assert "follower torque off" in live.prompt().plain
+        live.submit(answer)
+        assert client.sent == expected

@@ -32,6 +32,10 @@ RELEASE_PROMPT = "Support the arms. Type yes to turn the follower torque off: "
 QUIT_PROMPT = (
     "Support the arms of {}: it goes limp on quit. Enter quits, other text cancels: "
 )
+QUIT_RELEASE_PROMPT = (
+    "Support the arms of {}: Enter quits with the follower torque off, "
+    "'hold' quits with the follower holding, other text cancels: "
+)
 
 
 class KeyReader:
@@ -119,6 +123,7 @@ class LiveSession:
         log_path: Path,
         title: str,
         limp_on_quit: list[str] | None = None,
+        held: list[str] | None = None,
     ):
         self.client, self.process, self.log_path, self.title = (
             client,
@@ -128,6 +133,8 @@ class LiveSession:
         )
         # actuated leaders go limp on quit: the operator supports them first
         self.limp_on_quit = limp_on_quit or []
+        # followers with torque: released on quit unless the operator answers hold
+        self.held = held or []
         self.editor = LineEditor()
         self.messages: deque[Text] = deque(maxlen=8)
         self.confirm_release = False
@@ -140,7 +147,9 @@ class LiveSession:
         label = (
             RELEASE_PROMPT
             if self.confirm_release
-            else QUIT_PROMPT.format(", ".join(self.limp_on_quit))
+            else (QUIT_RELEASE_PROMPT if self.held else QUIT_PROMPT).format(
+                ", ".join(self.limp_on_quit + self.held)
+            )
             if self.confirm_quit
             else "roboloom> "
         )
@@ -151,9 +160,15 @@ class LiveSession:
     def submit(self, line: str) -> None:
         if self.confirm_quit:
             self.confirm_quit = False
-            if line in ("", "quit"):  # Enter, or Ctrl-C again
+            release = line == "" and bool(self.held)
+            if line in ("", "quit") or (line == "hold" and self.held):
+                # Ctrl-C again quits without releasing: nobody confirmed the arms
+                if release:
+                    self.client.send("release")
                 self.client.send("quit")
-                self.messages.append(Text("> quit", style="dim"))
+                self.messages.append(
+                    Text("> release, quit" if release else "> quit", style="dim")
+                )
                 self.quitting_since = time.monotonic()
             else:
                 self.messages.append(Text("quit cancelled"))
@@ -171,7 +186,7 @@ class LiveSession:
         command, *rest = line.split()
         if command == "release":
             self.confirm_release = True
-        elif command == "quit" and self.limp_on_quit:
+        elif command == "quit" and (self.limp_on_quit or self.held):
             self.confirm_quit = True
         elif command not in ("start", "stop", "save", "discard", "estop", "quit"):
             self.messages.append(Text(f"unknown command: {command}", style="yellow"))
