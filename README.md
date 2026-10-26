@@ -172,7 +172,9 @@ src/roboloom/
   ui/           操作画面（rich Live）、状態の描画、session との受け渡し
   config.py     実験 YAML の読み込みと、ノード間の整合性検査
   probe.py      Dynamixel バスの読み取り専用の調査
-  tools.py      commission、calibrate-joints、identify-gravity、measure-travel、gravity-check、tune-gravity
+  setup/        セットアップと計測の本体（commission、calibrate-joints、measure-travel、identify-gravity、gravity-check、tune-gravity）。結果をデータで返し、操作者とのやりとりは Operator に任せる
+  operator.py   Operator（CLI は TerminalOperator、スクリプトと試験は ScriptedOperator）
+  errors.py     利用者が対処できるエラー（ConfigError、SetupError、HardwareError、Cancelled）
   project.py    roboloom init（robots/<robot>/template から .roboloom/<robot>/ を作る）
   api.py        Python から使う Experiment
 ```

@@ -11,7 +11,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from .config import load_experiment
+from .config import load_experiment, resolve_experiment
+from .errors import Cancelled, RoboloomError
 from .runtime.flow import build_flow, write_flow
 
 
@@ -136,13 +137,21 @@ def main() -> None:
             )
             cmd.add_argument("task", nargs="?", default="")
     args = parser.parse_args()
-    if getattr(args, "experiment", None):
-        from .config import resolve_experiment
+    try:
+        _dispatch(args)
+    except Cancelled as exc:
+        print(exc)
+    except RoboloomError as exc:
+        raise SystemExit(f"error: {exc}") from None
 
-        try:
-            args.experiment = str(resolve_experiment(args.experiment))
-        except FileNotFoundError as exc:
-            raise SystemExit(str(exc)) from None
+
+def _dispatch(args: argparse.Namespace) -> None:
+    from . import setup
+    from .operator import TerminalOperator
+
+    operator = TerminalOperator()
+    if getattr(args, "experiment", None):
+        args.experiment = str(resolve_experiment(args.experiment))
     if args.command == "init":
         from .project import init_project
 
@@ -154,67 +163,79 @@ def main() -> None:
         print(probe(args.port, args.ids, args.baudrate))
         return
     if args.command == "commission":
-        from .tools import commission
-
-        print(commission(args.experiment, args.node))
+        plan = setup.plan_commission(args.experiment, args.node, hardware=args.hardware)
+        if not plan.changes:
+            print(f"{args.node}: EEPROM already matches the configuration")
+            return
+        print("\n".join(plan.lines()))
+        written = setup.apply_commission(plan, operator)
+        print(f"{args.node}: wrote and read back {written} values")
         return
     if args.command == "watchdog-test":
-        from .tools import watchdog_test
-
-        print(watchdog_test(args.experiment, args.node, args.joint, args.current_mA))
+        result = setup.watchdog_test(
+            args.experiment,
+            args.node,
+            args.joint,
+            operator,
+            args.current_mA,
+            hardware=args.hardware,
+        )
+        print("\n".join(result.lines()))
         return
     if args.command == "gravity-check":
-        from .tools import gravity_check
-
-        print(
-            gravity_check(
-                args.experiment, args.node, args.group, args.poses, args.scales
-            )
+        check = setup.gravity_check(
+            args.experiment,
+            args.node,
+            args.group,
+            operator,
+            args.poses,
+            args.scales,
+            hardware=args.hardware,
         )
+        print("\n".join(check.lines()))
         return
     if args.command == "tune-gravity":
-        from .tools import tune_gravity
+        from .ui.tune import run
 
-        if not load_experiment(args.experiment).mock and not args.hardware:
-            raise SystemExit("tune-gravity on hardware torques the arm; add --hardware")
-        print(tune_gravity(args.experiment, args.node, args.group))
+        session = setup.open_tuning(
+            args.experiment, args.node, args.group, hardware=args.hardware
+        )
+        mode = "mock" if load_experiment(args.experiment).mock else "hardware"
+        try:
+            outcome = run(
+                session,
+                session.period_s,
+                f"tune-gravity  {args.node}.{args.group}  ({mode})",
+            )
+        finally:
+            session.close()
+        print(f"{outcome}: {session.path}")
         return
     if args.command == "calibrate-joints":
-        from .tools import calibrate_joints
-
-        print(calibrate_joints(args.calibration, args.joints))
+        zeros = setup.calibrate_joints(args.calibration, operator, args.joints)
+        print(
+            f"recorded zeros for {len(zeros)} joints in {args.calibration}; "
+            "check directions, then set confirmed: true"
+        )
         return
     if args.command == "measure-travel":
-        from .tools import measure_travel
-
-        print(measure_travel(args.calibration, args.out))
+        travel = setup.measure_travel(args.calibration, args.out, operator)
+        print("\n".join(travel.lines()))
         return
     if args.command == "identify-gravity":
-        from .tools import Calibration, collect_holding_currents, fit_gravity
-
-        cal = Calibration(args.calibration)
-        out = Path(args.out)
-        data = Path(args.data) if args.data else out.with_suffix(".npz")
-        if args.collect:
-            if not args.hardware:
-                raise SystemExit("--collect torques the arm; add --hardware")
-            from .tools import confirm
-
-            if not confirm(
-                f"{cal.data['port']}: output joints will hold each pose with torque on, moving {args.delta} counts."
-            ):
-                return
-            collect_holding_currents(cal, data, args.delta)
-        print(fit_gravity(cal, data, out, args.max_rms_mA))
+        fit = setup.identify_gravity(
+            args.calibration,
+            args.out,
+            operator,
+            data=args.data,
+            collect=args.collect,
+            hardware=args.hardware,
+            delta=args.delta,
+            max_rms_mA=args.max_rms_mA,
+        )
+        print("\n".join(fit.lines()))
         return
-    try:
-        cfg = load_experiment(args.experiment)
-    except (
-        ValueError,
-        TypeError,
-        FileNotFoundError,
-    ) as exc:  # configuration, not a bug
-        raise SystemExit(f"{args.experiment}: {exc}") from None
+    cfg = load_experiment(args.experiment)
     if args.command == "session":
         send_session(
             args.experiment, " ".join(x for x in (args.operation, args.task) if x)

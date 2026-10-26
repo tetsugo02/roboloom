@@ -5,6 +5,7 @@ from roboloom.config import placeholders, resolve_experiment
 from roboloom.control.device import build_laws, parse_groups
 from roboloom.control.laws import GravityComp
 from roboloom.core.resources import resolve
+from roboloom.errors import ConfigError
 from roboloom.project import init_project
 
 
@@ -15,9 +16,9 @@ def test_init_copies_the_template_once_and_ignores_raw_data(tmp_path):
     assert (project / "experiment_gravity.yaml").is_file()
     assert (project / "calibration" / "gravity_tuning_right.yaml").is_file()
     assert "*.npz" in (root / ".gitignore").read_text()
-    with pytest.raises(SystemExit, match="already exists"):
+    with pytest.raises(ConfigError, match="already exists"):
         init_project("rakuda2", root)
-    with pytest.raises(SystemExit, match="unknown robot"):
+    with pytest.raises(ConfigError, match="unknown robot"):
         init_project("nope", root)
 
 
@@ -28,7 +29,7 @@ def test_experiments_resolve_by_name_under_the_project_root(tmp_path):
     assert resolve_experiment("rakuda2/experiment_gravity", root).name == (
         "experiment_gravity.yaml"
     )
-    with pytest.raises(FileNotFoundError, match="roboloom init"):
+    with pytest.raises(ConfigError, match="roboloom init"):
         resolve_experiment("missing", root)
 
 

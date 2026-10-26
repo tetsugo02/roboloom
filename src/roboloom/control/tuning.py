@@ -43,8 +43,10 @@ class TuningSession:
         law: GravityComp,
         path: str | Path,
         motor_ids: dict[str, int] | None = None,
+        period_s: float = 1 / 60,
     ):
         self.device, self.law, self.path = device, law, Path(path).resolve()
+        self.period_s = period_s  # the leader's control period (its poll_hz)
         self.names = [device.joint_names[i] for i in law.joints]
         data = yaml.safe_load(self.path.read_text()) or {}
         self.data = data
@@ -75,6 +77,10 @@ class TuningSession:
             self.device.command(None, now)
         except RuntimeError as exc:  # runaway or watchdog: the device is already limp
             self.stopped = str(exc)
+
+    def close(self) -> None:
+        """Torque off and close the bus (unsaved changes are dropped)."""
+        self.device.close()
 
     def _apply(self) -> None:
         self.law.gain = [0.0 if k in self.off else g for k, g in enumerate(self.gain)]

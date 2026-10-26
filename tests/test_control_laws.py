@@ -382,7 +382,7 @@ def test_undriven_joint_may_fall_fast_but_not_leave_its_range():
 
 
 def test_release_trial_reports_drift_and_leaves_torque_off():
-    from roboloom import tools
+    from roboloom.setup import release_trial
 
     dev, bus = device(
         [GRAVITY, {"group": "c", "law": "free", "joints": ["c"]}],
@@ -398,9 +398,9 @@ def test_release_trial_reports_drift_and_leaves_torque_off():
         if len(ticks) > 5:
             bus.values[0] -= 10  # the arm sinks after the release
 
-    result = tools.release_trial(
-        dev, law, [1.0, 1.0], 0.1, 0.1, 0.02, sleep, lambda: None
-    )
+    trial = release_trial(dev, law, [1.0, 1.0], 0.1, 0.1, 0.02, sleep)
+    result = trial.joints
+    assert trial.stopped is None
     assert law.gain == [1.0, 1.0]
     q0, model, sent, drift, _ = result["a"]
     assert (

@@ -12,6 +12,7 @@ from importlib.resources.abc import Traversable
 from pathlib import Path
 
 from .config import PROJECT_ROOT
+from .errors import ConfigError
 
 # robot name -> package holding `template/`; a new robot adds one line
 TEMPLATES = {"rakuda2": "roboloom.robots.rakuda2"}
@@ -42,11 +43,11 @@ def _copy(source: Traversable, target: Path) -> list[Path]:
 
 def init_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
     if robot not in TEMPLATES:
-        raise SystemExit(f"unknown robot {robot!r}; available: {', '.join(TEMPLATES)}")
+        raise ConfigError(f"unknown robot {robot!r}; available: {', '.join(TEMPLATES)}")
     root = Path(root)
     target = root / robot
     if target.exists():
-        raise SystemExit(f"{target} already exists; nothing was changed")
+        raise ConfigError(f"{target} already exists; nothing was changed")
     target.mkdir(parents=True)
     files = _copy(resources.files(TEMPLATES[robot]).joinpath("template"), target)
     ignore = root / ".gitignore"

@@ -17,6 +17,7 @@ from .controllers import CONTROLLERS
 from .controllers.base import Controller
 from .core.checks import identity, positive
 from .core.source import Recordable, Source
+from .errors import ConfigError
 from .inputs import INPUTS
 from .inputs.base import InputDevice
 from .recording import features
@@ -136,7 +137,7 @@ def resolve_experiment(arg: str | Path, root: str | Path = PROJECT_ROOT) -> Path
     ):
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError(
+    raise ConfigError(
         f"{arg}: no such experiment file, nor {Path(root) / path}/experiment.yaml "
         "(create one with `roboloom init <robot>`)"
     )
@@ -145,7 +146,7 @@ def resolve_experiment(arg: str | Path, root: str | Path = PROJECT_ROOT) -> Path
 def parse_experiment(tree: dict) -> ExperimentConfig:
     missing = placeholders({k: v for k, v in tree.items() if k != "path"})
     if missing:
-        raise ValueError(
+        raise ConfigError(
             "template values still to fill (see the README next to the experiment):\n  "
             + "\n  ".join(missing)
         )
@@ -237,5 +238,14 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
     return cfg
 
 
-def load_experiment(path: str | Path) -> ExperimentConfig:
-    return parse_experiment(read_experiment(path))
+def load_experiment(
+    experiment: str | Path, root: str | Path = PROJECT_ROOT
+) -> ExperimentConfig:
+    """Load and validate an experiment file, or one named under the project root."""
+    path = resolve_experiment(experiment, root)
+    try:
+        return parse_experiment(read_experiment(path))
+    except ConfigError:
+        raise
+    except (ValueError, TypeError, KeyError, FileNotFoundError) as exc:
+        raise ConfigError(f"{path}: {exc}") from exc
