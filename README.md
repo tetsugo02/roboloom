@@ -2,11 +2,31 @@
 
 公開ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)．docs関連の変更が `main` にpushされると，GitHub Actionsが両言語をビルドしてGitHub Pagesへ公開します．初回設定とtriggerの対象は [Contribution](docs/ja/contribution.md#github-pagesへの公開) を参照してください．
 
-ドキュメントは日本語（`docs/ja/`）と英語（`docs/en/`）があり，**[Quick start](docs/ja/quick-start/installation.md)**（[English](docs/en/quick-start/installation.md)）から読めます．[Rakuda2の設定・重力補償・データ収集](docs/ja/quick-start/rakuda2.md)，[対応機器](docs/ja/robots/rakuda2.md)，[Contribution](docs/ja/contribution.md) を掲載しています．両言語のビルドは `uv run --group docs python scripts/docs.py build`，プレビューは `uv run --group docs python scripts/docs.py serve`（http://127.0.0.1:8000，右上で言語を切り替え）です．
+**[Quick start](docs/ja/quick-start/installation.md)**（[English](docs/en/quick-start/installation.md)）から，インストールと [Rakuda2の設定・重力補償・データ収集](docs/ja/quick-start/rakuda2.md) を進められます．[対応機器](docs/ja/robots/rakuda2.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution.md) にまとめています．
 
-Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．`robopy` は実行時依存ではありません．
+Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．
 
 leaderの関節固定は `control` の `law: position`，首カメラの腰yaw相殺はjoint controllerの `couplings` で設定できます（既定は無効，組み合わせは模擬検証まで）．設定例と制約は [Leader](docs/ja/controllers/leader.md)（[English](docs/en/controllers/leader.md)）にあります．
+
+## Installation
+
+自分のuvプロジェクトに，GitHubからroboloomを追加します．新規プロジェクトの場合：
+
+```bash
+uv init --python '>=3.12,<3.13' my-robot
+cd my-robot
+uv add git+https://github.com/tetsugo02/roboloom.git
+uv run roboloom --help
+```
+
+既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．記録・実機収集にはextrasを追加します．
+
+```bash
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv run roboloom init rakuda2
+```
+
+`init` はインストール済みパッケージから，自分のプロジェクト内に `.roboloom/rakuda2/` を作ります．生成した設定を編集し，CLIもPythonスクリプトも自分のプロジェクトルートから実行します．`pyproject.toml` と `uv.lock` をGitで管理し，別の環境では `uv sync --locked` で再現します．更新・commit固定の手順は [Installation](docs/ja/quick-start/installation.md) を参照してください．
 
 ## Python interface
 
@@ -30,17 +50,29 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
         s.record(lambda info: f"pick up the cup #{info.index}", seconds=20)
 ```
 
-`Experiment` は，バス，センサー，controller を呼び出し側のスレッドで動かします．
+`Experiment` は，バス，センサー，controller を呼び出し側のスレッドで動かします．以下はデバイスもリポジトリ内のサンプルファイルも使わない模擬例です．記録用extraを追加し，Python例を自分の `main.py` に保存して実行します．
 
 ```bash
-uv sync --extra record
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record
 uv run python main.py
 ```
 
 ```python
 from roboloom import Experiment
+from roboloom.drivers.mock import MockBus
 
-with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
+with Experiment.from_components(
+    robot_id="my-mock",
+    robot=MockBus(dimension=2),
+    joint_names=["j1", "j2"],
+    limits=[
+        {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+        {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+    ],
+    controller=lambda obs: [2048, 2048],
+    output="datasets/my-mock",
+    repo_id="local/my-mock",
+) as experiment:
     experiment.start_episode("handover")
     experiment.run(3.0)
     experiment.stop_episode()
@@ -57,23 +89,7 @@ with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
 
 `Experiment.from_components(...)` では，任意の関節数と名前，ロボットバス，controller 関数，センサー読み取り関数を渡せます．controller または `step(policy=...)` は `obs` を受け取り，次の関節目標値を返します．センサー関数は `Sample(value, capture_ns)` または `None` を返します．ロボットバスは `read_positions`，`write_positions`，`enable_torque`，`close` を実装します．観測は `obs["state"]` と各センサー名で渡されます．`step()` の指令は必ず robot 側の期限・次元・有限値・関節範囲・変化量検査を通ります．
 
-```python
-from roboloom import Experiment
-from roboloom.drivers.mock import MockBus
-
-experiment = Experiment.from_components(
-    robot_id="my_robot",
-    robot=MockBus(dimension=2),
-    joint_names=["j1", "j2"],
-    limits=[
-        {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
-        {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
-    ],
-    controller=lambda obs: [2048, 2048],
-    output="datasets/my_robot",
-    repo_id="local/my_robot",
-)
-```
+この模擬例の関節範囲や速度を実機の安全値として使わないでください．
 
 `from_yaml` について：
 - 実験ファイルのパスでも，`.roboloom/` の下の名前でも指定できます．
@@ -86,11 +102,13 @@ experiment = Experiment.from_components(
 
 ## dora dataflow
 
-実験 YAML はノード YAML を役割ごと（`inputs`，`controllers`，`robots`，`sensors`）に名前付きで参照し，`recorder` と `session` を加えます．各ノードの `type` で実装を選びます．ノード名がそのまま dora のノード ID と LeRobot の feature 名になります．模擬構成は Rakuda leader 1台，joint controller 1個，follower 1台，センサー4個の9ノードです．leader と follower の Dynamixel バスはそれぞれのノードだけが開きます．`validate` は実機に接続しません．
+実験 YAML はノード YAML を役割ごと（`inputs`，`controllers`，`robots`，`sensors`）に名前付きで参照し，`recorder` と `session` を加えます．各ノードの `type` で実装を選びます．ノード名がそのまま dora のノード ID と LeRobot の feature 名になります．leader と follower の Dynamixel バスはそれぞれのノードだけが開きます．`validate` は実機に接続しません．
+
+以下は `init` で生成した設定を使う実機の例です．先に [Rakuda2 Quick start](docs/ja/quick-start/rakuda2.md) に従って `SET_...` を埋め，EEPROM・安全範囲・停止動作を確認します．初回はfollowerの `torque: false` で経路を確認し，leaderを含めて腕を支えられる状態で行います．
 
 ```bash
-uv run roboloom validate examples/mock/experiment.yaml
-uv run roboloom run examples/mock/experiment.yaml
+uv run roboloom validate rakuda2/experiment_camera
+uv run roboloom run rakuda2/experiment_camera --hardware
 ```
 
 `run` を端末で実行すると，画面の上部に全ノードの状態が固定表示されます．
@@ -110,12 +128,12 @@ uv run roboloom run examples/mock/experiment.yaml
 - `start <task>`，`stop`，`save`，`discard`，`estop`，`quit`
 - `release`：follower のトルクを切る．HOLD 中だけ受け付け，CLI が「腕を支えて yes」と確認する．
 
-別端末からは `uv run roboloom session examples/mock/experiment.yaml start handover` の形でも操作できます．
+別端末からは `uv run roboloom session rakuda2/experiment_camera start handover` の形でも操作できます．
 
 決まった長さのエピソードを録って終わるとき（`--episodes` で回数を指定，既定 1）：
 
 ```bash
-uv run roboloom record examples/mock/experiment.yaml --task handover --seconds 10
+uv run roboloom record rakuda2/experiment_camera --task handover --seconds 10 --hardware
 ```
 
 - 動作：
@@ -142,7 +160,7 @@ EEPROM について：
 
 機体固有の関節限界，速度上限，ポート，機器 ID は実験 YAML に明示してください．模擬構成の値を実機用の安全値として流用しないでください．
 
-全ての関節値は，現行 robopy に合わせた **Dynamixel の生の位置カウント**です．電流は mA で扱い，モーターごとの単位変換はドライバが行います．
+全ての関節値は **Dynamixel の生の位置カウント**です．電流は mA で扱い，モーターごとの単位変換はドライバが行います．
 
 follower の安全判定：
 
@@ -196,7 +214,7 @@ uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所�
 - 埋める手順は，`.roboloom/rakuda2/README.md` にあります．probe，commission，identify-gravity，measure-travel，tune-gravity の順です．
 - 実験は，`.roboloom` からの名前で指定できます（例：`roboloom run rakuda2/experiment_gravity --hardware`）．ファイルのパスでも指定できます．
 - YAML（設定，重力モデル，可動域，調整値）は git に入れます．測定の生データ（`*.npz`），ログ，データセットは `.gitignore` で除きます．ログは，実験ファイルの隣の `logs/` に置かれます．
-- このリポジトリの `.roboloom/rakuda2/` は，研究室の機体の設定です．
+- 自分のプロジェクトの `.roboloom/rakuda2/` に，使用する機体の設定を管理します．
 
 実機を動かす手順は，腕を支えられる状態で行ってください．
 - テンプレートの `nodes/robot.yaml` は `torque: true` です．初回の収集前に `torque: false` へ変更し，followerを動かさずデータの経路を確かめます（leaderの制御は独立して通電します）．

@@ -2,6 +2,8 @@
 
 roboloom の操作は，どれも Python の関数として使えます．CLI（`roboloom ...`）は，その関数を呼んで結果を表示するだけの薄い層です．
 
+[インストール](../quick-start/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．実験や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
+
 | やること | CLI | Python |
 | --- | --- | --- |
 | プロジェクトを作る | `roboloom init rakuda2` | `roboloom.init_project("rakuda2")` |
@@ -251,12 +253,24 @@ finally:
   - モーターを制御する leader（トリガーのばね，重力補償）を使う実験では，`from_yaml` を拒否します．
   - 方策の controller を使う実験でも，`from_yaml` を拒否します．
 
-模擬構成では，次のように呼び出します．`record` extraが必要です．
+デバイスやリポジトリ内のサンプルファイルを使わない模擬例です．`record` extraが必要です．この例の関節範囲・速度を実機へ流用しないでください．
 
 ```python
 from roboloom import Experiment
+from roboloom.drivers.mock import MockBus
 
-with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
+with Experiment.from_components(
+    robot_id="my-mock",
+    robot=MockBus(dimension=2),
+    joint_names=["j1", "j2"],
+    limits=[
+        {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+        {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+    ],
+    controller=lambda obs: [2048, 2048],
+    output="datasets/my-mock",
+    repo_id="local/my-mock",
+) as experiment:
     experiment.start_episode("handover")
     experiment.run(3.0)
     experiment.stop_episode()

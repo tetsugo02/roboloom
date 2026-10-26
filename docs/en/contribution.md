@@ -2,9 +2,11 @@
 
 ## Development environment and checks
 
-Use Python 3.12 and uv, and run commands from the repository root.
+For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git` in [Installation](quick-start/installation.md). The following is for developers changing roboloom itself or its docs. Use Python 3.12 and uv, clone the repository, and run commands from its root.
 
 ```bash
+git clone https://github.com/tetsugo02/roboloom.git
+cd roboloom
 uv sync --extra test --group dev --group docs
 uv run ruff format .
 uv run ruff check .
@@ -13,6 +15,8 @@ uv run pyright
 uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
+
+Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/experiment.yaml` and `uv run roboloom run examples/mock/experiment.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
 
 Do not include formatting changes unrelated to your change. Report mock tests, real-data checks, and hardware verification separately.
 

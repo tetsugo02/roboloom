@@ -2,9 +2,11 @@
 
 ## 開発環境とチェック
 
-Python 3.12とuvを使い，リポジトリルートで実行します．
+通常利用は [インストール](quick-start/installation.md) の `uv add git+https://github.com/tetsugo02/roboloom.git` を使います．以下はroboloom本体やdocsを変更する開発者向けです．Python 3.12とuvを使い，リポジトリをcloneしてそのルートで実行します．
 
 ```bash
+git clone https://github.com/tetsugo02/roboloom.git
+cd roboloom
 uv sync --extra test --group dev --group docs
 uv run ruff format .
 uv run ruff check .
@@ -13,6 +15,8 @@ uv run pyright
 uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
+
+checkout内の模擬dataflowは `uv run roboloom validate examples/mock/experiment.yaml` と `uv run roboloom run examples/mock/experiment.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
 変更と無関係な整形差分は含めないでください．模擬試験・実データ・実機検証は区別して報告します．
 

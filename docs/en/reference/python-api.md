@@ -2,6 +2,8 @@
 
 Every roboloom operation is available as a Python function. The CLI (`roboloom ...`) is only a thin layer that calls those functions and prints the result.
 
+Add roboloom to your own uv project following [Installation](../quick-start/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Experiment and `.roboloom/` paths are relative to your project root.
+
 | Task | CLI | Python |
 | --- | --- | --- |
 | Create a project | `roboloom init rakuda2` | `roboloom.init_project("rakuda2")` |
@@ -251,12 +253,24 @@ finally:
   - `from_yaml` rejects experiments that use a motor-controlling leader (trigger spring, gravity compensation).
   - `from_yaml` also rejects experiments that use a policy controller.
 
-For a mock configuration, call it as follows. The `record` extra is required.
+This mock example uses no devices or sample files from the repository. The `record` extra is required. Do not reuse its joint ranges or speeds on hardware.
 
 ```python
 from roboloom import Experiment
+from roboloom.drivers.mock import MockBus
 
-with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
+with Experiment.from_components(
+    robot_id="my-mock",
+    robot=MockBus(dimension=2),
+    joint_names=["j1", "j2"],
+    limits=[
+        {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+        {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+    ],
+    controller=lambda obs: [2048, 2048],
+    output="datasets/my-mock",
+    repo_id="local/my-mock",
+) as experiment:
     experiment.start_episode("handover")
     experiment.run(3.0)
     experiment.stop_episode()

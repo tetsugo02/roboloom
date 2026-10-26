@@ -5,8 +5,23 @@ these files; values still to fill are `SET_...` and every command refuses to run
 they are set. Commit the YAML files; `.roboloom/.gitignore` keeps out the raw
 measurements (`*.npz`), logs and datasets.
 
-The repository's `docs/en/quick-start/rakuda2.md` (Japanese: `docs/ja/...`) walks through setup, gravity compensation,
-and teleoperation recording. Sensor/controller combinations are in `docs/en/robots/rakuda2.md`.
+## Installation and project directory
+
+Run commands from your own uv project root, which contains `pyproject.toml` and
+`.roboloom/`. Set `project.requires-python` to `">=3.12,<3.13"` and add roboloom from GitHub:
+
+```bash
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv run roboloom --help
+```
+
+This README and the robot configuration are copied from the installed package by
+`uv run roboloom init rakuda2`. Package updates do not overwrite existing configuration.
+
+The [Rakuda2 Quick start](https://tetsugo02.github.io/roboloom/en/quick-start/rakuda2/)
+([日本語](https://tetsugo02.github.io/roboloom/ja/quick-start/rakuda2/)) walks through setup,
+gravity compensation, and teleoperation recording. Sensor/controller combinations are in
+[Rakuda2](https://tetsugo02.github.io/roboloom/en/robots/rakuda2/).
 Before the first run, change `nodes/robot.yaml` from its default `torque: true` to
 `torque: false` to check the recording path without moving the follower. This does not
 disable the leader's trigger or gravity-compensation motors. Support both arms at startup
@@ -41,7 +56,7 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    (operator screen, many episodes), or one fixed-length episode:
    `uv run roboloom record rakuda2/experiment_camera --task "pick up the cup" --seconds 30 --hardware`.
    From Python, `roboloom.Session` does the same and can name tasks automatically
-   (docs/en/reference/python-api.md in the roboloom repository).
+   ([Python API](https://tetsugo02.github.io/roboloom/en/reference/python-api/)).
 
 ## Lock selected leader joints and compensate torso yaw (optional)
 
@@ -85,8 +100,8 @@ alignment, so the alignment tolerance does not offset the head; align the follow
 camera heading with the leader's neck before launch. Speed and robot safety limits still apply, so limits and
 tracking lag leave camera heading errors. This is relative yaw compensation, not full
 camera stabilization. It applies to joint teleoperation, not policy outputs. Other
-robots can use their own joint names and scale. Details: docs/en/controllers/leader.md
-(Japanese: docs/ja/controllers/leader.md) in the roboloom repository.
+robots can use their own joint names and scale. Details: [Leader](https://tetsugo02.github.io/roboloom/en/controllers/leader/)
+([日本語](https://tetsugo02.github.io/roboloom/ja/controllers/leader/)).
 
 ## Gravity-compensated leader (optional)
 
@@ -98,7 +113,7 @@ robots can use their own joint names and scale. Details: docs/en/controllers/lea
    (current mode and low Current Limits, EEPROM). Back to the plain leader: commission `rakuda2/experiment_camera`.
 7. `uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware`, then `left_arm`:
    joint by joint, set how much weight is removed (gain) and how hard a push must be before
-   the arm moves (hold). What the numbers mean: docs/en/reference/gravity-tuning.md in the roboloom repository.
+   the arm moves (hold). What the numbers mean: [Gravity tuning](https://tetsugo02.github.io/roboloom/en/reference/gravity-tuning/).
 
 `experiment_gravity.yaml` includes RealSense only. To record DIGIT as well, add
 `digit_left: nodes/digit_left.yaml` and `digit_right: nodes/digit_right.yaml` under
