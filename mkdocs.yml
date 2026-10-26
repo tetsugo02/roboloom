@@ -3,8 +3,8 @@ INHERIT: docs/base.yml
 site_description: Rakuda2 の teleoperation とデータ収集
 docs_dir: docs/ja
 site_dir: site/ja
-# The language switcher rewrites this host to the one serving the site.
-site_url: http://127.0.0.1:8000/ja/
+# Canonical public URL; the serve commands also support local previews.
+site_url: https://tetsugo02.github.io/roboloom/ja/
 theme:
   language: ja
 nav:

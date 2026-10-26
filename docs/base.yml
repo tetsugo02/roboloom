@@ -1,6 +1,9 @@
 # Settings shared by every language. Each language's config (mkdocs.yml, mkdocs.en.yml)
 # INHERITs this file and sets its own docs_dir, site_dir, site_url, language and nav.
 site_name: roboloom
+site_author: tetsugo
+repo_name: tetsugo02/roboloom
+repo_url: https://github.com/tetsugo02/roboloom
 theme:
   name: material
   custom_dir: docs/overrides

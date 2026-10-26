@@ -7,6 +7,8 @@ name = "roboloom"
 version = "0.1.0"
 description = "Dora based Rakuda teleoperation and LeRobot recording"
 readme = "README.md"
+authors = [{ name = "tetsugo", email = "tetsugou2002@gmail.com" }]
+keywords = ["robotics", "teleoperation", "data-collection", "lerobot", "dora"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "dora-rs==1.0.1",
@@ -16,6 +18,12 @@ dependencies = [
     "dynamixel-sdk>=3.7,<4",
     "rich>=13,<15",
 ]
+
+[project.urls]
+Homepage = "https://github.com/tetsugo02/roboloom"
+Documentation = "https://tetsugo02.github.io/roboloom/"
+Repository = "https://github.com/tetsugo02/roboloom"
+Issues = "https://github.com/tetsugo02/roboloom/issues"
 
 [project.optional-dependencies]
 record = ["lerobot[dataset]==0.6.1"]

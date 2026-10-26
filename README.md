@@ -1,5 +1,7 @@
 # roboloom
 
+公開ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)．docs関連の変更が `main` にpushされると，GitHub Actionsが両言語をビルドしてGitHub Pagesへ公開します．初回設定とtriggerの対象は [Contribution](docs/ja/contribution.md#github-pagesへの公開) を参照してください．
+
 ドキュメントは日本語（`docs/ja/`）と英語（`docs/en/`）があり，**[Quick start](docs/ja/quick-start/installation.md)**（[English](docs/en/quick-start/installation.md)）から読めます．[Rakuda2の設定・重力補償・データ収集](docs/ja/quick-start/rakuda2.md)，[対応機器](docs/ja/robots/rakuda2.md)，[Contribution](docs/ja/contribution.md) を掲載しています．両言語のビルドは `uv run --group docs python scripts/docs.py build`，プレビューは `uv run --group docs python scripts/docs.py serve`（http://127.0.0.1:8000，右上で言語を切り替え）です．
 
 Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．`robopy` は実行時依存ではありません．
