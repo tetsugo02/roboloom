@@ -21,6 +21,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -29,8 +30,10 @@ from typing import Self
 
 from ..config import ExperimentConfig, load_experiment
 from ..errors import ConfigError, HardwareError, RoboloomError
+from ..operator import Operator
 from ..recording.metrics import assess
 from ..ui.client import SessionClient
+from ..ui.screen import SessionScreen, wanted
 from .flow import write_flow
 
 
@@ -122,6 +125,12 @@ class Session:
         self._recorded: list[str] = []
         self._episode: str | None = None  # task of the episode in progress
         self._saved = 0  # dataset episodes after this session's last save
+        self._lock = threading.RLock()  # the screen thread reads reports too
+        self._listeners: list[Callable[[dict], None]] = []
+        self.screen: SessionScreen | None = None
+        self.operator: Operator | None = (
+            None  # asked before an actuated leader goes limp
+        )
 
     # -- lifecycle --------------------------------------------------------------
 
@@ -135,10 +144,19 @@ class Session:
         policy_kwargs: dict | None = None,
         log_dir: str | Path | None = None,
         timeout: float = 60.0,
+        screen: bool | str = "auto",
+        operator: Operator | None | str = "auto",
     ) -> Session:
         """Validate and start the dataflow; returns once every node reports status.
-        Real devices open only with `hardware=True`. `policy` ("module:callable") and
-        `policy_kwargs` replace the policy of a `type: policy` controller."""
+
+        - Real devices open only with `hardware=True`.
+        - `policy` ("module:callable") and `policy_kwargs` replace the policy of a
+          `type: policy` controller.
+        - `screen`: the node-status screen, drawn on a thread ("auto": when stdout is
+          a terminal; see `roboloom.ui.screen`).
+        - `operator`: asked to support the arms before closing makes an actuated leader
+          go limp ("auto": a TerminalOperator when stdin is a terminal; None: no question).
+        """
         cfg = (
             experiment
             if isinstance(experiment, ExperimentConfig)
@@ -202,7 +220,19 @@ class Session:
         session = cls(
             cfg, process, SessionClient(fifo, report, status), logs, workdir, fifo
         )
+        if operator == "auto":
+            import sys
+
+            from ..operator import TerminalOperator
+
+            operator = TerminalOperator() if sys.stdin.isatty() else None
+        session.operator = operator if not isinstance(operator, str) else None
         try:
+            if wanted(screen):
+                session.screen = SessionScreen(
+                    session, f"roboloom  {Path(cfg.path).parent.name}"
+                )
+                session.screen.start()
             session._wait_nodes(timeout)
         except BaseException:
             session.close()
@@ -213,15 +243,36 @@ class Session:
     def alive(self) -> bool:
         return self.process.poll() is None
 
+    @property
+    def actuated(self) -> list[str]:
+        """Inputs whose motors run control laws; they go limp when the session ends."""
+        return [n for n, i in self.cfg.inputs.items() if getattr(i, "actuated", False)]
+
     def close(self, timeout: float = 15.0) -> None:
-        """Discard an unfinished episode, stop every node and wait for the dataflow to exit."""
+        """Discard an unfinished episode (the follower holds), ask the operator to support
+        any actuated leader, stop every node and wait for the dataflow to exit. The
+        follower keeps its torque and last target after the session."""
         try:
             if self.alive:
                 try:
                     if self._episode is not None:
                         self.discard()
-                    self.client.send("quit")
                 except (OSError, RoboloomError):
+                    pass
+                if self.screen is not None:
+                    self.screen.stop()
+                if self.actuated and self.operator is not None:
+                    try:
+                        self.operator.prompt(
+                            f"Support the arms of {', '.join(self.actuated)}: it goes limp "
+                            "when the session ends (the follower keeps holding). "
+                            "Press Enter to end: "
+                        )
+                    except (KeyboardInterrupt, EOFError):
+                        pass
+                try:
+                    self.client.send("quit")
+                except OSError:
                     pass
                 try:
                     self.process.wait(timeout=timeout)
@@ -233,6 +284,8 @@ class Session:
                         os.killpg(self.process.pid, signal.SIGKILL)
                         self.process.wait()
         finally:
+            if self.screen is not None:
+                self.screen.stop()
             self.fifo.unlink(missing_ok=True)
             self._workdir.cleanup()
 
@@ -257,12 +310,30 @@ class Session:
 
     def reports(self) -> list[dict]:
         """Reports not yet returned by a wait (robot mode changes, warnings, ...)."""
-        self._pull()
-        out, self._reports = self._reports, []
+        with self._lock:
+            self.poll()
+            out, self._reports = self._reports, []
         return out
 
-    def _pull(self) -> None:
-        self._reports += self.client.new_reports()
+    def listen(self, listener: Callable[[dict], None]) -> None:
+        """Call `listener` with every report and session note (the screen uses this)."""
+        self._listeners.append(listener)
+
+    def poll(self) -> None:
+        """Read new reports from the dataflow; safe from any thread."""
+        with self._lock:
+            new = self.client.new_reports()
+            self._reports += new
+        for report in new:
+            self._tell(report)
+
+    def note(self, text: str, level: str = "info") -> None:
+        """A message from this side (e.g. quality warnings) for the listeners."""
+        self._tell({"note": text, "level": level})
+
+    def _tell(self, item: dict) -> None:
+        for listener in self._listeners:
+            listener(item)
 
     def node_errors(self) -> list[str]:
         """Error lines of failed nodes in dora.log (a node can die while dora keeps running)."""
@@ -335,16 +406,18 @@ class Session:
         """The report answering command `ident`; raises SessionError if it failed."""
         deadline = time.monotonic() + timeout
         while True:
-            self._pull()
-            for k, report in enumerate(self._reports):
-                if report.get("id") == ident:
-                    del self._reports[k]
-                    if "warning" in report or "error" in report:
-                        raise SessionError(
-                            f"{report.get('command')}: "
-                            f"{report.get('warning') or report.get('error')}"
-                        )
-                    return report
+            self.poll()
+            with self._lock:
+                found = next((r for r in self._reports if r.get("id") == ident), None)
+                if found is not None:
+                    self._reports.remove(found)
+            if found is not None:
+                if "warning" in found or "error" in found:
+                    raise SessionError(
+                        f"{found.get('command')}: "
+                        f"{found.get('warning') or found.get('error')}"
+                    )
+                return found
             self._check_alive()
             if time.monotonic() > deadline:
                 raise SessionError(f"no answer to command {ident} within {timeout:g} s")
@@ -377,7 +450,7 @@ class Session:
         self._recorded.append(task)
         self._saved = int(report.get("episodes", 0))
         metrics = report.get("metrics", {})
-        return EpisodeResult(
+        result = EpisodeResult(
             task,
             True,
             int(report.get("saved_frames", 0)),
@@ -385,6 +458,9 @@ class Session:
             metrics,
             assess(metrics, self.cfg.quality),
         )
+        for warning in result.warnings:
+            self.note(f"episode {result.index} quality: {warning}", "warn")
+        return result
 
     def discard(self) -> None:
         """Stop the robot and drop the episode in progress."""

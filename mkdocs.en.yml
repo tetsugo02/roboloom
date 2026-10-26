@@ -1,0 +1,30 @@
+# English documentation. Japanese: mkdocs.yml. Build both: uv run --group docs python scripts/docs.py build
+INHERIT: docs/base.yml
+site_description: Teleoperation and data collection for Rakuda2
+docs_dir: docs/en
+site_dir: site/en
+# The language switcher rewrites this host to the one serving the site.
+site_url: http://127.0.0.1:8000/en/
+theme:
+  language: en
+nav:
+  - Home: index.md
+  - Quick start:
+      - Installation: quick-start/installation.md
+      - Rakuda2: quick-start/rakuda2.md
+  - Robots:
+      - Overview: robots/index.md
+      - Rakuda2: robots/rakuda2.md
+  - Sensors:
+      - Overview: sensors/index.md
+      - RealSense: sensors/realsense.md
+      - DIGIT: sensors/digit.md
+  - Controllers:
+      - Overview: controllers/index.md
+      - Leader: controllers/leader.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - CLI: reference/cli.md
+      - Python API: reference/python-api.md
+      - Gravity tuning: reference/gravity-tuning.md
+  - Contribution: contribution.md

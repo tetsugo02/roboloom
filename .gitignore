@@ -13,3 +13,7 @@ datasets/
 .codegraph/
 logs/
 *.npz
+
+# Documentation build output
+site/
+.cache/

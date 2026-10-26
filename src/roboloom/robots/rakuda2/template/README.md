@@ -5,6 +5,13 @@ these files; values still to fill are `SET_...` and every command refuses to run
 they are set. Commit the YAML files; `.roboloom/.gitignore` keeps out the raw
 measurements (`*.npz`), logs and datasets.
 
+The repository's `docs/en/quick-start/rakuda2.md` (Japanese: `docs/ja/...`) walks through setup, gravity compensation,
+and teleoperation recording. Sensor/controller combinations are in `docs/en/robots/rakuda2.md`.
+Before the first run, change `nodes/robot.yaml` from its default `torque: true` to
+`torque: false` to check the recording path without moving the follower. This does not
+disable the leader's trigger or gravity-compensation motors. Support both arms at startup
+and shutdown. Set `torque: true` only after validating the follower's limits and stop behavior.
+
 | file | what | filled by |
 | --- | --- | --- |
 | `experiment.yaml` | leader teleop + RealSense + 2 DIGIT | — |
@@ -27,14 +34,14 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    `ls /dev/serial/by-id/` gives the two U2D2 ports (`SET_FOLLOWER_PORT`, `SET_LEADER_PORT`).
    `uv run roboloom probe <port>` prints each motor's EEPROM; copy per-joint `homing_offset`
    values that are not 0 into `registers.homing_offset` of `robot.yaml` and `leader*.yaml`
-   (startup refuses to run on any mismatch and lists them). Set the FTDI latency timer to
-   1 ms (`echo 1 | sudo tee /sys/bus/usb-serial/devices/ttyUSB*/latency_timer`). `rs-enumerate-devices` and the DIGIT labels give the
+   (startup refuses to run on any mismatch and lists them). Check the FTDI latency timer;
+   if it needs system configuration, ask the machine administrator. `rs-enumerate-devices` and the DIGIT labels give the
    sensor serials.
 2. `uv run roboloom validate rakuda2`, then `uv run roboloom run rakuda2/experiment_camera --hardware`
    (operator screen, many episodes), or one fixed-length episode:
    `uv run roboloom record rakuda2/experiment_camera --task "pick up the cup" --seconds 30 --hardware`.
    From Python, `roboloom.Session` does the same and can name tasks automatically
-   (docs/python-api.md in the roboloom repository).
+   (docs/en/reference/python-api.md in the roboloom repository).
 
 ## Gravity-compensated leader (optional)
 
@@ -46,7 +53,13 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    (current mode and low Current Limits, EEPROM). Back to the plain leader: commission `rakuda2/experiment_camera`.
 7. `uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware`, then `left_arm`:
    joint by joint, set how much weight is removed (gain) and how hard a push must be before
-   the arm moves (hold). What the numbers mean: docs/gravity-tuning.md in the roboloom repository.
+   the arm moves (hold). What the numbers mean: docs/en/reference/gravity-tuning.md in the roboloom repository.
+
+`experiment_gravity.yaml` includes RealSense only. To record DIGIT as well, add
+`digit_left: nodes/digit_left.yaml` and `digit_right: nodes/digit_right.yaml` under
+`sensors`, fill their serials, and use a separate `repo_id` and `output` because the
+dataset features change. To finish an operator-screen run: `stop`, `save` or `discard`,
+support the follower and confirm `release`, then support the leader and `quit`.
 
 ## Inference
 

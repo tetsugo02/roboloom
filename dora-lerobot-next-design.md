@@ -174,7 +174,7 @@ extras はインストールする機器を選ぶためのものであり，全�
 
 ## 11．YAM 実装から取り入れる点
 
-YAM（双腕 YAM アームのテレオペ，収集，MolmoAct 評価の実装）の安全ガードと，方策出力を滑らかに送る工夫を [YAM 実装の分析](docs/yam-safety-and-smoothness.md) にまとめた．複数の機体に対応するため，YAM の工夫は汎用の契約と機体能力に分けて取り入れる．YAM の数値と，DM モーター固有の機能はそのまま移さない．
+YAM（双腕 YAM アームのテレオペ，収集，MolmoAct 評価の実装）の安全ガードと，方策出力を滑らかに送る工夫を [YAM 実装の分析](docs/ja/yam-safety-and-smoothness.md) にまとめた．複数の機体に対応するため，YAM の工夫は汎用の契約と機体能力に分けて取り入れる．YAM の数値と，DM モーター固有の機能はそのまま移さない．
 
 - **機体能力の申告**：`Robot` に能力（通信ウォッチドッグ，解放手段，障害時の安全状態，エラーコード，電流・温度，オンボード PD，運動学モデル）を宣言させる．robot ノードは起動時に申告と実機の値を照合する．安全に必要な能力がなければ，起動を拒否するか，明示した代わりの動作を選ぶ．
 - **安全判定の二段階化**：§5 の最終判定を，最後に送った値を基準にした変化量の soft clamp（送って記録する）と，NaN・期限・範囲・大きな飛びの hard reject（HOLD または FAULT）に分ける．上限は tick あたりではなく物理量で持つ．（2026-10-23 実装：`max_speed`，`max_jump`，`action.clamped`）
@@ -186,7 +186,7 @@ YAM（双腕 YAM アームのテレオペ，収集，MolmoAct 評価の実装）
 
 ## 参考資料
 
-- YAM：`/home/tetsugo_local/workspace/YAM`（HEAD `839fb55`）．分析は [docs/yam-safety-and-smoothness.md](docs/yam-safety-and-smoothness.md)．
+- YAM：`/home/tetsugo_local/workspace/YAM`（HEAD `839fb55`）．分析は [docs/ja/yam-safety-and-smoothness.md](docs/ja/yam-safety-and-smoothness.md)．
 - 現行 robopy：`src/robopy/robots/rakuda/rakuda_robot.py`，`src/robopy/robots/common/robot.py`，`src/robopy/robots/so101/so101_spacemouse.py`，`src/robopy/utils/worker/rakuda_save_worker.py`，`pyproject.toml`．
 - dora-rs：[v1.0.1 リリース](https://github.com/dora-rs/dora/releases/tag/v1.0.1)，[Python API](https://dora-rs.ai/dora/languages/python)，[dataflow とキュー](https://dora-rs.ai/dora/concepts/dataflow-yaml)，[CLI の PyPI 配布](https://pypi.org/project/dora-rs-cli/)，[Python API の PyPI 配布](https://pypi.org/project/dora-rs/)．
 - LeRobot：[公開版の一覧](https://pypi.org/project/lerobot/)，[LeRobotDataset API](https://huggingface.co/docs/lerobot/main/api/datasets)，[公式記録ループ](https://github.com/huggingface/lerobot/blob/main/src/lerobot/scripts/lerobot_record.py)．後二者は `main` の資料であり，実装時には固定版と照合する．

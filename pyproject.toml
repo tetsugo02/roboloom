@@ -47,6 +47,7 @@ pythonVersion = "3.12"
 typeCheckingMode = "standard"
 
 [dependency-groups]
+docs = ["zensical>=0.0.72,<0.1"]
 dev = [
     "mypy>=2.3.1",
     "pyright>=1.1.414",

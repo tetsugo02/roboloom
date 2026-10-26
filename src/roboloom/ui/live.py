@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import queue
+import select
 import signal
 import subprocess
 import sys
@@ -28,6 +29,9 @@ from .render import describe_report, render
 
 ALERT_WORDS = ("ERROR", "Error", "Traceback", "panicked", "exceeds maximum")
 RELEASE_PROMPT = "Support the arms. Type yes to turn the follower torque off: "
+QUIT_PROMPT = (
+    "Support the arms of {}: it goes limp on quit. Enter quits, other text cancels: "
+)
 
 
 class KeyReader:
@@ -38,15 +42,21 @@ class KeyReader:
         self.keys: queue.Queue[str] = queue.Queue()
         self.saved: list | None = None
         self.stop = threading.Event()
+        self.thread: threading.Thread | None = None
 
     def __enter__(self) -> Self:
         self.saved = termios.tcgetattr(self.fd)
         tty.setcbreak(self.fd)
-        threading.Thread(target=self._run, daemon=True, name="keys").start()
+        self.thread = threading.Thread(target=self._run, daemon=True, name="keys")
+        self.thread.start()
         return self
 
     def _run(self) -> None:
         while not self.stop.is_set():
+            # poll, so the thread ends with the reader instead of eating the next key
+            # (e.g. the Enter of a prompt after the screen)
+            if not select.select([self.fd], [], [], 0.1)[0]:
+                continue
             data = os.read(self.fd, 64)
             if not data:
                 self.keys.put("\x04")
@@ -56,6 +66,8 @@ class KeyReader:
 
     def __exit__(self, *_) -> None:
         self.stop.set()
+        if self.thread is not None:
+            self.thread.join(timeout=1)
         if self.saved is not None:
             termios.tcsetattr(self.fd, termios.TCSADRAIN, self.saved)
 
@@ -106,6 +118,7 @@ class LiveSession:
         process: subprocess.Popen,
         log_path: Path,
         title: str,
+        limp_on_quit: list[str] | None = None,
     ):
         self.client, self.process, self.log_path, self.title = (
             client,
@@ -113,19 +126,38 @@ class LiveSession:
             log_path,
             title,
         )
+        # actuated leaders go limp on quit: the operator supports them first
+        self.limp_on_quit = limp_on_quit or []
         self.editor = LineEditor()
         self.messages: deque[Text] = deque(maxlen=8)
         self.confirm_release = False
+        self.confirm_quit = False
         self.quitting_since: float | None = None
         self.log_offset = 0
 
     def prompt(self) -> Text:
-        label = RELEASE_PROMPT if self.confirm_release else "roboloom> "
-        return Text(
-            label, style="bold yellow" if self.confirm_release else "bold"
-        ) + Text(self.editor.buffer + "▏")
+        confirming = self.confirm_release or self.confirm_quit
+        label = (
+            RELEASE_PROMPT
+            if self.confirm_release
+            else QUIT_PROMPT.format(", ".join(self.limp_on_quit))
+            if self.confirm_quit
+            else "roboloom> "
+        )
+        return Text(label, style="bold yellow" if confirming else "bold") + Text(
+            self.editor.buffer + "▏"
+        )
 
     def submit(self, line: str) -> None:
+        if self.confirm_quit:
+            self.confirm_quit = False
+            if line in ("", "quit"):  # Enter, or Ctrl-C again
+                self.client.send("quit")
+                self.messages.append(Text("> quit", style="dim"))
+                self.quitting_since = time.monotonic()
+            else:
+                self.messages.append(Text("quit cancelled"))
+            return
         if self.confirm_release:
             self.confirm_release = False
             if line == "yes":
@@ -139,6 +171,8 @@ class LiveSession:
         command, *rest = line.split()
         if command == "release":
             self.confirm_release = True
+        elif command == "quit" and self.limp_on_quit:
+            self.confirm_quit = True
         elif command not in ("start", "stop", "save", "discard", "estop", "quit"):
             self.messages.append(Text(f"unknown command: {command}", style="yellow"))
         elif command == "start" and not rest:

@@ -135,3 +135,29 @@ def test_node_failures_are_read_from_the_dora_log(tmp_path):
     assert errors[0].startswith("ERROR node_failure") and errors[-1].startswith(
         "ValueError: existing dataset"
     )
+
+
+def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
+    from roboloom.operator import ScriptedOperator
+
+    project = mock_project(tmp_path / ".roboloom")
+    operator = ScriptedOperator()
+    with Session.launch(
+        project / "experiment.yaml", screen=True, operator=operator
+    ) as s:
+        assert s.actuated == ["leader"]  # the trigger spring runs a control law
+        s.wait_ready(30)
+        s.record("wave", 0.5)
+        print("from the script")
+        messages = [m.plain for m in s.screen.messages]
+    assert any("recording 'wave'" in m for m in messages), messages
+    assert any("saved" in m for m in messages), messages
+    assert "Support the arms of leader" in operator.log[-1]
+    out = capsys.readouterr().out
+    assert "from the script" in out and "nodes" in out  # printed above the screen
+
+
+def test_no_screen_or_question_without_a_terminal(tmp_path):
+    project = mock_project(tmp_path / ".roboloom")
+    with Session.launch(project / "experiment_camera.yaml") as s:  # pytest: not a tty
+        assert s.screen is None and s.operator is None

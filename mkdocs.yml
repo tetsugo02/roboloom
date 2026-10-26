@@ -1,0 +1,32 @@
+# Japanese documentation. English: mkdocs.en.yml. Build both: uv run --group docs python scripts/docs.py build
+INHERIT: docs/base.yml
+site_description: Rakuda2 の teleoperation とデータ収集
+docs_dir: docs/ja
+site_dir: site/ja
+# The language switcher rewrites this host to the one serving the site.
+site_url: http://127.0.0.1:8000/ja/
+theme:
+  language: ja
+nav:
+  - ホーム: index.md
+  - Quick start:
+      - インストール: quick-start/installation.md
+      - Rakuda2: quick-start/rakuda2.md
+  - Robots:
+      - 概要: robots/index.md
+      - Rakuda2: robots/rakuda2.md
+  - Sensors:
+      - 概要: sensors/index.md
+      - RealSense: sensors/realsense.md
+      - DIGIT: sensors/digit.md
+  - Controllers:
+      - 概要: controllers/index.md
+      - Leader: controllers/leader.md
+  - Reference:
+      - 設定: reference/configuration.md
+      - CLI: reference/cli.md
+      - Python API: reference/python-api.md
+      - 重力補償の調整: reference/gravity-tuning.md
+  - Contribution: contribution.md
+exclude_docs: |
+  yam-safety-and-smoothness.md

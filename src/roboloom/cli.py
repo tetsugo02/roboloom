@@ -261,11 +261,19 @@ def _dispatch(args: argparse.Namespace) -> None:
         print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
         return
     policy = getattr(args, "policy", None)
+    live = (
+        args.command == "run"
+        and not args.plain
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+    )
     session = Session.launch(
         cfg,
         hardware=args.hardware,
         policy=policy,
         policy_kwargs=getattr(args, "policy_kwargs", None),
+        # `run` draws its own screen with a command line; record/infer use the Session's
+        screen=False if args.command == "run" else "auto",
     )
     try:
         if args.command == "record":
@@ -283,11 +291,15 @@ def _dispatch(args: argparse.Namespace) -> None:
                 args.episodes,
                 keep=lambda _: bool(args.task),
             )
-        elif not args.plain and sys.stdin.isatty() and sys.stdout.isatty():
+        elif live:
             from .ui.live import LiveSession
 
             LiveSession(
-                session.client, session.process, session.log_path, "roboloom"
+                session.client,
+                session.process,
+                session.log_path,
+                "roboloom",
+                limp_on_quit=session.actuated,
             ).run()
         else:
             _plain_loop(session.client, session.process)

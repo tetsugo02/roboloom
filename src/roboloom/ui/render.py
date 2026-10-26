@@ -184,7 +184,10 @@ def render(
 
 
 def describe_report(report: dict) -> Text:
-    """One message line for a recorder report or session warning."""
+    """One message line for a recorder report, session warning or Session note."""
+    if "note" in report:
+        style = {"warn": "yellow", "error": "bold red"}.get(report.get("level", ""), "")
+        return Text(str(report["note"]), style=style)
     if "warning" in report:
         return Text(
             f"{report.get('command', '')} not started: {report['warning']}",
