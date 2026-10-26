@@ -43,3 +43,26 @@ class StatusReporter:
         return self.publisher.make(
             "status", {"role": self.role, "level": level, "fields": fields}, now
         )
+
+
+class GcPauses:
+    """Longest garbage-collection pause since the last `take`, to tell GC stalls of a
+    control loop from other causes (USB, scheduling). Uses `gc.callbacks`."""
+
+    def __init__(self) -> None:
+        import gc
+
+        self._t0 = 0
+        self._max_ns = 0
+        gc.callbacks.append(self._callback)
+
+    def _callback(self, phase: str, info: dict) -> None:
+        if phase == "start":
+            self._t0 = time.perf_counter_ns()
+        elif self._t0:
+            self._max_ns = max(self._max_ns, time.perf_counter_ns() - self._t0)
+
+    def take(self) -> float:
+        """Longest pause (ms) since the previous call."""
+        out, self._max_ns = self._max_ns / 1e6, 0
+        return round(out, 1)

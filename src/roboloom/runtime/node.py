@@ -16,7 +16,7 @@ from roboloom.config import ExperimentConfig, load_experiment
 from roboloom.controllers.base import Controller
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
-from roboloom.core.status import StatusReporter
+from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.recording import ACTION, EpisodeRecorder
 from roboloom.robots.base import Robot
 from roboloom.robots.safety import FollowerSafety
@@ -40,10 +40,14 @@ def _event(node):
     )
 
 
-def _start_warning(
+READY = ("following", "ready")  # controller states that may start an episode
+
+
+def start_warning(
     cfg: ExperimentConfig, latest: dict[str, dict], now_ns: int
 ) -> str | None:
-    """Reject start before broadcasting it to the robot and recorder."""
+    """Why an episode may not start yet (checked before start reaches the robot and
+    recorder), or None. `latest` maps node names to their last status."""
     for name in cfg.controllers:
         status = latest.get(name)
         # Reports arrive at 4 Hz; never start from missing or outdated readiness.
@@ -57,11 +61,27 @@ def _start_warning(
                 f"{fields.get('worst_diff')} (tolerance {fields.get('tolerance')}); "
                 "align the leader with the follower, then retry start"
             )
-        if state != "following":
-            return (
-                f"{name}: controller is {state}; wait until following, then retry start"
-            )
+        if state not in READY:
+            return f"{name}: controller is {state}; wait until ready, then retry start"
     return None
+
+
+def parse_command(line: str) -> dict:
+    """A command line from the FIFO: JSON {"id", "command", "task"} from a Session, or
+    plain `start <task>` typed by an operator (no id)."""
+    line = line.strip()
+    if line.startswith("{"):
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return {"command": line, "task": ""}
+        return {
+            "id": data.get("id"),
+            "command": str(data.get("command", "")),
+            "task": str(data.get("task", "")),
+        }
+    command, _, task = line.partition(" ")
+    return {"command": command, "task": task.strip()}
 
 
 def _session(node, cfg: ExperimentConfig):
@@ -87,20 +107,19 @@ def _session(node, cfg: ExperimentConfig):
                 pass
             while b"\n" in pending:
                 raw, pending = pending.split(b"\n", 1)
-                cmd, _, task = raw.decode().strip().partition(" ")
-                if cmd in COMMANDS:
-                    if cmd == "start":
-                        warning = _start_warning(cfg, latest, time.monotonic_ns())
-                        if warning is not None:
-                            report({"command": cmd, "warning": warning})
-                            continue
-                    _send(
-                        node,
-                        "control",
-                        p.make("session", {"command": cmd, "task": task}),
-                    )
-                    if cmd == "quit":
-                        return
+                request = parse_command(raw.decode())
+                cmd = request["command"]
+                if cmd not in COMMANDS:
+                    report({**request, "error": f"unknown command {cmd!r}"})
+                    continue
+                if cmd == "start":
+                    warning = start_warning(cfg, latest, time.monotonic_ns())
+                    if warning is not None:
+                        report({**request, "warning": warning})
+                        continue
+                _send(node, "control", p.make("session", request))
+                if cmd == "quit":
+                    return
             event_id, msg = _event(node)
             if event_id == "report" and msg is not None:
                 report(msg.payload)
@@ -151,6 +170,7 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
     p = Publisher(source.name)
     status = StatusReporter(Publisher(source.name), role)
     on_session = getattr(reader, "on_session", None)
+    gc_pauses = GcPauses()
     samples: deque[int] = deque(maxlen=60)
     misses = 0
     try:
@@ -186,6 +206,7 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
                     "rate_hz": round(rate, 1),
                     "age_ms": None if age_ms is None else round(age_ms),
                     "misses": misses,
+                    "gc_max_ms": gc_pauses.take(),
                     **(extra() if extra is not None else {}),
                 }
                 _send(node, "status", status.make(fields, level, now))
@@ -200,6 +221,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
     intervals: deque[float] = deque(maxlen=int(robot.control_hz * 2))
     clamped: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
     rejected: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
+    gc_pauses = GcPauses()
     error = ""
     try:
         safety.start()
@@ -240,6 +262,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                     "clamped_2s": sum(clamped),
                     "rejected_2s": sum(rejected),
                     "last_reject": safety.last_reject if any(rejected) else "",
+                    "gc_max_ms": gc_pauses.take(),
                     "error": error,
                 }
                 level = {"FAULT": "error", "ESTOP": "error", "RELEASED": "warn"}.get(
@@ -295,17 +318,19 @@ def _recorder(node, cfg: ExperimentConfig):
     done: queue.Queue[dict] = queue.Queue()
     status = StatusReporter(Publisher("recorder"), "recorder")
 
-    def save(metrics: dict) -> None:
+    def save(metrics: dict, ident: object) -> None:
         try:
             done.put(
                 {
+                    "command": "save",
+                    "id": ident,
                     "saved_frames": writer.save(),
                     "episodes": writer.dataset.num_episodes,
                     "metrics": metrics,
                 }
             )
         except Exception as exc:  # noqa: BLE001 - report session failure to operator
-            done.put({"command": "save", "error": str(exc)})
+            done.put({"command": "save", "id": ident, "error": str(exc)})
 
     try:
         while True:
@@ -357,6 +382,8 @@ def _recorder(node, cfg: ExperimentConfig):
                     )
             elif event_id == "session" and msg is not None:
                 command = msg.payload["command"]
+                ident = msg.payload.get("id")
+                ack: dict | None = None  # answers a Session waiting on this command
                 try:
                     if saving is not None and command in ("start", "save", "discard"):
                         raise RuntimeError(
@@ -364,17 +391,22 @@ def _recorder(node, cfg: ExperimentConfig):
                         )
                     if command == "start":
                         writer.start(msg.payload["task"])
+                        ack = {"task": writer.task}
                     elif command == "stop":
                         writer.stop()
+                        ack = {"metrics": writer.metrics()}
                     elif command == "save":
                         if not writer.stopped:
                             raise RuntimeError("stop the episode first")
                         saving = threading.Thread(
-                            target=save, args=(writer.metrics(),), name="save-episode"
+                            target=save,
+                            args=(writer.metrics(), ident),
+                            name="save-episode",
                         )
                         saving.start()
                     elif command == "discard":
                         writer.discard()
+                        ack = {}
                     elif command == "quit":
                         if saving is not None:
                             saving.join()
@@ -385,8 +417,21 @@ def _recorder(node, cfg: ExperimentConfig):
                     _send(
                         node,
                         "report",
-                        p.make("report", {"command": command, "error": str(exc)}),
+                        p.make(
+                            "report",
+                            {"command": command, "id": ident, "error": str(exc)},
+                        ),
                     )
+                else:
+                    if ack is not None:
+                        _send(
+                            node,
+                            "report",
+                            p.make(
+                                "report",
+                                {"command": command, "id": ident, "ok": True, **ack},
+                            ),
+                        )
     finally:
         if saving is not None:
             saving.join()

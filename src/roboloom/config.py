@@ -21,6 +21,7 @@ from .errors import ConfigError
 from .inputs import INPUTS
 from .inputs.base import InputDevice
 from .recording import features
+from .recording.metrics import QUALITY
 from .robots import ROBOTS
 from .robots.base import Robot
 from .sensors import SENSORS
@@ -43,6 +44,7 @@ class ExperimentConfig:
     controllers: dict[str, Controller] = field(default_factory=dict)
     max_age_ms: dict[str, float] = field(default_factory=dict)
     recorder: dict = field(default_factory=dict)
+    quality: dict = field(default_factory=dict)  # see recording.metrics.QUALITY
     mode: str = "mock"
     robot_type: str = ""
     path: str = ""
@@ -228,6 +230,7 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
             if k
             in ("grace_ms", "image_writer_threads", "streaming_encoding", "queue_s")
         },
+        quality=_quality(tree["recorder"].get("quality") or {}),
         mode=e["mode"],
         robot_type=e.get("robot_type", next(iter(robots.values())).robot_type),
         path=tree["path"],
@@ -236,6 +239,13 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         raise ValueError("session must be terminal")
     features(cfg)  # rejects colliding LeRobot keys
     return cfg
+
+
+def _quality(cfg: dict) -> dict:
+    unknown = set(cfg) - set(QUALITY)
+    if unknown:
+        raise ConfigError(f"recorder.quality: unknown keys {sorted(unknown)}")
+    return {k: float(v) for k, v in cfg.items()}
 
 
 def load_experiment(

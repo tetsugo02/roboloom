@@ -24,8 +24,8 @@ S = 1_000_000_000
 def test_start_requires_recent_following_status(state: str, age_ns: int) -> None:
     cfg = load_experiment("examples/mock/experiment.yaml")
     latest = {"controller": {"t_ns": S - age_ns, "fields": {"state": state}}}
-    assert runtime._start_warning(cfg, latest, S) is not None
-    assert runtime._start_warning(cfg, {}, S) is not None
+    assert runtime.start_warning(cfg, latest, S) is not None
+    assert runtime.start_warning(cfg, {}, S) is not None
 
 
 def test_session_warns_without_starting_then_accepts_aligned_retry(

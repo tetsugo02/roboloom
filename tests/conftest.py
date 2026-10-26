@@ -17,3 +17,27 @@ def rakuda2_tree(name: str = "experiment") -> dict:
         if sensor in tree["sensors"]:
             tree["sensors"][sensor]["serial"] = serial
     return tree
+
+
+def mock_project(root: Path) -> Path:
+    """`roboloom init rakuda2` under `root`, filled and switched to mock mode, as files
+    (the dora nodes read the experiment from disk). Returns the robot's project directory."""
+    from roboloom.project import init_project
+
+    init_project("rakuda2", root)
+    filled = {
+        "SET_LEADER_PORT": "/dev/leader",
+        "SET_FOLLOWER_PORT": "/dev/follower",
+        "SET_REALSENSE_SERIAL": "RS1",
+        "SET_DIGIT_LEFT_SERIAL": "D1",
+        "SET_DIGIT_RIGHT_SERIAL": "D2",
+        "mode: hardware": "mode: mock",
+        # the mock follower starts at 2048; a leader trigger resting there is aligned
+        "rest: 2500": "rest: 2048",
+    }
+    for path in (root / "rakuda2").rglob("*.yaml"):
+        text = path.read_text()
+        for old, new in filled.items():
+            text = text.replace(old, new)
+        path.write_text(text)
+    return root / "rakuda2"

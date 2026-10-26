@@ -45,6 +45,9 @@ def generic(fields: dict) -> tuple[str, str]:
     return str(state), key_values(fields, ("state", "mode"))
 
 
+GC_SHOWN_MS = 5.0  # shorter collections are routine
+
+
 @register("robot")
 def robot(f: dict) -> tuple[str, str]:
     parts = []
@@ -57,6 +60,8 @@ def robot(f: dict) -> tuple[str, str]:
         parts.append(f"clamped {f['clamped_2s']}/2s")
     if f.get("rejected_2s"):
         parts.append(f"REJECTED {f['rejected_2s']}/2s: {f.get('last_reject')}")
+    if (f.get("gc_max_ms") or 0) >= GC_SHOWN_MS:
+        parts.append(f"gc pause {f['gc_max_ms']} ms")
     if f.get("error"):
         parts.append(f"last error: {f['error']}")
     return str(f.get("mode", "")), "  ".join(parts)
@@ -82,6 +87,8 @@ def _source(f: dict) -> tuple[str, str]:
     detail = f"{f.get('rate_hz', 0)} Hz  age {age} ms"
     if f.get("misses"):
         detail += f"  misses {f['misses']}"
+    if (f.get("gc_max_ms") or 0) >= GC_SHOWN_MS:
+        detail += f"  gc pause {f['gc_max_ms']} ms"
     if f.get("current_mA"):  # actuated leader: sent/measured mA of the pushed joints
         detail += "\nmA sent/measured: " + "  ".join(
             f"{j} {c[0]}/{c[1]}" for j, c in f["current_mA"].items()
@@ -148,6 +155,7 @@ def render(
     now_ns: int | None = None,
     title: str = "roboloom",
     log_path: Path | None = None,
+    keys: str = "start <task> | stop | save | discard | estop | release | quit",
 ) -> RenderableType:
     now = time.monotonic_ns() if now_ns is None else now_ns
     header = Text(title, style="bold")
@@ -165,9 +173,7 @@ def render(
         if lines
         else Text("")
     )
-    help_line = Text(
-        "start <task> | stop | save | discard | estop | release | quit", style="dim"
-    )
+    help_line = Text(keys, style="dim")
     return Group(
         header,
         Panel(node_table(status, now), title="nodes", border_style="blue"),
@@ -198,6 +204,14 @@ def describe_report(report: dict) -> Text:
         if missing:
             text += f"  missing % {missing}"
         return Text(text, style="green")
+    if report.get("ok"):
+        command = report.get("command", "")
+        if command == "start":
+            return Text(f"recording '{report.get('task', '')}'", style="cyan")
+        if command == "stop":
+            rows = report.get("metrics", {}).get("rows")
+            return Text(f"stopped ({rows} rows); save or discard", style="cyan")
+        return Text(f"{command} done", style="dim")
     if "robot_mode" in report:
         style = "bold red" if report["robot_mode"] in ("FAULT", "ESTOP") else "cyan"
         reason = f" ({report['reason']})" if report.get("reason") else ""

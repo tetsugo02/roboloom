@@ -1,10 +1,9 @@
-"""Validation, local dora launch, and terminal episode controls."""
+"""The `roboloom` command: a thin layer over `roboloom.setup` and `roboloom.runtime.Session`."""
 
 from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,17 +12,7 @@ from pathlib import Path
 
 from .config import load_experiment, resolve_experiment
 from .errors import Cancelled, RoboloomError
-from .runtime.flow import build_flow, write_flow
-
-
-def send_session(path: str, line: str) -> None:
-    cfg = load_experiment(path)
-    fifo = Path(cfg.output).resolve().with_suffix(".fifo")
-    fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
-    try:
-        os.write(fd, (line + "\n").encode())
-    finally:
-        os.close(fd)
+from .runtime.flow import build_flow
 
 
 def main() -> None:
@@ -108,34 +97,38 @@ def main() -> None:
         "--delta", type=int, default=30, help="approach offset in counts"
     )
     ident.add_argument("--max-rms-mA", type=float, default=15.0)
-    for name in ("validate", "run", "session"):
-        cmd = sub.add_parser(name)
-        cmd.add_argument("experiment")
-        if name == "run":
-            cmd.add_argument(
-                "--hardware",
-                action="store_true",
-                help="explicitly allow opening real devices",
-            )
-            cmd.add_argument(
-                "--plain",
-                action="store_true",
-                help="line-by-line prompt instead of the fixed screen",
-            )
-        if name == "session":
-            cmd.add_argument(
-                "operation",
-                choices=(
-                    "start",
-                    "stop",
-                    "save",
-                    "discard",
-                    "estop",
-                    "release",
-                    "quit",
-                ),
-            )
-            cmd.add_argument("task", nargs="?", default="")
+    sub.add_parser(
+        "validate", help="check an experiment and its dora dataflow"
+    ).add_argument("experiment")
+    run_cmd = sub.add_parser(
+        "run", help="start the dataflow with the operator screen (many episodes)"
+    )
+    run_cmd.add_argument("experiment")
+    run_cmd.add_argument(
+        "--hardware", action="store_true", help="explicitly allow opening real devices"
+    )
+    run_cmd.add_argument(
+        "--plain",
+        action="store_true",
+        help="line-by-line prompt instead of the fixed screen",
+    )
+    rec = sub.add_parser(
+        "record", help="record episodes of a fixed length (default: one) and exit"
+    )
+    rec.add_argument("experiment")
+    rec.add_argument("--task", required=True, help="task text stored with every frame")
+    rec.add_argument("--seconds", type=float, required=True)
+    rec.add_argument("--episodes", type=int, default=1)
+    rec.add_argument(
+        "--hardware", action="store_true", help="explicitly allow opening real devices"
+    )
+    sess = sub.add_parser("session", help="send one command to a running `run`")
+    sess.add_argument("experiment")
+    sess.add_argument(
+        "operation",
+        choices=("start", "stop", "save", "discard", "estop", "release", "quit"),
+    )
+    sess.add_argument("task", nargs="?", default="")
     args = parser.parse_args()
     try:
         _dispatch(args)
@@ -197,19 +190,19 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "tune-gravity":
         from .ui.tune import run
 
-        session = setup.open_tuning(
+        tuning = setup.open_tuning(
             args.experiment, args.node, args.group, hardware=args.hardware
         )
         mode = "mock" if load_experiment(args.experiment).mock else "hardware"
         try:
             outcome = run(
-                session,
-                session.period_s,
+                tuning,
+                tuning.period_s,
                 f"tune-gravity  {args.node}.{args.group}  ({mode})",
             )
         finally:
-            session.close()
-        print(f"{outcome}: {session.path}")
+            tuning.close()
+        print(f"{outcome}: {tuning.path}")
         return
     if args.command == "calibrate-joints":
         zeros = setup.calibrate_joints(args.calibration, operator, args.joints)
@@ -235,118 +228,49 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         print("\n".join(fit.lines()))
         return
+    from .runtime.session import Session, fifo_for, validate_flow
+
     cfg = load_experiment(args.experiment)
     if args.command == "session":
         send_session(
-            args.experiment, " ".join(x for x in (args.operation, args.task) if x)
+            fifo_for(cfg), " ".join(x for x in (args.operation, args.task) if x)
         )
         return
-    dora = shutil.which("dora")
-    if dora is None:
-        raise SystemExit("dora CLI unavailable; install dependencies with uv sync")
-    with tempfile.TemporaryDirectory(prefix="roboloom-flow-") as directory:
-        flow = write_flow(cfg, Path(directory) / "flow.yaml")
-        subprocess.run([dora, "validate", "--offline", str(flow)], check=True)
-        if args.command == "validate":
-            print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
-            return
-        if not cfg.mock and not args.hardware:
-            raise SystemExit("hardware mode requires run --hardware")
-        fifo = Path(cfg.output).resolve().with_suffix(".fifo")
-        fifo.parent.mkdir(parents=True, exist_ok=True)
-        if fifo.exists():
-            raise SystemExit(f"session FIFO already exists: {fifo}")
-        os.mkfifo(fifo, 0o600)
-        # next to the experiment, so a project keeps its own logs (ignored by git)
-        log_dir = (
-            Path(cfg.path).parent
-            / "logs"
-            / f"{Path(cfg.path).stem}-{time.strftime('%Y%m%d-%H%M%S')}"
-        )
-
-        log_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            run_dataflow(
-                dora, flow, fifo, Path(directory), args.plain, log_dir.resolve()
-            )
-        finally:
-            fifo.unlink(missing_ok=True)
-
-
-def run_dataflow(
-    dora: str,
-    flow: Path,
-    fifo: Path,
-    directory: Path,
-    plain: bool,
-    log_dir: Path | None = None,
-) -> None:
-    """Start `dora run` and drive it from the fixed screen, or line by line without a terminal."""
-    from .ui.client import SessionClient
-
-    report, status = directory / "report.jsonl", directory / "status.json"
-    report.touch()
-    live = not plain and sys.stdin.isatty() and sys.stdout.isatty()
-    log_dir = log_dir or directory  # kept after the run: dora.log and device traces
-    log_path = log_dir / "dora.log"
-    command = [
-        dora,
-        "run",
-        "--log-level",
-        "error",
-        "--env",
-        f"ROBOLOOM_SESSION_FIFO={fifo}",
-        "--env",
-        f"ROBOLOOM_REPORT_PATH={report}",
-        "--env",
-        f"ROBOLOOM_STATUS_PATH={status}",
-        "--env",
-        f"ROBOLOOM_LOG_DIR={log_dir}",
-        str(flow),
-    ]
-    client = SessionClient(fifo, report, status)
-    if live:
-        from .ui.live import LiveSession
-
-        with open(log_path, "w") as log:
-            # own session: terminal Ctrl-C reaches only this CLI, which sends `quit`
-            process = subprocess.Popen(
-                command,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            try:
-                LiveSession(client, process, log_path, "roboloom").run()
-            finally:
-                _finish(process)
-        if (
-            process.returncode
-        ):  # the log lives in a temporary directory; show its end now
-            print(
-                f"dora exited with {process.returncode}; end of its log:\n{log_path.read_text()[-4000:]}"
-            )
-        print(f"logs: {log_dir}")
+    if args.command == "validate":
+        with tempfile.TemporaryDirectory(prefix="roboloom-flow-") as directory:
+            validate_flow(cfg, Path(directory))
+        print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
         return
-    process = subprocess.Popen(command)
+    session = Session.launch(cfg, hardware=args.hardware)
     try:
-        _plain_loop(client, process)
+        if args.command == "record":
+            from .ui.record import record
+
+            record(session, args.task, args.seconds, args.episodes)
+        elif not args.plain and sys.stdin.isatty() and sys.stdout.isatty():
+            from .ui.live import LiveSession
+
+            LiveSession(
+                session.client, session.process, session.log_path, "roboloom"
+            ).run()
+        else:
+            _plain_loop(session.client, session.process)
     finally:
-        _finish(process)
-    print(f"logs: {log_dir}")
+        session.close()
+        if session.process.returncode:
+            print(
+                f"dora exited with {session.process.returncode}; end of its log:\n"
+                f"{session.log_path.read_text()[-4000:]}"
+            )
+        print(f"logs: {session.log_dir}")
 
 
-def _finish(process: subprocess.Popen) -> None:
+def send_session(fifo: Path, line: str) -> None:
+    fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
     try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        process.terminate()
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
+        os.write(fd, (line + "\n").encode())
+    finally:
+        os.close(fd)
 
 
 def _plain_loop(client, process: subprocess.Popen) -> None:
