@@ -9,7 +9,7 @@ hold_kp: 1.0
 joints:
   l_arm_sh_pitch1: {gain: 1.8, hold_mA: 30.0, hint: 'arm forward, horizontal (elbow straight)'}
   l_arm_sh_roll: {gain: 1.8, hold_mA: 30.0, hint: 'arm out to the side, horizontal'}
-  l_arm_sh_pitch2: {gain: 0.0, hold_mA: 0.0, hint: 'rotates about the upper arm: little gravity load'}
-  l_arm_el_yaw: {gain: 1.6, hold_mA: 20.0, hint: 'upper arm down, forearm horizontal (elbow at 90 deg)'}
+  l_arm_sh_pitch2: {gain: 1.8, hold_mA: 30.0, hint: 'rotates about the upper arm: little gravity load'}
+  l_arm_el_yaw: {gain: 1.6, hold_mA: 30.0, hint: 'upper arm down, forearm horizontal (elbow at 90 deg)'}
   l_arm_wr_roll: {gain: 0.0, hold_mA: 0.0, hint: 'rotates about the forearm: little gravity load'}
-  l_arm_wr_yaw: {gain: 0.0, hold_mA: 10.0, hint: 'forearm horizontal, hand bent up or down'}
+  l_arm_wr_yaw: {gain: 0.0, hold_mA: 30.0, hint: 'forearm horizontal, hand bent up or down'}
