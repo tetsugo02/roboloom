@@ -111,7 +111,7 @@ uv run roboloom validate rakuda2/experiment_camera
 uv run roboloom run rakuda2/experiment_camera --hardware
 ```
 
-`run`・`record`・`infer`・`tune-gravity` を対話端末で実行すると，Textualのノード一覧・詳細・操作メニュー・スクロール可能なログ・コマンド欄を表示します．Logsは幅にかかわらず専用タブに隠し，Operationsを広く表示します．幅100文字未満ではノード一覧と詳細も切り替えて表示します．ノード選択は表示だけで，操作は実験全体を対象にします．
+`run`・`record`・`infer`・`tune-gravity` を対話端末で実行すると，Textualのノード一覧・詳細・操作メニュー・スクロール可能なログ・コマンド欄を表示します．Logsは幅にかかわらず専用タブに隠し，Operationsを広く表示します．幅100文字未満ではノード一覧と詳細も切り替えて表示します．ノード選択は表示だけで，操作は実験全体を対象にします．縦・横の境界をマウスでドラッグしてペインの幅・高さを調整でき，ダブルクリックで既定へ戻せます．サイズ比率はセッション内で保持します．
 
 Ctrl-Lで入力，Tab/Shift-Tabで補完，↑↓で履歴，Ctrl-N/Ctrl-Pでペイン移動，Ctrl-Gで確認なしの非常停止です．Ctrl-C/Ctrl-Qと `quit` は同じ終了確認を開き，保持・支持した上での脱力・キャンセルを選びます（初期選択はキャンセル）．`release` にも支持確認があります．
 

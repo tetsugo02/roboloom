@@ -19,6 +19,7 @@ from textual.widgets import Footer, OptionList, RichLog, Static, Tabs
 from .command import CommandInput
 from .models import Backend, Closed, LogEvent, Notice, Snapshot
 from .presenters import present
+from .splitter import Splitter
 
 
 class Confirmation(ModalScreen[str | None]):
@@ -78,18 +79,18 @@ class OperatorApp(App[str]):
     Screen { layout: vertical; }
     #summary { height: 2; padding: 0 1; background: $boost; }
     #tabs { height: 3; }
-    #panes { height: 1fr; layout: grid; grid-size: 2 2; grid-columns: 1fr 2fr; grid-rows: 1fr 1fr; }
+    #panes { height: 1fr; layout: grid; grid-size: 3 3; grid-columns: 1fr 1 2fr; grid-rows: 1fr 1 1fr; }
     #nodes, #details, #menu, #logs { border: solid $primary; height: 1fr; }
-    #menu, #logs { column-span: 2; }
-    #menu { min-height: 10; }
+    #menu, #logs, #row-splitter { column-span: 3; }
+    #menu { min-height: 6; }
     #details { padding: 0 1; }
-    #details.expanded { column-span: 2; }
+    #details.expanded { column-span: 3; }
     #detail { height: auto; }
     #command { height: 3; }
     #completion { height: auto; max-height: 2; padding: 0 1; }
-    #panes.narrow { grid-size: 1 2; grid-columns: 1fr; grid-rows: 1fr 10; }
+    #panes.narrow { grid-size: 1 3; grid-columns: 1fr; grid-rows: 1fr 1 10; }
     #panes.narrow #nodes, #panes.narrow #details, #panes.narrow #logs { column-span: 1; row-span: 1; }
-    #panes.narrow #menu { column-span: 1; }
+    #panes.narrow #menu, #panes.narrow #row-splitter { column-span: 1; }
     """
 
     def __init__(self, backend: Backend):
@@ -102,6 +103,8 @@ class OperatorApp(App[str]):
         self._complete_prompted = False
         self._exit_requested = False
         self._log_end_requested = False
+        self._nodes_ratio = 1 / 3
+        self._operations_ratio: float | None = None
         self._pending_logs: deque[LogEvent] = deque(maxlen=10000)
 
     def compose(self) -> ComposeResult:
@@ -109,11 +112,13 @@ class OperatorApp(App[str]):
         yield Tabs("Status", "Details", "Logs", id="tabs")
         with Container(id="panes"):
             yield OptionList(id="nodes", markup=False)
+            yield Splitter("x", id="column-splitter")
             with VerticalScroll(id="details", can_focus=True):
                 yield Static(id="detail", markup=False)
             yield RichLog(
                 id="logs", wrap=True, min_width=1, max_lines=10000, auto_scroll=False
             )
+            yield Splitter("y", id="row-splitter")
             yield OptionList(id="menu", markup=False)
         yield Static("", id="completion", markup=False)
         yield CommandInput()
@@ -142,20 +147,70 @@ class OperatorApp(App[str]):
             self._layout(event.size.width, event.size.height)
 
     def _layout(self, width: int | None = None, height: int | None = None) -> None:
+        if not self.query("#panes"):
+            return
         narrow = (width if width is not None else self.size.width) < 100
         panes = self.query_one("#panes")
         panes.set_class(narrow, "narrow")
+        screen_width = width if width is not None else self.size.width
         screen_height = height if height is not None else self.size.height
-        operations_height = max(10, (screen_height - 9) // 2)
-        panes.styles.grid_rows = f"1fr {operations_height}"
+        completion = self.query_one("#completion")
+        completion_height = completion.size.height if completion.display else 0
+        # Fixed chrome: summary (2), tabs (3), input (3), footer (1).
+        available_rows = max(0, screen_height - 9 - completion_height - 1)
+        operations_height = self._operations_height(available_rows)
+        panes.styles.grid_rows = f"1fr 1 {operations_height}"
+        available_columns = max(1, screen_width - 1)
+        nodes_width = min(
+            max(20, round(available_columns * self._nodes_ratio)),
+            max(20, available_columns - 30),
+        )
+        panes.styles.grid_columns = "1fr" if narrow else f"{nodes_width} 1 1fr"
         active = self.query_one("#tabs", Tabs).active or "tab-1"
         self.query_one("#nodes").display = active == "tab-1"
+        self.query_one("#column-splitter").display = active == "tab-1" and not narrow
         details = self.query_one("#details")
         details.display = active == "tab-2" or (active == "tab-1" and not narrow)
         details.set_class(active == "tab-2", "expanded")
         self.query_one("#logs").display = active == "tab-3"
         if active == "tab-3":
             self.call_after_refresh(self._flush_logs)
+
+    def _operations_height(self, available: int) -> int:
+        desired = (
+            max(10, available // 2)
+            if self._operations_ratio is None
+            else round(available * self._operations_ratio)
+        )
+        maximum = max(0, available - 3)
+        minimum = min(6, maximum)
+        return min(max(minimum, desired), maximum)
+
+    def on_splitter_moved(self, event: Splitter.Moved) -> None:
+        panes = self.query_one("#panes")
+        if event.splitter.axis == "x":
+            available = max(1, panes.content_region.width - 1)
+            current = round(available * self._nodes_ratio)
+            width = min(max(20, current + event.delta), max(20, available - 30))
+            self._nodes_ratio = width / available
+        else:
+            available = max(1, panes.content_region.height - 1)
+            current = self._operations_height(available)
+            minimum = min(6, max(0, available - 3))
+            height = min(max(minimum, current - event.delta), max(0, available - 3))
+            self._operations_ratio = height / available
+        self._layout()
+
+    def on_splitter_reset(self, event: Splitter.Reset) -> None:
+        if event.splitter.axis == "x":
+            self._nodes_ratio = 1 / 3
+        else:
+            self._operations_ratio = None
+        self._layout()
+
+    def _cancel_drag(self) -> None:
+        for splitter in self.query(Splitter):
+            splitter.action_cancel_drag()
 
     def on_tabs_tab_activated(self, _: Tabs.TabActivated) -> None:
         self._layout()
@@ -226,7 +281,11 @@ class OperatorApp(App[str]):
                 self.action_request_quit()
 
     def _flush_logs(self) -> None:
-        log = self.query_one("#logs", RichLog)
+        if not self._pending_logs and not self._log_end_requested:
+            return
+        log = next(iter(self.query(RichLog)), None)
+        if log is None:
+            return
         if (
             not log.display
             or not log.content_region.width
@@ -302,6 +361,7 @@ class OperatorApp(App[str]):
         completion = self.query_one("#completion", Static)
         completion.update(event.text)
         completion.display = bool(event.text)
+        self.call_after_refresh(self._layout)
 
     def on_input_submitted(self, event: CommandInput.Submitted) -> None:
         self._dispatch(event.value.strip())
@@ -326,6 +386,7 @@ class OperatorApp(App[str]):
         elif name == "quit":
             self.action_request_quit()
         elif operation.confirmation == "release":
+            self._cancel_drag()
             self.push_screen(
                 Confirmation(
                     "Support every actuated input and follower before releasing torque.",
@@ -345,7 +406,16 @@ class OperatorApp(App[str]):
             return
         panes = [
             self.query_one("#" + name)
-            for name in ("menu", "tabs", "nodes", "details", "logs", "command")
+            for name in (
+                "menu",
+                "tabs",
+                "nodes",
+                "column-splitter",
+                "details",
+                "logs",
+                "row-splitter",
+                "command",
+            )
             if self.query_one("#" + name).display
         ]
         index = panes.index(self.focused) if self.focused in panes else 0
@@ -392,6 +462,7 @@ class OperatorApp(App[str]):
                 self._exit_requested = True
                 self.backend.request_close(choice)
 
+        self._cancel_drag()
         self.push_screen(Confirmation(prompt, choices), confirmed)
 
     def on_key(self, event: events.Key) -> None:

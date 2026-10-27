@@ -153,7 +153,11 @@ Cancel is initially selected, so Enter alone cancels.
 Interactive run, record, infer, and tune-gravity use Textual: Ctrl-L command input,
 Tab/Shift-Tab completion, Up/Down history, Ctrl-N/Ctrl-P panes, Ctrl-G emergency stop,
 and Ctrl-C/Ctrl-Q exit confirmation. Logs always has its own tab; Operations stays visible with more space.
-Below 100 columns, the node list and details use separate tabs. Node selection changes the display only; experiment
+Below 100 columns, the node list and details use separate tabs. Drag the vertical
+divider between nodes and details, or the horizontal divider above Operations,
+to resize panes. Double-click a divider to reset it. Ctrl-N/Ctrl-P can focus
+a divider for arrow-key resizing and Ctrl-R reset. Proportions persist for the
+session across tab changes and terminal resizing; they are not saved to disk. Node selection changes the display only; experiment
 operations target all configured nodes. Record/infer show readiness, remaining
 time, episode count, and results; select Start for each episode. `record --home`
 moves home before every episode. Inference saves only with `--task`.

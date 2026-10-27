@@ -150,7 +150,7 @@ async def test_resize_selection_focus_and_no_home():
         console.print(app.query_one("#detail", Static).content)
         assert "force_N" in console.export_text()
         await pilot.press("ctrl+p")
-        assert app.focused is app.query_one("#details")
+        assert app.focused is app.query_one("#row-splitter")
         await pilot.press("ctrl+l", "ctrl+n")
         assert app.focused is app.query_one("#menu")
         await pilot.press("h")
