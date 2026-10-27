@@ -47,6 +47,17 @@ class MockBus:
         self._check()
         return self.health
 
+    def read_health_field(self, name: str) -> list[int]:
+        self._check()
+        if name == "bus_watchdog":
+            fired = self.health.watchdog_fired
+            return [-1] * len(self.watchdog) if fired else self.watchdog.copy()
+        if name == "hardware_error":
+            return list(self.health.hardware_error)
+        if name == "present_temperature":
+            return [round(t) for t in self.health.temperature_c]
+        raise KeyError(name)
+
     def read_register(self, name: str) -> list[int]:
         self._check()
         if name == "operating_mode":

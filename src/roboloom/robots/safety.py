@@ -13,7 +13,15 @@ import time
 
 from ..core.checks import positions
 from ..core.protocol import Envelope, Publisher
-from ..drivers.base import JointState, disable_torque, read_health, read_state
+from ..drivers.base import (
+    HEALTH_FIELDS,
+    Health,
+    JointState,
+    disable_torque,
+    health_from,
+    read_health,
+    read_state,
+)
 
 MAX_CLAMP_DT_S = 0.1  # a stalled tick never widens the speed clamp beyond this
 
@@ -67,6 +75,7 @@ class FollowerSafety:
         self.last_tick_ns: int | None = None
         self.ticks = 0
         self.over_current_since: list[int | None] = [None] * self.dim
+        self.health_values: dict[str, list[int]] = {}  # last read of each HEALTH_FIELDS
         self.armed = False
 
     @property
@@ -134,11 +143,23 @@ class FollowerSafety:
         if self.mode not in self.LATCHED:
             self.armed = True
 
+    def _read_health(self) -> Health | None:
+        """A bus that reads one health register at a time refreshes one per health tick, in
+        turn (a full read costs 9 ms on 17 Dynamixels at 1 Mbps, more than a 120 Hz tick
+        can spare); judged on the latest value of each."""
+        field_reader = getattr(self.bus, "read_health_field", None)
+        if field_reader is None:
+            return read_health(self.bus)
+        turn = self.ticks // self.health["every_ticks"] - 1
+        name = HEALTH_FIELDS[turn % len(HEALTH_FIELDS)]
+        self.health_values[name] = field_reader(name)
+        return health_from(self.health_values)
+
     def _check_health(self, now: int) -> str | None:
         self.ticks += 1
         if not self.health or self.ticks % self.health["every_ticks"]:
             return None
-        health = read_health(self.bus)
+        health = self._read_health()
         if health is not None:
             if health.watchdog_fired:
                 return "bus watchdog fired"

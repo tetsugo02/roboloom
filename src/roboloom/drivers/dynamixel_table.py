@@ -14,6 +14,7 @@ class Register:
 
 REGISTERS = {
     "model_number": Register(0, 2, True),
+    "firmware_version": Register(6, 1, True),
     "return_delay": Register(9, 1, True),  # 2 us per count
     "drive_mode": Register(10, 1, True),
     "operating_mode": Register(11, 1, True),
@@ -49,6 +50,8 @@ OPERATING_MODES = {
 COUNTS_PER_REV = 4096
 VELOCITY_RPM = 0.229  # per count, all X-series
 WATCHDOG_MS = 20
+# Fast Sync Read (one reply packet for all motors) needs this firmware or later.
+FAST_SYNC_READ_FIRMWARE = 45
 
 
 @dataclass(frozen=True)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Iterable
+from functools import partial
 from pathlib import Path
 
 from rich.console import Group, RenderableType
@@ -56,6 +57,8 @@ def robot(f: dict) -> tuple[str, str]:
     parts.append("armed" if f.get("armed") else "not armed")
     if f.get("tick_ms") is not None:
         parts.append(f"tick {f['tick_ms']} ms (max {f.get('tick_max_ms')})")
+    if f.get("work_ms") is not None:
+        parts.append(f"work {f['work_ms']} ms (max {f.get('work_max_ms')})")
     if f.get("clamped_2s"):
         parts.append(f"clamped {f['clamped_2s']}/2s")
     if f.get("rejected_2s"):
@@ -81,10 +84,12 @@ def controller(f: dict) -> tuple[str, str]:
     return state, detail
 
 
-def _source(f: dict) -> tuple[str, str]:
+def _source(f: dict, work: bool = False) -> tuple[str, str]:
     age = f.get("age_ms")
     state = "no samples" if age is None else "stale" if age >= 500 else "streaming"
     detail = f"{f.get('rate_hz', 0)} Hz  age {age} ms"
+    if work and f.get("work_ms") is not None:
+        detail += f"  work {f['work_ms']} ms (max {f.get('work_max_ms')})"
     if f.get("misses"):
         detail += f"  misses {f['misses']}"
     if (f.get("gc_max_ms") or 0) >= GC_SHOWN_MS:
@@ -96,7 +101,8 @@ def _source(f: dict) -> tuple[str, str]:
     return state, detail
 
 
-RENDERERS["input"] = RENDERERS["sensor"] = _source
+RENDERERS["sensor"] = _source  # a camera's read waits for its next frame: no work time
+RENDERERS["input"] = partial(_source, work=True)
 
 
 @register("recorder")

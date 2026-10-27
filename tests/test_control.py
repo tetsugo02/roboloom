@@ -117,10 +117,20 @@ def test_write_failure_and_health_latch_fault():
     _, action = ctl.tick(now)
     assert not action.payload["valid"] and ctl.mode == "FAULT"
 
+    # one health register per health tick (watchdog, hardware error, temperature in turn)
     ctl, bus = safety(health={"every_ticks": 1, "max_temperature_c": 70})
     bus.health = Health([0], [75.0])
-    state, _ = ctl.tick(now)
-    assert ctl.mode == "FAULT" and "temperature" in state.payload["reason"]
+    modes = []
+    for _ in range(3):
+        state, _ = ctl.tick(now)
+        modes.append(ctl.mode)
+    assert modes == ["HOLD", "HOLD", "FAULT"]
+    assert "temperature" in state.payload["reason"]
+    ctl, bus = safety(health={"every_ticks": 1})
+    bus.health = Health([1], [30.0])
+    ctl.tick(now)
+    ctl.tick(now)
+    assert ctl.mode == "FAULT" and "hardware error" in ctl.reason
     ctl, bus = safety(health={"every_ticks": 1})
     bus.health = Health([0], [30.0], watchdog_fired=True)
     ctl.tick(now)

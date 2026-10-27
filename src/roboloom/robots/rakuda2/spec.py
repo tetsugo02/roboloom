@@ -141,6 +141,8 @@ def open_rakuda_bus(
                 + "\n  ".join(problems)
             )
         bus.set_bus_watchdog(cfg.get("bus_watchdog_ms"))
+        if not bus.use_fast_read():
+            print(f"{name}: {port}: {bus.read_note}", file=sys.stderr)
     except BaseException:
         bus.close()
         raise

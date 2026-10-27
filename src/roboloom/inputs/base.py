@@ -155,6 +155,7 @@ class JointInput(InputDevice):
                 self.joint_names,
                 build_laws(self.control, self.joint_names, self.cfg.get("__dir__")),
                 self.name,
+                self.cfg.get("bus_watchdog_ms"),
             )
             return ActuatedReader(device)
         except BaseException:

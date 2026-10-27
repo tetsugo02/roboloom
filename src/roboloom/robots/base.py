@@ -128,6 +128,7 @@ class Robot:
             self.joint_names,
             build_laws(self.control, self.joint_names, self.cfg.get("__dir__")),
             self.name,
+            self.cfg.get("bus_watchdog_ms"),
         )
 
     def current_limits_mA(self) -> dict[str, float]:

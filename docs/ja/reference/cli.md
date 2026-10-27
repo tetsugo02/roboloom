@@ -5,7 +5,7 @@
 | コマンド | 用途 |
 | --- | --- |
 | `init rakuda2` | 機体設定を生成する |
-| `probe <port>` | DynamixelのID・モデル・レジスタを読み取る |
+| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る |
 | `validate <experiment>` | デバイスを開かず設定とdataflowを検証する |
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |

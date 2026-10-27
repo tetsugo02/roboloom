@@ -1,7 +1,7 @@
 """Bus contract shared by robots and actuated inputs.
 
 `RobotBus` is the minimum every bus implements. Richer buses add `read_state`,
-`read_health` and `disable_torque`; callers use the helpers below so a minimal
+`read_health` (and `read_health_field`, one register at a time) and `disable_torque`; callers use the helpers below so a minimal
 bus (e.g. one passed to `Experiment.from_components`) keeps working.
 """
 
@@ -40,6 +40,19 @@ def read_state(bus: RobotBus) -> JointState:
 def read_health(bus: RobotBus) -> Health | None:
     reader = getattr(bus, "read_health", None)
     return reader() if reader else None
+
+
+# Registers a bus may read one at a time (`read_health_field`), most urgent first.
+HEALTH_FIELDS = ("bus_watchdog", "hardware_error", "present_temperature")
+
+
+def health_from(values: dict[str, list[int]]) -> Health:
+    """Health from the HEALTH_FIELDS read so far (missing ones count as healthy)."""
+    return Health(
+        hardware_error=list(values.get("hardware_error", [])),
+        temperature_c=[float(x) for x in values.get("present_temperature", [])],
+        watchdog_fired=any(x < 0 for x in values.get("bus_watchdog", [])),
+    )
 
 
 def disable_torque(bus: RobotBus) -> None:

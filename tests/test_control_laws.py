@@ -6,7 +6,12 @@ import pytest
 from conftest import rakuda2_tree
 
 from roboloom.config import parse_experiment
-from roboloom.control.device import JointDevice, build_laws, parse_groups
+from roboloom.control.device import (
+    WATCHDOG_CHECK_MS,
+    JointDevice,
+    build_laws,
+    parse_groups,
+)
 from roboloom.control.laws import GravityComp, RunawayError
 from roboloom.drivers.mock import MockBus
 from roboloom.inputs.base import ActuatedReader, JointInput
@@ -339,8 +344,34 @@ def test_fired_bus_watchdog_releases_current_joints():
     dev.enable_torque()
     bus.watchdog[1] = -1  # the loop stalled: the motor froze its goal current
     with pytest.raises(WatchdogFired, match="b"):
-        dev.command(None)
+        dev.command(None, time.monotonic_ns() + WATCHDOG_CHECK_MS * 1_000_000)
     assert bus.torque == [False, False, True]  # current joints released, position kept
+
+
+def test_bus_watchdog_is_read_after_a_gap_and_periodically_not_every_tick():
+    groups = [GRAVITY, {"group": "c", "law": "position", "joints": ["c"]}]
+    dev, bus = device(groups, [0, 0, 3], FlatGravity())
+    dev.watchdog_ms = 100  # read once 50 ms pass without a write
+    reads = []
+    original = bus.read_register
+
+    def counting(name):
+        reads.append(name)
+        return original(name)
+
+    bus.read_register = counting
+    dev.read_state()
+    dev.enable_torque()  # the first command reads it
+    t0 = dev.last_write_ns
+    for k in range(1, 6):  # 125 Hz ticks: no read for 40 ms
+        dev.command(None, t0 + k * 8_000_000)
+    assert reads.count("bus_watchdog") == 1
+    dev.command(None, t0 + 95_000_000)  # 55 ms without a write, 95 ms since the read
+    assert reads.count("bus_watchdog") == 2
+    last = dev.last_write_ns
+    for k in range(1, 20):  # 152 ms of 8 ms ticks: one safety-net read at 100 ms
+        dev.command(None, last + k * 8_000_000)
+    assert reads.count("bus_watchdog") == 3
 
 
 def test_gravity_gain_can_differ_per_joint():

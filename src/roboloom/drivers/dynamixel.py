@@ -13,9 +13,10 @@ from pathlib import Path
 
 import dynamixel_sdk as dxl
 
-from .base import Health, JointState
+from .base import HEALTH_FIELDS, Health, JointState, health_from
 from .dynamixel_table import (
     COUNTS_PER_REV,
+    FAST_SYNC_READ_FIRMWARE,
     MODELS,
     REGISTERS,
     STATE_ADDRESS,
@@ -44,7 +45,12 @@ def latency_timer_ms(port: str) -> int | None:
 
 
 class DynamixelBus:
-    """Sync I/O in the given motor order. `models` are the expected model numbers."""
+    """Sync I/O in the given motor order. `models` are the expected model numbers.
+
+    Reads use Fast Sync Read (one reply packet for every motor) once `use_fast_read`
+    found all firmware recent enough; on 17 motors at 1 Mbps the state read drops from
+    5 to 4 ms (2026-10-27).
+    """
 
     def __init__(
         self,
@@ -60,8 +66,15 @@ class DynamixelBus:
         self.packet = dxl.PacketHandler(2.0)
         self._readers: dict[tuple[int, int], dxl.GroupSyncRead] = {}
         self._units: list[float] | None = None
+        self.fast_read = False
+        self.read_note = "sync read"  # how reads are done, for probe and status
         if not self.port.openPort() or not self.port.setBaudRate(baudrate):
             raise ConnectionError(f"cannot open Dynamixel bus {port}")
+        # The SDK drains the serial output (tcdrain) before every packet, so each write
+        # waits for the previous one to leave the adapter: 1.9 ms per leader tick on FTDI
+        # (2026-10-27). Packets stay in order without it (one writer per bus), and reads
+        # still wait for their replies.
+        self.port.clearPort = lambda: None
         if self.models is not None and len(self.models) != len(self.ids):
             raise ValueError("one model per motor ID required")
 
@@ -76,7 +89,8 @@ class DynamixelBus:
                 if not group.addParam(motor_id):
                     raise ConnectionError(f"cannot register motor {motor_id}")
             self._readers[(address, size)] = group
-        if group.txRxPacket() != dxl.COMM_SUCCESS:
+        result = group.fastSyncRead() if self.fast_read else group.txRxPacket()
+        if result != dxl.COMM_SUCCESS:
             raise ConnectionError("Dynamixel sync read failed")
         out = []
         for motor_id in self.ids:
@@ -128,13 +142,33 @@ class DynamixelBus:
             ],
         )
 
+    def use_fast_read(self) -> bool:
+        """Switch reads to Fast Sync Read when every motor's firmware supports it and one
+        trial read succeeds; otherwise keep the plain sync read. Returns whether it is on."""
+        firmware = self.read_register("firmware_version")
+        if min(firmware) < FAST_SYNC_READ_FIRMWARE:
+            self.read_note = (
+                f"sync read (firmware {min(firmware)} < {FAST_SYNC_READ_FIRMWARE})"
+            )
+            return False
+        self.fast_read = True
+        try:
+            self.read_state()
+        except ConnectionError as exc:
+            self.fast_read = False
+            self.read_note = f"sync read (fast sync read failed: {exc})"
+            return False
+        self.read_note = "fast sync read"
+        return True
+
+    def read_health_field(self, name: str) -> list[int]:
+        """One of HEALTH_FIELDS, so a caller can spread health reads over ticks."""
+        if name not in HEALTH_FIELDS:
+            raise KeyError(name)
+        return self.read_register(name)
+
     def read_health(self) -> Health:
-        watchdog = self.read_register("bus_watchdog")
-        return Health(
-            hardware_error=self.read_register("hardware_error"),
-            temperature_c=[float(x) for x in self.read_register("present_temperature")],
-            watchdog_fired=any(x < 0 for x in watchdog),
-        )
+        return health_from({n: self.read_health_field(n) for n in HEALTH_FIELDS})
 
     def write_positions(self, values: list[float]) -> None:
         reg = REGISTERS["goal_position"]

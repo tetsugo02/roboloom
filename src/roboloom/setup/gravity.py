@@ -185,7 +185,13 @@ def gravity_check(
     require_hardware(cfg, hardware, "gravity-check")
     configured = list(law.gain)
     _only(law, laws)
-    device = JointDevice(owner.open_bus(False), owner.joint_names, laws, node)
+    device = JointDevice(
+        owner.open_bus(False),
+        owner.joint_names,
+        laws,
+        node,
+        owner.cfg.get("bus_watchdog_ms"),
+    )
     trace = (
         Path(cfg.path).parent
         / "logs"
@@ -240,7 +246,13 @@ def open_tuning(
         require_hardware(cfg, hardware, "tune-gravity")
     _only(law, laws)
     ids = dict(zip(owner.joint_names, owner.cfg.get("motor_ids") or [], strict=False))
-    device = JointDevice(owner.open_bus(cfg.mock), owner.joint_names, laws, node)
+    device = JointDevice(
+        owner.open_bus(cfg.mock),
+        owner.joint_names,
+        laws,
+        node,
+        owner.cfg.get("bus_watchdog_ms"),
+    )
     return TuningSession(
         device,
         law,

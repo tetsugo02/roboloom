@@ -182,6 +182,7 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
     on_session = getattr(reader, "on_session", None)
     gc_pauses = GcPauses()
     samples: deque[int] = deque(maxlen=60)
+    work: deque[float] = deque(maxlen=60)  # ms in read()
     misses = 0
     try:
         while True:
@@ -193,7 +194,9 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
                     return
                 continue
             if event_id == "tick":
+                began = time.perf_counter()
                 sample = reader.read()
+                work.append((time.perf_counter() - began) * 1e3)
                 if sample is not None:
                     _send(
                         node,
@@ -216,12 +219,21 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
                     "rate_hz": round(rate, 1),
                     "age_ms": None if age_ms is None else round(age_ms),
                     "misses": misses,
+                    **_work_fields(work),
                     "gc_max_ms": gc_pauses.take(),
                     **(extra() if extra is not None else {}),
                 }
                 _send(node, "status", status.make(fields, level, now))
     finally:
         reader.close()
+
+
+def _work_fields(work: deque[float]) -> dict:
+    """Time one tick spends in the device (bus I/O and control laws): the headroom left
+    under the period tells how far `control_hz` / `poll_hz` can go."""
+    if not work:
+        return {"work_ms": None, "work_max_ms": None}
+    return {"work_ms": round(work[-1], 1), "work_max_ms": round(max(work), 1)}
 
 
 def _robot(node, robot: Robot, cfg: ExperimentConfig):
@@ -231,6 +243,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
     intervals: deque[float] = deque(maxlen=int(robot.control_hz * 2))
     clamped: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
     rejected: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
+    work: deque[float] = deque(maxlen=int(robot.control_hz * 2))  # ms in tick()
     gc_pauses = GcPauses()
     error = ""
     try:
@@ -256,7 +269,9 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                 if command == "quit":
                     return
             elif event_id == "tick":
+                began = time.perf_counter()
                 state, action = safety.tick()
+                work.append((time.perf_counter() - began) * 1e3)
                 _send(node, "state", state)
                 _send(node, ACTION, action)
                 intervals.append(state.payload["tick_interval_ms"])
@@ -270,6 +285,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                     "armed": safety.armed,
                     "tick_ms": round(intervals[-1], 1) if intervals else None,
                     "tick_max_ms": round(max(intervals), 1) if intervals else None,
+                    **_work_fields(work),
                     "clamped_2s": sum(clamped),
                     "rejected_2s": sum(rejected),
                     "last_reject": safety.last_reject if any(rejected) else "",
@@ -288,7 +304,9 @@ def _controller(node, controller: Controller):
     follower = follower_target = None
     status = StatusReporter(Publisher(controller.name), "controller")
     last_intent_ns = 0
-    commands: deque[int] = deque(maxlen=60)
+    commands: deque[int] = deque(
+        maxlen=1000
+    )  # send times; command_hz counts the last second
     timeout_ns = int(controller.cfg.get("input_timeout_ms", 150) * 1e6)
     while True:
         event_id, msg = _event(node)
@@ -332,7 +350,9 @@ def _policy(node, controller: PolicyController):
         )
     except Exception as exc:  # noqa: BLE001 - shown on the operator screen; start refused
         controller.state, controller.error = "failed", f"loading the policy: {exc}"
-    commands: deque[int] = deque(maxlen=60)
+    commands: deque[int] = deque(
+        maxlen=1000
+    )  # send times; command_hz counts the last second
     warmed = False
     while True:
         event_id, msg = _event(node)

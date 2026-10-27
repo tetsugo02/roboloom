@@ -190,6 +190,9 @@ def check_hardware(
                     )
 
 
+WATCHDOG_CHECK_MS = 100  # Bus Watchdog read at least this often while currents are sent
+
+
 class WatchdogFired(RuntimeError):
     """The motors stopped accepting goals because the control loop went silent too long."""
 
@@ -201,6 +204,7 @@ class JointDevice:
         joint_names: tuple[str, ...],
         laws: list[ControlLaw],
         name: str = "device",
+        watchdog_ms: float | None = None,
     ):
         missing = sorted(
             {
@@ -222,6 +226,12 @@ class JointDevice:
         self.last_ns: int | None = None
         self.trace: Trace | None = None
         self.last_currents: dict[int, float] = {}
+        # Bus Watchdog checks: a read costs 2-3 ms per tick on 17 Dynamixels, so read it when
+        # the goals may have gone stale (no write for half the watchdog period) and else
+        # every WATCHDOG_CHECK_MS as a safety net.
+        self.watchdog_ms = watchdog_ms or None
+        self.last_write_ns: int | None = None
+        self.last_watchdog_ns: int | None = None
 
     def _indices(self, predicate) -> list[int]:
         return sorted(i for law in self.laws if predicate(law) for i in law.joints)
@@ -237,6 +247,11 @@ class JointDevice:
 
     def read_health(self) -> Health | None:
         return read_health(self.bus)
+
+    @property
+    def read_health_field(self):
+        """The bus's one-register health read, or None when it has none."""
+        return getattr(self.bus, "read_health_field", None)
 
     def write_positions(self, values: list[float] | None) -> None:
         self.target = None if values is None else list(values)
@@ -308,13 +323,26 @@ class JointDevice:
                 + "\n  ".join(wrong)
             )
 
-    def check_watchdog(self) -> None:
+    def watchdog_due(self, now_ns: int) -> bool:
+        """Whether `check_watchdog` must read the register this tick (see __init__)."""
+        if self.last_watchdog_ns is None or self.last_write_ns is None:
+            return True
+        if now_ns - self.last_watchdog_ns >= WATCHDOG_CHECK_MS * 1_000_000:
+            return True
+        gap_ms = (now_ns - self.last_write_ns) / 1e6
+        return self.watchdog_ms is not None and gap_ms >= self.watchdog_ms / 2
+
+    def check_watchdog(self, now_ns: int | None = None) -> None:
         """A fired Bus Watchdog freezes Goal Current at its last value (the motor keeps
         pushing; bench-tested on XC330, 2026-10-23) and rejects new goals silently, so a
         stalled control loop must be caught here: the caller limps the joints."""
         reader = getattr(self.bus, "read_register", None)
         if reader is None:
             return
+        now = time.monotonic_ns() if now_ns is None else now_ns
+        if not self.watchdog_due(now):
+            return
+        self.last_watchdog_ns = now
         watchdog = reader("bus_watchdog")
         fired = [
             self.joint_names[i]
@@ -351,12 +379,13 @@ class JointDevice:
                 }
                 self.trace.add(now, self.state, model, currents)
             if currents:
-                self.check_watchdog()
+                self.check_watchdog(now)
                 keys = sorted(currents)
                 self.bus.write_goal_currents(keys, [currents[i] for i in keys])
             if positions:
                 keys = sorted(positions)
                 self.bus.write_goal_positions(keys, [positions[i] for i in keys])
+            self.last_write_ns = now
         except BaseException:
             self._safe(self.limp)
             raise

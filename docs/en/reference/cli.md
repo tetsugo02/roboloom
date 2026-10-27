@@ -5,7 +5,7 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 | Command | Purpose |
 | --- | --- |
 | `init rakuda2` | Generate the robot configuration |
-| `probe <port>` | Read Dynamixel IDs, models, and registers |
+| `probe <port>` | Read Dynamixel IDs, models, registers, and read times (a rough rate limit) |
 | `validate <experiment>` | Validate the configuration and dataflow without opening devices |
 | `calibrate-joints <calibration>` | Save measured counts at the URDF zero pose to the calibration |
 | `measure-travel <calibration> --out <path>` | Save the range of motion moved by hand |

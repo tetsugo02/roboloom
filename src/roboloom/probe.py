@@ -8,6 +8,7 @@ from .drivers.dynamixel_table import MODELS, REGISTERS
 
 SHOWN = (
     "model_number",
+    "firmware_version",
     "operating_mode",
     "drive_mode",
     "homing_offset",
@@ -30,7 +31,8 @@ def probe(
     baudrate: int = 1_000_000,
     repeats: int = 50,
 ) -> str:
-    """Ping IDs (all 0..252 if none given), read registers, and time the state sync read. Never writes."""
+    """Ping IDs (all 0..252 if none given), read registers, and time the state read (plain and
+    Fast Sync Read) and the Bus Watchdog read. Never writes."""
     import dynamixel_sdk as dxl
 
     from .drivers.dynamixel import DynamixelBus, latency_timer_ms
@@ -52,16 +54,35 @@ def probe(
     if not ids:
         return f"{port}: no motors answered"
     bus = DynamixelBus(port, ids, baudrate=baudrate)
-    try:
-        table = {name: bus.read_register(name) for name in SHOWN}
+
+    def timed(read) -> float:
         start = time.perf_counter()
         for _ in range(repeats):
-            bus.read_state()
-        read_ms = (time.perf_counter() - start) / repeats * 1e3
+            read()
+        return (time.perf_counter() - start) / repeats * 1e3
+
+    try:
+        table = {name: bus.read_register(name) for name in SHOWN}
+        read_ms = timed(bus.read_state)
+        fast = bus.use_fast_read()
+        fast_ms = timed(bus.read_state) if fast else None
+        watchdog_ms = timed(lambda: bus.read_register("bus_watchdog"))
+        note = bus.read_note
     finally:
         bus.close()
+    tick_ms = (fast_ms or read_ms) + 1.0  # + about 1 ms of goal writes
+    fast_text = f"{fast_ms:.2f} ms" if fast_ms is not None else f"unavailable: {note}"
+    firmware = sorted(set(table["firmware_version"]))
     lines = [
-        f"{port}: {len(ids)} motors, latency_timer {latency_timer_ms(port)} ms, state read {read_ms:.2f} ms"
+        f"{port}: {len(ids)} motors, latency_timer {latency_timer_ms(port)} ms, firmware {firmware}",
+        (
+            f"state read {read_ms:.2f} ms, fast sync read {fast_text}, "
+            f"bus_watchdog read {watchdog_ms:.2f} ms ({note})"
+        ),
+        (
+            f"rough control-rate limit: {700 / tick_ms:.0f} Hz (70% of the period for one "
+            "state read + goal writes); check work_ms on the run screen"
+        ),
     ]
     lines.append("id  model        " + " ".join(f"{n[:12]:>12}" for n in SHOWN[1:]))
     for i, motor_id in enumerate(ids):
