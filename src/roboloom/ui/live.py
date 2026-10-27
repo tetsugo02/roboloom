@@ -25,7 +25,7 @@ from rich.live import Live
 from rich.text import Text
 
 from .client import SessionClient
-from .render import describe_report, render
+from .render import describe_report, home_available, render
 
 ALERT_WORDS = ("ERROR", "Error", "Traceback", "panicked", "exceeds maximum")
 RELEASE_PROMPT = "Support the arms. Type yes to turn the follower torque off: "
@@ -188,7 +188,22 @@ class LiveSession:
             self.confirm_release = True
         elif command == "quit" and (self.limp_on_quit or self.held):
             self.confirm_quit = True
-        elif command not in ("start", "stop", "save", "discard", "estop", "quit"):
+        elif command == "home" and not home_available(self.client.status()):
+            self.messages.append(
+                Text(
+                    "home is inactive: no home pose (home: in the controller YAML)",
+                    style="yellow",
+                )
+            )
+        elif command not in (
+            "start",
+            "stop",
+            "save",
+            "discard",
+            "estop",
+            "home",
+            "quit",
+        ):
             self.messages.append(Text(f"unknown command: {command}", style="yellow"))
         elif command == "start" and not rest:
             self.messages.append(

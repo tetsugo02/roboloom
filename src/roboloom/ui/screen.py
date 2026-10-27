@@ -31,7 +31,7 @@ class SessionScreen:
         self.session, self.title = session, title
         self.messages: deque[Text] = deque(maxlen=8)
         self.prompt = Text("Ctrl-C: discard the episode and stop", style="dim")
-        self.keys = ""  # help line; empty for scripts (no keys are read)
+        self.keys: str | Text = ""  # help line; empty for scripts (no keys are read)
         self._log_offset = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None

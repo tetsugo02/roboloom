@@ -60,11 +60,12 @@ couplings:
     source: torso_yaw
     scale: -1.0
     reference: 2048
+    lead_ms: 70
 ```
 
 ```text
 首の目標 = leaderから変換した首の目標
-         - (followerの現在の腰位置 - reference)
+         - (followerの現在の腰位置 + 腰の速度 × lead_ms - reference)
 ```
 
 `reference` は，leaderから変換した首の目標をそのまま使う腰の位置（counts）です．腰が正面を向く位置を設定します．例えば腰が `reference` から+100 counts回転すると，首の目標に-100 countsを加えます．上の関節固定と併用すると，leaderの首を固定したまま腰の回転を相殺できます．leaderの首を自由にすると，操作者による首の操作に相殺分が加わります．
@@ -74,7 +75,57 @@ couplings:
 - 位置合わせでは相殺後の首の目標とfollowerの首を比べます．followerのカメラが正面から大きく外れた状態で起動すると，`head_yaw` が許容差を超えて `aligning` のままになります．起動前にfollowerのカメラ向きとleaderの首を揃えてください．
 - 腰の目標値ではなく実測値を使うため，腰が指令に追いついていない段階で首だけを先回りさせません．相殺後にも既存の速度制限とrobot側の範囲・期限・変化量検査がかかります．
 - `joint`・`source`・`scale`・`reference` はすべて必須です．
+- `lead_ms`（任意，既定0，0〜500）は，腰の実測速度の方向へ目標を先読みする時間です．首のモーターは位置制御で目標に遅れて追従するため，腰が動いている間はカメラが遅れてずれます．Rakuda2では，腰を最大69°/sで回したときのずれ（最大4.6°）が，腰の速度×約70 msでほぼ説明できました（相関0.99，2026-10-27の記録）．このため例では70としています．大きすぎると首が行き過ぎます．robotが速度を出さない場合，先読みは加えません．
 - これは指定した関節間の線形な相殺です．全姿勢のカメラ安定化，IMUフィードバック，台座の回転補償ではありません．軸が平行で，符号と単位比が正しいことが前提です．他の機体では `scale` に軸の符号と単位比を設定します．速度制限や可動域端，追従遅れではカメラの向きに誤差が残ります．
 - `type: joint` の遠隔操作に適用します．方策controllerの出力には適用しません．関節名をコードに固定していないので，他のロボットのjoint controllerにも使えます．
 
 関節固定と相殺の組み合わせは模擬バス・controllerで検証しています．実機での方向・可動域・追従精度は未検証です．既存の `.roboloom/` は自動更新しないため，設定例を使用中のYAMLへ反映してください．
+
+## 初期姿勢へ動かす（home）
+
+保存した初期姿勢へ，leaderとfollowerを `home` の操作でゆっくり動かせます．エピソードを毎回同じ姿勢から始めるためのものです．着いてから1秒後，leaderは通常の制御（重力補償とbreakaway hold）に戻るので，そのまま手で持って操作を始められます．
+
+**1. 姿勢を保存します．** followerを使いたい姿勢にしてから，dataflowを止めた状態で実行します．名前ごとに `poses/<名前>.yaml` が作られ，いくつでも保存できます．同じ名前は `--force` なしでは上書きしません．
+
+```bash
+uv run roboloom capture-pose rakuda2/experiment_head_compensation ready --hardware
+```
+
+followerを姿勢にするには，遠隔操作で動かしてから `quit` で `hold`（followerを保持したまま終了）とするか，`release` 後に手で動かします．`capture-pose` はfollowerの位置を読むだけで，動かしません．バスを開くときの通常の起動時の検査は行います．
+
+**2. controllerのYAMLで使う姿勢を選びます．**
+
+```yaml
+home:
+  pose: ../poses/ready.yaml   # 保存した姿勢のどれか
+  max_speed: 200              # counts/s（約18°/s）．遅く動かすための上限
+  tolerance: 30               # 各関節がこの差以内なら到着
+  timeout_s: 30
+```
+
+重力補償leaderの電流制御のグループには，姿勢へ引くばねの設定が必要です．なければ設定の読み込み時に拒否します．
+
+```yaml
+- group: right_arm
+  law: gravity_comp
+  # ...
+  homing:
+    kp_mA_per_count: 0.5      # 目標との差1 countあたりの電流
+    max_mA: 40                # ばねの電流の上限．重力補償との合計は max_current_mA で制限
+```
+
+**3. 動かします．** 操作画面で `home` と入力します（`roboloom session <exp> home`，Pythonでは `Session.home()` も同じ）．controllerの行に `home pose: ready.yaml` と，使う姿勢の名前が表示されます．移動中はrobotとleaderの行に進み具合が出て，到着すると `reached` になります．
+
+- 全関節が同じ時間で到着するよう，滑らかな速度の曲線で動かします．最も遠い関節でも速さは `max_speed` を超えません．
+- followerは，通常の指令と同じ範囲と速度の検査を通して動きます．`stop`・`estop` で移動を止められます．
+- leaderの動かし方は関節の制御則で変わります．
+  - 電流制御（`gravity_comp`）：重力補償に，`homing` のばね（上限つき）を足して引きます．
+  - 位置制御（固定した首など）：目標を姿勢に沿って動かします．移動後は固定の目標がその姿勢になります．
+  - `free`：モーターが位置制御のモードのときだけ，移動中にトルクを入れて動かし，到着後に脱力へ戻します．それ以外は動かさず，画面に表示します．
+  - トリガーのばね：動かしません．
+- 電流制御の関節は，静止摩擦のためにばねが姿勢の手前で止まることがあります．許容差（`tolerance`）より離れた関節は，到着後に `short`（黄）として差（counts）を表示します．開始できるかは，通常の位置合わせの検査（`alignment_tolerance`）で決まります．差が大きい場合は `kp_mA_per_count` か `max_mA` を上げます．
+- leaderの目標は，controllerの関節対応（符号・オフセット）と `couplings` を逆にたどって計算します．到着後のleaderとfollowerの差はほぼ0です．
+- 録画中や追従中（`start` 後）は `home` を拒否し，移動中は `start` を拒否します．
+- 移動中は腕から手を離してください．`estop`・`release`・`quit` では今までどおりleaderが脱力します．
+
+模擬のバスとdataflowで動作を確かめています．実機での動きは未検証です．

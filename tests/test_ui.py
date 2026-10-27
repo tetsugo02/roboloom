@@ -157,3 +157,55 @@ def test_line_editor_and_client_files(tmp_path):
     assert client.status() is None
     status.write_text(json.dumps({"nodes": {}}))
     assert client.status() == {"nodes": {}}
+
+
+def styles_of(text) -> dict[str, str]:
+    """Plain substring -> style of each styled span of a rich Text."""
+    return {text.plain[s.start : s.end]: str(s.style) for s in text.spans}
+
+
+def test_home_pose_and_problems_stand_out_in_the_detail():
+    _, detail = RENDERERS["controller"]({"state": "following", "home": "ready"})
+    assert "home pose: ready.yaml" in detail.plain
+    assert styles_of(detail)["ready.yaml"] == "bold magenta"
+    _, detail = RENDERERS["robot"](
+        {
+            "mode": "HOMING",
+            "armed": False,
+            "home": "ready",
+            "home_state": "moving",
+            "home_progress": 0.4,
+            "error": "bus failed",
+        }
+    )
+    spans = styles_of(detail)
+    assert spans["ready"] == "bold magenta" and spans["moving 40%"] == "yellow"
+    assert spans["last error: bus failed"] == "bold red"
+    _, detail = RENDERERS["input"](
+        {
+            "rate_hz": 120,
+            "age_ms": 0,
+            "home": "ready",
+            "home_state": "short",
+            "home_far": {"r_arm_sh_roll": -42},
+            "work_ms": 7.5,
+            "work_max_ms": 7.5,
+        }
+    )
+    spans = styles_of(detail)
+    assert spans["short"] == "yellow" and "r_arm_sh_roll -42" in detail.plain
+    assert spans["work 7.5 ms (max 7.5)"] == "yellow"  # 7.5 of 8.3 ms: little room
+
+
+def test_home_is_inactive_without_a_saved_pose():
+    without = {"nodes": {"controller": {"role": "controller", "fields": {}}}}
+    with_home = {
+        "nodes": {"controller": {"role": "controller", "fields": {"home": "ready"}}}
+    }
+    off = text_of(render(without, [], "> ", now_ns=0))
+    on = text_of(render(with_home, [], "> ", now_ns=0))
+    assert "home (no home pose)" in off and "(no home pose)" not in on
+    from roboloom.ui.render import command_line
+
+    line = command_line(False, ("Enter: start", "h: home"))
+    assert styles_of(line)["h: home"] == "strike"

@@ -32,7 +32,7 @@ session: nodes/session.yaml
 
 ## 関節固定と相殺
 
-leaderノードの `control` は，`free`（脱力），`position`（leaderでは通電時の姿勢を保持），`spring`，`gravity_comp` などを関節グループごとに選びます．全関節をちょうど1回ずつ指定します．`joint` controllerの `couplings`（既定 `[]`）は，`{joint, source, scale, reference}` のリストで，他のfollower関節の `reference` からの実測変位を目標へ加えます．両者は独立した設定です．[Leaderの設定例](../controllers/leader.md)を参照してください．
+leaderノードの `control` は，`free`（脱力），`position`（leaderでは通電時の姿勢を保持），`spring`，`gravity_comp` などを関節グループごとに選びます．全関節をちょうど1回ずつ指定します．`joint` controllerの `couplings`（既定 `[]`）は，`{joint, source, scale, reference}`（任意で `lead_ms`） のリストで，他のfollower関節の `reference` からの実測変位を目標へ加えます．両者は独立した設定です．[Leaderの設定例](../controllers/leader.md)を参照してください．
 
 ## 制御周期
 
@@ -80,6 +80,6 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 ## ログと設定の管理
 
-ログは実験ファイルの隣の `logs/<実験名>-<時刻>/` に置きます．YAMLの設定・重力モデル・可動域・調整値はGitで管理し，生データ `*.npz`・ログ・dataset・FIFOは生成した `.roboloom/.gitignore` で除外します．
+ログは実験ファイルの隣の `logs/<実験名>-<時刻>/` に置きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFOは生成した `.roboloom/.gitignore` で除外します．
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．

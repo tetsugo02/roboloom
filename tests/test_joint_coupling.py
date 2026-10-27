@@ -128,6 +128,10 @@ def test_following_reports_how_far_the_follower_is_from_the_leader() -> None:
         [{**LINK, "reference": True}],
         [{**LINK, "reference": float("nan")}],
         [LINK, LINK],
+        [{**LINK, "lead_ms": -1}],
+        [{**LINK, "lead_ms": 501}],
+        [{**LINK, "lead_ms": True}],
+        [{**LINK, "lead_ms": float("nan")}],
     ],
 )
 def test_invalid_couplings_fail_when_loading_yaml(raw: object) -> None:
@@ -154,6 +158,35 @@ def test_couplings_work_with_other_joint_names_and_snapshot_sources() -> None:
     )
     with pytest.raises(ValueError, match="finite"):
         overflow.apply([0, 0], [1e308, 0])
+
+
+def test_lead_looks_ahead_along_the_measured_source_velocity() -> None:
+    links = JointCouplings([{**LINK, "lead_ms": 70}], ("torso_yaw", "head_yaw"), "test")
+    # torso 100 counts past the reference, turning at 1000 counts/s: 70 more ahead
+    assert links.apply([2048, 2048], [2148, 2048], [1000, 0]) == [2048, 1878]
+    assert links.apply([2048, 2048], [2148, 2048]) == [
+        2048,
+        1948,
+    ]  # no velocity: no lead
+
+
+def test_controller_passes_the_follower_velocity_to_the_lead() -> None:
+    base = controller()
+    ctl = JointController(
+        base.name,
+        {**base.cfg, "couplings": [{**LINK, "lead_ms": 100}]},
+        base.source,
+        base.robot,
+        base.robot_id,
+    )
+    now = time.monotonic_ns() - 10_000_000_000
+    hold = [2048.0] * 17
+    assert ctl.update(intent(0, hold, now), hold, now) is not None
+    velocity = [0.0] * 17
+    velocity[0] = -200.0  # torso turning; position still at the reference
+    second = 1_000_000_000
+    cmd = ctl.update(intent(1, hold, now + second), hold, now + second, None, velocity)
+    assert cmd is not None and cmd.payload["positions"][1] == 2068  # -1 * (-200 * 0.1)
 
 
 def test_position_locks_only_selected_leader_joints_and_seeds_before_torque() -> None:

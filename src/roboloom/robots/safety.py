@@ -1,6 +1,7 @@
 """Final command check at the bus boundary and the follower mode state machine.
 
-Modes: IDLE -> HOLD <-> ACTIVE; FAULT, ESTOP and RELEASED are latched.
+Modes: IDLE -> HOLD <-> ACTIVE, HOLD -> HOMING -> HOLD; FAULT, ESTOP and RELEASED are
+latched. HOMING moves slowly to a saved pose (`home`), then holds it.
 HOLD keeps writing one fixed target (the last sent command, or the pose at
 stop/start), never the freshly measured pose, so a gravity-loaded joint does not
 creep. Small overshoots are clamped to `max_speed`; NaN, stale, out-of-range or
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import time
 
+from ..control.homing import Trajectory
 from ..core.checks import positions
 from ..core.protocol import Envelope, Publisher
 from ..drivers.base import (
@@ -77,6 +79,10 @@ class FollowerSafety:
         self.over_current_since: list[int | None] = [None] * self.dim
         self.health_values: dict[str, list[int]] = {}  # last read of each HEALTH_FIELDS
         self.armed = False
+        self.homing: Trajectory | None = None
+        self.homing_since_ns = 0
+        self.home_name = ""  # the saved pose last moved to (or being moved to)
+        self.home_reached = False
 
     @property
     def current(self) -> list[float] | None:
@@ -92,6 +98,7 @@ class FollowerSafety:
         self.mode, self.reason = mode, reason
         self.pending = None
         self.armed = False
+        self.homing = None
 
     def start(self) -> None:
         state = self._read()
@@ -124,6 +131,10 @@ class FollowerSafety:
         self.armed = False
         if self.mode in self.LATCHED:
             return
+        if self.homing is not None:  # stay where the move got to
+            self.homing = None
+            self.mode = "ESTOP" if estop else "HOLD"
+            return
         try:
             self.hold_target = list(self.last_sent or self._read().positions)
             self.bus.write_positions(self.hold_target)
@@ -134,14 +145,54 @@ class FollowerSafety:
 
     def release(self) -> None:
         """Torque off. Only when not moving; the operator must support the arm."""
-        if self.armed or self.mode == "ACTIVE":
+        if self.armed or self.mode in ("ACTIVE", "HOMING"):
             raise RuntimeError("stop the robot before release")
         disable_torque(self.bus)
         self._latch("RELEASED", "operator release")
 
     def arm(self) -> None:
-        if self.mode not in self.LATCHED:
+        if self.mode not in self.LATCHED and self.homing is None:
             self.armed = True
+            self.home_reached = False
+
+    def home(
+        self,
+        target: list[float],
+        max_speed: float,
+        name: str,
+        now_ns: int | None = None,
+    ) -> None:
+        """Move slowly to `target` (a saved pose), then hold it. Only while stopped in HOLD;
+        the move still passes the range and speed checks of every write."""
+        if self.armed or self.mode != "HOLD":
+            raise RuntimeError(
+                f"home needs the robot stopped in HOLD (it is {self.mode}"
+                f"{', following' if self.armed else ''})"
+            )
+        target = positions(target, self.dim)
+        start = list(self.hold_target or self._read().positions)
+        self.homing = Trajectory(start, target, max_speed)
+        self.homing_since_ns = time.monotonic_ns() if now_ns is None else now_ns
+        self.home_name, self.home_reached = name, False
+        self.mode = "HOMING"
+
+    def _home_step(self, now: int, dt: float) -> None:
+        assert self.homing is not None
+        elapsed = (now - self.homing_since_ns) / 1e9
+        reference = self.hold_target or self.current or self.homing.start
+        out = []
+        for x, ref, bound in zip(
+            self.homing.at(elapsed), reference, self.cfg["limits"], strict=True
+        ):
+            inside = min(bound["max"], max(bound["min"], x))
+            step = bound["max_speed"] * dt
+            out.append(min(ref + step, max(ref - step, inside)))
+        self.bus.write_positions(out)
+        # later commands are checked (max_jump) against where the follower now is
+        self.last_sent = self.hold_target = out
+        if self.homing.progress(elapsed) >= 1 and out == self.homing.goal:
+            self.homing, self.home_reached = None, True
+            self.mode = "HOLD"
 
     def _read_health(self) -> Health | None:
         """A bus that reads one health register at a time refreshes one per health tick, in
@@ -231,7 +282,10 @@ class FollowerSafety:
             if problem:
                 self._latch("FAULT", problem)
             command, self.pending = self.pending, None
-            if self.mode not in self.LATCHED and command is not None:
+            if self.mode == "HOMING" and self.homing is not None:
+                command = None
+                self._home_step(now, max(dt, 0.0))
+            elif self.mode not in self.LATCHED and command is not None:
                 target, clamped, why = self._checked(command, now, max(dt, 0.0))
                 if target is None:
                     self.mode, self.last_reject = "HOLD", why
@@ -241,12 +295,13 @@ class FollowerSafety:
                     sent_ns = time.monotonic_ns() if now_ns is None else now
                     self.last_sent = self.hold_target = target
                     self.mode = "ACTIVE"
-            if not sent and self.mode not in self.LATCHED:
+            if not sent and self.mode not in (*self.LATCHED, "HOMING"):
                 if self.hold_target is None:
                     self.hold_target = list(self.current or [])
                 self.bus.write_positions(self.hold_target)
                 self.mode = "HOLD"
         except Exception as exc:  # noqa: BLE001 - every bus failure must latch FAULT
+            self.homing = None
             self._latch("FAULT", f"bus: {exc}")
         interval = 0.0 if self.last_tick_ns is None else (now - self.last_tick_ns) / 1e6
         self.last_tick_ns = now

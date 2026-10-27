@@ -130,7 +130,7 @@ uv run roboloom validate rakuda2/experiment_gravity
 uv run roboloom run rakuda2/experiment_gravity --hardware
 ```
 
-1. Check the robot status, sensor acquisition rates, and recorder.
+1. Check the robot status, sensor acquisition rates, and recorder. If an initial pose ([home](../controllers/leader.md)) is configured, `home` moves both arms there before you start.
 2. Align the leader to the follower and confirm the controller is `following`. While an `aligning` warning is shown, match the pose and retry starting.
 3. Start following and recording with `start pick up the cup`, and operate with the leader.
 4. Stop with `stop`. `stop` holds the follower and does not turn off torque.

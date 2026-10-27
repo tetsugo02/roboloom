@@ -80,6 +80,14 @@ def main() -> None:
     )
     travel.add_argument("calibration")
     travel.add_argument("--out", required=True)
+    pose = sub.add_parser(
+        "capture-pose",
+        help="save the follower's current pose as poses/<name>.yaml (for home)",
+    )
+    pose.add_argument("experiment")
+    pose.add_argument("name")
+    pose.add_argument("--force", action="store_true", help="replace an existing pose")
+    pose.add_argument("--hardware", action="store_true")
     ident = sub.add_parser(
         "identify-gravity", help="collect holding currents and fit a gravity model"
     )
@@ -121,6 +129,11 @@ def main() -> None:
     rec.add_argument("--seconds", type=float, required=True)
     rec.add_argument("--episodes", type=int, default=1)
     rec.add_argument(
+        "--home",
+        action="store_true",
+        help="move to the controller's saved home pose before every episode",
+    )
+    rec.add_argument(
         "--hardware", action="store_true", help="explicitly allow opening real devices"
     )
     inf = sub.add_parser(
@@ -145,7 +158,16 @@ def main() -> None:
     sess.add_argument("experiment")
     sess.add_argument(
         "operation",
-        choices=("start", "stop", "save", "discard", "estop", "release", "quit"),
+        choices=(
+            "start",
+            "stop",
+            "save",
+            "discard",
+            "estop",
+            "release",
+            "home",
+            "quit",
+        ),
     )
     sess.add_argument("task", nargs="?", default="")
     args = parser.parse_args()
@@ -230,6 +252,12 @@ def _dispatch(args: argparse.Namespace) -> None:
             "check directions, then set confirmed: true"
         )
         return
+    if args.command == "capture-pose":
+        path = setup.capture_pose(
+            args.experiment, args.name, hardware=args.hardware, force=args.force
+        )
+        print(f"saved {path}; select it with home: {{pose: ../poses/{path.name}}}")
+        return
     if args.command == "measure-travel":
         travel = setup.measure_travel(args.calibration, args.out, operator)
         print("\n".join(travel.lines()))
@@ -279,7 +307,7 @@ def _dispatch(args: argparse.Namespace) -> None:
         if args.command == "record":
             from .ui.record import record
 
-            record(session, args.task, args.seconds, args.episodes)
+            record(session, args.task, args.seconds, args.episodes, home=args.home)
         elif args.command == "infer":
             from .ui.record import record
 

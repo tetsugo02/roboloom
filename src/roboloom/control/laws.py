@@ -173,6 +173,20 @@ class CurrentLaw(ControlLaw):
         self.range = [(float(lo), float(hi)) for lo, hi in limits]
         self.margin = positive(cfg.get("range_margin", 100), f"{name}.range_margin")
         self.barrier = float(cfg.get("barrier_mA_per_count", 0.5))
+        # `home`: a spring of kp mA/count, capped at max_mA, pulls the joint along the move
+        homing = cfg.get("homing")
+        if homing is not None and (
+            not isinstance(homing, dict) or set(homing) != {"kp_mA_per_count", "max_mA"}
+        ):
+            raise ValueError(f"{name}.homing needs kp_mA_per_count and max_mA")
+        self.homing: tuple[float, float] | None = (
+            None
+            if homing is None
+            else (
+                positive(homing["kp_mA_per_count"], f"{name}.homing.kp_mA_per_count"),
+                positive(homing["max_mA"], f"{name}.homing.max_mA"),
+            )
+        )
         self.elapsed = 0.0
         self.model_mA: dict[int, float] = {}  # last g(q) at gain 1, for traces
         if gravity is not None:

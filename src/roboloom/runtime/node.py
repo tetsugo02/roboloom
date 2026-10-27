@@ -22,7 +22,7 @@ from roboloom.recording import ACTION, EpisodeRecorder
 from roboloom.robots.base import Robot
 from roboloom.robots.safety import FollowerSafety
 
-COMMANDS = ("start", "stop", "save", "discard", "estop", "release", "quit")
+COMMANDS = ("start", "stop", "save", "discard", "estop", "release", "home", "quit")
 from roboloom.runtime.flow import STATUS_SUFFIX
 
 
@@ -64,6 +64,18 @@ def start_warning(
             )
         if state not in READY:
             return f"{name}: controller is {state}; wait until ready, then retry start"
+        controller = cfg.controllers[name]
+        pair = [
+            controller.robot.name,
+            *([controller.source.name] if controller.source else []),
+        ]
+        for node in pair:
+            moving = latest.get(node, {}).get("fields", {})
+            if moving.get("home_state") == "moving":
+                return (
+                    f"{node} is still moving home ({moving.get('home')}); "
+                    "wait, then retry start"
+                )
         # Checked before every start: following can leave the follower behind the leader
         # (speed and range limits), and the first alignment says nothing about later ones.
         diff, tolerance = fields.get("worst_diff"), fields.get("tolerance")
@@ -73,6 +85,22 @@ def start_warning(
                 f"differs by {diff} (tolerance {tolerance}); hold the leader still near "
                 "the follower, then retry start"
             )
+    return None
+
+
+def home_warning(
+    cfg: ExperimentConfig, latest: dict[str, dict], now_ns: int
+) -> str | None:
+    """Why `home` may not run now (the robot would move during an episode), or None."""
+    if not any(c.home is not None for c in cfg.controllers.values()):
+        return "no controller has a home pose (home: in the controller YAML)"
+    recorder = latest.get("recorder", {}).get("fields", {})
+    if recorder.get("state") == "recording":
+        return "stop the episode before moving home"
+    for name in cfg.robots:
+        fields = latest.get(name, {}).get("fields", {})
+        if fields.get("armed"):
+            return f"{name} is following; stop it before moving home"
     return None
 
 
@@ -122,12 +150,15 @@ def _session(node, cfg: ExperimentConfig):
                 if cmd not in COMMANDS:
                     report({**request, "error": f"unknown command {cmd!r}"})
                     continue
-                if cmd == "start":
-                    warning = start_warning(cfg, latest, time.monotonic_ns())
+                if cmd in ("start", "home"):
+                    check = start_warning if cmd == "start" else home_warning
+                    warning = check(cfg, latest, time.monotonic_ns())
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
                 _send(node, "control", p.make("session", request))
+                if cmd == "home":  # progress shows in the robot and leader status
+                    report({**request, "ok": True})
                 if cmd == "quit":
                     return
             event_id, msg = _event(node)
@@ -172,6 +203,14 @@ def _quit(event_id, msg) -> bool:
 def _source(node, source: Source, cfg: ExperimentConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
+    set_home = getattr(reader, "set_home", None)
+    for pair in cfg.controllers.values():  # the pair this input leads, if it has a home
+        if set_home is not None and pair.source is source and pair.home is not None:
+            leader_pose = getattr(pair, "leader_pose", None)
+            if leader_pose is not None:
+                set_home(
+                    leader_pose(pair.home.target(pair.robot.joint_names)), pair.home
+                )
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     start_trace = getattr(reader, "start_trace", None)
     if log_dir and start_trace is not None:
@@ -236,6 +275,31 @@ def _work_fields(work: deque[float]) -> dict:
     return {"work_ms": round(work[-1], 1), "work_max_ms": round(max(work), 1)}
 
 
+def _home_robot(safety: FollowerSafety, robot: Robot, cfg: ExperimentConfig) -> str:
+    """Start the move to the controller's saved pose; the error text, or ""."""
+    spec = cfg.controller_for(robot.name).home
+    if spec is None:
+        return "home: no home pose configured for this robot's controller"
+    try:
+        safety.home(spec.target(robot.joint_names), spec.max_speed, spec.pose.name)
+    except (RuntimeError, ValueError) as exc:
+        return str(exc)
+    return ""
+
+
+def _home_fields(safety: FollowerSafety) -> dict:
+    if safety.homing is not None:
+        elapsed = (time.monotonic_ns() - safety.homing_since_ns) / 1e9
+        return {
+            "home": safety.home_name,
+            "home_state": "moving",
+            "home_progress": round(safety.homing.progress(elapsed), 2),
+        }
+    if safety.home_reached:
+        return {"home": safety.home_name, "home_state": "reached"}
+    return {}
+
+
 def _robot(node, robot: Robot, cfg: ExperimentConfig):
     bus = robot.open_device(cfg.mock)
     safety = FollowerSafety(robot.safety_config(cfg.robot_id), bus)
@@ -266,6 +330,8 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                         safety.release()
                     except RuntimeError as exc:
                         error = str(exc)
+                elif command == "home":
+                    error = _home_robot(safety, robot, cfg)
                 if command == "quit":
                     return
             elif event_id == "tick":
@@ -291,6 +357,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                     "last_reject": safety.last_reject if any(rejected) else "",
                     "gc_max_ms": gc_pauses.take(),
                     "error": error,
+                    **_home_fields(safety),
                 }
                 level = {"FAULT": "error", "ESTOP": "error", "RELEASED": "warn"}.get(
                     safety.mode, "warn" if any(rejected) else "ok"
@@ -301,7 +368,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
 
 
 def _controller(node, controller: Controller):
-    follower = follower_target = None
+    follower = follower_target = follower_velocity = None
     status = StatusReporter(Publisher(controller.name), "controller")
     last_intent_ns = 0
     commands: deque[int] = deque(
@@ -313,15 +380,21 @@ def _controller(node, controller: Controller):
         if _quit(event_id, msg):
             return
         if event_id == "robot" and msg is not None:
-            follower, follower_target = (
+            follower, follower_target, follower_velocity = (
                 msg.payload["positions"],
                 msg.payload.get("target"),
+                msg.payload.get("velocities"),
             )
             if msg.payload["mode"] in ("FAULT", "ESTOP"):
                 controller.reset()
         elif event_id == "intent" and msg is not None and follower is not None:
             last_intent_ns = time.monotonic_ns()
-            command = controller.update(msg, follower, follower_target=follower_target)
+            command = controller.update(
+                msg,
+                follower,
+                follower_target=follower_target,
+                follower_velocity=follower_velocity,
+            )
             if command:
                 _send(node, "command", command)
                 commands.append(time.monotonic_ns())

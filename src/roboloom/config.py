@@ -203,6 +203,8 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
             raise ValueError(f"robot {robot.name!r} needs exactly one controller")
         if robot.control_hz < fps:
             raise ValueError("control_hz must be >= dataset_fps")
+    for name, controller in controllers.items():
+        _check_home(name, controller)
 
     if e["mode"] == "hardware":
         for owner in [*inputs.values(), *robots.values()]:
@@ -248,6 +250,26 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         raise ValueError("session must be terminal")
     features(cfg)  # rejects colliding LeRobot keys
     return cfg
+
+
+def _check_home(name: str, controller: Controller) -> None:
+    """With `home`, every current-mode group of the leader needs `homing` (the spring that
+    pulls it along the move); without it the move would leave those joints behind."""
+    source = controller.source
+    if controller.home is None or source is None:
+        return
+    from .control.device import law_class
+
+    missing = [
+        g.name
+        for g in getattr(source, "control", None) or []
+        if law_class(g.law).current_mode and g.cfg.get("homing") is None
+    ]
+    if missing:
+        raise ConfigError(
+            f"controllers.{name}.home: leader {source.name} groups {missing} need "
+            "homing: {kp_mA_per_count, max_mA}"
+        )
 
 
 def _quality(cfg: dict) -> dict:

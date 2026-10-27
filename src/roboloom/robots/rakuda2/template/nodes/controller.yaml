@@ -11,10 +11,20 @@ input_timeout_ms: 150
 # Optional measured-motion compensation, applied after mapping and before speed limits.
 # For head-camera yaw compensation (verify motor directions on your robot):
 # couplings:
-# - {joint: head_yaw, source: torso_yaw, scale: -1.0, reference: 2048}
+# - {joint: head_yaw, source: torso_yaw, scale: -1.0, reference: 2048, lead_ms: 70}
 # reference: follower torso count at which the mapped head target is used unchanged
-# (torso facing forward). The head leader can be locked separately.
+# (torso facing forward). lead_ms: look ahead along the torso velocity for the head's
+# position-loop lag (optional, default 0). The head leader can be locked separately.
 couplings: []
+# Optional saved initial pose: the `home` command moves leader and follower there slowly,
+# and the leader returns to its normal laws one second after arriving. Save poses with `roboloom capture-pose <exp> <name>`
+# (several names can coexist under ../poses/); choose one here. max_speed: counts/s.
+# A gravity leader needs `homing:` on its arm groups (leader_gravity.yaml).
+# home:
+#   pose: ../poses/ready.yaml
+#   max_speed: 200
+#   tolerance: 30
+#   timeout_s: 30
 joints:
 - leader: torso_yaw
   follower: torso_yaw

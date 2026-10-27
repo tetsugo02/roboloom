@@ -32,7 +32,7 @@ Each node's `type` selects the implementation. `SET_...` are robot-specific unse
 
 ## Joint locking and compensation
 
-The leader node's `control` selects a law per joint group, such as `free` (torque off), `position` (holds the torque-enable pose on a leader), `spring`, or `gravity_comp`. Specify every joint exactly once. The `joint` controller's `couplings` (default `[]`) is a list of `{joint, source, scale, reference}` entries that add another follower joint's measured displacement from `reference` to a target. These settings are independent. See the [Leader configuration examples](../controllers/leader.md).
+The leader node's `control` selects a law per joint group, such as `free` (torque off), `position` (holds the torque-enable pose on a leader), `spring`, or `gravity_comp`. Specify every joint exactly once. The `joint` controller's `couplings` (default `[]`) is a list of `{joint, source, scale, reference}` (optionally `lead_ms`) entries that add another follower joint's measured displacement from `reference` to a target. These settings are independent. See the [Leader configuration examples](../controllers/leader.md).
 
 ## Control rate
 
@@ -80,6 +80,6 @@ Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_
 
 ## Managing logs and configuration
 
-Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. Manage YAML configuration, gravity models, ranges of motion, and tuning values with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
+Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).

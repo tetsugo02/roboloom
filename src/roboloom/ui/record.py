@@ -1,8 +1,9 @@
 """`roboloom record` and `roboloom infer`: fixed-length episodes through a `Session`.
 
 On a terminal the Session's screen (`ui.screen`) shows the nodes; this module adds the
-keys: Enter starts each episode once the controller is ready, `q` (or Ctrl-C) discards
-the episode in progress and stops, `e` latches the follower in ESTOP. Without a terminal
+keys: Enter starts each episode once the controller is ready, `h` moves to the saved home
+pose before it (inactive without one), `q` (or Ctrl-C) discards the episode in progress
+and stops, `e` latches the follower in ESTOP. Without a terminal
 the episodes start as soon as the controller is ready.
 """
 
@@ -19,8 +20,9 @@ from ..errors import Cancelled
 from ..runtime.node import start_warning
 from ..runtime.session import EpisodeResult, Session, Task
 from .live import KeyReader
+from .render import command_line
 
-KEYS = "Enter: start | q: discard and quit | e: emergency stop"
+KEYS = ("Enter: start", "h: home", "q: discard and quit", "e: emergency stop")
 
 
 def describe(result: EpisodeResult) -> str:
@@ -35,11 +37,12 @@ def record(
     seconds: float,
     episodes: int = 1,
     keep: Callable[[EpisodeResult], bool] | None = None,
+    home: bool = False,
 ) -> list[EpisodeResult]:
-    """Run `episodes` episodes of `seconds`; `keep` as in `Session.record`."""
+    """Run `episodes` episodes of `seconds`; `keep` and `home` as in `Session.record`."""
     if session.screen is None or not sys.stdin.isatty():
-        return _plain(session, task, seconds, episodes, keep)
-    return _keys(session, task, seconds, episodes, keep)
+        return _plain(session, task, seconds, episodes, keep, home)
+    return _keys(session, task, seconds, episodes, keep, home)
 
 
 def _plain(
@@ -48,13 +51,16 @@ def _plain(
     seconds: float,
     episodes: int,
     keep: Callable[[EpisodeResult], bool] | None,
+    home: bool,
 ) -> list[EpisodeResult]:
     print("waiting until the controller is ready ...", flush=True)
     session.wait_ready(timeout=120)
     results = []
     for k in range(episodes):
+        if home:
+            print("moving home ...", flush=True)
         print(f"episode {k + 1}/{episodes}: recording {seconds:g} s", flush=True)
-        results.append(session.record(task, seconds, keep=keep))
+        results.append(session.record(task, seconds, keep=keep, home=home))
         print(describe(results[-1]), flush=True)
         for warning in results[-1].warnings:
             print(f"  quality: {warning}", flush=True)
@@ -67,10 +73,12 @@ def _keys(
     seconds: float,
     episodes: int,
     keep: Callable[[EpisodeResult], bool] | None,
+    home: bool,
 ) -> list[EpisodeResult]:
     screen = session.screen
     assert screen is not None
-    screen.keys = KEYS
+    has_home = any(c.home is not None for c in session.cfg.controllers.values())
+    screen.keys = command_line(has_home, KEYS)
     results: list[EpisodeResult] = []
 
     def prompt(text: str, style: str = "bold") -> None:
@@ -90,7 +98,20 @@ def _keys(
                 raise Cancelled("emergency stop: the follower is latched in ESTOP")
             return ch
 
+        def go_home() -> None:
+            """Move home; keys stay live (q, e) while the arms move."""
+            sent_ns, limit = session.begin_home()
+            deadline = time.monotonic() + limit
+            while waiting := session.home_waiting(sent_ns):
+                key()
+                if time.monotonic() > deadline:
+                    raise Cancelled(f"home not reached: {', '.join(waiting)}")
+                prompt(f"moving home: {', '.join(waiting)}", "yellow")
+                time.sleep(0.1)
+
         for k in range(episodes):
+            if home:
+                go_home()
             while True:  # ready and Enter
                 warning = start_warning(
                     session.cfg, session.status(), time.monotonic_ns()
@@ -101,7 +122,11 @@ def _keys(
                     prompt(
                         f"episode {k + 1}/{episodes}: press Enter to record {seconds:g} s"
                     )
-                if key() in ("\r", "\n") and warning is None:
+                pressed = key()
+                if pressed == "h" and has_home:
+                    go_home()
+                    continue
+                if pressed in ("\r", "\n") and warning is None:
                     break
                 time.sleep(0.1)
             end = time.monotonic() + seconds

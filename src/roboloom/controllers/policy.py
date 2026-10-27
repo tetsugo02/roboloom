@@ -179,6 +179,7 @@ class PolicyController(Controller):
         follower: list[float],
         now_ns: int | None = None,
         follower_target: list[float] | None = None,
+        follower_velocity: list[float] | None = None,
     ) -> Envelope | None:
         raise TypeError(f"{self.name}: a policy controller is stepped by `tick`")
 

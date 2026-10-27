@@ -19,6 +19,7 @@ from .gravity import (
     open_tuning,
     release_trial,
 )
+from .pose import capture_pose
 from .watchdog import WatchdogResult, watchdog_test, watchdog_trial
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "WatchdogResult",
     "apply_commission",
     "calibrate_joints",
+    "capture_pose",
     "collect_holding_currents",
     "fit_gravity",
     "gravity_check",

@@ -16,6 +16,7 @@ from ..control.device import (
     check_hardware,
     parse_groups,
 )
+from ..control.homing import HomeSpec
 from ..control.trace import Trace
 from ..core.checks import names, positions, positive
 from ..core.protocol import Envelope
@@ -57,8 +58,15 @@ class ActuatedReader:
 
     def __init__(self, device: JointDevice):
         self.device = device
+        self.home_goal: dict[str, float] | None = None  # leader pose of the pair's home
+        self.home_spec: HomeSpec | None = None
+        self.home_error = ""
         device.read_state()
         device.enable_torque()
+
+    def set_home(self, goal: dict[str, float], spec: HomeSpec) -> None:
+        """The leader pose `home` moves to (the controller maps the saved follower pose)."""
+        self.home_goal, self.home_spec = goal, spec
 
     def read(self) -> Sample:
         state = self.device.read_state()
@@ -71,6 +79,22 @@ class ActuatedReader:
     def on_session(self, command: str, argument: str = "") -> None:
         if command in ("estop", "release", "quit"):
             self.device.disable_torque()
+        elif command == "start":
+            self.device.end_home()  # the operator takes over from the held pose
+        elif command == "home":
+            self.home_error = ""
+            if self.home_goal is None or self.home_spec is None:
+                self.home_error = "no home pose configured for this leader's controller"
+            elif not self.device.enabled:
+                self.home_error = "leader is limp (estop or release); restart to home"
+            else:
+                spec = self.home_spec
+                try:
+                    self.device.begin_home(
+                        self.home_goal, spec.max_speed, spec.tolerance, spec.pose.name
+                    )
+                except (RuntimeError, ValueError, ConnectionError) as exc:
+                    self.home_error = str(exc)
 
     def start_trace(self, path: str | Path) -> None:
         """Record every control tick; written on close (see `roboloom.control.trace`)."""
@@ -81,6 +105,8 @@ class ActuatedReader:
         state = self.device.state
         measured = (state.currents_mA if state else None) or []
         return {
+            **self.device.home_status(),
+            **({"home_error": self.home_error} if self.home_error else {}),
             "current_mA": {
                 self.device.joint_names[i]: [
                     round(v),
@@ -88,7 +114,7 @@ class ActuatedReader:
                 ]
                 for i, v in sorted(self.device.last_currents.items())
                 if abs(v) >= 0.5
-            }
+            },
         }
 
     def close(self) -> None:

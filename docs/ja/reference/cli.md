@@ -10,11 +10,12 @@
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |
 | `identify-gravity <calibration> --out <path> --collect --hardware` | 保持電流を測定して重力モデルを同定する |
+| `capture-pose <experiment> <name> --hardware` | followerの今の姿勢を `poses/<name>.yaml` に保存する（動かさない．`--force` で上書き） |
 | `commission <experiment> <node> --hardware` | 差分と操作者の確認を経てEEPROMを書き，読み戻す |
 | `tune-gravity <experiment> leader <group> --hardware` | gainとholdを対話調整する |
 | `gravity-check <experiment> leader <group> --hardware` | 補償の有無による姿勢の変化を測る |
 | `run <experiment> --hardware` | 操作画面で収集する |
-| `record <experiment> --task <text> --seconds <n> --hardware` | 一定時間のエピソードを収集する（`--episodes` で回数指定） |
+| `record <experiment> --task <text> --seconds <n> --hardware` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
 | `session <experiment> <operation> [task]` | 起動済みの実験へ操作を送る |
 
 `calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．dataflowと同時に同じバスを開かないでください．
@@ -28,7 +29,10 @@
 | `save` | エピソードを保存する |
 | `discard` | エピソードを破棄する |
 | `release` | HOLD中のfollowerを，腕を支えた確認後に脱力する |
+| `home` | leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かす．到着後，leaderは通常の制御に戻る |
 | `estop` | 非常停止する |
 | `quit` | 腕を支えた確認後にdataflowを終了する．Enterでfollowerも脱力，`hold` でfollowerは保持 |
+
+画面下の操作一覧には，`home` も他の操作と並んで表示されます．controllerに初期姿勢（`home:`）がないときは，`home` に取り消し線と `(no home pose)` が付き，入力しても実行しません．`record` の画面では，Enterの代わりに `h` で初期姿勢へ動かしてから開始できます（初期姿勢がないときは同じく無効）．nodesの表の詳細欄では，初期姿勢の名前を紫，注意（移動中・処理時間の余裕が少ない・欠損）を黄，異常（REJECTED・エラー・着かない関節）を赤で表示します．
 
 `stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../quick-start/rakuda2.md) にあります．既存の方策APIなど，leader以外の詳細は [Python API](python-api.md) を参照してください．

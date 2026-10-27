@@ -130,7 +130,7 @@ uv run roboloom validate rakuda2/experiment_gravity
 uv run roboloom run rakuda2/experiment_gravity --hardware
 ```
 
-1. robotの状態，センサー取得周期，recorderを確認します．
+1. robotの状態，センサー取得周期，recorderを確認します．初期姿勢（[home](../controllers/leader.md)）を設定した場合は，`home` で両方を初期姿勢へ動かしてから始められます．
 2. leaderをfollowerに揃え，controllerの `following` を確認します．`aligning` の警告中は，姿勢を合わせてから開始を再試行します．
 3. `start pick up the cup` で追従・記録を始め，leaderで操作します．
 4. `stop` で止めます．`stop` はfollowerを保持し，脱力はしません．

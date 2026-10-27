@@ -1,0 +1,22 @@
+# roboloom capture-pose 2026-10-27 19:28, robot `robot` (/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT1JD4T5-if00-port0).
+# Select it in the controller YAML: home: {pose: ../poses/ready.yaml, ...}
+robot_type: rakuda2
+unit: dynamixel_count
+pose:
+  torso_yaw: 2104
+  head_yaw: 1931
+  head_pitch: 2573
+  r_arm_sh_pitch1: 1898
+  r_arm_sh_roll: 1035
+  r_arm_sh_pitch2: 2175
+  r_arm_el_yaw: 1726
+  r_arm_wr_roll: 2190
+  r_arm_wr_yaw: 1498
+  r_arm_grip: 2503
+  l_arm_sh_pitch1: 2188
+  l_arm_sh_roll: 3021
+  l_arm_sh_pitch2: 2034
+  l_arm_el_yaw: 2451
+  l_arm_wr_roll: 2161
+  l_arm_wr_yaw: 2502
+  l_arm_grip: 2505

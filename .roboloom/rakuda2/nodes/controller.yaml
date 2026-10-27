@@ -77,3 +77,10 @@ joints:
   follower: l_arm_grip
   sign: 1
   offset: 0
+# Saved initial pose for `home` (save it first: roboloom capture-pose <exp> ready), then
+# uncomment. max_speed counts/s; slow by design.
+# home:
+#   pose: ../poses/ready.yaml
+#   max_speed: 200
+#   tolerance: 30
+#   timeout_s: 30

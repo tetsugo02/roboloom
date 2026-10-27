@@ -95,17 +95,31 @@ couplings:
     source: torso_yaw
     scale: -1.0
     reference: 2048
+    lead_ms: 70
 ```
 
 The controller subtracts the measured follower torso displacement from `reference`
 (the torso count facing forward) from the mapped head target. This example assumes
 matching yaw axis signs and count units. The reference is fixed, not the pose at
 alignment, so the alignment tolerance does not offset the head; align the follower
-camera heading with the leader's neck before launch. Speed and robot safety limits still apply, so limits and
+camera heading with the leader's neck before launch. `lead_ms` places the head target
+ahead along the measured torso velocity, for the head's own position-loop lag (about
+70 ms on Rakuda2). Speed and robot safety limits still apply, so limits and
 tracking lag leave camera heading errors. This is relative yaw compensation, not full
 camera stabilization. It applies to joint teleoperation, not policy outputs. Other
 robots can use their own joint names and scale. Details: [Leader](https://tetsugo02.github.io/roboloom/en/controllers/leader/)
 ([日本語](https://tetsugo02.github.io/roboloom/ja/controllers/leader/)).
+
+## Initial pose (optional)
+
+Save poses by name while the dataflow is stopped (follower posed by teleoperation then
+`quit` + `hold`, or by hand after `release`); each becomes `poses/<name>.yaml`:
+`uv run roboloom capture-pose rakuda2/experiment_gravity ready --hardware`.
+Choose one with `home:` in `nodes/controller.yaml` (see the comment there) and type `home`
+on the run screen (or `record ... --home`): leader and follower move slowly
+(`max_speed`) to it; one second after arriving the leader is back on gravity
+compensation. A gravity leader's arm groups
+need `homing:` (set in `leader_gravity.yaml`). Hands off the arms while they move.
 
 ## Gravity-compensated leader (optional)
 

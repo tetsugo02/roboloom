@@ -82,3 +82,11 @@ couplings:
   source: torso_yaw
   scale: -1.0
   reference: 2048  # follower torso count facing forward; head target unchanged here
+  lead_ms: 70  # head position loop lags ~70 ms (dataset 'head lag', 2026-10-27)
+# Saved initial pose for `home` (roboloom capture-pose, 2026-10-27). max_speed counts/s;
+# slow by design.
+home:
+  pose: ../poses/ready.yaml
+  max_speed: 200
+  tolerance: 30
+  timeout_s: 30

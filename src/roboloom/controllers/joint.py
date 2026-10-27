@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import time
 
+from ..control.homing import parse_home
 from ..core.checks import positions, positive
 from ..core.protocol import Envelope
 from ..inputs.base import InputDevice, JointInput
@@ -59,6 +60,13 @@ class JointController(Controller):
         self.couplings = JointCouplings(
             cfg.get("couplings", []), robot.joint_names, name
         )
+        self.home = parse_home(
+            cfg.get("home"),
+            name,
+            cfg.get("__dir__"),
+            robot,
+            cfg["max_speed_counts_per_s"],
+        )
         self.last_seq = -1
         self.last_boot: str | None = None
         self.last_target: list[float] | None = None
@@ -73,8 +81,19 @@ class JointController(Controller):
         self.aligned = False
         self.state = "robot_fault"
 
+    def leader_pose(self, follower: list[float]) -> dict[str, float]:
+        """Leader joint values that map onto `follower` (a pose at rest): the inverse of
+        the joint map, couplings included, so the controller sees no difference there."""
+        added = self.couplings.apply([0.0] * len(follower), follower)
+        return {
+            j["leader"]: j["sign"] * (f - j["offset"] - extra)
+            for j, f, extra in zip(self.cfg["joints"], follower, added, strict=True)
+        }
+
     def status(self) -> dict:
         out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
+        if self.home is not None:
+            out["home"] = self.home.pose.name
         if self.worst is not None and self.state in ("aligning", "following"):
             out["worst_joint"], out["worst_diff"] = (
                 self.worst[0],
@@ -88,6 +107,7 @@ class JointController(Controller):
         follower: list[float],
         now_ns: int | None = None,
         follower_target: list[float] | None = None,
+        follower_velocity: list[float] | None = None,
     ) -> Envelope | None:
         now = time.monotonic_ns() if now_ns is None else now_ns
         if (
@@ -110,7 +130,7 @@ class JointController(Controller):
             by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
         ]
         current = positions(follower, len(self.robot.joint_names))
-        target = self.couplings.apply(target, current)
+        target = self.couplings.apply(target, current, follower_velocity)
         diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
         worst = max(range(len(diffs)), key=diffs.__getitem__)
         self.worst = (self.robot.joint_names[worst], diffs[worst])

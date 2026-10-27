@@ -29,7 +29,8 @@ from ..drivers.base import Health, JointState, read_health, read_state
 from ..drivers.dynamixel_table import OPERATING_MODES
 from ..dynamics.base import GravityModel, load_gravity_model
 from . import LAWS
-from .laws import ControlLaw, _per_joint
+from .homing import Trajectory
+from .laws import ControlLaw, CurrentLaw, CurrentPosition, Position, _per_joint
 from .trace import Trace
 
 
@@ -190,6 +191,34 @@ def check_hardware(
                     )
 
 
+POSITION_MODES = {
+    OPERATING_MODES[m] for m in ("position", "extended_position", "current_position")
+}
+
+
+@dataclass
+class HomeRun:
+    """A move of a JointDevice to a saved pose, kept until `end_home` (episode start)."""
+
+    name: str
+    trajectory: Trajectory
+    since_ns: int
+    joints: list[int]  # device indices moved, in trajectory order
+    springs: dict[
+        int, tuple[float, float, float]
+    ]  # current joint -> (kp, max_mA, limit)
+    positions: set[int]  # position-law joints: goal follows the move
+    free: list[int]  # free joints in a position mode: torque on during the move
+    skipped: list[str]  # joints the move cannot drive
+    tolerance: float
+
+    def reference(self, now_ns: int) -> dict[int, float]:
+        ref = self.trajectory.at((now_ns - self.since_ns) / 1e9)
+        return dict(zip(self.joints, ref, strict=True))
+
+
+HOME_SETTLE_S = 1.0  # springs keep pulling this long after the move, then normal laws
+
 WATCHDOG_CHECK_MS = 100  # Bus Watchdog read at least this often while currents are sent
 
 
@@ -232,6 +261,8 @@ class JointDevice:
         self.watchdog_ms = watchdog_ms or None
         self.last_write_ns: int | None = None
         self.last_watchdog_ns: int | None = None
+        self.home: HomeRun | None = None
+        self.home_result: dict = {}  # how the last move ended, shown until start or home
 
     def _indices(self, predicate) -> list[int]:
         return sorted(i for law in self.laws if predicate(law) for i in law.joints)
@@ -286,6 +317,7 @@ class JointDevice:
     def disable_torque(self) -> None:
         """Release every joint (operator supports the arm)."""
         self.enabled = False
+        self.home, self.home_result = None, {}
         self._safe(self.limp)
         self.bus.set_torque(list(range(len(self.joint_names))), False)
 
@@ -366,10 +398,21 @@ class JointDevice:
         try:
             positions: dict[int, float] = {}
             currents: dict[int, float] = {}
+            if self.home is not None:  # the move, not a breakaway hold, places the arm
+                for law in self.laws:
+                    anchor = getattr(law, "anchor", None)
+                    if anchor is not None:
+                        anchor.update({i: self.state.positions[i] for i in law.joints})
             for law in self.laws:
                 goals = law.compute(self.state, target, dt)
                 positions.update(goals.positions)
                 currents.update(goals.currents_mA)
+            if self.home is not None:
+                self._home_goals(now, positions, currents)
+                if (now - self.home.since_ns) / 1e9 >= (
+                    self.home.trajectory.duration_s + HOME_SETTLE_S
+                ):
+                    self._finish_home()
             self.last_currents = currents
             if self.trace is not None:
                 model = {
@@ -390,9 +433,142 @@ class JointDevice:
             self._safe(self.limp)
             raise
 
+    # -- home: move to a saved pose and hold it until the episode starts ----------------
+
+    def begin_home(
+        self,
+        goal: Mapping[str, float],
+        max_speed: float,
+        tolerance: float,
+        name: str,
+        now_ns: int | None = None,
+    ) -> None:
+        """Move every joint this device can drive to `goal` (joint name -> value), slowly:
+        current laws with `homing` by a capped spring added to their output, position laws
+        by their goal, free joints whose motor is in a position mode with torque on. The springs
+        keep pulling HOME_SETTLE_S after the move, then the normal laws resume."""
+        if not self.enabled or self.state is None:
+            raise RuntimeError(f"{self.name}: torque is not enabled")
+        self.end_home()
+        modes = self._modes()
+        joints, springs, position_joints, free, skipped = [], {}, set(), [], []
+        for law in self.laws:
+            for k, i in enumerate(law.joints):
+                joint = self.joint_names[i]
+                if joint not in goal:
+                    continue
+                if isinstance(law, CurrentLaw):
+                    if law.homing is None:
+                        skipped.append(f"{joint} (no homing in {law.name})")
+                        continue
+                    springs[i] = (*law.homing, law.max_current[k])
+                elif isinstance(law, CurrentPosition) and law.fixed is not None:
+                    continue  # a return spring (trigger) keeps its rest
+                elif isinstance(law, Position):
+                    position_joints.add(i)
+                elif (
+                    law.mode is None
+                    and modes is not None
+                    and modes[i] in POSITION_MODES
+                ):
+                    free.append(i)
+                else:
+                    skipped.append(f"{joint} (free, not in a position mode)")
+                    continue
+                joints.append(i)
+        start = [self.state.positions[i] for i in joints]
+        trajectory = Trajectory(
+            start, [goal[self.joint_names[i]] for i in joints], max_speed
+        )
+        now = time.monotonic_ns() if now_ns is None else now_ns
+        self.home = HomeRun(
+            name,
+            trajectory,
+            now,
+            joints,
+            springs,
+            position_joints,
+            free,
+            skipped,
+            tolerance,
+        )
+        if free:
+            self.bus.write_goal_positions(free, [self.state.positions[i] for i in free])
+            self.bus.set_torque(free, True)
+
+    def end_home(self) -> None:
+        """Back to the normal laws (after arriving, or at start): position laws keep the
+        pose, free joints go limp again, breakaway holds anchor where the arm is."""
+        run, self.home = self.home, None
+        self.home_result = {}
+        if run is None:
+            return
+        goal = dict(zip(run.joints, run.trajectory.goal, strict=True))
+        for law in self.laws:
+            if isinstance(law, Position):
+                law.goal.update({i: goal[i] for i in law.joints if i in run.positions})
+            anchor = getattr(law, "anchor", None)
+            if anchor is not None and self.state is not None:
+                anchor.update({i: self.state.positions[i] for i in law.joints})
+        if run.free:
+            self.bus.set_torque(run.free, False)
+
+    def home_status(self, now_ns: int | None = None) -> dict:
+        """`moving` during the move and its settling; then the result (`reached`, or
+        `short` with the differences) until the next start or home."""
+        run = self.home
+        if run is None:
+            return dict(self.home_result)
+        now = time.monotonic_ns() if now_ns is None else now_ns
+        progress = run.trajectory.progress((now - run.since_ns) / 1e9)
+        out: dict = {"home": run.name, "home_state": "moving"}
+        out["home_progress"] = round(progress, 2)
+        if run.skipped:
+            out["home_skipped"] = run.skipped
+        return out
+
+    def _finish_home(self) -> None:
+        """The move and its settling are over: keep the result, back to the normal laws
+        (gravity compensation, breakaway hold) while the operator waits to start."""
+        run = self.home
+        assert run is not None and self.state is not None
+        # Springs can stop short where static friction beats them; the start check
+        # (alignment tolerance) decides whether that is close enough.
+        far = {
+            self.joint_names[i]: round(self.state.positions[i] - g)
+            for i, g in zip(run.joints, run.trajectory.goal, strict=True)
+            if abs(self.state.positions[i] - g) > run.tolerance
+        }
+        result: dict = {"home": run.name, "home_state": "short" if far else "reached"}
+        if far:
+            result["home_far"] = far
+        if run.skipped:
+            result["home_skipped"] = run.skipped
+        self.end_home()
+        self.home_result = result
+
+    def _modes(self) -> list[int] | None:
+        reader = getattr(self.bus, "read_register", None)
+        return None if reader is None else reader("operating_mode")
+
+    def _home_goals(
+        self, now: int, positions: dict[int, float], currents: dict[int, float]
+    ) -> None:
+        run = self.home
+        assert run is not None and self.state is not None
+        reference = run.reference(now)
+        for i, ref in reference.items():
+            if i in run.springs:
+                kp, cap, limit = run.springs[i]
+                pull = max(-cap, min(cap, kp * (ref - self.state.positions[i])))
+                currents[i] = max(-limit, min(limit, currents.get(i, 0.0) + pull))
+            else:
+                positions[i] = ref
+
     def limp(self) -> None:
         """Zero current and torque off on current-mode joints; other joints keep their goals."""
         current = self._indices(lambda law: law.current_mode)
+        self.home = None
         if not current:
             return
         self.enabled = False

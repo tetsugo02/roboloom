@@ -90,6 +90,9 @@ control:
   range: ../calibration/travel_right.yaml
   range_margin: 100
   barrier_mA_per_count: 0.5
+  homing:  # `home` pulls the arm with this spring (on top of gravity), capped at max_mA
+    kp_mA_per_count: 0.5
+    max_mA: 40
 - group: left_arm
   law: gravity_comp
   joints:
@@ -108,6 +111,9 @@ control:
   range: ../calibration/travel_left.yaml
   range_margin: 100
   barrier_mA_per_count: 0.5
+  homing:  # `home` pulls the arm with this spring (on top of gravity), capped at max_mA
+    kp_mA_per_count: 0.5
+    max_mA: 40
 - group: trigger
   law: spring
   joints:

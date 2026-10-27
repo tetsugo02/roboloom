@@ -492,6 +492,54 @@ class Session:
             return False  # nobody confirmed supporting the arms
         return answer.strip().lower() != "hold"
 
+    def home(self, timeout: float | None = None) -> None:
+        """Move every leader-follower pair with a `home` pose there, slowly, and wait until
+        both arrived (at most `timeout` s, default the YAML's `timeout_s`). Leaders go back to
+        their normal laws a second after arriving. Raises SessionError when a node refused or did not
+        arrive."""
+        sent_ns, limit = self.begin_home()
+        deadline = time.monotonic() + (timeout if timeout is not None else limit)
+        while True:
+            waiting = self.home_waiting(sent_ns)
+            if not waiting:
+                return
+            if time.monotonic() > deadline:
+                raise SessionError(f"home not reached: {', '.join(waiting)}")
+            time.sleep(0.1)
+
+    def begin_home(self) -> tuple[int, float]:
+        """Send `home`; returns (send time in monotonic ns, the YAML's timeout in s)."""
+        pairs = [c for c in self.cfg.controllers.values() if c.home is not None]
+        if not pairs:
+            raise SessionError("no controller has a home pose (home: in its YAML)")
+        sent_ns = time.monotonic_ns()
+        self.wait_report(self.send("home"))
+        return sent_ns, max(c.home.timeout_s for c in pairs if c.home is not None)
+
+    def home_waiting(self, sent_ns: int) -> list[str]:
+        """Nodes still moving home since `sent_ns` (empty: arrived); raises SessionError
+        when one refused."""
+        self._check_alive()
+        status = self.status()
+        waiting = []
+        for c in self.cfg.controllers.values():
+            if c.home is None:
+                continue
+            for name in (c.robot.name, *([c.source.name] if c.source else [])):
+                item = status.get(name, {})
+                fields = item.get("fields", {})
+                fresh = item.get("t_ns", 0) > sent_ns
+                problem = fields.get("home_error") or (
+                    fields.get("error") if name in self.cfg.robots else ""
+                )
+                if fresh and problem:
+                    raise SessionError(f"{name}: home: {problem}")
+                # "short": the move ended short of the pose where friction stopped a
+                # spring; the start check (alignment) decides whether that is close enough
+                if not fresh or fields.get("home_state") not in ("reached", "short"):
+                    waiting.append(f"{name} ({fields.get('home_state', 'waiting')})")
+        return waiting
+
     def estop(self) -> None:
         """Latch the follower in ESTOP (stays until the dataflow restarts)."""
         self.send("estop")
@@ -523,6 +571,7 @@ class Session:
         on_tick: Callable[[dict], None] | None = None,
         tick_s: float = 0.2,
         ready_timeout: float = 60.0,
+        home: bool = False,
     ) -> EpisodeResult:
         """One episode: wait until it may start (leader aligned with the follower, at most
         `ready_timeout` s), start, record for `seconds`, stop, then save it unless `keep`
@@ -531,8 +580,12 @@ class Session:
 
         `task` is a string or a function of `EpisodeInfo`. `on_tick(status)` is called
         every `tick_s` while recording. An exception or Ctrl-C discards the episode.
+        `home=True` first moves to the saved home pose (`home`), so every episode starts
+        from the same pose.
         """
         name = task(self.next_info()) if callable(task) else task
+        if home:
+            self.home()
         self.wait_ready(
             ready_timeout
         )  # every episode starts aligned, not only the first
