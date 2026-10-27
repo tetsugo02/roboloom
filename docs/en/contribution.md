@@ -16,7 +16,9 @@ uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
 
-Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/experiment.yaml` and `uv run roboloom run examples/mock/experiment.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
+Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/experiment_ui.yaml` and `uv run roboloom run examples/mock/experiment_ui.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
+
+The UI preview uses a separate `datasets/rakuda-mock-ui` output and session identity. Existing `datasets/rakuda-mock` data is preserved. Older mock datasets can have a different schema (for example, DIGIT image sizes or missing effort fields) and cannot be resumed with the current configuration. Use a separate output for each schema; do not delete existing data to preview the screen.
 
 Do not include formatting changes unrelated to your change. Report mock tests, real-data checks, and hardware verification separately.
 
@@ -71,3 +73,7 @@ Fonts and colors are set in `docs/overrides/` (`main.html` and `assets/styleshee
 The workflow uses Python 3.12 and uv, installing only the locked documentation dependencies with `uv sync --locked --only-group docs`. It then runs `uv run --no-sync python scripts/docs.py build` and publishes the successful output. Robot and sensor dependencies and hardware connections are not required.
 
 For the initial setup, set the repository's **Settings → Pages → Build and deployment → Source** to **GitHub Actions** ([GitHub setup instructions](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)). Once the workflow reaches `main`, it publishes the site; the URL appears in the `github-pages` environment and the Actions deployment result. Failed builds are not deployed.
+
+## Operator UI extensions
+
+For new device kinds, keep device access in the backend and publish standard status fields. Optional explicit kind/role presenters, backend contracts, and Pilot/MockBus verification are described in [Operator screen](reference/operator-screen.md).

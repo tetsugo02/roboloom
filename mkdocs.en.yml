@@ -25,6 +25,7 @@ nav:
   - Reference:
       - Configuration: reference/configuration.md
       - CLI: reference/cli.md
+      - Operator screen: reference/operator-screen.md
       - Python API: reference/python-api.md
       - Gravity tuning: reference/gravity-tuning.md
   - Contribution:

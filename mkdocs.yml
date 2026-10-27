@@ -25,6 +25,7 @@ nav:
   - Reference:
       - 設定: reference/configuration.md
       - CLI: reference/cli.md
+      - 操作画面: reference/operator-screen.md
       - Python API: reference/python-api.md
       - 重力補償の調整: reference/gravity-tuning.md
   - Contribution:

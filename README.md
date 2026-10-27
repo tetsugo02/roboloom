@@ -111,22 +111,13 @@ uv run roboloom validate rakuda2/experiment_camera
 uv run roboloom run rakuda2/experiment_camera --hardware
 ```
 
-`run` を端末で実行すると，画面の上部に全ノードの状態が固定表示されます．
+`run`・`record`・`infer`・`tune-gravity` を対話端末で実行すると，Textualのノード一覧・詳細・操作メニュー・スクロール可能なログ・コマンド欄を表示します．Logsは幅にかかわらず専用タブに隠し，Operationsを広く表示します．幅100文字未満ではノード一覧と詳細も切り替えて表示します．ノード選択は表示だけで，操作は実験全体を対象にします．縦・横の境界をマウスでドラッグしてペインの幅・高さを調整でき，ダブルクリックで既定へ戻せます．サイズ比率はセッション内で保持します．
 
-- robot：`HOLD`，`ACTIVE`，`FAULT` などと，その理由，tick の周期．
-- controller：`following`（追従中），`aligning`（姿勢合わせ待ち．最も離れた関節と差を表示），`input_stale`（leader の入力が途絶えている）．
-- 入力・センサー：実測のレートと，最後のサンプルからの経過時間．
-- recorder：記録中のタスク，行数，欠損．
-- 2 秒以上状態が届かないノードは赤で表示します．
+Ctrl-Lで入力，Tab/Shift-Tabで補完，↑↓で履歴，Ctrl-N/Ctrl-Pでペイン移動，Ctrl-Gで確認なしの非常停止です．Ctrl-C/Ctrl-Qと `quit` は同じ終了確認を開き，保持・支持した上での脱力・キャンセルを選びます（初期選択はキャンセル）．`release` にも支持確認があります．
 
-その下にメッセージ（保存結果，エラー，状態の変化）と入力行があります．dora 自身の出力は，実験ファイルの隣の `logs/<実験名>-<時刻>/dora.log` に送り，エラーらしい行だけをメッセージ欄に写します．Ctrl-C は `quit` と同じです．パイプなど端末でないとき，または `--plain` を付けたときは，従来の行入力で動きます．
+`run --plain` は行入力，`record --plain`・`infer --plain` は非対話処理です．非TTYも同じ経路です．`tune-gravity` は機器open前に非TTYを拒否します．Python APIの `Session.launch(..., screen="auto")` は入力を読まないRich表示を維持し，`print()`・`input()` と既存の終了確認を使えます．
 
-表示する項目は，各ノードが `status` 出力に載せる `fields` で決まります（`core/status.py`）．新しいロボットやセンサーは，`fields` を足すだけで `key=value` として表示されます．専用の表示にしたいときは，`ui/render.py` の `RENDERERS` に role ごとの関数を 1 つ登録します．
-
-実行中に入力できるコマンド：
-
-- `start <task>`，`stop`，`save`，`discard`，`estop`，`quit`
-- `release`：follower のトルクを切る．HOLD 中だけ受け付け，CLI が「腕を支えて yes」と確認する．
+コマンドは `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` です．各操作の利用可否と理由をメニューに表示します．doraの出力は実験の隣の `logs/<実験名>-<時刻>/dora.log` に保存し，画面のログにも表示します．新しい機種は通常の登録と状態通知で汎用表示でき，専用Presenterは任意です．キー・機能情報・表示拡張は [操作画面](docs/ja/reference/operator-screen.md)（[English](docs/en/reference/operator-screen.md)）を参照してください．mock検証と実機検証は別です．
 
 別端末からは `uv run roboloom session rakuda2/experiment_camera start handover` の形でも操作できます．
 
@@ -137,9 +128,9 @@ uv run roboloom record rakuda2/experiment_camera --task handover --seconds 10 --
 ```
 
 - 動作：
-  - controller が準備できたら，Enter で開始します．
-  - `q` はエピソードを破棄して終わります．
-  - `e` は非常停止です．
+  - controllerの準備後，StartメニューでEnterを押して各エピソードを開始します．
+  - 準備待ち，残り時間，回数，保存結果を表示します．`--home` は毎回homeへ移動します．
+  - 終了時は保持・脱力・キャンセルを選びます．Ctrl-Gは入力中・確認中も非常停止します．
 - 保存したとき：
   - 欠損率，有効な行動の割合，制御周期の最大値が `recorder.quality` の上限を超えていれば，警告を出します．
 
@@ -218,7 +209,7 @@ uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所�
 
 実機を動かす手順は，腕を支えられる状態で行ってください．
 - テンプレートの `nodes/robot.yaml` は `torque: true` です．初回の収集前に `torque: false` へ変更し，followerを動かさずデータの経路を確かめます（leaderの制御は独立して通電します）．
-- 終了するときは `stop` → 腕を支えて `quit` → Enter（followerも脱力）の順にします．followerを保持したまま終えるときは，確認に `hold` と入力します．
+- 終了するときは `stop` → 腕を支えて `quit` → 確認で保持または支持後の脱力を明示選択します．初期選択はキャンセルです．
 
 leader の重力補償の調整（gain と hold の意味，`tune-gravity` の使い方）は，[docs/ja/reference/gravity-tuning.md](docs/ja/reference/gravity-tuning.md) を参照してください．
 

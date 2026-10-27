@@ -82,15 +82,15 @@ gain は「重さをどれだけ消すか」，`hold_mA` は「どれくらい�
 uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware
 ```
 
-1. 腕を支えたまま起動します．電流は `ramp_s` 秒かけて上がります．調整中は，ほかのグループ（反対の腕）は脱力しています．
-2. 画面の上に，式と各値の意味，感触ごとの調整表が出ます．中央の表には，関節ごとの次の値が出ます．
+1. 腕を支えたまま起動します．電流は `ramp_s` 秒かけて上がります．ほかの電流制御グループは重力gainとbreakaway holdをゼロにしますが，トルクオフではなく，可動域の押し戻しや減衰は残ります．位置制御グループは目標を保持する場合があります．調整終了時は全グループを明示的に脱力してからバスを閉じます．
+2. Textualの一覧で関節を選び，Detailsで値の意味，調整の説明，選んだ関節の次の値を確認します．
    - ID，gain，hold，g(q)，送った電流，実際の電流，位置，速度
    - 状態：`gravity`（重力補償だけ），`holding`（保持が効いている），`sliding`（押し負けて滑っている），`free`（何もしない），`off`（比較のため重力補償を切っている）
 3. 「guide」の欄に，選んだ関節で重力がかかる姿勢が出ます．その姿勢に置いて手を離し，その関節がどう動くかを見ます．
 4. 4 節の表に従って，キーで gain と hold を変えます．値はすぐに反映されます．
 5. `0` を押すと，その関節の重力補償だけを切って，補償なしの感触と比べられます．もう一度押すと戻ります．
-6. ↓（または `j`）で次の関節に移ります．`gain 0` で重力の影響が小さい関節（ねじりの関節など）は，そのままにして次へ進みます．
-7. `s` で保存します（`calibration/gravity_tuning_right.yaml`）．`q` で終了します．未保存なら確認が出ます．
+6. Ctrl-Nで関節一覧へ移り，↓で次の関節を選びます（Ctrl-Lの入力欄で `joint <name>` も使えます）．`gain 0` で重力の影響が小さい関節（ねじりの関節など）は，そのままにして次へ進みます．
+7. メニューまたは `save` で保存します（`calibration/gravity_tuning_right.yaml`）．`quit` またはCtrl-Qで終了し，保存・破棄・キャンセル（初期選択）を選びます．保存中の追加変更は未保存として残ります．
 8. 左腕も `left_arm` で同じように調整します．
 
 調整した値は，`roboloom run rakuda2/experiment_gravity --hardware` でそのまま使われます．
@@ -120,3 +120,5 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardw
 ```bash
 uv run roboloom gravity-check rakuda2/experiment_gravity leader right_arm --poses 1 --scales 1,0,2,-2 --hardware
 ```
+
+メニューと編集可能な入力欄は `joint <name>`・`gain + / -`・`hold + / -`・`compare`・`resume`・`save`・`estop`・`quit` を共用します．Ctrl-Gは次の制御処理で脱力して再起動までESTOPをラッチします．`resume` は通常のSTOPPEDだけを再開します．制御とファイル保存は描画から独立し，非TTYは機器open前に拒否します．フォーカス・入力・確認のキーは [操作画面](operator-screen.md) を参照してください．

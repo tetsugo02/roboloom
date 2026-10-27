@@ -7,6 +7,7 @@
 # Implementation
 ## Overall
 - When a repository's documentation and its existing code disagree, follow the conventions used in the existing code, and in your final reply point out each inconsistency you found between the documentation and the code.
+- Design and build the system to easily accommodate future additions of new robots, controller arms, or control systems such as gello.
 
 # Documentation
 

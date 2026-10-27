@@ -24,18 +24,41 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
 from ..config import ExperimentConfig, load_experiment
-from ..errors import ConfigError, HardwareError, RoboloomError
+from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
 from ..recording.metrics import assess
 from ..ui.client import SessionClient
 from ..ui.screen import SessionScreen, wanted
 from .flow import write_flow
+
+
+@dataclass(frozen=True)
+class _Startup:
+    cancelled: threading.Event
+    opened: Callable[[Session], None]
+
+
+_startup: ContextVar[_Startup | None] = ContextVar("session_ui_startup", default=None)
+
+
+@contextmanager
+def _ui_launch(
+    cancelled: threading.Event, opened: Callable[[Session], None]
+) -> Iterator[None]:
+    """Internal startup hook without changing the public launch signature."""
+    token = _startup.set(_Startup(cancelled, opened))
+    try:
+        yield
+    finally:
+        _startup.reset(token)
 
 
 class SessionError(RoboloomError):
@@ -125,6 +148,8 @@ class Session:
         self.log_dir, self._workdir, self.fifo = log_dir, workdir, fifo
         self.log_path = log_dir / "dora.log"
         self._ids = itertools.count(1)
+        self._closed = False
+        self._cancel_local = threading.local()
         self._reports: list[dict] = []
         self._recorded: list[str] = []
         self._episode: str | None = None  # task of the episode in progress
@@ -230,6 +255,10 @@ class Session:
             operator = TerminalOperator() if sys.stdin.isatty() else None
         session.operator = operator if not isinstance(operator, str) else None
         try:
+            startup = _startup.get()
+            if startup is not None:
+                session._cancel_local.event = startup.cancelled
+                startup.opened(session)
             if wanted(screen):
                 session.screen = SessionScreen(
                     session, f"roboloom  {Path(cfg.path).parent.name}"
@@ -239,6 +268,7 @@ class Session:
         except BaseException:
             session.close()
             raise
+        session._cancel_local.event = None
         return session
 
     @property
@@ -261,6 +291,9 @@ class Session:
         An actuated leader goes limp. The follower torque goes off when `release` is
         true; when it is None, the operator is asked (Enter releases, `hold` keeps the
         follower holding) and without an operator the follower keeps holding."""
+        if self._closed:
+            return
+        self._closed = True
         try:
             if self.alive:
                 try:
@@ -354,7 +387,23 @@ class Session:
             or ERROR_LINE.match(line.strip())
         ][-6:]
 
+    @contextmanager
+    def _cancellable(self, cancelled: threading.Event | None) -> Iterator[None]:
+        """Internal UI hook; default Python API waits remain unchanged."""
+        previous = getattr(self._cancel_local, "event", None)
+        self._cancel_local.event = cancelled
+        try:
+            yield
+        finally:
+            self._cancel_local.event = previous
+
+    def _check_cancelled(self) -> None:
+        cancelled = getattr(self._cancel_local, "event", None)
+        if cancelled is not None and cancelled.is_set():
+            raise Cancelled("operation cancelled")
+
     def _check_alive(self) -> None:
+        self._check_cancelled()
         if not self.alive:
             tail = self.log_path.read_text()[-2000:] if self.log_path.exists() else ""
             raise SessionError(
@@ -410,6 +459,7 @@ class Session:
         """The report answering command `ident`; raises SessionError if it failed."""
         deadline = time.monotonic() + timeout
         while True:
+            self._check_cancelled()
             self.poll()
             with self._lock:
                 found = next((r for r in self._reports if r.get("id") == ident), None)
@@ -600,7 +650,8 @@ class Session:
             stopped = self.stop()
         except BaseException:
             if self.alive:
-                self.discard()
+                with self._cancellable(None):
+                    self.discard()
             raise
         if keep is not None and not keep(stopped):
             self.discard()

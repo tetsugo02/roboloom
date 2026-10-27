@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from .config import load_experiment, resolve_experiment
-from .errors import Cancelled, RoboloomError
+from .errors import Cancelled, ConfigError, RoboloomError
 from .runtime.flow import build_flow
 
 
@@ -125,6 +125,9 @@ def main() -> None:
         "record", help="record episodes of a fixed length (default: one) and exit"
     )
     rec.add_argument("experiment")
+    rec.add_argument(
+        "--plain", action="store_true", help="use non-interactive recording"
+    )
     rec.add_argument("--task", required=True, help="task text stored with every frame")
     rec.add_argument("--seconds", type=float, required=True)
     rec.add_argument("--episodes", type=int, default=1)
@@ -140,6 +143,9 @@ def main() -> None:
         "infer", help="run a policy experiment for fixed-length episodes"
     )
     inf.add_argument("experiment")
+    inf.add_argument(
+        "--plain", action="store_true", help="use non-interactive inference"
+    )
     inf.add_argument("--seconds", type=float, required=True)
     inf.add_argument("--episodes", type=int, default=1)
     inf.add_argument(
@@ -231,19 +237,18 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "tune-gravity":
         from .ui.tune import run
 
-        tuning = setup.open_tuning(
-            args.experiment, args.node, args.group, hardware=args.hardware
-        )
-        mode = "mock" if load_experiment(args.experiment).mock else "hardware"
-        try:
-            outcome = run(
-                tuning,
-                tuning.period_s,
-                f"tune-gravity  {args.node}.{args.group}  ({mode})",
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            raise ConfigError(
+                "tune-gravity requires an interactive terminal; no device was opened"
             )
-        finally:
-            tuning.close()
-        print(f"{outcome}: {tuning.path}")
+        mode = "mock" if load_experiment(args.experiment).mock else "hardware"
+        outcome = run(
+            lambda: setup.open_tuning(
+                args.experiment, args.node, args.group, hardware=args.hardware
+            ),
+            f"tune-gravity  {args.node}.{args.group}  ({mode})",
+        )
+        print(outcome)
         return
     if args.command == "calibrate-joints":
         zeros = setup.calibrate_joints(args.calibration, operator, args.joints)
@@ -289,19 +294,44 @@ def _dispatch(args: argparse.Namespace) -> None:
         print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
         return
     policy = getattr(args, "policy", None)
-    live = (
-        args.command == "run"
-        and not args.plain
-        and sys.stdin.isatty()
-        and sys.stdout.isatty()
-    )
+    live = not args.plain and sys.stdin.isatty() and sys.stdout.isatty()
+    if live:
+        from .ui.app import run_backend
+        from .ui.backend import RecordingPlan, SessionBackend
+
+        recording = None
+        if args.command in ("record", "infer"):
+            recording = RecordingPlan(
+                args.task or "inference",
+                args.seconds,
+                args.episodes,
+                save=args.command == "record" or bool(args.task),
+                home=getattr(args, "home", False),
+            )
+        backend = SessionBackend(
+            lambda: Session.launch(
+                cfg,
+                hardware=args.hardware,
+                policy=policy,
+                policy_kwargs=getattr(args, "policy_kwargs", None),
+                screen=False,
+                operator=None,
+            ),
+            mode=args.command,
+            recording=recording,
+        )
+        outcome = run_backend(backend)
+        if outcome == "failed":
+            raise ConfigError(backend.failure)
+        if backend.session is not None:
+            print(f"logs: {backend.session.log_dir}")
+        return
     session = Session.launch(
         cfg,
         hardware=args.hardware,
         policy=policy,
         policy_kwargs=getattr(args, "policy_kwargs", None),
-        # `run` draws its own screen with a command line; record/infer use the Session's
-        screen=False if args.command == "run" else "auto",
+        screen=False,
     )
     try:
         if args.command == "record":
@@ -319,17 +349,6 @@ def _dispatch(args: argparse.Namespace) -> None:
                 args.episodes,
                 keep=lambda _: bool(args.task),
             )
-        elif live:
-            from .ui.live import LiveSession
-
-            LiveSession(
-                session.client,
-                session.process,
-                session.log_path,
-                "roboloom",
-                limp_on_quit=session.actuated,
-                held=session.held,
-            ).run()
         else:
             _plain_loop(session.client, session.process)
     finally:
