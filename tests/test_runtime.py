@@ -28,6 +28,16 @@ def test_start_requires_recent_following_status(state: str, age_ns: int) -> None
     assert runtime.start_warning(cfg, {}, S) is not None
 
 
+def test_every_start_checks_the_follower_is_at_the_leader() -> None:
+    cfg = load_experiment("examples/mock/experiment.yaml")
+    fields = {"state": "following", "tolerance": 100, "worst_joint": "head_yaw"}
+    latest = {"controller": {"t_ns": S, "fields": {**fields, "worst_diff": 140.0}}}
+    warning = runtime.start_warning(cfg, latest, S)
+    assert warning is not None and "head_yaw differs by 140.0" in warning
+    latest["controller"]["fields"]["worst_diff"] = 60.0
+    assert runtime.start_warning(cfg, latest, S) is None
+
+
 def test_session_warns_without_starting_then_accepts_aligned_retry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

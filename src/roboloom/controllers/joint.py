@@ -65,7 +65,9 @@ class JointController(Controller):
         self.last_target_ns = 0
         self.aligned = False
         self.state = "waiting_input"
-        self.worst: tuple[str, float] | None = None  # joint farthest from alignment
+        # Joint farthest from the leader at the last update, also while following: every
+        # start is checked against it, not only the first alignment.
+        self.worst: tuple[str, float] | None = None
 
     def reset(self) -> None:
         self.aligned = False
@@ -73,7 +75,7 @@ class JointController(Controller):
 
     def status(self) -> dict:
         out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
-        if self.worst is not None and self.state == "aligning":
+        if self.worst is not None and self.state in ("aligning", "following"):
             out["worst_joint"], out["worst_diff"] = (
                 self.worst[0],
                 round(self.worst[1], 1),
@@ -109,10 +111,10 @@ class JointController(Controller):
         ]
         current = positions(follower, len(self.robot.joint_names))
         target = self.couplings.apply(target, current)
+        diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
+        worst = max(range(len(diffs)), key=diffs.__getitem__)
+        self.worst = (self.robot.joint_names[worst], diffs[worst])
         if not self.aligned:
-            diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
-            worst = max(range(len(diffs)), key=diffs.__getitem__)
-            self.worst = (self.robot.joint_names[worst], diffs[worst])
             if diffs[worst] > self.cfg["alignment_tolerance"]:
                 self.state = "aligning"
                 return None

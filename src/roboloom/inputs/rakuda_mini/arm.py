@@ -1,4 +1,4 @@
-"""Rakuda2 leader: joint intents with optional per-group motor control laws."""
+"""Rakuda-mini arm: joint intents with optional per-group motor control laws."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from ...core.checks import identity
 from ...robots.base import RobotBus
 from ...robots.rakuda2.spec import (
     JOINTS,
-    LEADER_MODELS,
     MOTOR_IDS,
+    RAKUDA_MINI_MODELS,
     UNIT,
     check_motor_ids,
     expected_registers,
@@ -16,7 +16,7 @@ from ...robots.rakuda2.spec import (
 from ..base import JointInput
 
 
-class RakudaLeader(JointInput):
+class RakudaMini(JointInput):
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg, JOINTS, UNIT)
         check_motor_ids(cfg, name)
@@ -36,4 +36,4 @@ class RakudaLeader(JointInput):
         return (self.port,)
 
     def open_bus(self, mock: bool) -> RobotBus:
-        return open_rakuda_bus(self.port, mock, LEADER_MODELS, self.cfg, self.name)
+        return open_rakuda_bus(self.port, mock, RAKUDA_MINI_MODELS, self.cfg, self.name)

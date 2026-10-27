@@ -1,4 +1,4 @@
-type: rakuda2_leader
+type: rakuda_mini
 port: mock://leader
 motor_ids:
 - 27

@@ -1,6 +1,6 @@
 # Trial: gravity-compensated arms, free torso, neck yaw/pitch held at startup pose.
 # Align the neck before launch; support the leader before shutdown.
-type: rakuda2_leader
+type: rakuda_mini
 port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
 motor_ids:
 - 27

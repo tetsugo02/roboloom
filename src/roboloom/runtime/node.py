@@ -64,6 +64,15 @@ def start_warning(
             )
         if state not in READY:
             return f"{name}: controller is {state}; wait until ready, then retry start"
+        # Checked before every start: following can leave the follower behind the leader
+        # (speed and range limits), and the first alignment says nothing about later ones.
+        diff, tolerance = fields.get("worst_diff"), fields.get("tolerance")
+        if diff is not None and tolerance is not None and diff > tolerance:
+            return (
+                f"{name}: the follower is not at the leader: {fields.get('worst_joint')} "
+                f"differs by {diff} (tolerance {tolerance}); hold the leader still near "
+                "the follower, then retry start"
+            )
     return None
 
 

@@ -2,7 +2,7 @@
 
 Rakuda2 has **17 joints**: 3 torso/head joints, plus 6 arm joints and 1 gripper joint on each of the left and right sides. Joint values are raw Dynamixel position counts, and current is in mA.
 
-The follower is `type: rakuda2_follower` and the operator input is `type: rakuda2_leader`. The leader and follower use separate Dynamixel buses, each owned exclusively by its node. Create the configuration with `roboloom init rakuda2`.
+The follower is `type: rakuda2_follower` and the operator input, in the `leader` role, is the Rakuda-mini arm (`type: rakuda_mini`). The leader and follower use separate Dynamixel buses, each owned exclusively by its node. Create the configuration with `roboloom init rakuda2`.
 
 ## Supported controllers
 

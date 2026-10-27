@@ -96,6 +96,19 @@ def test_reference_is_configured_not_the_pose_at_alignment() -> None:
     assert cmd is not None and cmd.payload["positions"][:2] == [2048, 2048]
 
 
+def test_following_reports_how_far_the_follower_is_from_the_leader() -> None:
+    ctl = controller()
+    now = time.monotonic_ns() - 10_000_000_000
+    hold = [2048.0] * 17
+    assert ctl.update(intent(0, hold, now), hold, now) is not None
+    leader = hold.copy()
+    leader[5] += 500  # the leader moved away; the follower has not caught up yet
+    assert ctl.update(intent(1, leader, now + 1), hold, now + 1) is not None
+    status = ctl.status()
+    assert status["state"] == "following"
+    assert (status["worst_joint"], status["worst_diff"]) == ("r_arm_sh_pitch2", 500)
+
+
 @pytest.mark.parametrize(
     "raw",
     [

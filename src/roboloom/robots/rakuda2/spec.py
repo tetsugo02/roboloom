@@ -1,6 +1,6 @@
 """Rakuda2 hardware description: 17 Dynamixel joints in robopy's canonical order.
 
-Shared by the follower and the leader arm in `roboloom.inputs.rakuda2`.
+Shared by the follower and by Rakuda-mini, its teleoperation arm (`roboloom.inputs.rakuda_mini`).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ _SHOULDER = (
 FOLLOWER_MODELS = tuple(
     "XM540-W270" if j in _SHOULDER else "XM430-W350" for j in JOINTS
 )
-LEADER_MODELS = tuple(
+RAKUDA_MINI_MODELS = tuple(
     "XM430-W350" if j == "torso_yaw" else "XC330-T288" for j in JOINTS
 )
 

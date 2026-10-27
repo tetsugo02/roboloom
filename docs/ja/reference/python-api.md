@@ -50,6 +50,7 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 ```
 
 - `launch` は，すべてのノードが状態を報告し始めるまで待ちます．
+- 毎回の `start` の前に，followerがleaderから `alignment_tolerance` 以内にあるかを確かめます（最初の位置合わせだけではありません）．`record` はエピソードごとに，揃うまで待ちます（`ready_timeout`，既定 60 秒）．`start` は，ずれていると `SessionError` を出します．
 - 実機を開く実験では，`hardware=True` が必要です．
 - `with` を抜けると，次のことをします．
   - 途中のエピソードがあれば破棄する．

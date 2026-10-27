@@ -231,12 +231,12 @@ src/roboloom/
   core/         Envelope（通信形式），値の検査，型レジストリ，Source（入力・センサー共通の契約）
   drivers/      機器バス（Dynamixel，模擬バス）．inputs と robots が共有する
   inputs/       操作入力の契約（InputDevice，JointInput）
-    rakuda2/    leader（rakuda2_leader）
+    rakuda_mini/ Rakuda-mini（rakuda_mini．Rakuda2 を操作するアーム．実験では leader の役割で使う）
   controllers/  入力から RobotCommand への変換．joint，policy（方策ノード）
   control/      制御則（laws）と JointDevice（device）．leader と follower が共有する
   dynamics/     重力モデルの契約，URDF 運動学，同定（regressor，identify）
   robots/       Robot の契約（base），FollowerSafety（safety）
-    rakuda2/    spec（関節・モーター ID・モデル．leader も参照），follower（rakuda2_follower），model（URDF），template（init が写す設定一式）
+    rakuda2/    spec（関節・モーター ID・モデル．Rakuda-mini も参照），follower（rakuda2_follower），model（URDF），template（init が写す設定一式）
   sensors/
     vision/     ImageSensor（base），realsense_rgb
     tactile/    TactileImageSensor（base），digit

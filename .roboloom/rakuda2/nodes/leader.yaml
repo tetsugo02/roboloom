@@ -7,7 +7,7 @@
 #   held at rest (robopy GRIP_OPEN_POSITION = 2500) in current-based position mode, pushed back
 #   with at most goal_current_mA (<= the motors' EEPROM Current Limit). 30 mA follows robopy
 #   (LEADER_GRIP_CURRENT_LIMIT / LEADER_GRIP_GOAL_CURRENT); 20 mA was lost in gear friction.
-type: rakuda2_leader
+type: rakuda_mini
 port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
 motor_ids:
 - 27

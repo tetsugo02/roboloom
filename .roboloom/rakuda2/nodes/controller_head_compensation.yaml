@@ -4,7 +4,7 @@ type: joint
 input: leader
 robot: robot
 unit: dynamixel_count
-alignment_tolerance: 150
+alignment_tolerance: 300
 max_speed_counts_per_s: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150

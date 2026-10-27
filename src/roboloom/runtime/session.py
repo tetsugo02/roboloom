@@ -522,8 +522,10 @@ class Session:
         keep: Callable[[EpisodeResult], bool] | None = None,
         on_tick: Callable[[dict], None] | None = None,
         tick_s: float = 0.2,
+        ready_timeout: float = 60.0,
     ) -> EpisodeResult:
-        """One episode: start, record for `seconds`, stop, then save it unless `keep`
+        """One episode: wait until it may start (leader aligned with the follower, at most
+        `ready_timeout` s), start, record for `seconds`, stop, then save it unless `keep`
         rejects the stopped episode (default: keep every one; quality warnings are in the
         result either way).
 
@@ -531,6 +533,9 @@ class Session:
         every `tick_s` while recording. An exception or Ctrl-C discards the episode.
         """
         name = task(self.next_info()) if callable(task) else task
+        self.wait_ready(
+            ready_timeout
+        )  # every episode starts aligned, not only the first
         self.start(name)
         try:
             end = time.monotonic() + seconds

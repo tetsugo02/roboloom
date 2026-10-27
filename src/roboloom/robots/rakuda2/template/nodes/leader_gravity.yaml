@@ -10,7 +10,7 @@
 #   range          ../calibration/travel_<side>.yaml          roboloom measure-travel
 #   tuning         ../calibration/gravity_tuning_<side>.yaml  roboloom tune-gravity (gain, hold)
 # drive_mode: r_arm_grip reversed (5), l_arm_grip not (0) ON PURPOSE (symmetric triggers).
-type: rakuda2_leader
+type: rakuda_mini
 port: SET_LEADER_PORT  # /dev/serial/by-id/... of the leader U2D2
 motor_ids:
 - 27

@@ -1,24 +1,26 @@
 # Leader
 
-For the Rakuda2 leader, the `rakuda2_leader` node in `inputs` reads joint positions, and the `joint` node in `controllers` converts them into follower targets. The mapping, signs, and offsets between leader joints and follower joints are specified in `joints` in `nodes/controller.yaml`.
+For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_mini`, the Rakuda-mini arm) reads joint positions, and the `joint` node in `controllers` converts them into follower targets. The mapping, signs, and offsets between leader joints and follower joints are specified in `joints` in `nodes/controller.yaml`.
 
 ```yaml
 type: joint
 input: leader
 robot: robot
 unit: dynamixel_count
-alignment_tolerance: 150
+alignment_tolerance: 300
 max_speed_counts_per_s: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
 # The actual configuration also needs the joints mapping table for all 17 joints.
 ```
 
+`leader` is the node's role in the experiment and `type` names the device. To use another arm as the leader, change only `type`.
+
 These are the values from the distributed template. Set them after checking the robot's range of motion, communication cycle, and stopping behavior.
 
 | Key | Meaning |
 | --- | --- |
-| `alignment_tolerance` | Allowed joint difference between leader and follower before start (counts) |
+| `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
 | `max_speed_counts_per_s` | Upper limit on the rate of change of the target |
 | `command_deadline_ms` | Validity period of commands sent to the robot |
 | `input_timeout_ms` | Time until leader input is judged stale |

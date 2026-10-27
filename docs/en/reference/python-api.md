@@ -50,6 +50,7 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 ```
 
 - `launch` waits until every node has started reporting its status.
+- Every `start` is checked: the follower must be within `alignment_tolerance` of the leader, not only at the first alignment. `record` waits for this (`ready_timeout`, default 60 s) before each episode; `start` raises `SessionError` when the arms differ.
 - Experiments that open real hardware require `hardware=True`.
 - Leaving the `with` block does the following:
   - Discards any in-progress episode.
