@@ -9,6 +9,7 @@ group's tuning file (`tuning:` in the node YAML).
 from __future__ import annotations
 
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,6 +37,37 @@ class JointRow:
     hint: str
 
 
+@dataclass(frozen=True)
+class TuningSave:
+    """Detached values for file I/O on a separate thread."""
+
+    path: Path
+    header: str
+    data: dict
+    revision: int
+
+    def write(self) -> Path:
+        text = self.header + yaml.safe_dump(
+            self.data,
+            sort_keys=False,
+            allow_unicode=True,
+            default_flow_style=None,
+            width=1000,
+        )
+        # Replace atomically so a failed write cannot truncate the tuning file.
+        import os
+        import tempfile
+
+        fd, name = tempfile.mkstemp(prefix=self.path.name, dir=self.path.parent)
+        try:
+            with os.fdopen(fd, "w") as stream:
+                stream.write(text)
+            os.replace(name, self.path)
+        finally:
+            Path(name).unlink(missing_ok=True)
+        return self.path
+
+
 class TuningSession:
     def __init__(
         self,
@@ -48,7 +80,9 @@ class TuningSession:
         self.device, self.law, self.path = device, law, Path(path).resolve()
         self.period_s = period_s  # the leader's control period (its poll_hz)
         self.names = [device.joint_names[i] for i in law.joints]
-        data = yaml.safe_load(self.path.read_text()) or {}
+        text = self.path.read_text()
+        self._header = "".join(text.splitlines(keepends=True)[: _comment_lines(text)])
+        data = yaml.safe_load(text) or {}
         self.data = data
         self.hints = {
             j: str((data.get("joints") or {}).get(j, {}).get("hint", ""))
@@ -59,11 +93,15 @@ class TuningSession:
         self.selected = 0
         self.off: set[int] = set()
         self.dirty = False
+        self.revision = 0
+        self.estopped = False
         self.stopped: str | None = None
 
     # -- running ----------------------------------------------------------------
 
     def start(self) -> None:
+        if self.estopped:
+            raise RuntimeError("ESTOP: restart tune-gravity to re-enable torque")
         self.device.read_state()
         self.device.enable_torque()
         self.stopped = None
@@ -80,7 +118,10 @@ class TuningSession:
 
     def close(self) -> None:
         """Torque off and close the bus (unsaved changes are dropped)."""
-        self.device.close()
+        try:
+            self.device.disable_torque()
+        finally:
+            self.device.close()
 
     def _apply(self) -> None:
         self.law.gain = [0.0 if k in self.off else g for k, g in enumerate(self.gain)]
@@ -99,12 +140,14 @@ class TuningSession:
             step = GAIN_STEP if key == "]" else -GAIN_STEP
             self.gain[k] = round(min(MAX_GAIN, max(0.0, self.gain[k] + step)), 2)
             self.dirty = True
+            self.revision += 1
             self._apply()
             return f"{name}: gain {self.gain[k]:.1f}"
         elif key in ("=", "-"):
             step = HOLD_STEP if key == "=" else -HOLD_STEP
             self.law.hold[k] = min(MAX_HOLD, max(0.0, self.law.hold[k] + step))
             self.dirty = True
+            self.revision += 1
             return f"{name}: hold {self.law.hold[k]:.0f} mA"
         elif key == "0":
             self.off ^= {k}
@@ -155,31 +198,34 @@ class TuningSession:
 
     # -- file -------------------------------------------------------------------
 
-    def save(self) -> Path:
-        """Write gain and hold per joint; the file's leading comment block is kept."""
-        text = self.path.read_text() if self.path.exists() else ""
-        header = "".join(
-            line for line in text.splitlines(keepends=True)[: _comment_lines(text)]
-        )
-        joints = dict(self.data.get("joints") or {})
-        for k, j in enumerate(self.names):
-            entry = dict(joints.get(j) or {})
+    def emergency(self) -> None:
+        """Permanent latch, distinct from a recoverable safety STOPPED state."""
+        self.estopped = True
+        self.stopped = "ESTOP: restart required"
+        self.device.disable_torque()
+
+    def save_snapshot(self) -> TuningSave:
+        data = deepcopy(self.data)
+        joints = dict(data.get("joints") or {})
+        for k, joint in enumerate(self.names):
+            entry = dict(joints.get(joint) or {})
             entry["gain"] = round(float(self.gain[k]), 2)
             entry["hold_mA"] = round(float(self.law.hold[k]), 1)
-            joints[j] = entry
-        self.data = {**self.data, "hold_kp": self.law.hold_kp, "joints": joints}
-        self.path.write_text(
-            header
-            + yaml.safe_dump(
-                self.data,
-                sort_keys=False,
-                allow_unicode=True,
-                default_flow_style=None,
-                width=1000,
-            )
-        )
-        self.dirty = False
-        return self.path
+            joints[joint] = entry
+        data.update(hold_kp=self.law.hold_kp, joints=joints)
+        return TuningSave(self.path, self._header, data, self.revision)
+
+    def mark_saved(self, saved: TuningSave) -> None:
+        """Changes made during a write must remain dirty."""
+        self.data = deepcopy(saved.data)
+        self.dirty = self.revision != saved.revision
+
+    def save(self) -> Path:
+        """Synchronous API; the operator backend uses detached snapshots instead."""
+        saved = self.save_snapshot()
+        path = saved.write()
+        self.mark_saved(saved)
+        return path
 
 
 def _comment_lines(text: str) -> int:

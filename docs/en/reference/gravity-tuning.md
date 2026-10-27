@@ -82,15 +82,15 @@ Prerequisites:
 uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware
 ```
 
-1. Start it while supporting the arm. The current rises over `ramp_s` seconds. During tuning, the other group (the opposite arm) has torque off.
-2. The top of the screen shows the formula, the meaning of each value, and the tuning-by-feel table. The central table shows the following values for each joint:
+1. Start it while supporting the arm. The current rises over `ramp_s` seconds. Other current-control groups have gravity gains and breakaway hold zeroed; this does not turn their torque off or disable range barriers and damping. Position-control groups may hold their targets. On tuning exit, all groups are explicitly released before the bus closes.
+2. The Textual node list selects joints. The Details pane shows the meaning of each value, tuning guidance, and these values for the selected joint:
    - ID, gain, hold, g(q), sent current, actual current, position, velocity
    - State: `gravity` (gravity compensation only), `holding` (hold is active), `sliding` (overpowered and sliding), `free` (does nothing), `off` (gravity compensation turned off for comparison)
 3. The "guide" column shows a pose in which gravity acts on the selected joint. Place the arm in that pose, let go, and watch how that joint moves.
 4. Following the table in section 4, change gain and hold with the keys. Values take effect immediately.
 5. Press `0` to turn off gravity compensation for that joint only, so you can compare with the uncompensated feel. Press it again to restore.
-6. Move to the next joint with ↓ (or `j`). Joints with `gain 0` on which gravity has little effect (such as twist joints) are left as they are; move on to the next.
-7. Save with `s` (`calibration/gravity_tuning_right.yaml`). Quit with `q`. If there are unsaved changes, a confirmation appears.
+6. Focus the joint list with Ctrl-N and move to the next joint with ↓ (or use `joint <name>` in Ctrl-L input). Joints with `gain 0` on which gravity has little effect (such as twist joints) are left as they are; move on to the next.
+7. Save with the menu or `save` (`calibration/gravity_tuning_right.yaml`). Quit with `quit` or Ctrl-Q and choose Save, Discard, or Cancel (initial selection). Changes made during saving remain unsaved.
 8. Tune the left arm the same way with `left_arm`.
 
 The tuned values are used as-is by `roboloom run rakuda2/experiment_gravity --hardware`.
@@ -120,3 +120,5 @@ The tuned values are used as-is by `roboloom run rakuda2/experiment_gravity --ha
 ```bash
 uv run roboloom gravity-check rakuda2/experiment_gravity leader right_arm --poses 1 --scales 1,0,2,-2 --hardware
 ```
+
+The menu and editable command input share `joint <name>`, `gain + / -`, `hold + / -`, `compare`, `resume`, `save`, `estop`, and `quit`. Ctrl-G releases at the next control step and latches ESTOP until restart; `resume` only recovers ordinary STOPPED states. Control and file saving run independently of rendering. Non-TTY invocation is rejected before device open. See [Operator screen](operator-screen.md) for focus, input, and confirmation keys.

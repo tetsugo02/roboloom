@@ -60,7 +60,7 @@ release
 quit
 ```
 
-`release` の確認時はfollowerの腕を支えます．`quit` でleaderも脱力するため，leaderの腕も支えてから終了します．`quit` の確認では，Enterでfollowerのトルクも切って終了し，`hold` でfollowerを保持したまま終了します．この段階ではfollowerの `torque: false` を維持し，観測・記録経路を確認します．
+`release` の確認時はfollowerの腕を支えます．`quit` でleaderも脱力するため，leaderの腕も支えてから終了します．`quit` の確認では，保持・支持確認後の脱力・キャンセルから明示選択します．初期選択はキャンセルで，Enterだけでは終了しません．この段階ではfollowerの `torque: false` を維持し，観測・記録経路を確認します．
 
 ## 3. 重力補償用の零点・方向・可動域を設定
 
@@ -136,7 +136,7 @@ uv run roboloom run rakuda2/experiment_gravity --hardware
 4. `stop` で止めます．`stop` はfollowerを保持し，脱力はしません．
 5. `save` で保存，または `discard` で破棄します．保存結果の欠損率・指令の有効率・制御周期の警告を確認します．
 6. 次の `start <task>` で別エピソードを収集できます．
-7. 終了時は `stop` → 保存または破棄 → leaderとfollowerの腕を支えて `quit` → Enter（followerも脱力）の順にします．followerを保持したまま終える場合は，確認に `hold` と入力します．
+7. 終了時は `stop` → 保存または破棄 → leaderとfollowerの腕を支えて `quit` の順に操作し，確認で保持または支持後の脱力を明示選択します．初期選択はキャンセルです．
 
 異常時の `estop` はラッチされ，自動復帰しません．物理的な支持・停止手段を使える状態で操作してください．
 
@@ -160,3 +160,5 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as session:
 スクリプト終了時も腕の支持が必要です．手動の停止・解放を組み込む場合は [Python API](../reference/python-api.md) を参照してください．
 
 既定の保存先は `.roboloom/rakuda2/datasets/rakuda2-camera` です（`output` は実験YAMLからの相対パス）．ログは `.roboloom/rakuda2/logs/` に残ります．設定・校正・調整のYAMLを管理し，同じ設定・FPS・featureのデータセットへ収集を再開できます．
+
+対話CLIは [Textual操作画面](../reference/operator-screen.md) を使います．Ctrl-Lで入力，Ctrl-Nでペイン移動，Ctrl-Gで非常停止，Ctrl-C/Ctrl-Qで終了確認です．`record --plain` と非TTYはEnter待ちなしで始めます．Python APIは入力を読まないRich表示を維持します．

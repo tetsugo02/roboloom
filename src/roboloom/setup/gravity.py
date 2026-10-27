@@ -253,13 +253,17 @@ def open_tuning(
         node,
         owner.cfg.get("bus_watchdog_ms"),
     )
-    return TuningSession(
-        device,
-        law,
-        tuning_path(spec.cfg["tuning"], owner.cfg.get("__dir__")),
-        ids,
-        1 / float(owner.cfg.get("poll_hz", 60)),
-    )
+    try:
+        return TuningSession(
+            device,
+            law,
+            tuning_path(spec.cfg["tuning"], owner.cfg.get("__dir__")),
+            ids,
+            1 / float(owner.cfg.get("poll_hz", 60)),
+        )
+    except BaseException:
+        device.close()
+        raise
 
 
 # -- identify: holding currents in position mode, then a regression fit ---------

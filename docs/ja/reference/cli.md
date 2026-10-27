@@ -16,6 +16,7 @@
 | `gravity-check <experiment> leader <group> --hardware` | 補償の有無による姿勢の変化を測る |
 | `run <experiment> --hardware` | 操作画面で収集する |
 | `record <experiment> --task <text> --seconds <n> --hardware` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
+| `infer <experiment> --seconds <n> --hardware` | 時間指定の方策実行．`--task` がある場合だけ保存 |
 | `session <experiment> <operation> [task]` | 起動済みの実験へ操作を送る |
 
 `calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．dataflowと同時に同じバスを開かないでください．
@@ -28,11 +29,12 @@
 | `stop` | 追従・記録を止める（保存は別操作） |
 | `save` | エピソードを保存する |
 | `discard` | エピソードを破棄する |
-| `release` | HOLD中のfollowerを，腕を支えた確認後に脱力する |
+| `release` | 支持確認後に追従を止め，通電している入力機器とfollowerを脱力する |
 | `home` | leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かす．到着後，leaderは通常の制御に戻る |
 | `estop` | 非常停止する |
-| `quit` | 腕を支えた確認後にdataflowを終了する．Enterでfollowerも脱力，`hold` でfollowerは保持 |
+| `quit` | 終了確認を開く．Cancel・follower保持・支持確認後の脱力から選ぶ |
 
-画面下の操作一覧には，`home` も他の操作と並んで表示されます．controllerに初期姿勢（`home:`）がないときは，`home` に取り消し線と `(no home pose)` が付き，入力しても実行しません．`record` の画面では，Enterの代わりに `h` で初期姿勢へ動かしてから開始できます（初期姿勢がないときは同じく無効）．nodesの表の詳細欄では，初期姿勢の名前を紫，注意（移動中・処理時間の余裕が少ない・欠損）を黄，異常（REJECTED・エラー・着かない関節）を赤で表示します．
+Textualの操作メニューは使えない操作も理由付きで表示し，初期姿勢がない `home` も含めます．Ctrl-Lで編集可能なコマンド欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．キー・ペイン・確認・時間指定モード・拡張契約は [操作画面](operator-screen.md) を参照してください．
 
+`run --plain` は行入力を維持し，`record --plain`・`infer --plain` はキー入力なしで収集します．非TTYも同じ経路です．`tune-gravity` はデバイスを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
 `stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../quick-start/rakuda2.md) にあります．既存の方策APIなど，leader以外の詳細は [Python API](python-api.md) を参照してください．

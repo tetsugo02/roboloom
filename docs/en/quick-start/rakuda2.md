@@ -60,7 +60,7 @@ release
 quit
 ```
 
-At the `release` confirmation, support the follower arms. `quit` also releases the leader's torque, so support the leader arms as well before exiting. At the `quit` confirmation, Enter also turns the follower torque off; `hold` exits with the follower holding. At this stage, keep the follower at `torque: false` and check the observation and recording path.
+At the `release` confirmation, support the follower arms. `quit` also releases the leader's torque, so support the leader arms as well before exiting. At the `quit` confirmation, select follower Hold or supported Release; Cancel is initially selected. At this stage, keep the follower at `torque: false` and check the observation and recording path.
 
 ## 3. Set zero points, directions, and travel for gravity compensation
 
@@ -136,7 +136,7 @@ uv run roboloom run rakuda2/experiment_gravity --hardware
 4. Stop with `stop`. `stop` holds the follower and does not turn off torque.
 5. Save with `save`, or discard with `discard`. Check the saved result's warnings for missing-data rate, valid-command rate, and control period.
 6. Collect another episode with the next `start <task>`.
-7. To finish, do `stop` → save or discard → support the leader and follower arms and `quit` → Enter (the follower goes limp too), in that order. To exit with the follower holding, type `hold` at the confirmation.
+7. To finish, do `stop` → save or discard → support the leader and follower arms and `quit`, then explicitly select supported Release or follower Hold in the confirmation. Cancel is selected initially; Enter alone cancels.
 
 `estop` on a fault is latched and does not recover automatically. Operate with physical support and stop means available.
 
@@ -160,3 +160,5 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as session:
 The arms must be supported when the script ends as well. To build in manual stop and release, see [Python API](../reference/python-api.md).
 
 The default save location is `.roboloom/rakuda2/datasets/rakuda2-camera` (`output` is relative to the experiment YAML). Logs are kept in `.roboloom/rakuda2/logs/`. Keep the configuration, calibration, and tuning YAMLs under management, and you can resume collection into a dataset with the same configuration, FPS, and features.
+
+Interactive CLI commands use the [Textual operator screen](../reference/operator-screen.md): Ctrl-L for command input, Ctrl-N for panes, Ctrl-G for emergency stop, Ctrl-C/Ctrl-Q for exit confirmation. `record --plain` and non-TTY runs start without an Enter prompt. Python API displays remain input-free Rich views.

@@ -1,10 +1,10 @@
 """The node-status screen of a `Session`, drawn on a background thread.
 
-A script that drives a Session (or `roboloom record`) sees the same table as `roboloom
-run`, while its own code runs in the main thread: the screen keeps refreshing while the
+A script that drives a Session sees a Rich state table while its own code runs
+in the main thread: the screen keeps refreshing while the
 script sleeps or waits. Anything the script prints scrolls above the screen (rich Live
 redirects stdout and stderr). The screen reads no keys, so `input()` keeps working;
-callers that want keys (the `record` command) read them themselves.
+interactive CLI commands use a separate Textual app.
 """
 
 from __future__ import annotations

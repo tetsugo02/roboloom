@@ -16,6 +16,7 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 | `gravity-check <experiment> leader <group> --hardware` | Measure the change in pose with and without compensation |
 | `run <experiment> --hardware` | Collect data with the operation screen |
 | `record <experiment> --task <text> --seconds <n> --hardware` | Collect fixed-duration episodes (`--episodes` sets the count; `--home` moves to the initial pose before each) |
+| `infer <experiment> --seconds <n> --hardware` | Fixed-duration policy episodes; save only with `--task` |
 | `session <experiment> <operation> [task]` | Send an operation to a running experiment |
 
 `calibrate-joints` / `measure-travel` do not write to the bus, but they save local YAML. The arm torque must be off. `identify-gravity --collect`, `tune-gravity`, and `gravity-check` energize the motors. Do not open the same bus at the same time as the dataflow.
@@ -28,11 +29,12 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 | `stop` | Stop following and recording (saving is a separate operation) |
 | `save` | Save the episode |
 | `discard` | Discard the episode |
-| `release` | Turn off the torque of a follower in HOLD, after confirming the arms are supported |
+| `release` | Stop following and release actuated inputs and followers after confirming support |
 | `home` | Move the leader and follower slowly to the initial pose chosen in the controller; after arriving the leader returns to its normal laws |
 | `estop` | Emergency stop |
-| `quit` | Exit the dataflow after confirming the arms are supported. Enter also releases the follower; `hold` keeps it holding |
+| `quit` | Open the exit confirmation: Cancel, follower hold, or supported release |
 
-The command list at the bottom of the screen shows `home` alongside the other commands. When the controller has no initial pose (`home:`), `home` is struck through with `(no home pose)` and typing it does nothing. On the `record` screen, `h` moves to the initial pose before you press Enter (also inactive without a pose). In the detail column of the nodes table, the pose name is magenta, things to watch (moving, little work headroom, missing data) are yellow, and faults (REJECTED, errors, joints that did not arrive) are red.
+The Textual operations menu shows unavailable actions with reasons, including `home` without a configured pose. Ctrl-L opens the editable command input; Ctrl-G requests emergency stop. Ctrl-C and Ctrl-Q open the same exit dialog, initially selecting Cancel. See [Operator screen](operator-screen.md) for keys, panes, confirmations, fixed-duration modes, and extension contracts.
 
+`run --plain` retains line input; `record --plain` and `infer --plain` collect without key input. Non-TTY invocation selects these paths automatically. `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
 `stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Quick start](../quick-start/rakuda2.md). For details beyond the leader, such as the existing policy API, see [Python API](python-api.md).

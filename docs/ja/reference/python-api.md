@@ -65,7 +65,7 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 
 ### 状態画面と終了時の確認
 
-- `Session.launch(..., screen="auto")` が既定です．標準出力が端末なら，CLI と同じノードの状態表とメッセージ欄を，別スレッドで 10 Hz で更新します．
+- `Session.launch(..., screen="auto")` が既定です．標準出力が端末なら，Richのノード状態表とメッセージ欄を別スレッドで10 Hzで更新します．対話CLIは別の [Textual操作画面](operator-screen.md) を使います．
   - `screen=False` で表示を切れます．パイプなど標準出力が端末でない場合，既定では表示しません．
   - スクリプトの `print()` は画面の上に出ます．画面はキーを読まないので，`input()` や API 呼び出しで操作できます．CLI の `record` のようなキー操作は追加しません．
   - 保存結果と品質の警告もメッセージ欄に出ます．

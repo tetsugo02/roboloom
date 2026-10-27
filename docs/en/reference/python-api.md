@@ -65,7 +65,7 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 
 ### Status screen and exit confirmation
 
-- `Session.launch(..., screen="auto")` is the default. When stdout is a terminal, a background thread updates the same node-status table and messages panel as the CLI at 10 Hz.
+- `Session.launch(..., screen="auto")` is the default. When stdout is a terminal, a background thread updates the Rich node-status table and messages panel at 10 Hz. Interactive CLI commands instead use the [Textual operator screen](operator-screen.md).
   - Set `screen=False` to disable the display. It is hidden by default when stdout is not a terminal, such as in a pipe.
   - Your script's `print()` output appears above the screen. The screen reads no keys, so you can use `input()` and API calls to operate the session. It does not add the keyboard controls of CLI `record`.
   - Save results and quality warnings also appear in the messages panel.

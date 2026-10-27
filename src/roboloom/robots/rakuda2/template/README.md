@@ -113,7 +113,7 @@ robots can use their own joint names and scale. Details: [Leader](https://tetsug
 ## Initial pose (optional)
 
 Save poses by name while the dataflow is stopped (follower posed by teleoperation then
-`quit` + `hold`, or by hand after `release`); each becomes `poses/<name>.yaml`:
+`quit` then select Hold, or by hand after `release`); each becomes `poses/<name>.yaml`:
 `uv run roboloom capture-pose rakuda2/experiment_gravity ready --hardware`.
 Choose one with `home:` in `nodes/controller.yaml` (see the comment there) and type `home`
 on the run screen (or `record ... --home`): leader and follower move slowly
@@ -137,8 +137,8 @@ need `homing:` (set in `leader_gravity.yaml`). Hands off the arms while they mov
 `digit_left: nodes/digit_left.yaml` and `digit_right: nodes/digit_right.yaml` under
 `sensors`, fill their serials, and use a separate `repo_id` and `output` because the
 dataset features change. To finish an operator-screen run: `stop`, `save` or `discard`,
-support the leader and follower arms, `quit`, then Enter (the follower goes limp
-too) or `hold` (the follower keeps holding).
+support the leader and follower arms, `quit`, then select Hold or supported Release.
+Cancel is initially selected, so Enter alone cancels.
 
 ## Inference
 
@@ -147,3 +147,25 @@ too) or `hold` (the follower keeps holding).
    Then pass yours: `--policy my_lab.policies:load --policy-kwargs '{"checkpoint": "..."}'`
    (or set `factory`/`kwargs` in `nodes/policy.yaml`). Add `--task` to record the run into
    `datasets/rakuda2_eval`.
+
+## Operator screen
+
+Interactive run, record, infer, and tune-gravity use Textual: Ctrl-L command input,
+Tab/Shift-Tab completion, Up/Down history, Ctrl-N/Ctrl-P panes, Ctrl-G emergency stop,
+and Ctrl-C/Ctrl-Q exit confirmation. Logs always has its own tab; Operations stays visible with more space.
+Below 100 columns, the node list and details use separate tabs. Node selection changes the display only; experiment
+operations target all configured nodes. Record/infer show readiness, remaining
+time, episode count, and results; select Start for each episode. `record --home`
+moves home before every episode. Inference saves only with `--task`.
+
+`run --plain` uses line input; `record --plain` and `infer --plain` run without
+key input. Non-TTY runs select these paths automatically. Tuning requires a TTY
+before device open. Tuning commands are `joint <name>`, `gain + / -`, `hold + / -`,
+`compare`, `resume`, `save`, `estop`, and `quit`. Tuning exit offers Save, Discard,
+and Cancel; Cancel is initially selected. Changes made during saving remain dirty.
+Ctrl-G latches tuning ESTOP until restart; resume cannot bypass it.
+
+Python `Session.launch(..., screen="auto")` keeps its input-free Rich display
+and existing operator prompts. See [Operator screen](https://tetsugo02.github.io/roboloom/en/reference/operator-screen/)
+([日本語](https://tetsugo02.github.io/roboloom/ja/reference/operator-screen/)).
+This screen migration is verified with mocks; hardware operation needs separate validation.
