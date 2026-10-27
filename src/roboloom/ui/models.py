@@ -55,6 +55,7 @@ class Snapshot:
 class LogEvent:
     text: str
     level: str = "info"
+    style: str = ""  # rich style; empty: from the level
 
 
 @dataclass(frozen=True)

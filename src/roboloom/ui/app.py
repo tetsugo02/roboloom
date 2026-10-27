@@ -19,6 +19,7 @@ from textual.widgets import Footer, OptionList, RichLog, Static, Tabs
 from .command import CommandInput
 from .models import Backend, Closed, LogEvent, Notice, Snapshot
 from .presenters import present
+from .render import BAD, LEVEL_STYLE, STALE_S, WATCH
 from .splitter import Splitter
 
 
@@ -224,11 +225,14 @@ class OperatorApp(App[str]):
             self._flush_logs()
         else:
             self.snapshot = notice
-            self.query_one("#summary", Static).update(
-                f"{notice.title}  |  {notice.mode}  |  {notice.phase}"
-                + ("  |  UNSAVED" if notice.dirty else "")
-                + (f"\n{notice.warning}" if notice.warning else "")
+            summary = Text(notice.title, style="bold").append(
+                f"  |  {notice.mode}  |  {notice.phase}"
             )
+            if notice.dirty:
+                summary.append("  |  UNSAVED", style=WATCH)
+            if notice.warning:
+                summary.append(f"\n{notice.warning}", style=WATCH)
+            self.query_one("#summary", Static).update(summary)
             nodes = self.query_one("#nodes", OptionList)
             names = tuple(n.name for n in notice.nodes)
             if names != self._node_names:
@@ -239,14 +243,22 @@ class OperatorApp(App[str]):
                         names.index(self._selected) if self._selected in names else 0
                     )
             for i, node in enumerate(notice.nodes):
-                state = present(node).state
-                age = (
-                    f"  STALE {node.age_s:.1f}s"
-                    if node.age_s > 2
-                    else f"  {node.age_s:.1f}s"
-                )
+                level = LEVEL_STYLE.get(node.level, "")
+                stale = node.age_s > STALE_S
                 nodes.replace_option_prompt_at_index(
-                    i, f"{node.name} · {node.level} · {state}{age}"
+                    i,
+                    Text.assemble(
+                        (node.name, "bold"),
+                        " · ",
+                        (node.level, level),
+                        " · ",
+                        (present(node).state, level),
+                        (
+                            (f"  STALE {node.age_s:.1f}s", BAD)
+                            if stale
+                            else (f"  {node.age_s:.1f}s", "dim")
+                        ),
+                    ),
                 )
             menu = self.query_one("#menu", OptionList)
             commands = tuple(o.command for o in notice.operations)
@@ -257,11 +269,13 @@ class OperatorApp(App[str]):
             for i, operation in enumerate(notice.operations):
                 menu.replace_option_prompt_at_index(
                     i,
-                    operation.label
-                    + (
-                        f" — unavailable: {operation.reason}"
-                        if not operation.enabled
-                        else ""
+                    Text(operation.label, style=BAD)
+                    if operation.command == "estop"
+                    else Text(operation.label)
+                    if operation.enabled
+                    else Text(
+                        f"{operation.label} — unavailable: {operation.reason}",
+                        style="dim",
                     ),
                 )
             self.query_one(CommandInput).commands = tuple(
@@ -298,7 +312,8 @@ class OperatorApp(App[str]):
             log.write(
                 Text(
                     notice.text,
-                    style={"warn": "yellow", "error": "bold red"}.get(notice.level, ""),
+                    style=notice.style
+                    or {"warn": WATCH, "error": BAD}.get(notice.level, ""),
                 ),
                 scroll_end=at_end,
                 animate=False,
@@ -318,7 +333,11 @@ class OperatorApp(App[str]):
         table.add_column(overflow="fold")
         table.add_column(overflow="fold", ratio=1)
         table.add_row(Text(node.name, style="bold"), Text(f"{node.role} / {node.kind}"))
-        table.add_row(Text(description.state), Text(description.explanation))
+        explanation = description.explanation
+        table.add_row(
+            Text(description.state, style=LEVEL_STYLE.get(node.level, "")),
+            explanation if isinstance(explanation, Text) else Text(explanation),
+        )
         for key, value in description.values:
             table.add_row(Text(key), Text(value))
         self.query_one("#detail", Static).update(table)

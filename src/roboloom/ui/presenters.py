@@ -14,7 +14,7 @@ from .render import RENDERERS
 @dataclass(frozen=True)
 class Presentation:
     state: str
-    explanation: str
+    explanation: str | Text  # Text keeps the renderer's emphasis (home pose, faults)
     values: tuple[tuple[str, str], ...]
 
 
@@ -48,6 +48,4 @@ def present(node: NodeSnapshot) -> Presentation:
             str(node.fields.get("state", node.fields.get("mode", ""))), "", values
         )
     state, detail = renderer(dict(node.fields))
-    return Presentation(
-        state, detail.plain if isinstance(detail, Text) else detail, values
-    )
+    return Presentation(state, detail, values)

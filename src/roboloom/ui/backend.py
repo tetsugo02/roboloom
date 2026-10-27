@@ -86,11 +86,12 @@ class SessionBackend:
         emergency.start()
         worker.start()
 
-    def _log(self, text: str, level: str = "info") -> None:
-        self._publish(LogEvent(text, level))
+    def _log(self, text: str, level: str = "info", style: str = "") -> None:
+        self._publish(LogEvent(text, level, style))
 
     def _report(self, report: dict) -> None:
-        self._log(describe_report(report).plain)
+        line = describe_report(report)
+        self._log(line.plain, style=str(line.style))
 
     def _snapshot(self) -> Snapshot:
         with self._lock:

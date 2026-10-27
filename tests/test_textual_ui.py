@@ -8,10 +8,12 @@ from dataclasses import replace
 
 import pytest
 from rich.console import Console
+from rich.text import Text
 from textual import events
 from textual.widgets import OptionList, RichLog, Static, Tabs
 
 from roboloom.ui.app import BackendMessage, Confirmation, OperatorApp, run_backend
+from roboloom.ui.backend import SessionBackend
 from roboloom.ui.command import CommandInput
 from roboloom.ui.models import (
     Capabilities,
@@ -243,6 +245,28 @@ async def test_log_scroll_is_preserved_and_latest_is_explicit():
         backend.publish(LogEvent("followed event"))
         await pilot.pause()
         assert log.is_vertical_scroll_end
+
+
+def test_presenters_keep_the_renderer_emphasis():
+    node = NodeSnapshot(
+        "robot",
+        "robot",
+        "rakuda2",
+        level="error",
+        fields={"mode": "HOLD", "home": "ready", "error": "overload"},
+    )
+    detail = present(node).explanation
+    assert isinstance(detail, Text)
+    styles = {str(span.style) for span in detail.spans}
+    assert {"bold magenta", "bold red"} <= styles  # home pose name, last error
+
+
+def test_report_log_lines_keep_their_style():
+    notices: list = []
+    backend = SessionBackend(lambda: None)
+    backend._publish = notices.append
+    backend._report({"command": "home", "ok": True})
+    assert notices[-1].style == "magenta"
 
 
 def test_presenters_are_optional_and_kind_precedes_role():

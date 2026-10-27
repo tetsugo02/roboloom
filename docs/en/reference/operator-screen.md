@@ -10,6 +10,8 @@ Status, Details, and Logs tabs are always available. Status shows the node list 
 
 Ctrl-N / Ctrl-P also focus the dividers. When a divider is focused, use the arrow keys along its direction to resize and Ctrl-R to reset it (Home is an alias). Esc releases an active drag. Emergency stop remains available during dragging.
 
+Important items are shown in color. Node states in the list and the details are green when OK, yellow for warnings and red for errors; a node with no update for over 2 s turns into a red `STALE`. The details highlight the home pose name in magenta, the task being recorded in cyan, and limits, rejections and errors in yellow or red. The header warning and `UNSAVED` are yellow, Emergency stop is red, and unavailable operations are dimmed. Log lines keep the color of each report (recording, emergency stop and so on).
+
 The log scrolls independently; messages arriving while it is hidden are retained, and new entries preserve your position while reading older logs. Ctrl-O opens Logs at the latest entry. The log retains up to 10,000 lines; the full dora log stays beside the experiment.
 
 | Key | Action |
