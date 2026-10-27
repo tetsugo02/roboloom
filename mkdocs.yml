@@ -27,6 +27,8 @@ nav:
       - CLI: reference/cli.md
       - Python API: reference/python-api.md
       - 重力補償の調整: reference/gravity-tuning.md
-  - Contribution: contribution.md
+  - Contribution:
+      - 開発: contribution.md
+      - バイラテラル制御の設計: contribution/bilateral.md
 exclude_docs: |
   yam-safety-and-smoothness.md

@@ -58,7 +58,7 @@ The language switcher at the top right moves to the selected language's home pag
 
 Fonts and colors are set in `docs/overrides/` (`main.html` and `assets/stylesheets/roboloom.css`).
 
-`docs/ja/yam-safety-and-smoothness.md` is kept as a past investigation and design note and is excluded from the guide build.
+`docs/ja/yam-safety-and-smoothness.md` is kept as a past investigation and design note and is excluded from the guide build. Design proposals for unimplemented features, such as the [bilateral control design](contribution/bilateral.md), go under Contribution and state at the top that they are not implemented.
 
 ## Publishing to GitHub Pages
 

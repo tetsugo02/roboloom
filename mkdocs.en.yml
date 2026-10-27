@@ -27,4 +27,6 @@ nav:
       - CLI: reference/cli.md
       - Python API: reference/python-api.md
       - Gravity tuning: reference/gravity-tuning.md
-  - Contribution: contribution.md
+  - Contribution:
+      - Development: contribution.md
+      - Bilateral control design: contribution/bilateral.md

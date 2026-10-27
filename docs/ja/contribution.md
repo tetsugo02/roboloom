@@ -58,7 +58,7 @@ uv run --group docs zensical serve -f mkdocs.en.yml  # 英語だけをライブ�
 
 フォントと配色は `docs/overrides/`（`main.html` と `assets/stylesheets/roboloom.css`）で調整しています．
 
-`docs/ja/yam-safety-and-smoothness.md` は過去の調査・設計メモとして残し，利用ガイドのビルド対象から除外しています．
+`docs/ja/yam-safety-and-smoothness.md` は過去の調査・設計メモとして残し，利用ガイドのビルド対象から除外しています．未実装の機能の設計案は，[バイラテラル制御の設計](contribution/bilateral.md) のように，冒頭で未実装と明示した上でContributionに置きます．
 
 ## GitHub Pagesへの公開
 
