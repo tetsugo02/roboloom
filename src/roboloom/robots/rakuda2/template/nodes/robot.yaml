@@ -29,7 +29,10 @@ motor_ids:
 - 10
 - 12
 - 30
-control_hz: 60
+# control_hz: 120 Hz verified on Rakuda2 (2026-10-27: work max 6.1 ms of 8.3 ms). Needs the FTDI
+#   latency_timer at 1 ms and firmware v45+ (Fast Sync Read); if `roboloom probe` shows a lower
+#   limit, lower it (e.g. 60) together with the leader poll_hz. Docs: Reference > Configuration.
+control_hz: 120
 torque: true
 record_effort: true
 bus_watchdog_ms: null

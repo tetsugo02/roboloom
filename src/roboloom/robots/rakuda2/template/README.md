@@ -52,6 +52,10 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    (startup refuses to run on any mismatch and lists them). Check the FTDI latency timer;
    if it needs system configuration, ask the machine administrator. `rs-enumerate-devices` and the DIGIT labels give the
    sensor serials.
+   `probe` also prints the bus read times and a rough limit for `control_hz` / `poll_hz`
+   (120 Hz here, which needs latency_timer 1 ms); lower both if probe shows less, and check
+   `work_ms` on the run screen (docs: Reference >
+   Configuration, Control rate).
 2. `uv run roboloom validate rakuda2`, then `uv run roboloom run rakuda2/experiment_camera --hardware`
    (operator screen, many episodes), or one fixed-length episode:
    `uv run roboloom record rakuda2/experiment_camera --task "pick up the cup" --seconds 30 --hardware`.

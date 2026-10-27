@@ -30,7 +30,10 @@ motor_ids:
 - 10
 - 12
 - 30
-poll_hz: 60
+# poll_hz: 120 Hz verified on Rakuda2 (2026-10-27: work max 6.8 ms of 8.3 ms). Needs the FTDI
+#   latency_timer at 1 ms and firmware v45+ (Fast Sync Read); if `roboloom probe` shows a lower
+#   limit, lower it (e.g. 60) together with the robot control_hz. Docs: Reference > Configuration.
+poll_hz: 120
 registers:
   drive_mode:
     default: 0

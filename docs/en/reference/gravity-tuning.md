@@ -5,7 +5,7 @@ This page explains how the compensation current is determined, what `gain` and `
 
 ## 1. The current formula
 
-Every control period (the leader's `poll_hz`, default 60 Hz), the current for each joint is determined by the following formula.
+Every control period (the leader's `poll_hz`, 120 Hz in the templates), the current for each joint is determined by the following formula.
 
 ```
 sent current = clip_to_limit( ramp × ( gain × g(q) + hold − kd × velocity ) + range push-back )   [mA]
@@ -106,7 +106,7 @@ The tuned values are used as-is by `roboloom run rakuda2/experiment_gravity --ha
     - It moved outside the range of motion + `range_margin`.
     - A joint receiving current moved faster than `max_velocity`.
   - Support the arm, then resume with `r`.
-- **Watchdog:** if control stops for `bus_watchdog_ms` (500 ms) or longer, the Watchdog triggers. This is checked every period, and if it has triggered, torque is turned off. With 100 ms, occasional delays of about 130 ms triggered it.
+- **Watchdog:** if control stops for `bus_watchdog_ms` (500 ms) or longer, the Watchdog triggers. This is checked when writes have paused and every 100 ms, and if it has triggered, torque is turned off. With 100 ms, occasional delays of about 130 ms triggered it.
 
 ## 7. Limits of identification and the root fix
 

@@ -5,7 +5,7 @@ leader の腕を，手を離してもその場に留まり，ある程度の力�
 
 ## 1．送る電流の式
 
-制御の周期ごと（leader の `poll_hz`，既定 60 Hz）に，関節ごとの電流を次の式で決めます．
+制御の周期ごと（leader の `poll_hz`，テンプレートでは120 Hz）に，関節ごとの電流を次の式で決めます．
 
 ```
 送る電流 = 上限で切る( ランプ × ( gain × g(q) + 保持 − kd × 速度 ) + 可動域の押し戻し )   [mA]
@@ -106,7 +106,7 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardw
     - 可動域＋`range_margin` の外に出た．
     - 電流をかけている関節が `max_velocity` を超えて動いた．
   - 腕を支えてから `r` で再開します．
-- **Watchdog：** 制御が `bus_watchdog_ms`（500 ms）以上止まると Watchdog が作動します．毎周期これを確かめ，作動していたら腕を脱力させます．100 ms では，たまに起きる 130 ms 程度の遅れで作動してしまいました．
+- **Watchdog：** 制御が `bus_watchdog_ms`（500 ms）以上止まると Watchdog が作動します．書き込みが途切れたときと100 msごとにこれを確かめ，作動していたら腕を脱力させます．100 ms では，たまに起きる 130 ms 程度の遅れで作動してしまいました．
 
 ## 7．同定の限界と，根本的な直し方
 

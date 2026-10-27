@@ -45,4 +45,6 @@ When adding them, also change `repo_id` and `output`, for example to `local/raku
 
 Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits on the hardware. The template has `torque` set to `true`, so if you want to check the pipeline the first time without moving the follower, **change `nodes/robot.yaml` to `torque: false` before launch**. Leader-side control is independent; the trigger and gravity compensation are energized.
 
+The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Configuration](../reference/configuration.md#control-rate).
+
 For the steps from setup to data collection, see [Rakuda2 Quick start](../quick-start/rakuda2.md); for the meaning of the control values, see [Gravity tuning](../reference/gravity-tuning.md).
