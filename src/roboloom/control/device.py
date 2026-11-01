@@ -540,7 +540,12 @@ class JointDevice:
             return dict(self.home_result)
         now = time.monotonic_ns() if now_ns is None else now_ns
         progress = run.trajectory.progress((now - run.since_ns) / 1e9)
-        out: dict = {"home": run.name, "home_state": "moving"}
+        # home_since_ns: when this move began, so a waiter tells it from an earlier one
+        out: dict = {
+            "home": run.name,
+            "home_state": "moving",
+            "home_since_ns": run.since_ns,
+        }
         out["home_progress"] = round(progress, 2)
         if run.skipped:
             out["home_skipped"] = run.skipped
@@ -558,7 +563,11 @@ class JointDevice:
             for i, g in zip(run.joints, run.trajectory.goal, strict=True)
             if abs(self.state.positions[i] - g) > run.tolerance
         }
-        result: dict = {"home": run.name, "home_state": "short" if far else "reached"}
+        result: dict = {
+            "home": run.name,
+            "home_state": "short" if far else "reached",
+            "home_since_ns": run.since_ns,
+        }
         if far:
             result["home_far"] = far
         if run.skipped:

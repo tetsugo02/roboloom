@@ -301,9 +301,14 @@ def _home_fields(safety: FollowerSafety) -> dict:
             "home": safety.home_name,
             "home_state": "moving",
             "home_progress": round(safety.homing.progress(elapsed), 2),
+            "home_since_ns": safety.homing_since_ns,
         }
     if safety.home_reached:
-        return {"home": safety.home_name, "home_state": "reached"}
+        return {
+            "home": safety.home_name,
+            "home_state": "reached",
+            "home_since_ns": safety.homing_since_ns,
+        }
     return {}
 
 

@@ -584,9 +584,15 @@ class Session:
                 )
                 if fresh and problem:
                     raise SessionError(f"{name}: home: {problem}")
+                # A status sent after `home` but before the node handled it still shows
+                # the previous move's result: count only a move that began after sent_ns.
+                began = fields.get("home_since_ns", 0) >= sent_ns
                 # "short": the move ended short of the pose where friction stopped a
                 # spring; the start check (alignment) decides whether that is close enough
-                if not fresh or fields.get("home_state") not in ("reached", "short"):
+                if not (fresh and began) or fields.get("home_state") not in (
+                    "reached",
+                    "short",
+                ):
                     waiting.append(f"{name} ({fields.get('home_state', 'waiting')})")
         return waiting
 
