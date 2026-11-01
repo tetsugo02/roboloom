@@ -1,7 +1,7 @@
 # バイラテラル制御の設計（FACTR 2）
 
-!!! warning "未実装の設計案"
-    このページは実装の手順をまとめた設計案です．roboloomはまだ力のフィードバックを実装していません．ここにある設定キー・コマンド・ノード名は提案で，現行のroboloomでは使えません．実機での動作も確かめていません．
+!!! warning "一部だけ実装した設計案"
+    このページは実装の手順をまとめた設計案です．§7の段階1（経路）を実装しました．使える設定は [設定](../reference/configuration.md) の「力の逆送」にあります．それ以外の設定キー・コマンド・ノード名は提案で，現行のroboloomでは使えません．実機での動作は確かめていません．
 
 作成日：2026-10-27．調査対象は次のとおりです．コードは読んだだけで，実行していません．
 
@@ -271,18 +271,22 @@ smoothing_alpha: 0.2
 
 ```python
 class EffortEstimator(Protocol):
-    robot: str                        # 参照するrobotノード
-    joint_names: tuple[str, ...]      # follower関節
-    unit: str                         # "mA" や "Nm"
-    needs: tuple[str, ...]            # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
+    robot: str  # 参照するrobotノード
+    joint_names: tuple[str, ...]  # follower関節
+    unit: str  # "mA" や "Nm"
+    needs: tuple[
+        str, ...
+    ]  # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
+
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...   # robot_state の payload
+    def update(self, state: dict, t_ns: int) -> Estimate: ...  # robot_state の payload
+
 
 @dataclass
 class Estimate:
-    residual: list[float]             # 実測 − 自由運動の予測
+    residual: list[float]  # 実測 − 自由運動の予測
     contact: bool
-    valid: bool                       # 履歴が足りない，状態が古い，などで False
+    valid: bool  # 履歴が足りない，状態が古い，などで False
 ```
 
 | `type` | 中身 | 用途 |

@@ -18,6 +18,7 @@ from roboloom.controllers.policy import PolicyController
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
+from roboloom.estimators.base import Estimate, Estimator
 from roboloom.recording import ACTION, EpisodeRecorder
 from roboloom.robots.base import Robot
 from roboloom.robots.safety import FollowerSafety
@@ -219,6 +220,7 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
     p = Publisher(source.name)
     status = StatusReporter(Publisher(source.name), role)
     on_session = getattr(reader, "on_session", None)
+    on_feedback = getattr(reader, "on_feedback", None)
     gc_pauses = GcPauses()
     samples: deque[int] = deque(maxlen=60)
     work: deque[float] = deque(maxlen=60)  # ms in read()
@@ -231,6 +233,10 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
                     on_session(msg.payload["command"], msg.payload.get("task", ""))
                 if _quit(event_id, msg):
                     return
+                continue
+            if event_id == "feedback" and msg is not None:
+                if on_feedback is not None:
+                    on_feedback(msg)
                 continue
             if event_id == "tick":
                 began = time.perf_counter()
@@ -369,6 +375,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
 
 def _controller(node, controller: Controller):
     follower = follower_target = follower_velocity = None
+    follower_mode: str | None = None
     status = StatusReporter(Publisher(controller.name), "controller")
     last_intent_ns = 0
     commands: deque[int] = deque(
@@ -385,8 +392,18 @@ def _controller(node, controller: Controller):
                 msg.payload.get("target"),
                 msg.payload.get("velocities"),
             )
-            if msg.payload["mode"] in ("FAULT", "ESTOP"):
+            follower_mode = msg.payload["mode"]
+            if follower_mode in ("FAULT", "ESTOP"):
                 controller.reset()
+        elif (
+            event_id == "estimate"
+            and msg is not None
+            and controller.feedback is not None
+        ):
+            following = controller.status().get("state") == "following"
+            feedback = controller.feedback.make(msg, follower_mode, following)
+            if feedback is not None:
+                _send(node, "feedback", feedback)
         elif event_id == "intent" and msg is not None and follower is not None:
             last_intent_ns = time.monotonic_ns()
             command = controller.update(
@@ -406,6 +423,50 @@ def _controller(node, controller: Controller):
             recent = [t for t in commands if now - t < 1e9]
             fields["command_hz"] = len(recent)
             level = "ok" if fields.get("state") == "following" else "warn"
+            _send(node, "status", status.make(fields, level, now))
+
+
+def _estimator(node, estimator: Estimator):
+    """Estimate the follower's external effort from each robot state it publishes."""
+    p = Publisher(estimator.name)
+    status = StatusReporter(Publisher(estimator.name), "estimator")
+    states: deque[int] = deque(maxlen=60)
+    work: deque[float] = deque(maxlen=60)  # ms in update()
+    last: Estimate | None = None
+    while True:
+        event_id, msg = _event(node)
+        if _quit(event_id, msg):
+            return
+        if event_id == "robot" and msg is not None:
+            began = time.perf_counter()
+            last = estimator.update(msg.payload)
+            work.append((time.perf_counter() - began) * 1e3)
+            _send(
+                node,
+                "estimate",
+                p.make(
+                    estimator.kind,
+                    estimator.encode(last, msg.t_capture_ns),
+                    msg.t_capture_ns,
+                ),
+            )
+            states.append(time.monotonic_ns())
+        now = time.monotonic_ns()
+        if status.due(now):
+            rate = (
+                (len(states) - 1) / ((states[-1] - states[0]) / 1e9)
+                if len(states) > 1 and states[-1] > states[0]
+                else 0.0
+            )
+            age_ms = (now - states[-1]) / 1e6 if states else None
+            fields = {
+                "rate_hz": round(rate, 1),
+                "age_ms": None if age_ms is None else round(age_ms),
+                "valid": last is not None and last.valid,
+                "contact": last is not None and last.contact,
+                **_work_fields(work),
+            }
+            level = "ok" if age_ms is not None and age_ms < 500 else "warn"
             _send(node, "status", status.make(fields, level, now))
 
 
@@ -632,6 +693,8 @@ def main() -> None:
         _source(node, cfg.inputs[name], cfg, "input")
     elif name in cfg.sensors:
         _source(node, cfg.sensors[name], cfg, "sensor")
+    elif name in cfg.estimators:
+        _estimator(node, cfg.estimators[name])
     else:
         raise SystemExit(f"unknown node {name!r}")
 

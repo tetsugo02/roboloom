@@ -34,6 +34,58 @@ Each node's `type` selects the implementation. `SET_...` are robot-specific unse
 
 The leader node's `control` selects a law per joint group, such as `free` (torque off), `position` (holds the torque-enable pose on a leader), `spring`, or `gravity_comp`. Specify every joint exactly once. The `joint` controller's `couplings` (default `[]`) is a list of `{joint, source, scale, reference}` (optionally `lead_ms`) entries that add another follower joint's measured displacement from `reference` to a target. These settings are independent. See the [Leader configuration examples](../controllers/leader.md).
 
+## Force feedback (not verified on hardware)
+
+!!! warning "Not verified on hardware"
+    This is the path that returns the external force on the follower to the leader. Only the mock tests pass. The only estimator so far is `none` (never estimates), so the current returned to the leader is 0. See [Bilateral control design](../contribution/bilateral.md) for the design and the remaining stages.
+
+Add `estimators` to the experiment YAML and reference the estimator from the controller's `feedback`. You do not write edges; the path below follows from each node's references.
+
+```text
+leader ──sample──► controller ──command──► robot ──state──► estimator
+  ▲                    │  ▲                                  │
+  └──── feedback ──────┘  └────────────── estimate ──────────┘
+```
+
+```yaml
+estimators:
+  effort: nodes/effort.yaml
+```
+
+Estimator (`nodes/effort.yaml`):
+
+| Key | Meaning |
+| --- | --- |
+| `type` | `none` |
+| `robot` | Name of the robot node whose state it reads |
+| `joints` | Follower joints to estimate |
+| `smoothing_alpha` | Exponential moving average factor (greater than 0, at most 1; default 1 = no smoothing) |
+| `contact_on` / `contact_off` | Contact detection with hysteresis on the L1 norm of the residual. `contact_off` ≤ `contact_on`. Both default to 0, which means always in contact |
+
+An estimator computes a per-joint residual (measured − predicted for free motion) from the effort signal the robot declares (Rakuda2: `currents_mA`, in mA). External force acts opposite to the residual.
+
+The controller's `feedback`:
+
+```yaml
+feedback:
+  estimator: effort
+  deadline_ms: 100
+  unit: mA/mA          # leader unit / estimator unit
+  gain:                # follower joint name -> gain (0 or more)
+    r_arm_el_yaw: 0.1
+```
+
+The current sent to the leader is `−gain × sign × residual` (`sign` is the sign of the `joints` mapping). The controller asks for the feedback to be applied (gate) only while the estimate is valid and in contact, the follower is `ACTIVE`, and the controller is `following`. The leader accepts it only on joints of current-mode groups (`gravity_comp`, `impedance`) that have `feedback:`. Position-mode groups and `free` cannot have it.
+
+```yaml
+- group: right_arm
+  law: gravity_comp
+  # ...
+  feedback: {}
+```
+
+At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`Experiment`) does not handle estimators.
+
 ## Control rate
 
 `control_hz` in `robot.yaml` and the leader's `poll_hz` are the rates at which those nodes read and write their bus. The work of one period (reading the state, computing control laws, writing goals) must fit in the period. A higher rate makes the leader's current control and the follower's tracking finer.

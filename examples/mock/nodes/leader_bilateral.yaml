@@ -1,0 +1,47 @@
+type: rakuda_mini
+port: mock://leader
+motor_ids:
+- 27
+- 28
+- 29
+- 1
+- 3
+- 5
+- 7
+- 9
+- 11
+- 31
+- 2
+- 4
+- 6
+- 8
+- 10
+- 12
+- 30
+poll_hz: 30
+registers:
+  operating_mode:
+    r_arm_grip: 5
+    l_arm_grip: 5
+# Current-mode arms so the mock leader takes force feedback. Impedance with kp 0 and no
+# gravity model sends no current of its own; the mock bus never moves.
+control:
+- group: body
+  law: free
+  joints: [torso_yaw, head_yaw, head_pitch, r_arm_grip, l_arm_grip]
+- group: right_arm
+  law: impedance
+  joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
+  kp: 0.0
+  max_current_mA: 50
+  max_velocity: 3000
+  range: [[0, 4095], [0, 4095], [0, 4095], [0, 4095], [0, 4095], [0, 4095]]
+  feedback: {}
+- group: left_arm
+  law: impedance
+  joints: [l_arm_sh_pitch1, l_arm_sh_roll, l_arm_sh_pitch2, l_arm_el_yaw, l_arm_wr_roll, l_arm_wr_yaw]
+  kp: 0.0
+  max_current_mA: 50
+  max_velocity: 3000
+  range: [[0, 4095], [0, 4095], [0, 4095], [0, 4095], [0, 4095], [0, 4095]]
+  feedback: {}

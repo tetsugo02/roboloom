@@ -29,6 +29,7 @@ from ..drivers.base import Health, JointState, read_health, read_state
 from ..drivers.dynamixel_table import OPERATING_MODES
 from ..dynamics.base import GravityModel, load_gravity_model
 from . import LAWS
+from .feedback import FeedbackCommand
 from .homing import Trajectory
 from .laws import ControlLaw, CurrentLaw, CurrentPosition, Position, _per_joint
 from .trace import Trace
@@ -263,6 +264,13 @@ class JointDevice:
         self.last_watchdog_ns: int | None = None
         self.home: HomeRun | None = None
         self.home_result: dict = {}  # how the last move ended, shown until start or home
+        self.feedback = (
+            FeedbackCommand()
+        )  # latest from the controller (actuated leader)
+
+    def set_feedback(self, effort_mA: dict[int, float], gate: bool, deadline_ns: int):
+        """Store the controller's latest force feedback (device joint index -> mA)."""
+        self.feedback = FeedbackCommand(dict(effort_mA), gate, deadline_ns)
 
     def _indices(self, predicate) -> list[int]:
         return sorted(i for law in self.laws if predicate(law) for i in law.joints)

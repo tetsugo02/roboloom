@@ -1,7 +1,7 @@
 """Experiment configuration: resolve node files, build validated specs, cross-check the graph.
 
 The experiment YAML groups node files by role (`inputs`, `controllers`, `robots`,
-`sensors`) plus the `recorder` and `session` services. Each node's `type` selects
+`sensors`, `estimators`) plus the `recorder` and `session` services. Each node's `type` selects
 its class from that role's registry. Nothing here opens a device.
 """
 
@@ -18,6 +18,8 @@ from .controllers.base import Controller
 from .core.checks import identity, positive
 from .core.source import Recordable, Source
 from .errors import ConfigError
+from .estimators import ESTIMATORS
+from .estimators.base import Estimator
 from .inputs import INPUTS
 from .inputs.base import InputDevice
 from .recording import features
@@ -26,7 +28,7 @@ from .robots import ROBOTS
 from .robots.base import Robot
 from .sensors import SENSORS
 
-ROLES = ("inputs", "controllers", "robots", "sensors")
+ROLES = ("inputs", "controllers", "robots", "sensors", "estimators")
 SERVICES = ("recorder", "session")
 # Service node ids and fixed dora input ids; LeRobot key collisions are checked by `features`.
 RESERVED = {*SERVICES, "action", "tick"}
@@ -42,6 +44,7 @@ class ExperimentConfig:
     inputs: dict[str, InputDevice] = field(default_factory=dict)
     sensors: dict[str, Source] = field(default_factory=dict)
     controllers: dict[str, Controller] = field(default_factory=dict)
+    estimators: dict[str, Estimator] = field(default_factory=dict)
     max_age_ms: dict[str, float] = field(default_factory=dict)
     recorder: dict = field(default_factory=dict)
     quality: dict = field(default_factory=dict)  # see recording.metrics.QUALITY
@@ -179,6 +182,14 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
     sensors = {
         name: SENSORS.get(c.get("type"))(name, c) for name, c in tree["sensors"].items()
     }
+    estimators = {}
+    for name, c in tree["estimators"].items():
+        estimator = ESTIMATORS.get(c.get("type"))(name, c)
+        robot = robots.get(estimator.robot)
+        if robot is None:
+            raise ValueError(f"estimators.{name} must reference a configured robot")
+        estimator.bind(robot)
+        estimators[name] = estimator
     controllers = {}
     for name, c in tree["controllers"].items():
         cls = CONTROLLERS.get(c.get("type"))
@@ -197,6 +208,7 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         bind = getattr(controller, "bind", None)
         if bind is not None:
             bind({**inputs, **sensors})
+        controller.bind_feedback(estimators)
         controllers[name] = controller
     for robot in robots.values():
         if [c.robot.name for c in controllers.values()].count(robot.name) != 1:
@@ -231,6 +243,7 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         inputs=inputs,
         sensors=sensors,
         controllers=controllers,
+        estimators=estimators,
         max_age_ms={
             name: positive(ages.get(name), f"max_age_ms.{name}")
             for name in (*inputs, *robots, *sensors)

@@ -1,7 +1,7 @@
 # Bilateral control design (FACTR 2)
 
-!!! warning "Unimplemented design proposal"
-    This page is a design proposal that lays out the implementation steps. roboloom does not implement force feedback yet. The configuration keys, commands and node names here are proposals and do not work in the current roboloom. Nothing here has been verified on hardware.
+!!! warning "Partly implemented design proposal"
+    This page is a design proposal that lays out the implementation steps. Stage 1 of §7 (the path) is implemented; the settings that work are under "Force feedback" in [Configuration](../reference/configuration.md). Other configuration keys, commands and node names are proposals and do not work in the current roboloom. Nothing here has been verified on hardware.
 
 Written 2026-10-27. Sources studied (code was read, not run):
 
@@ -271,18 +271,22 @@ Like robots, inputs and sensors, estimators live in a registry `ESTIMATORS` (`ro
 
 ```python
 class EffortEstimator(Protocol):
-    robot: str                        # the robot node it reads
-    joint_names: tuple[str, ...]      # follower joints
-    unit: str                         # e.g. "mA" or "Nm"
-    needs: tuple[str, ...]            # state fields used, e.g. ("positions", "velocities", "currents_mA", "target")
+    robot: str  # the robot node it reads
+    joint_names: tuple[str, ...]  # follower joints
+    unit: str  # e.g. "mA" or "Nm"
+    needs: tuple[
+        str, ...
+    ]  # state fields used, e.g. ("positions", "velocities", "currents_mA", "target")
+
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...   # robot_state payload
+    def update(self, state: dict, t_ns: int) -> Estimate: ...  # robot_state payload
+
 
 @dataclass
 class Estimate:
-    residual: list[float]             # measured − predicted in free motion
+    residual: list[float]  # measured − predicted in free motion
     contact: bool
-    valid: bool                       # False with too little history, a stale state, etc.
+    valid: bool  # False with too little history, a stale state, etc.
 ```
 
 | `type` | Content | Use |

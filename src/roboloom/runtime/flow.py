@@ -33,23 +33,53 @@ def build_flow(cfg: ExperimentConfig) -> dict:
 
     control_hz = cfg.robot.control_hz
     session = {"session": "session/control"}  # every node ends on `quit`
-    nodes = [
-        node(name, session, ["sample", "status"], source.rate_hz(fps) or control_hz)
-        for name, source in cfg.inputs.items()
-    ]
 
     def latest(output: str) -> dict:
         return {"source": output, "queue_size": 1, "queue_policy": "drop_oldest"}
 
+    # force feedback: the controller that sends it to each input
+    feedback = {
+        c.source.name: name
+        for name, c in cfg.controllers.items()
+        if c.feedback is not None and c.source is not None
+    }
+    nodes = [
+        node(
+            name,
+            {
+                **session,
+                **(
+                    {"feedback": latest(f"{feedback[name]}/feedback")}
+                    if name in feedback
+                    else {}
+                ),
+            },
+            ["sample", "status"],
+            source.rate_hz(fps) or control_hz,
+        )
+        for name, source in cfg.inputs.items()
+    ]
+
     for name, c in cfg.controllers.items():
         inputs: dict[str, object] = {"robot": f"{c.robot.name}/state", **session}
+        outputs = ["command", "status"]
         if c.source is not None:
             inputs["intent"] = f"{c.source.name}/sample"
         # a policy reads the newest sample of what it observes, on its own timer
         inputs.update({f"observe_{n}": latest(f"{n}/sample") for n in c.observes()})
-        nodes.append(
-            node(name, inputs, ["command", "status"], getattr(c, "rate_hz", None))
+        if c.feedback is not None:
+            inputs["estimate"] = latest(f"{c.feedback.estimator_name}/estimate")
+            outputs.append("feedback")
+        nodes.append(node(name, inputs, outputs, getattr(c, "rate_hz", None)))
+    # estimators run on each robot state they receive, so they need no timer
+    nodes += [
+        node(
+            name,
+            {"robot": latest(f"{e.robot}/state"), **session},
+            ["estimate", "status"],
         )
+        for name, e in cfg.estimators.items()
+    ]
     nodes += [
         node(
             name,

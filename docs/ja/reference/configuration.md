@@ -34,6 +34,58 @@ session: nodes/session.yaml
 
 leaderノードの `control` は，`free`（脱力），`position`（leaderでは通電時の姿勢を保持），`spring`，`gravity_comp` などを関節グループごとに選びます．全関節をちょうど1回ずつ指定します．`joint` controllerの `couplings`（既定 `[]`）は，`{joint, source, scale, reference}`（任意で `lead_ms`） のリストで，他のfollower関節の `reference` からの実測変位を目標へ加えます．両者は独立した設定です．[Leaderの設定例](../controllers/leader.md)を参照してください．
 
+## 力の逆送（実機未検証）
+
+!!! warning "実機では未検証"
+    followerが受けた外力をleaderへ返す経路です．模擬（mock）の試験だけを通しています．現在の推定器は `none`（常に推定なし）だけで，leaderへ返す電流は0です．設計と今後の段階は [バイラテラル制御の設計](../contribution/bilateral.md) を参照してください．
+
+実験YAMLに `estimators` を足し，controllerの `feedback` で推定器を参照します．辺は書きません．各ノードの参照から次の経路を導きます．
+
+```text
+leader ──sample──► controller ──command──► robot ──state──► estimator
+  ▲                    │  ▲                                  │
+  └──── feedback ──────┘  └────────────── estimate ──────────┘
+```
+
+```yaml
+estimators:
+  effort: nodes/effort.yaml
+```
+
+推定器（`nodes/effort.yaml`）：
+
+| キー | 意味 |
+| --- | --- |
+| `type` | `none` |
+| `robot` | 状態を読むrobotノードの名前 |
+| `joints` | 推定するfollower関節 |
+| `smoothing_alpha` | 指数移動平均の係数（0より大きく1以下，既定1＝平滑化なし） |
+| `contact_on` / `contact_off` | 残差のL1ノルムによる接触の判定（ヒステリシス）．`contact_off` ≤ `contact_on`．既定はどちらも0で，常に接触とみなす |
+
+推定器は，robotが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
+
+controllerの `feedback`：
+
+```yaml
+feedback:
+  estimator: effort
+  deadline_ms: 100
+  unit: mA/mA          # leaderの単位 / 推定器の単位
+  gain:                # followerの関節名 → 係数（0以上）
+    r_arm_el_yaw: 0.1
+```
+
+leaderへの電流は `−gain × sign × 残差` です（`sign` は `joints` の対応の符号）．controllerは，推定が有効で接触中，followerが `ACTIVE`，controllerが `following` のときだけ，適用の希望（gate）を立てます．leaderは，`feedback:` を書いた電流制御のグループ（`gravity_comp`，`impedance`）の関節だけで受け取ります．位置制御のグループや `free` には書けません．
+
+```yaml
+- group: right_arm
+  law: gravity_comp
+  # ...
+  feedback: {}
+```
+
+読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`Experiment`）は推定器を扱いません．
+
 ## 制御周期
 
 `robot.yaml` の `control_hz` と，leaderの `poll_hz` は，そのノードがバスを読み書きする周期です．1周期の仕事（状態の読み出し，制御則の計算，目標値の書き込み）が周期に収まる必要があります．周期を上げると，leaderの電流制御とfollowerの追従が細かくなります．
