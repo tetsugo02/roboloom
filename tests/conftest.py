@@ -28,6 +28,7 @@ def mock_project(root: Path) -> Path:
     filled = {
         "SET_LEADER_PORT": "/dev/leader",
         "SET_FOLLOWER_PORT": "/dev/follower",
+        "SET_FOLLOWER_ARM_GOAL_CURRENT_mA": "1000",
         "SET_REALSENSE_SERIAL": "RS1",
         "SET_DIGIT_LEFT_SERIAL": "D1",
         "SET_DIGIT_RIGHT_SERIAL": "D2",

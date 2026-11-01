@@ -176,6 +176,17 @@ def check_hardware(
             raise ValueError(
                 f"{owner}.control.{g.name}: {g.law} is not validated on hardware; set allow_unvalidated: true to override"
             )
+        if issubclass(cls, CurrentPosition):
+            # Goal Current above the EEPROM Current Limit is refused by the motor at run time
+            goals = _per_joint(
+                g.cfg.get("goal_current_mA"), len(g.joints), f"{g.name}.goal_current_mA"
+            )
+            for joint, goal in zip(g.joints, goals, strict=True):
+                eeprom = current_limits_mA.get(joint)
+                if eeprom is not None and goal > eeprom:
+                    raise ValueError(
+                        f"{owner}: {joint} goal_current_mA {goal} exceeds registers.current_limit {eeprom}"
+                    )
         if cls.current_mode:
             if not cfg.get("bus_watchdog_ms"):
                 raise ValueError(

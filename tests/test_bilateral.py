@@ -399,3 +399,67 @@ def test_robot_trace_keeps_published_state_per_tick(tmp_path):
     assert data["measured_mA"][0].tolist() == [3.0, 4.0]
     assert data["target"][0].tolist() == [5.0, 6.0]
     assert np.isnan(data["velocities"]).all() and np.isnan(data["target"][1]).all()
+
+
+def bilateral_tree(tmp_path, goal_mA=1000):
+    """The shipped bilateral template, filled as `init` users do (ports, limits, models)."""
+    from conftest import rakuda2_tree
+    from test_tools import synthetic_models
+
+    paths = synthetic_models(tmp_path)
+    tree = rakuda2_tree("experiment_bilateral")
+    for group in tree["inputs"]["leader"]["control"]:
+        if group["law"] == "gravity_comp":
+            group["gravity_model"] = str(paths[group["group"].split("_")[0]])
+            group["range"] = [[500, 3500]] * 6
+    robot = tree["robots"]["robot"]
+    limits = robot["registers"]["current_limit"]
+    for joint, value in limits.items():
+        if value == "SET_FOLLOWER_ARM_GOAL_CURRENT_mA":
+            limits[joint] = 1000
+    for group in robot["control"]:
+        if group.get("goal_current_mA") == "SET_FOLLOWER_ARM_GOAL_CURRENT_mA":
+            group["goal_current_mA"] = goal_mA
+    return tree
+
+
+def test_bilateral_template_parses_with_hardware_checks(tmp_path):
+    cfg = parse_experiment(bilateral_tree(tmp_path))
+    assert not cfg.mock and set(cfg.estimators) == {"effort"}
+    assert cfg.controllers["controller"].feedback.leader_joints == ["r_arm_el_yaw"]
+    robot = cfg.robots["robot"]
+    modes = robot.expected_eeprom()[2]["operating_mode"]
+    assert modes["r_arm_el_yaw"] == 5 and modes["torso_yaw"] == 3
+    assert modes["r_arm_grip"] == 5
+
+
+def test_template_refuses_unfilled_or_too_high_goal_current(tmp_path):
+    from conftest import rakuda2_tree
+
+    with pytest.raises(ValueError, match="SET_FOLLOWER_ARM_GOAL_CURRENT_mA"):
+        parse_experiment(rakuda2_tree("experiment_bilateral"))
+    with pytest.raises(ValueError, match="exceeds registers.current_limit"):
+        parse_experiment(bilateral_tree(tmp_path, goal_mA=1200))
+
+
+def test_mock_follower_runs_arms_in_current_position_mode(tmp_path):
+    from roboloom.robots.safety import FollowerSafety
+
+    tree = bilateral_tree(tmp_path)
+    tree["experiment"]["mode"] = "mock"
+    cfg = parse_experiment(tree)
+    robot = cfg.robots["robot"]
+    bus = robot.open_device(True)
+    safety = FollowerSafety(robot.safety_config(cfg.robot_id), bus)
+    safety.start()
+    try:
+        raw = bus.bus
+        elbow = robot.joint_names.index("r_arm_el_yaw")
+        grip = robot.joint_names.index("r_arm_grip")
+        assert raw.modes[elbow] == 5 and raw.modes[0] == 3
+        assert raw.goal_current[elbow] == 1000 and raw.goal_current[grip] == 54
+        assert all(raw.torque)
+        state, _ = safety.tick()
+        assert state.payload["mode"] == "HOLD"
+    finally:
+        bus.close()

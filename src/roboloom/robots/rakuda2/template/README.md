@@ -140,6 +140,24 @@ dataset features change. To finish an operator-screen run: `stop`, `save` or `di
 support the leader and follower arms, `quit`, then select Hold or supported Release.
 Cancel is initially selected, so Enter alone cancels.
 
+## Bilateral teleoperation (not verified)
+
+`experiment_bilateral.yaml` returns the external force on the follower to the leader. It
+is **not verified on hardware**; check every step with the arms supported. Files:
+
+| file | what |
+| --- | --- |
+| `nodes/robot_bilateral.yaml` | follower arms in current-based position control (Mode 5): set `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` |
+| `nodes/leader_bilateral.yaml` | `leader_gravity.yaml` with `feedback:` on the arm groups (needs the gravity steps above) |
+| `nodes/controller_bilateral.yaml` | `controller.yaml` with `feedback:` (one joint, small gain) |
+| `nodes/effort.yaml` | the follower effort estimator (`none`: never estimates) |
+
+1. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/robot_bilateral.yaml`, then write
+   Operating Mode 5 and the Current Limit: `uv run roboloom commission rakuda2/experiment_bilateral robot --hardware`.
+   `nodes/robot.yaml` (Mode 3) refuses to start on these motors until you commission it back.
+2. `uv run roboloom run rakuda2/experiment_bilateral --hardware`: the follower should track and
+   hold as before, and stop pushing at the goal current when it meets an obstacle.
+
 ## Inference
 
 8. `uv run roboloom infer rakuda2/experiment_policy --seconds 20 --hardware` first runs the
