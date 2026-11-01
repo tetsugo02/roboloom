@@ -31,9 +31,10 @@ class Trace:
         state: JointState,
         model_mA: dict[int, float],
         commanded_mA: dict[int, float],
+        feedback_mA: dict[int, float] | None = None,
     ) -> None:
         n = len(self.joint_names)
-        row = np.full(1 + 5 * n, np.nan)
+        row = np.full(1 + 6 * n, np.nan)
         row[0] = t_ns
         row[1 : 1 + n] = state.positions
         if state.velocities is not None:
@@ -44,6 +45,8 @@ class Trace:
             row[1 + 3 * n + i] = v
         for i, v in commanded_mA.items():
             row[1 + 4 * n + i] = v
+        for i, v in (feedback_mA or {}).items():
+            row[1 + 5 * n + i] = v
         self.rows.append(row)
         if len(self.rows) > MAX_ROWS:
             del self.rows[: len(self.rows) - MAX_ROWS]
@@ -62,8 +65,9 @@ class Trace:
             velocities=a[:, 1 + n : 1 + 2 * n],
             measured_mA=a[:, 1 + 2 * n : 1 + 3 * n],
             model_mA=a[:, 1 + 3 * n : 1 + 4 * n],  # g(q) at gain 1
-            # sent Goal Current: model after ramp, gain, damping, range barrier and clip
-            commanded_mA=a[:, 1 + 4 * n :],
+            # sent Goal Current: model after ramp, gain, damping, range barrier, feedback, clip
+            commanded_mA=a[:, 1 + 4 * n : 1 + 5 * n],
+            feedback_mA=a[:, 1 + 5 * n :],  # force feedback added before the clip
         )
         return self.path
 

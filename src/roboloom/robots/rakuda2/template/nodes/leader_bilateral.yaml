@@ -1,6 +1,9 @@
 # Leader for bilateral teleoperation (experiment_bilateral.yaml): leader_gravity.yaml with
 # `feedback:` on the arm groups, so they take the force the controller returns from the
 # follower. NOT verified on hardware. The controller's feedback.gain picks the joints.
+# The feedback shares max_current_mA and the EEPROM Current Limit with gravity: near the
+#   limit it is clipped. Raising the Current Limit for more feedback raises the force left on
+#   the arm if the host stops (XC330 keeps the last current when the Bus Watchdog fires).
 # Actuated leader: arms gravity-compensated (current mode), triggers are the return spring.
 # Same motors and EEPROM checks as leader.yaml; differences: the arm joints run gravity_comp in
 # current mode (Operating Mode 0) with the low Current Limits below.
@@ -92,7 +95,10 @@ control:
   homing:  # `home` pulls the arm with this spring (on top of gravity), capped at max_mA
     kp_mA_per_count: 0.5
     max_mA: 40
-  feedback: {}
+  feedback:  # force from the follower (controller_bilateral.yaml feedback.gain picks joints)
+    max_mA: 20  # feedback alone; the total is still clipped at max_current_mA (and EEPROM)
+    ramp_s: 0.3  # the feedback fades in and out over this time, never jumps
+    kd: 0.0  # extra damping while the feedback is on, mA per count/s
 - group: left_arm
   law: gravity_comp
   joints:
@@ -114,7 +120,10 @@ control:
   homing:  # `home` pulls the arm with this spring (on top of gravity), capped at max_mA
     kp_mA_per_count: 0.5
     max_mA: 40
-  feedback: {}
+  feedback:  # force from the follower (controller_bilateral.yaml feedback.gain picks joints)
+    max_mA: 20  # feedback alone; the total is still clipped at max_current_mA (and EEPROM)
+    ramp_s: 0.3  # the feedback fades in and out over this time, never jumps
+    kd: 0.0  # extra damping while the feedback is on, mA per count/s
 - group: trigger
   law: spring
   joints:

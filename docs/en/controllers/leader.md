@@ -129,3 +129,19 @@ Current-mode groups of a gravity-compensated leader need a spring that pulls the
 - Keep your hands off the arms while they move. `estop`, `release` and `quit` make the leader limp as before.
 
 This is verified with mock buses and the mock dataflow. Behaviour on hardware has not been verified.
+
+## Receive force feedback (not verified on hardware)
+
+When a current-mode group (`gravity_comp`, `impedance`) has `feedback:`, its joints receive, as current, the external force on the follower that the controller returns. This has not been verified on hardware.
+
+```yaml
+- group: right_arm
+  law: gravity_comp
+  # ... existing gravity_model, tuning, range, etc.
+  feedback:
+    max_mA: 20
+    ramp_s: 0.3
+    kd: 0.0
+```
+
+The controller's `feedback.gain` selects the joints that receive it. The feedback is added to the output of gravity compensation and the rest, then clipped at `max_current_mA`; the gate opens and closes over `ramp_s`. Estop, release and quit set it to 0 at once. For the keys and the safety mechanisms, see "Force feedback" in [Configuration](../reference/configuration.md); for the Rakuda2 combination, see "Bilateral" in [Rakuda2](../robots/rakuda2.md).

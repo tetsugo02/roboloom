@@ -1,7 +1,7 @@
 # Bilateral control design (FACTR 2)
 
 !!! warning "Partly implemented design proposal"
-    This page is a design proposal that lays out the implementation steps. Stages 1 (the path), 2 (follower recording), 3 (follower mode) and 4 (`model_residual`) of §7 are implemented; the settings that work are under "Force feedback" in [Configuration](../reference/configuration.md). Other configuration keys, commands and node names are proposals and do not work in the current roboloom. Nothing here has been verified on hardware.
+    This page is a design proposal that lays out the implementation steps. Stages 1–5 of §7 are implemented and pass the mock tests. Nothing has been verified on hardware. The settings that work are under "Force feedback" in [Configuration](../reference/configuration.md). Configuration keys, commands and node names for stage 6 onward (`sensor`, `next`, gripper feedback, etc.) are proposals and do not work in the current roboloom.
 
 Written 2026-10-27. Sources studied (code was read, not run):
 
@@ -164,7 +164,7 @@ leader ──sample──► controller ──command──► robot ──state
 
 - Joint correspondence and signs are written only in the controller's `joints`. No separate map for feedback.
 - Feedback messages carry an absolute deadline, like robot commands (the same shape as `make_command`).
-- The path is a cycle (leader → controller → robot → estimator → controller → leader). Stage 1 checks in mock that dora-rs dataflows accept cyclic edges.
+- The path is a cycle (leader → controller → robot → estimator → controller → leader). Stage 1 confirmed in mock that dora-rs dataflows accept cyclic edges (the controller and robot already formed a cycle).
 
 ### Writing an experiment
 
@@ -250,19 +250,22 @@ An arm group in `nodes/leader_bilateral.yaml`:
   feedback:
     max_mA: 40                    # limit on the feedback part; the total stays limited by max_current_mA
     ramp_s: 0.3                   # time to open or close the gate
-    contact_on: 30                # L1 norm of |residual|, with hysteresis
-    contact_off: 15
     kd: 0.0                       # extra damping in contact
 ```
+
+The implementation puts contact detection (`contact_on` / `contact_off`) in the estimator, not the leader, so that the recorded `observation.contact` and the decision used for the gate are the same value and the leader stays robot-independent. The controller asks for the gate only while "the estimate is valid, in contact, the follower is `ACTIVE`, and `following`"; the leader checks the deadline, unit and joints and moves the gate over `ramp_s`.
 
 `nodes/effort.yaml`:
 
 ```yaml
-type: model_residual              # none | sensor | model_residual | next
+type: model_residual              # none | sensor | model_residual | next (none and model_residual are implemented)
 robot: robot
 joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
-model: ../calibration/effort_gravity_right.yaml
+models: [../calibration/effort_gravity_right.yaml]   # implemented as a list of per-arm models
 smoothing_alpha: 0.2
+contact_on: 30                    # L1 norm of |residual|, with hysteresis (in the estimator, as implemented)
+contact_off: 15
+record: true                      # records observation.effort_ext / observation.contact
 ```
 
 ### Estimator contract
@@ -347,6 +350,8 @@ The `roboloom init` template gains a description of `models/` and `*.safetensors
 ## 7. Implementation steps
 
 Each stage is committed and passes mock tests before moving to hardware. Hardware checks are done by the user.
+
+Status (2026-11-02): stages 1–5 are implemented and pass the mock tests (`tests/test_bilateral.py`, including the whole path from the estimate through the gate to the leader current on dora). The hardware checks of stages 3–5 have not been done. The stage 2 trace is `<robot name>_trace.npz`; stage 4 identification uses the existing `identify-gravity` on a follower calibration (`calibration/follower_<side>.yaml`).
 
 | Stage | Content | Done when |
 | --- | --- | --- |

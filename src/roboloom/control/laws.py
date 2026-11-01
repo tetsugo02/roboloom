@@ -15,6 +15,7 @@ from typing import ClassVar
 from ..core.checks import finite, positive
 from ..drivers.base import JointState
 from ..dynamics.base import GravityModel
+from .feedback import FeedbackTerm
 
 
 class RunawayError(RuntimeError):
@@ -140,7 +141,8 @@ class Spring(CurrentPosition):
 
 
 class CurrentLaw(ControlLaw):
-    """Shared current-mode machinery: gravity term, damping, range barrier, runaway check, ramp, clip."""
+    """Shared current-mode machinery: gravity term, damping, range barrier, runaway check, ramp,
+    optional force feedback (`feedback:`, see `roboloom.control.feedback`), clip."""
 
     mode = "current"
     current_mode = True
@@ -187,6 +189,7 @@ class CurrentLaw(ControlLaw):
                 positive(homing["max_mA"], f"{name}.homing.max_mA"),
             )
         )
+        self.feedback = _feedback(cfg.get("feedback"), joints, name)
         self.elapsed = 0.0
         self.model_mA: dict[int, float] = {}  # last g(q) at gain 1, for traces
         if gravity is not None:
@@ -209,8 +212,13 @@ class CurrentLaw(ControlLaw):
 
     def driven(self, k: int) -> bool:
         """A joint this law pushes. One it does not (gain and kd 0) carries no current inside
-        its range and cannot run away, so falling limp is not checked against max_velocity."""
-        return self.kd[k] != 0 or (self.gravity is not None and self.gain[k] != 0)
+        its range and cannot run away, so falling limp is not checked against max_velocity.
+        A joint that takes feedback counts as pushed: the follower may drive it."""
+        return (
+            self.kd[k] != 0
+            or (self.gravity is not None and self.gain[k] != 0)
+            or self.feedback is not None
+        )
 
     def reset(self, state):
         self.elapsed = 0.0
@@ -240,9 +248,31 @@ class CurrentLaw(ControlLaw):
                     f"{self.device_joints[i]}: q={q:.0f} v={v:.0f} outside the allowed range"
                 )
             push = self.barrier * (max(0.0, lo - q) - max(0.0, q - hi))
-            value = scale * (raw[i] - self.kd[k] * v) + push
+            fed = self.feedback.mA(k, v) if self.feedback is not None else 0.0
+            value = scale * (raw[i] - self.kd[k] * v) + push + fed
             out[i] = max(-self.max_current[k], min(self.max_current[k], value))
         return Goals(currents_mA=out)
+
+
+def _feedback(cfg: object, joints: list[int], name: str) -> FeedbackTerm | None:
+    if cfg is None:
+        return None
+    where = f"{name}.feedback"
+    if not isinstance(cfg, dict):
+        raise TypeError(f"{where} must be a mapping")
+    unknown = set(cfg) - {"max_mA", "ramp_s", "kd"}
+    if unknown:
+        raise ValueError(f"{where}: unknown keys {sorted(unknown)}")
+    n = len(joints)
+    return FeedbackTerm(
+        joints,
+        [
+            positive(x, f"{where}.max_mA")
+            for x in _per_joint(cfg.get("max_mA"), n, f"{where}.max_mA")
+        ],
+        positive(cfg.get("ramp_s", 0.3), f"{where}.ramp_s"),
+        _per_joint(cfg.get("kd", 0.0), n, f"{where}.kd"),  # mA per count/s
+    )
 
 
 class GravityComp(CurrentLaw):

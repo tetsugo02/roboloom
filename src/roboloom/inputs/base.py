@@ -141,8 +141,9 @@ class ActuatedReader:
         feedback = (
             {
                 "feedback": {
-                    "gate": self.device.feedback.gate,
+                    "wanted": self.device.feedback.gate,
                     "received": self.feedback_received,
+                    **self.device.feedback_status(),
                 },
                 **(
                     {"feedback_rejected": self.feedback_rejected}

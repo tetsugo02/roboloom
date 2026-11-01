@@ -227,7 +227,9 @@ def test_leader_takes_matching_feedback_and_drops_the_rest():
             device.joint_names.index("l_arm_el_yaw"),
         }
         assert device.feedback.gate is True
-        assert reader.status()["feedback"] == {"gate": True, "received": 1}
+        status = reader.status()["feedback"]
+        assert status["wanted"] is True and status["received"] == 1
+        assert status["gate"] == 0.0  # opens over ramp_s on the next control ticks
 
         wrong_unit = Publisher("controller").make(
             "feedback",
@@ -293,7 +295,8 @@ def test_feedback_path_runs_end_to_end_in_mock(tmp_path):
     assert nodes["effort"]["fields"]["valid"] is False  # `none` never estimates
     assert nodes["controller"]["fields"]["feedback_gate"] is False
     leader = nodes["leader"]["fields"]
-    assert leader["feedback"]["received"] > 0 and leader["feedback"]["gate"] is False
+    assert leader["feedback"]["received"] > 0 and leader["feedback"]["wanted"] is False
+    assert leader["feedback"]["gate"] == 0.0
     assert "feedback_rejected" not in leader
 
 
@@ -536,3 +539,208 @@ def test_model_residual_needs_models_covering_its_joints(tmp_path):
     del tree["estimators"]["effort"]["models"]
     with pytest.raises(ValueError, match="models must list"):
         parse_experiment(tree)
+
+
+MS = 1_000_000
+
+
+def feedback_device(feedback=None, max_current=50.0):
+    """A one-group current-mode device (impedance, kp 0: no current of its own)."""
+    from roboloom.control.device import JointDevice, build_laws, parse_groups
+    from roboloom.drivers.mock import MockBus
+
+    group = {
+        "group": "arm",
+        "law": "impedance",
+        "joints": ["a", "b"],
+        "kp": 0.0,
+        "max_current_mA": max_current,
+        "max_velocity": 3000,
+        "range": [[0, 4095], [0, 4095]],
+        "feedback": {"max_mA": 20, "ramp_s": 0.1, **(feedback or {})},
+    }
+    joints = ("a", "b")
+    bus = MockBus(dimension=2, modes=[0, 0])
+    dev = JointDevice(
+        bus, joints, build_laws(parse_groups([group], joints, "dev"), joints)
+    )
+    dev.read_state()
+    dev.enable_torque()
+    return dev, bus
+
+
+def start(dev):
+    """Pin the device clock: one closed tick at t0, so later ticks have exact dt."""
+    t0 = time.monotonic_ns()
+    dev.read_state()
+    dev.command(None, t0)
+    return t0
+
+
+def run(dev, t0, ticks, period_ms=20):
+    for k in range(1, ticks + 1):
+        dev.read_state()
+        dev.command(None, t0 + k * period_ms * MS)
+
+
+def test_leader_feedback_ramps_in_and_clips_to_max_mA():
+    dev, bus = feedback_device()
+    t0 = start(dev)
+    dev.set_feedback({0: 15.0, 1: -80.0}, True, t0 + 10_000 * MS)
+    run(dev, t0, 2)  # 2 x 20 ms of a 100 ms ramp
+    assert dev.feedback_status()["gate"] == pytest.approx(0.4)
+    assert bus.goal_current[:2] == pytest.approx(
+        [6.0, -8.0]
+    )  # 0.4 x (15, clip -80 to -20)
+    run(dev, t0 + 40 * MS, 5)
+    assert bus.goal_current[:2] == pytest.approx([15.0, -20.0])
+
+
+def test_leader_feedback_total_is_clipped_at_max_current():
+    dev, bus = feedback_device({"max_mA": 40}, max_current=30.0)
+    t0 = start(dev)
+    dev.set_feedback({0: 40.0}, True, t0 + 10_000 * MS)
+    run(dev, t0, 10)
+    assert bus.goal_current[0] == pytest.approx(30.0)
+
+
+@pytest.mark.parametrize(("cause", "left_mA"), [("deadline", 6.0), ("gate", 2.0)])
+def test_leader_feedback_fades_out_when_stale_or_closed(cause, left_mA):
+    dev, bus = feedback_device()
+    t0 = start(dev)
+    dev.set_feedback({0: 10.0}, True, t0 + 200 * MS)
+    run(dev, t0, 8)  # open after 100 ms
+    assert bus.goal_current[0] == pytest.approx(10.0)
+    if cause == "gate":
+        dev.set_feedback({0: 10.0}, False, t0 + 10_000 * MS)
+    # ticks at 180..240 ms: the deadline (200 ms) passes after two of them; a closed
+    # gate fades from the first
+    run(dev, t0 + 160 * MS, 4)
+    assert bus.goal_current[0] == pytest.approx(left_mA)
+    run(dev, t0 + 240 * MS, 5)
+    assert bus.goal_current[0] == pytest.approx(0.0)
+
+
+def test_leader_feedback_stops_at_once_on_estop_and_runaway_checks_stay():
+    from roboloom.control.laws import RunawayError
+
+    dev, bus = feedback_device()
+    t0 = start(dev)
+    dev.set_feedback({0: 10.0}, True, t0 + 10_000 * MS)
+    run(dev, t0, 8)
+    dev.disable_torque()  # estop / release / quit on the leader
+    assert bus.goal_current[0] == 0.0 and dev.feedback_status()["gate"] == 0.0
+    dev.read_state()
+    dev.enable_torque()
+    run(dev, t0 + 200 * MS, 1)
+    assert bus.goal_current[0] == 0.0  # stays closed until the controller asks again
+    dev.set_feedback({0: 10.0}, True, t0 + 10_000 * MS)
+    bus.velocities[0] = (
+        5000.0  # a joint taking feedback is checked against max_velocity
+    )
+    with pytest.raises(RunawayError):
+        run(dev, t0 + 220 * MS, 1)
+    assert not dev.enabled and bus.goal_current[0] == 0.0
+
+
+def test_feedback_gate_never_leaves_0_to_1():
+    from roboloom.control.feedback import FeedbackCommand, FeedbackTerm
+
+    term = FeedbackTerm([0], [10.0], 0.1, [0.0])
+    term.advance(0, -5.0)  # a clock step backwards must not open the gate
+    assert term.gate == 0.0
+    term.set(FeedbackCommand({0: 5.0}, True, 10))
+    term.advance(1, 5.0)
+    assert term.gate == 1.0
+
+
+def test_leader_feedback_is_traced(tmp_path):
+    import numpy as np
+
+    from roboloom.control.trace import Trace
+
+    dev, _ = feedback_device()
+    dev.trace = Trace(tmp_path / "leader_trace.npz", dev.joint_names)
+    t0 = start(dev)
+    dev.set_feedback({0: 10.0}, True, t0 + 10_000 * MS)
+    run(dev, t0, 8)
+    data = np.load(dev.trace.save())
+    assert data["feedback_mA"][-1, 0] == pytest.approx(10.0)
+    assert data["commanded_mA"][-1, 0] == pytest.approx(10.0)
+
+
+def test_feedback_max_mA_must_fit_under_max_current_on_hardware():
+    from roboloom.control.device import check_hardware, parse_groups
+
+    group = {
+        "group": "arm",
+        "law": "gravity_comp",
+        "joints": ["a"],
+        "max_current_mA": 30,
+        "feedback": {"max_mA": 40},
+    }
+    with pytest.raises(
+        ValueError, match=r"feedback.max_mA 40.0 exceeds max_current_mA 30.0"
+    ):
+        check_hardware(
+            parse_groups([group], ("a",), "dev"),
+            {"bus_watchdog_ms": 500},
+            "dev",
+            {"a": 30},
+        )
+
+
+def test_tools_measure_without_feedback():
+    from roboloom.control.laws import CurrentLaw
+    from roboloom.setup.gravity import _only
+
+    dev, _ = feedback_device()
+    (law,) = dev.laws
+    assert isinstance(law, CurrentLaw) and law.feedback is not None
+    _only(law, dev.laws)
+    assert law.feedback is None
+
+
+@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
+def test_feedback_reaches_the_leader_current_while_following_in_mock(tmp_path):
+    """The whole chain in mock: the mock follower draws no current, so a constant 30 mA
+    gravity model leaves a residual of -30 mA (contact); once following an ACTIVE robot,
+    the leader's elbows receive -gain * sign * residual = 0.1 * 30 = 3 mA."""
+    from roboloom.runtime.session import Session
+
+    root = tmp_path / "mock"
+    shutil.copytree("examples/mock", root)
+    models = follower_models(tmp_path, offset_mA=30.0)
+    effort = yaml.safe_load((root / "nodes/effort.yaml").read_text())
+    effort.update(
+        type="model_residual",
+        models=[str(models["right"]), str(models["left"])],
+        contact_on=100,
+        contact_off=50,
+    )
+    (root / "nodes/effort.yaml").write_text(yaml.safe_dump(effort))
+    path = root / "experiment_bilateral.yaml"
+    path.write_text(
+        path.read_text().replace(
+            "output: ../../datasets/rakuda-mock-bilateral", "output: datasets/bilateral"
+        )
+    )
+    with Session.launch(path, log_dir=tmp_path / "logs") as s:
+        s.wait_ready(30)
+        s.start("push")
+        deadline = time.monotonic() + 10
+        fed: dict = {}
+        while time.monotonic() < deadline:
+            fed = s.status().get("leader", {}).get("fields", {}).get("feedback", {})
+            if fed.get("gate") == 1.0:
+                break
+            time.sleep(0.2)
+        nodes = s.status()
+        s.stop()
+        s.discard()
+    assert nodes["effort"]["fields"]["valid"] is True
+    assert nodes["effort"]["fields"]["contact"] is True
+    assert nodes["controller"]["fields"]["feedback_gate"] is True
+    assert fed["gate"] == 1.0
+    assert fed["mA"]["r_arm_el_yaw"] == pytest.approx(3.0)
+    assert fed["mA"]["l_arm_el_yaw"] == pytest.approx(3.0)

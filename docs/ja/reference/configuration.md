@@ -93,8 +93,21 @@ leaderへの電流は `−gain × sign × 残差` です（`sign` は `joints` �
 - group: right_arm
   law: gravity_comp
   # ...
-  feedback: {}
+  feedback:
+    max_mA: 20     # 逆送分だけの上限（関節ごとのリストも可）
+    ramp_s: 0.3    # gateの開閉にかける時間（既定0.3）
+    kd: 0.0        # 逆送中に足す減衰，mA/(count/s)（既定0）
 ```
+
+leaderは，毎周期，次の値を制御則の出力に足してから `max_current_mA` で制限します．
+
+```text
+gate × (clip(受け取った電流, ±max_mA) − kd × 速度)
+```
+
+`gate` は0〜1の値で，controllerが適用を希望し，かつメッセージの期限（`deadline_ms`）内なら1へ，そうでなければ0へ，`ramp_s` かけて近づきます．急に変わりません．estop・release・quit，脱力，逸走の検出では即座に0になります．逆送を受ける関節は，重力のゲインが0でも逸走の検査（`max_velocity`，範囲外）の対象です．`tune-gravity` と `gravity-check` の間は逆送を使いません．実機では `max_mA` ≤ `max_current_mA` を確かめます．leaderのstatusの `feedback` に，`gate`，各関節の逆送電流（`mA`），受信数を出します．トレース（`<leader名>_trace.npz`）の `feedback_mA` にも残ります．
+
+逆送の電流は，重力補償と同じ `max_current_mA` とEEPROMのCurrent Limitの内側にあります．上限の近くでは削られます．Current Limitを上げると，ホストが止まったときに腕に残る力も大きくなります（XC330はBus Watchdogが作動しても電流を止めません）．
 
 `record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1実験に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
 

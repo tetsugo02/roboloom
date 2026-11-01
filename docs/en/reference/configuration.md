@@ -93,8 +93,21 @@ The current sent to the leader is `−gain × sign × residual` (`sign` is the s
 - group: right_arm
   law: gravity_comp
   # ...
-  feedback: {}
+  feedback:
+    max_mA: 20     # limit of the feedback alone (a per-joint list also works)
+    ramp_s: 0.3    # time the gate takes to open or close (default 0.3)
+    kd: 0.0        # damping added while the feedback is on, mA/(count/s) (default 0)
 ```
+
+Every tick, the leader adds the following to the law's output, then clips the sum at `max_current_mA`.
+
+```text
+gate × (clip(received current, ±max_mA) − kd × velocity)
+```
+
+`gate` is a value from 0 to 1. It moves toward 1 over `ramp_s` while the controller asks for the feedback and the message is within its deadline (`deadline_ms`), and toward 0 otherwise. It never jumps. Estop, release, quit, going limp, and a detected runaway set it to 0 at once. Joints that take feedback are checked for runaway (`max_velocity`, out of range) even with gravity gain 0. `tune-gravity` and `gravity-check` run without feedback. On hardware, roboloom checks `max_mA` ≤ `max_current_mA`. The leader status shows `gate`, the feedback current per joint (`mA`) and the number received under `feedback`; the trace (`<leader name>_trace.npz`) keeps it as `feedback_mA`.
+
+The feedback current stays inside the same `max_current_mA` and EEPROM Current Limit as gravity compensation, so near the limit it is clipped. Raising the Current Limit also raises the force left on the arm if the host stops (an XC330 does not stop its current when the Bus Watchdog fires).
 
 An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One experiment records at most one estimator (a second one collides on the feature names and is refused).
 

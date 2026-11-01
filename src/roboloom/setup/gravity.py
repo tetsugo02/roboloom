@@ -150,10 +150,13 @@ def _gravity_group(experiment: str | Path, node: str, group: str):
 
 
 def _only(law, laws) -> None:
-    """Only `law` pushes; every other current law of the device stays limp."""
+    """Only `law` pushes; every other current law of the device stays limp. No law takes
+    force feedback (no controller sends any to a tool, but the config may enable it)."""
     from ..control.laws import CurrentLaw, GravityComp
 
     for other in laws:
+        if isinstance(other, CurrentLaw):
+            other.feedback = None  # no force feedback while measuring or tuning
         if other is law:
             continue
         if isinstance(other, CurrentLaw):

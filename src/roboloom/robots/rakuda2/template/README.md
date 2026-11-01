@@ -165,6 +165,12 @@ is **not verified on hardware**; check every step with the arms supported. Files
    hold as before, and stop pushing at the goal current when it meets an obstacle. Watch
    `residual_l1` of the `effort` node while moving freely and while pushing, then set
    `contact_on` / `contact_off` in `nodes/effort.yaml` between the two.
+4. Check the feedback on one joint: `nodes/controller_bilateral.yaml` returns only
+   `r_arm_el_yaw` with gain 0.05. Push the follower's right elbow while following: the
+   leader's `feedback` status should show `gate` rising to 1 and a small `mA` on the elbow,
+   and the leader elbow should be pushed the same way as the follower. If it pushes the
+   other way, stop (`estop`) and report it; do not raise the gain or add joints before the
+   direction is right. `feedback.max_mA` in `nodes/leader_bilateral.yaml` caps it.
 
 ## Inference
 
