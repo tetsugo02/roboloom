@@ -13,6 +13,7 @@ from collections import deque
 from pathlib import Path
 
 from roboloom.config import ExperimentConfig, load_experiment
+from roboloom.control.trace import RobotTrace
 from roboloom.controllers.base import Controller
 from roboloom.controllers.policy import PolicyController
 from roboloom.core.protocol import Envelope, Publisher
@@ -316,6 +317,16 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
     work: deque[float] = deque(maxlen=int(robot.control_hz * 2))  # ms in tick()
     gc_pauses = GcPauses()
     error = ""
+    log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
+    trace = (
+        RobotTrace(
+            Path(log_dir) / f"{robot.name}_trace.npz",
+            robot.joint_names,
+            FollowerSafety.MODES,
+        )
+        if log_dir
+        else None
+    )
     try:
         safety.start()
         while True:
@@ -346,6 +357,8 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                 work.append((time.perf_counter() - began) * 1e3)
                 _send(node, "state", state)
                 _send(node, ACTION, action)
+                if trace is not None:
+                    trace.add(state.t_capture_ns, state.payload)
                 intervals.append(state.payload["tick_interval_ms"])
                 clamped.append(bool(action.payload["clamped"]))
                 rejected.append(bool(state.payload["rejected"]))
@@ -370,7 +383,11 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                 )
                 _send(node, "status", status.make(fields, level, now))
     finally:
-        bus.close()
+        try:
+            if trace is not None:
+                trace.save()
+        finally:
+            bus.close()
 
 
 def _controller(node, controller: Controller):

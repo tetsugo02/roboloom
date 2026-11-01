@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 
 from roboloom.config import parse_experiment, read_experiment
-from roboloom.core.protocol import Publisher
+from roboloom.core.protocol import Envelope, Publisher
 from roboloom.estimators.base import Estimator
 from roboloom.runtime.flow import build_flow
 
@@ -288,8 +288,114 @@ def test_feedback_path_runs_end_to_end_in_mock(tmp_path):
                 break
             time.sleep(0.2)
         nodes = s.status()
+    assert (tmp_path / "logs" / "robot_trace.npz").is_file()
     assert nodes["effort"]["fields"]["valid"] is False  # `none` never estimates
     assert nodes["controller"]["fields"]["feedback_gate"] is False
     leader = nodes["leader"]["fields"]
     assert leader["feedback"]["received"] > 0 and leader["feedback"]["gate"] is False
     assert "feedback_rejected" not in leader
+
+
+def recorded_tree():
+    tree = read_experiment(PATH)
+    tree["estimators"]["effort"]["record"] = True
+    tree["recorder"]["max_age_ms"]["effort"] = 300
+    return tree
+
+
+def test_recorded_estimator_adds_features_and_a_recorder_input():
+    from roboloom.recording import features
+
+    cfg = parse_experiment(recorded_tree())
+    schema = features(cfg)
+    assert schema["observation.effort_ext"]["shape"] == (12,)
+    assert schema["observation.contact"]["shape"] == (1,)
+    assert "observation.meta.effort.valid" in schema
+    recorder = next(x for x in build_flow(cfg)["nodes"] if x["id"] == "recorder")
+    assert recorder["inputs"]["effort"]["source"] == "effort/estimate"
+    assert recorder["inputs"]["effort"]["queue_size"] == 15  # robot 30 Hz x 0.5 s
+    unrecorded = parse_experiment(read_experiment(PATH))
+    assert "observation.effort_ext" not in features(unrecorded)
+
+
+def test_recorded_estimator_needs_a_max_age():
+    tree = recorded_tree()
+    del tree["recorder"]["max_age_ms"]["effort"]
+    with pytest.raises(ValueError, match="max_age_ms.effort"):
+        parse_experiment(tree)
+
+
+def test_recorder_writes_external_effort_and_contact():
+    from roboloom.recording import EpisodeRecorder
+
+    cfg = parse_experiment(recorded_tree())
+    recorder = EpisodeRecorder(cfg)
+    t = time.monotonic_ns()
+    ms = 1_000_000
+    recorder.start("push", t, write=False)
+    residual = [0.0] * 12
+    residual[3] = 25.0
+    est = Envelope(
+        Estimator.kind,
+        "effort",
+        "boot",
+        0,
+        t - ms,
+        t - ms,
+        {
+            "residual": residual,
+            "valid": True,
+            "contact": True,
+            "joints": [],
+            "unit": "mA",
+        },
+        t_receive_ns=t - ms,
+    )
+    recorder.ingest("effort", est)
+    recorder.ingest(
+        "action",
+        Envelope(
+            "action",
+            "robot",
+            "boot",
+            1,
+            t + 20 * ms,
+            t + 20 * ms,
+            {"valid": True, "positions": [2048] * 17, "command_seq": 1, "t_sent_ns": t},
+            t_receive_ns=t + 21 * ms,
+        ),
+    )
+    recorder.stop(t + 100 * ms)
+    row = recorder.frames()[0]
+    assert (
+        row["observation.effort_ext"][3] == -25.0
+    )  # external force opposes the residual
+    assert row["observation.effort_ext.valid"][0] == 1
+    assert row["observation.contact"][0] == 1
+    assert row["observation.meta.effort.valid"][0] == 1
+
+
+def test_robot_trace_keeps_published_state_per_tick(tmp_path):
+    import numpy as np
+
+    from roboloom.control.trace import RobotTrace
+    from roboloom.robots.safety import FollowerSafety
+
+    trace = RobotTrace(tmp_path / "robot_trace.npz", ["a", "b"], FollowerSafety.MODES)
+    trace.add(
+        1,
+        {
+            "positions": [1.0, 2.0],
+            "velocities": None,
+            "currents_mA": [3.0, 4.0],
+            "target": [5.0, 6.0],
+            "mode": "ACTIVE",
+        },
+    )
+    trace.add(2, {"positions": [1.0, 2.0], "mode": "HOLD"})
+    data = np.load(trace.save())
+    assert list(data["joints"]) == ["a", "b"]
+    assert [data["modes"][m] for m in data["mode"]] == ["ACTIVE", "HOLD"]
+    assert data["measured_mA"][0].tolist() == [3.0, 4.0]
+    assert data["target"][0].tolist() == [5.0, 6.0]
+    assert np.isnan(data["velocities"]).all() and np.isnan(data["target"][1]).all()

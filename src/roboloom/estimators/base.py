@@ -10,9 +10,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
+
+import numpy as np
 
 from ..core.checks import finite, identity, names
+from ..core.protocol import Envelope
+from ..core.source import Features
 from ..robots.base import Robot
 
 STATE_FIELDS = ("positions", "velocities", "target")  # every robot_state carries these
@@ -43,6 +47,8 @@ class Estimator(ABC):
         if not (finite(on) and finite(off) and 0 <= off <= on):
             raise ValueError(f"{name}: needs 0 <= contact_off <= contact_on")
         self.contact_on, self.contact_off = float(on), float(off)
+        # record: estimates become dataset features (see `features`)
+        self.record = bool(cfg.get("record", False))
         self.effort_field = ""
         self.unit = ""
         self.indices: list[int] = []
@@ -98,6 +104,33 @@ class Estimator(ABC):
             "contact": estimate.contact,
             "valid": estimate.valid,
             "robot_t_ns": robot_t_ns,
+        }
+
+    def features(self, dataset_fps: float) -> Features:
+        """External effort (`-residual`, estimator unit), its validity and contact."""
+        one = {"dtype": "float32", "shape": (1,), "names": None}
+        return {
+            "observation.effort_ext": {
+                "dtype": "float32",
+                "shape": (len(self.joint_names),),
+                "names": None,
+            },
+            "observation.effort_ext.valid": one,
+            "observation.contact": one,
+        }
+
+    def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
+        valid = msg is not None and bool(msg.payload.get("valid"))
+        effort = (
+            [-float(r) for r in msg.payload["residual"]]
+            if msg is not None and valid
+            else [0.0] * len(self.joint_names)
+        )
+        contact = valid and msg is not None and bool(msg.payload.get("contact"))
+        return {
+            "observation.effort_ext": np.asarray(effort, dtype=np.float32),
+            "observation.effort_ext.valid": np.asarray([valid], dtype=np.float32),
+            "observation.contact": np.asarray([contact], dtype=np.float32),
         }
 
 

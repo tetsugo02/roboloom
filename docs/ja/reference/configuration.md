@@ -61,6 +61,7 @@ estimators:
 | `joints` | 推定するfollower関節 |
 | `smoothing_alpha` | 指数移動平均の係数（0より大きく1以下，既定1＝平滑化なし） |
 | `contact_on` / `contact_off` | 残差のL1ノルムによる接触の判定（ヒステリシス）．`contact_off` ≤ `contact_on`．既定はどちらも0で，常に接触とみなす |
+| `record` | `true` で推定をデータセットに記録する（既定 `false`）．`recorder.max_age_ms` にこの推定器の名前が必要 |
 
 推定器は，robotが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
 
@@ -83,6 +84,8 @@ leaderへの電流は `−gain × sign × 残差` です（`sign` は `joints` �
   # ...
   feedback: {}
 ```
+
+`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1実験に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
 
 読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`Experiment`）は推定器を扱いません．
 
@@ -132,6 +135,6 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 ## ログと設定の管理
 
-ログは実験ファイルの隣の `logs/<実験名>-<時刻>/` に置きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFOは生成した `.roboloom/.gitignore` で除外します．
+ログは実験ファイルの隣の `logs/<実験名>-<時刻>/` に置きます．leaderの電流制御は `<leader名>_trace.npz` に，robotは毎周期の状態（位置・速度・電流・目標・モード）を `<robot名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFOは生成した `.roboloom/.gitignore` で除外します．
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．

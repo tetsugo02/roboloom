@@ -61,6 +61,7 @@ Estimator (`nodes/effort.yaml`):
 | `joints` | Follower joints to estimate |
 | `smoothing_alpha` | Exponential moving average factor (greater than 0, at most 1; default 1 = no smoothing) |
 | `contact_on` / `contact_off` | Contact detection with hysteresis on the L1 norm of the residual. `contact_off` ≤ `contact_on`. Both default to 0, which means always in contact |
+| `record` | `true` records the estimate in the dataset (default `false`). `recorder.max_age_ms` needs an entry for this estimator |
 
 An estimator computes a per-joint residual (measured − predicted for free motion) from the effort signal the robot declares (Rakuda2: `currents_mA`, in mA). External force acts opposite to the residual.
 
@@ -83,6 +84,8 @@ The current sent to the leader is `−gain × sign × residual` (`sign` is the s
   # ...
   feedback: {}
 ```
+
+An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One experiment records at most one estimator (a second one collides on the feature names and is refused).
 
 At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`Experiment`) does not handle estimators.
 
@@ -132,6 +135,6 @@ Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_
 
 ## Managing logs and configuration
 
-Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
+Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and the robot's per-tick state (positions, velocities, currents, target, mode) to `<robot name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).

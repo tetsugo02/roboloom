@@ -64,7 +64,8 @@ class ExperimentConfig:
     @property
     def sources(self) -> dict[str, Recordable]:
         """Recorded streams in dataset order."""
-        return {**self.inputs, **self.robots, **self.sensors}
+        recorded = {n: e for n, e in self.estimators.items() if e.record}
+        return {**self.inputs, **self.robots, **self.sensors, **recorded}
 
     def controller_for(self, robot: str) -> Controller:
         (controller,) = (c for c in self.controllers.values() if c.robot.name == robot)
@@ -246,7 +247,12 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         estimators=estimators,
         max_age_ms={
             name: positive(ages.get(name), f"max_age_ms.{name}")
-            for name in (*inputs, *robots, *sensors)
+            for name in (
+                *inputs,
+                *robots,
+                *sensors,
+                *(n for n, e in estimators.items() if e.record),
+            )
         },
         recorder={
             k: v

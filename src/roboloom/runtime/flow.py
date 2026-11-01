@@ -117,11 +117,14 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             for n, s in {**cfg.inputs, **cfg.sensors}.items()
         },
         **{n: r.control_hz for n, r in cfg.robots.items()},
+        **{n: cfg.robots[e.robot].control_hz for n, e in cfg.estimators.items()},
+    }
+    published = {
+        **{n: "state" for n in cfg.robots},
+        **{n: "estimate" for n in cfg.estimators},
     }
     recorded = {
-        name: bounded(
-            f"{name}/{'state' if name in cfg.robots else 'sample'}", rates[name]
-        )
+        name: bounded(f"{name}/{published.get(name, 'sample')}", rates[name])
         for name in cfg.sources
     }
     recorded[ACTION] = bounded(f"{cfg.robot.name}/{ACTION}", cfg.robot.control_hz)

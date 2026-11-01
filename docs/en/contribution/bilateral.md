@@ -1,7 +1,7 @@
 # Bilateral control design (FACTR 2)
 
 !!! warning "Partly implemented design proposal"
-    This page is a design proposal that lays out the implementation steps. Stage 1 of §7 (the path) is implemented; the settings that work are under "Force feedback" in [Configuration](../reference/configuration.md). Other configuration keys, commands and node names are proposals and do not work in the current roboloom. Nothing here has been verified on hardware.
+    This page is a design proposal that lays out the implementation steps. Stages 1 (the path) and 2 (follower recording) of §7 are implemented; the settings that work are under "Force feedback" in [Configuration](../reference/configuration.md). Other configuration keys, commands and node names are proposals and do not work in the current roboloom. Nothing here has been verified on hardware.
 
 Written 2026-10-27. Sources studied (code was read, not run):
 
