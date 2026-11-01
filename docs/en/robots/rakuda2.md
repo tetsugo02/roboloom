@@ -51,7 +51,7 @@ When adding them, also change `repo_id` and `output`, for example to `local/raku
 | robot | `nodes/robot_bilateral.yaml` | Runs the arms in current-based position control (Operating Mode 5, `current_position`). `goal_current_mA` is the force limit on contact. Choose `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` and write the Mode and Current Limit with `roboloom commission` |
 | leader | `nodes/leader_bilateral.yaml` | The gravity-compensated leader with `feedback:` added to the arm groups |
 | controller | `nodes/controller_bilateral.yaml` | `feedback:` names the estimator and the joints that receive feedback (initially the right elbow only, with a small gain) |
-| estimator | `nodes/effort.yaml` | Estimator of the follower's external effort. Currently `none` (no estimate; the returned current is 0) |
+| estimator | `nodes/effort.yaml` | Estimator of the follower's external effort (`model_residual`). Uses gravity models identified on the follower, `calibration/effort_gravity_<side>.yaml`. The contact thresholds are provisional values, not measured |
 
 Limitations:
 

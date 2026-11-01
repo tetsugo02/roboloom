@@ -150,13 +150,21 @@ is **not verified on hardware**; check every step with the arms supported. Files
 | `nodes/robot_bilateral.yaml` | follower arms in current-based position control (Mode 5): set `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` |
 | `nodes/leader_bilateral.yaml` | `leader_gravity.yaml` with `feedback:` on the arm groups (needs the gravity steps above) |
 | `nodes/controller_bilateral.yaml` | `controller.yaml` with `feedback:` (one joint, small gain) |
-| `nodes/effort.yaml` | the follower effort estimator (`none`: never estimates) |
+| `nodes/effort.yaml` | the follower effort estimator (`model_residual`: measured current - g(q)) |
+| `calibration/follower_<side>.yaml` | joint map for identifying the follower's g(q) |
 
 1. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/robot_bilateral.yaml`, then write
    Operating Mode 5 and the Current Limit: `uv run roboloom commission rakuda2/experiment_bilateral robot --hardware`.
    `nodes/robot.yaml` (Mode 3) refuses to start on these motors until you commission it back.
-2. `uv run roboloom run rakuda2/experiment_bilateral --hardware`: the follower should track and
-   hold as before, and stop pushing at the goal current when it meets an obstacle.
+2. Identify the follower's gravity model per arm (follower node stopped, arm supported):
+   `uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml`, set
+   `confirmed: true` after checking the map, then
+   `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware`
+   (same for left).
+3. `uv run roboloom run rakuda2/experiment_bilateral --hardware`: the follower should track and
+   hold as before, and stop pushing at the goal current when it meets an obstacle. Watch
+   `residual_l1` of the `effort` node while moving freely and while pushing, then set
+   `contact_on` / `contact_off` in `nodes/effort.yaml` between the two.
 
 ## Inference
 

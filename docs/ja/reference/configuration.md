@@ -37,7 +37,7 @@ leaderノードの `control` は，`free`（脱力），`position`（leaderで�
 ## 力の逆送（実機未検証）
 
 !!! warning "実機では未検証"
-    followerが受けた外力をleaderへ返す経路です．模擬（mock）の試験だけを通しています．現在の推定器は `none`（常に推定なし）だけで，leaderへ返す電流は0です．設計と今後の段階は [バイラテラル制御の設計](../contribution/bilateral.md) を参照してください．
+    followerが受けた外力をleaderへ返す経路です．模擬（mock）の試験だけを通しています．設計と今後の段階は [バイラテラル制御の設計](../contribution/bilateral.md) を参照してください．
 
 実験YAMLに `estimators` を足し，controllerの `feedback` で推定器を参照します．辺は書きません．各ノードの参照から次の経路を導きます．
 
@@ -56,7 +56,8 @@ estimators:
 
 | キー | 意味 |
 | --- | --- |
-| `type` | `none` |
+| `type` | `none`（常に推定なし．経路の確認用）または `model_residual` |
+| `models` | `model_residual` の重力モデル（腕ごと）．出力関節を合わせると `joints` とちょうど一致すること |
 | `robot` | 状態を読むrobotノードの名前 |
 | `joints` | 推定するfollower関節 |
 | `smoothing_alpha` | 指数移動平均の係数（0より大きく1以下，既定1＝平滑化なし） |
@@ -64,6 +65,16 @@ estimators:
 | `record` | `true` で推定をデータセットに記録する（既定 `false`）．`recorder.max_age_ms` にこの推定器の名前が必要 |
 
 推定器は，robotが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
+
+`model_residual` は `残差 = 実測電流 − g(q)` です．`g(q)` はfollowerで同定した重力モデルで，学習は要りません．摩擦・慣性・位置の追従誤差は残差に残るので，自由に動かしているときも0になりません．推定器ノードのstatusの `residual_l1`（接触の判定と比べる値）を，自由に動かしたときと押したときで見て，`contact_on` をその間に置きます．重力モデルは，leaderと同じ `identify-gravity` で，followerのcalibration（`calibration/follower_<side>.yaml`）から作ります．
+
+```bash
+uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml \
+    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware
+```
+
+followerの腕は，XM540とXM430が混在するため関節ごとに別々に同定します（`shared_parameters: false`）．leaderより多くの姿勢が要ります．同定中はfollowerのノードを止めておきます．
 
 controllerの `feedback`：
 

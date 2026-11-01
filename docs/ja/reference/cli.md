@@ -9,7 +9,7 @@
 | `validate <experiment>` | デバイスを開かず設定とdataflowを検証する |
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |
-| `identify-gravity <calibration> --out <path> --collect --hardware` | 保持電流を測定して重力モデルを同定する |
+| `identify-gravity <calibration> --out <path> --collect --hardware` | 保持電流を測定して重力モデルを同定する（leaderの重力補償，followerの `model_residual` 推定器） |
 | `capture-pose <experiment> <name> --hardware` | followerの今の姿勢を `poses/<name>.yaml` に保存する（動かさない．`--force` で上書き） |
 | `commission <experiment> <node> --hardware` | 差分と操作者の確認を経てEEPROMを書き，読み戻す |
 | `tune-gravity <experiment> leader <group> --hardware` | gainとholdを対話調整する |

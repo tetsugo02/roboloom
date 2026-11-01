@@ -481,6 +481,12 @@ def _estimator(node, estimator: Estimator):
                 "age_ms": None if age_ms is None else round(age_ms),
                 "valid": last is not None and last.valid,
                 "contact": last is not None and last.contact,
+                # L1 norm the contact thresholds compare (estimator unit)
+                "residual_l1": (
+                    round(sum(abs(r) for r in last.residual), 1)
+                    if last is not None and last.valid
+                    else None
+                ),
                 **_work_fields(work),
             }
             level = "ok" if age_ms is not None and age_ms < 500 else "warn"

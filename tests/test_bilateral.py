@@ -3,6 +3,7 @@ import time
 from copy import deepcopy
 
 import pytest
+import yaml
 
 from roboloom.config import parse_experiment, read_experiment
 from roboloom.core.protocol import Envelope, Publisher
@@ -401,6 +402,42 @@ def test_robot_trace_keeps_published_state_per_tick(tmp_path):
     assert np.isnan(data["velocities"]).all() and np.isnan(data["target"][1]).all()
 
 
+def follower_models(tmp_path, offset_mA=0.0):
+    """Gravity models on the follower calibration templates whose g(q) is a constant
+    `offset_mA` per output joint (the regressor's constant term)."""
+    from conftest import TEMPLATE
+    from test_tools import RAKUDA_URDF
+
+    from roboloom.dynamics.regressor import (
+        Fit,
+        JointMap,
+        Regressor,
+        RegressorGravityModel,
+    )
+
+    shutil.copy(RAKUDA_URDF, tmp_path / "assembly_2.urdf")
+    paths = {}
+    for side in ("right", "left"):
+        cal = yaml.safe_load(
+            (TEMPLATE / f"calibration/follower_{side}.yaml").read_text()
+        )
+        maps = [JointMap(j["name"], j["urdf"], 2048, 1) for j in cal["joints"]]
+        reg = Regressor(RAKUDA_URDF.read_text(), maps, cal["outputs"])
+        theta = [
+            [0.0] * (4 * len(reg.bodies[u])) + [offset_mA] for u in reg.output_urdf
+        ]
+        model = RegressorGravityModel(
+            RAKUDA_URDF.read_text(), maps, cal["outputs"], theta
+        )
+        paths[side] = tmp_path / f"effort_gravity_{side}.yaml"
+        model.save(
+            paths[side],
+            tmp_path / "assembly_2.urdf",
+            Fit(theta, [0] * 6, [1.0] * 6, [0.0] * 6),
+        )
+    return paths
+
+
 def bilateral_tree(tmp_path, goal_mA=1000):
     """The shipped bilateral template, filled as `init` users do (ports, limits, models)."""
     from conftest import rakuda2_tree
@@ -412,6 +449,9 @@ def bilateral_tree(tmp_path, goal_mA=1000):
         if group["law"] == "gravity_comp":
             group["gravity_model"] = str(paths[group["group"].split("_")[0]])
             group["range"] = [[500, 3500]] * 6
+    tree["estimators"]["effort"]["models"] = [
+        str(p) for p in follower_models(tmp_path).values()
+    ]
     robot = tree["robots"]["robot"]
     limits = robot["registers"]["current_limit"]
     for joint, value in limits.items():
@@ -463,3 +503,36 @@ def test_mock_follower_runs_arms_in_current_position_mode(tmp_path):
         assert state.payload["mode"] == "HOLD"
     finally:
         bus.close()
+
+
+def test_model_residual_subtracts_the_follower_gravity_model(tmp_path):
+    tree = bilateral_tree(tmp_path)
+    tree["estimators"]["effort"].update(
+        models=[str(p) for p in follower_models(tmp_path, offset_mA=40.0).values()],
+        smoothing_alpha=1.0,
+        contact_on=100,
+        contact_off=50,
+    )
+    cfg = parse_experiment(tree)
+    est = cfg.estimators["effort"]
+    robot = cfg.robots["robot"]
+    currents = [0.0] * 17
+    currents[robot.joint_names.index("r_arm_el_yaw")] = 100.0
+    currents[robot.joint_names.index("torso_yaw")] = 999.0  # not estimated
+    out = est.update({"positions": [2048.0] * 17, "currents_mA": currents})
+    assert out.valid
+    expected = [-40.0] * 12
+    expected[est.joint_names.index("r_arm_el_yaw")] = 60.0
+    assert out.residual == pytest.approx(expected)
+    assert out.contact  # L1 = 11 * 40 + 60 = 500 >= 100
+    assert not est.update({"positions": [2048.0] * 17, "currents_mA": None}).valid
+
+
+def test_model_residual_needs_models_covering_its_joints(tmp_path):
+    tree = bilateral_tree(tmp_path)
+    tree["estimators"]["effort"]["models"] = tree["estimators"]["effort"]["models"][:1]
+    with pytest.raises(ValueError, match="must be exactly joints"):
+        parse_experiment(tree)
+    del tree["estimators"]["effort"]["models"]
+    with pytest.raises(ValueError, match="models must list"):
+        parse_experiment(tree)

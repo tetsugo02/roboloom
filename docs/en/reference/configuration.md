@@ -37,7 +37,7 @@ The leader node's `control` selects a law per joint group, such as `free` (torqu
 ## Force feedback (not verified on hardware)
 
 !!! warning "Not verified on hardware"
-    This is the path that returns the external force on the follower to the leader. Only the mock tests pass. The only estimator so far is `none` (never estimates), so the current returned to the leader is 0. See [Bilateral control design](../contribution/bilateral.md) for the design and the remaining stages.
+    This is the path that returns the external force on the follower to the leader. Only the mock tests pass. See [Bilateral control design](../contribution/bilateral.md) for the design and the remaining stages.
 
 Add `estimators` to the experiment YAML and reference the estimator from the controller's `feedback`. You do not write edges; the path below follows from each node's references.
 
@@ -56,7 +56,8 @@ Estimator (`nodes/effort.yaml`):
 
 | Key | Meaning |
 | --- | --- |
-| `type` | `none` |
+| `type` | `none` (never estimates; for checking the path) or `model_residual` |
+| `models` | Gravity models for `model_residual` (one per arm). Their output joints together must equal `joints` exactly |
 | `robot` | Name of the robot node whose state it reads |
 | `joints` | Follower joints to estimate |
 | `smoothing_alpha` | Exponential moving average factor (greater than 0, at most 1; default 1 = no smoothing) |
@@ -64,6 +65,16 @@ Estimator (`nodes/effort.yaml`):
 | `record` | `true` records the estimate in the dataset (default `false`). `recorder.max_age_ms` needs an entry for this estimator |
 
 An estimator computes a per-joint residual (measured − predicted for free motion) from the effort signal the robot declares (Rakuda2: `currents_mA`, in mA). External force acts opposite to the residual.
+
+`model_residual` is `residual = measured current − g(q)`, where `g(q)` is a gravity model identified on the follower; no training is needed. Friction, inertia and position tracking error stay in the residual, so it is not 0 while the arm moves freely. Watch `residual_l1` (the value the contact thresholds compare) in the estimator node's status while moving the follower freely and while pushing it, and put `contact_on` between the two. Build the gravity model with the same `identify-gravity` as the leader, from a follower calibration (`calibration/follower_<side>.yaml`).
+
+```bash
+uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml \
+    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware
+```
+
+Because the follower arm mixes XM540 and XM430 motors, each joint is identified separately (`shared_parameters: false`), which needs more poses than the leader. Stop the follower node during identification.
 
 The controller's `feedback`:
 
