@@ -55,17 +55,17 @@ def test_sensors_are_selected_by_name_and_type():
 
 
 def filled_hardware_tree():
-    return rakuda2_tree()
+    return rakuda2_tree(["digit"])
 
 
 def test_hardware_template_refuses_placeholders_then_parses():
     with pytest.raises(ValueError, match="robots.robot.port: SET_FOLLOWER_PORT"):
-        parse_experiment(read_experiment(TEMPLATE / "experiment.yaml"))
+        parse_experiment(read_experiment(TEMPLATE / "config.yaml"))
     tree = rakuda2_tree()
     tree["robots"]["robot"]["limits"][0]["max"] = "SET_FROM_PROBE"
     with pytest.raises(ValueError, match=r"limits\[0\]\.max: SET_FROM_PROBE"):
         parse_experiment(tree)
-    assert set(parse_experiment(rakuda2_tree("experiment_camera")).sensors) == {"camera"}
+    assert set(parse_experiment(rakuda2_tree()).sensors) == {"camera"}
     cfg = parse_experiment(filled_hardware_tree())
     assert not cfg.mock and set(cfg.sensors) == {"camera", "digit_left", "digit_right"}
     assert features(cfg)["observation.images.digit_left"]["shape"] == (320, 240, 3)

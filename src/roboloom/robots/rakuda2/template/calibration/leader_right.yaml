@@ -10,7 +10,7 @@
 # Usage:
 #   uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/leader_right.yaml
 #   uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml \
-#       --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect --hardware
+#       --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect
 port: SET_LEADER_PORT
 urdf: roboloom:robots/rakuda2/model/assembly_2.urdf
 confirmed: false

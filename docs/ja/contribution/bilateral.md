@@ -166,12 +166,12 @@ leader ──sample──► controller ──command──► robot ──state
 - 逆送の指令は，robotへの指令と同じく，絶対時刻の期限を持ちます（`make_command` と同じ形）．
 - 経路は循環します（leader → controller → robot → estimator → controller → leader）．dora-rsのdataflowで循環する辺が使えることは，段階1で模擬で確かめました（controllerとrobotの間にも，以前から循環があります）．
 
-### 実験の書き方
+### 設定の書き方
 
-利用者は辺を書きません．今のroboloomと同じく，実験YAMLにはノードを役割ごとに並べるだけです．`runtime/flow.py` が，各ノードの参照から辺を導きます．
+利用者は辺を書きません．今のroboloomと同じく，設定YAMLにはノードを役割ごとに並べるだけです．`runtime/flow.py` が，各ノードの参照から辺を導きます．
 
 ```yaml
-# experiment_bilateral.yaml
+# オプション bilateral を有効にした設定（config.yaml）のノード
 inputs:
   leader: nodes/leader_bilateral.yaml        # type: rakuda_mini
 controllers:
@@ -190,7 +190,7 @@ estimators:
 | `robot: robot` | estimator | `robot/state` → estimator |
 | `feedback.estimator: effort` | controller | `effort/estimate` → controller，controller `feedback` → `leader`（controllerの `input`） |
 
-この規則は1組ごとに閉じています．双腕を別々のrobotとして扱う場合や，別の機体の組を同じ実験に置く場合も，組の数だけノードを並べれば辺が決まります（現在の「1実験にrobotは1台」の制限は別の課題です）．例えば，別のfollowerと別のleaderの組は次のように書けます．機体名は例で，今のroboloomにはありません．
+この規則は1組ごとに閉じています．双腕を別々のrobotとして扱う場合や，別の機体の組を同じ設定に置く場合も，組の数だけノードを並べれば辺が決まります（現在の「1つの設定にrobotは1台」の制限は別の課題です）．例えば，別のfollowerと別のleaderの組は次のように書けます．機体名は例で，今のroboloomにはありません．
 
 ```yaml
 inputs:
@@ -233,7 +233,7 @@ leaderは，自分の関節名と単位に合わないメッセージを捨て�
 
 ```yaml
 feedback:
-  estimator: effort               # experiment.yaml の estimators の名前
+  estimator: effort               # 設定の estimators の名前
   deadline_ms: 100
   unit: mA/mA                     # leaderの単位 / followerの単位
   gain:                           # 書いた関節だけ逆送する（followerの関節名）

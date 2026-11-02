@@ -29,10 +29,8 @@ and shutdown. Set `torque: true` only after validating the follower's limits and
 
 | file | what | filled by |
 | --- | --- | --- |
-| `experiment.yaml` | leader teleop + RealSense + 2 DIGIT | — |
-| `experiment_camera.yaml` | the same without DIGIT | — |
-| `experiment_gravity.yaml` | camera set, gravity-compensated leader | — |
-| `experiment_policy.yaml`, `nodes/policy.yaml` | a policy drives the follower (inference) | your policy |
+| `config.yaml` | the one configuration: leader teleop + RealSense, and the launch `options:` below | — |
+| `nodes/policy.yaml` | the policy that drives the follower (option `policy`) | your policy |
 | `nodes/robot.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
 | `nodes/camera.yaml`, `nodes/digit_*.yaml` | sensor serials | step 1 |
 | `calibration/leader_<side>.yaml` | joint map for gravity identification | step 4 |
@@ -40,8 +38,33 @@ and shutdown. Set `torque: true` only after validating the follower's limits and
 | `calibration/travel_<side>.yaml` | joint travel (runaway check) | step 5 |
 | `calibration/gravity_tuning_<side>.yaml` | gain and hold per joint | step 7 |
 
-Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware` runs
-`experiment.yaml`, `roboloom run rakuda2/experiment_gravity --hardware` the gravity one.
+Options in `config.yaml` add, replace or remove node files. Enabling one also enables what
+it `requires` and disables what it `conflicts` with. An option with `dataset:` appends that
+name to `repo_id` and `output`, so a different set of recorded features goes into its own
+dataset:
+
+| option | default | what | dataset |
+| --- | --- | --- | --- |
+| (none) | — | leader teleop + RealSense | `local/rakuda2` |
+| `digit` | off | add the left/right DIGIT sensors (fill their serials) | `local/rakuda2-digit` |
+| `gravity` | off | gravity-compensated leader (after steps 3-7) | same as without it |
+| `bilateral` | off | force feedback to the leader; requires `gravity`; **not verified on hardware** | `local/rakuda2-bilateral` |
+| `policy` | off | a policy drives the follower; requires `digit`, conflicts with `gravity`; `infer` turns it on | `local/rakuda2-digit-eval` |
+
+Real hardware is the default; `--mock` uses mock devices (`--hardware` is gone and errors).
+`uv run roboloom` alone opens the launcher: pick the robot (from the robots under
+`.roboloom/`; Back returns to this list), then run, record or infer, tick the options,
+choose mock or hardware, and see the dataset name before starting. `run`, `record` and
+`infer` in a terminal show it first too, unless `--with a,b`, `--without a,b` or `--plain`
+is given. The last choice is kept in `logs/last_launch.yaml`. Options are not switched
+while running; quit the operator screen with "Quit and choose options again" to return to
+the launcher. With only one robot under `.roboloom/`, the configuration name can be left
+out (`uv run roboloom run` or `uv run roboloom run rakuda2`).
+
+Before a hardware launch from a terminal, the CLI compares the EEPROM (Operating Mode,
+Current Limit) of the leader and follower with the chosen options, shows the differences,
+and writes them only after you confirm. Switching `gravity` on or off therefore needs no
+separate `commission` step; `uv run roboloom commission <node> --with ...` is still there.
 
 ## Teleoperation and recording
 
@@ -56,9 +79,9 @@ Experiments are named relative to `.roboloom`: `roboloom run rakuda2 --hardware`
    (120 Hz here, which needs latency_timer 1 ms); lower both if probe shows less, and check
    `work_ms` on the run screen (docs: Reference >
    Configuration, Control rate).
-2. `uv run roboloom validate rakuda2`, then `uv run roboloom run rakuda2/experiment_camera --hardware`
-   (operator screen, many episodes), or one fixed-length episode:
-   `uv run roboloom record rakuda2/experiment_camera --task "pick up the cup" --seconds 30 --hardware`.
+2. `uv run roboloom validate`, then `uv run roboloom run` (the launcher first, then the
+   operator screen for many episodes), or one fixed-length episode:
+   `uv run roboloom record --task "pick up the cup" --seconds 30`.
    From Python, `roboloom.Session` does the same and can name tasks automatically
    ([Python API](https://tetsugo02.github.io/roboloom/en/reference/python-api/)).
 
@@ -114,7 +137,7 @@ robots can use their own joint names and scale. Details: [Leader](https://tetsug
 
 Save poses by name while the dataflow is stopped (follower posed by teleoperation then
 `quit` then select Hold, or by hand after `release`); each becomes `poses/<name>.yaml`:
-`uv run roboloom capture-pose rakuda2/experiment_gravity ready --hardware`.
+`uv run roboloom capture-pose ready`.
 Choose one with `home:` in `nodes/controller.yaml` (see the comment there) and type `home`
 on the run screen (or `record ... --home`): leader and follower move slowly
 (`max_speed`) to it; one second after arriving the leader is back on gravity
@@ -124,25 +147,27 @@ need `homing:` (set in `leader_gravity.yaml`). Hands off the arms while they mov
 ## Gravity-compensated leader (optional)
 
 3. `calibration/leader_<side>.yaml`: set `port`, check the joint map, set `confirmed: true`.
-4. `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect --hardware`
-   (about 40 poses; hands off the arm while it measures). The same for `left`.
+4. `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect`
+   (about 40 poses; you confirm before it moves; hands off the arm while it measures). The same for `left`.
 5. `uv run roboloom measure-travel .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/travel_right.yaml`, and `left`.
-6. Arms supported, dataflow stopped: `uv run roboloom commission rakuda2/experiment_gravity leader --hardware`
-   (current mode and low Current Limits, EEPROM). Back to the plain leader: commission `rakuda2/experiment_camera`.
-7. `uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware`, then `left_arm`:
+6. Arms supported, dataflow stopped: `uv run roboloom commission leader --with gravity`
+   (current mode and low Current Limits, EEPROM), or just launch with the `gravity` option
+   and confirm the EEPROM write. Launching without `gravity` offers to write the plain
+   leader's values back the same way.
+7. `uv run roboloom tune-gravity leader right_arm --with gravity`, then `left_arm`:
    joint by joint, set how much weight is removed (gain) and how hard a push must be before
    the arm moves (hold). What the numbers mean: [Gravity tuning](https://tetsugo02.github.io/roboloom/en/reference/gravity-tuning/).
 
-`experiment_gravity.yaml` includes RealSense only. To record DIGIT as well, add
-`digit_left: nodes/digit_left.yaml` and `digit_right: nodes/digit_right.yaml` under
-`sensors`, fill their serials, and use a separate `repo_id` and `output` because the
-dataset features change. To finish an operator-screen run: `stop`, `save` or `discard`,
+Then run with `uv run roboloom run --with gravity` (or tick it in the launcher). To record
+DIGIT as well, fill the serials in `nodes/digit_*.yaml` and enable the `digit` option
+(`--with gravity,digit`); it records into its own dataset (`local/rakuda2-digit`). To finish an operator-screen run: `stop`, `save` or `discard`,
 support the leader and follower arms, `quit`, then select Hold or supported Release.
 Cancel is initially selected, so Enter alone cancels.
 
 ## Bilateral teleoperation (not verified)
 
-`experiment_bilateral.yaml` returns the external force on the follower to the leader. It
+The `bilateral` option (`--with bilateral`, which also enables `gravity`) returns the
+external force on the follower to the leader. It
 is **not verified on hardware**; check every step with the arms supported. Files:
 
 | file | what |
@@ -156,14 +181,15 @@ is **not verified on hardware**; check every step with the arms supported. Files
 1. Identify the follower's gravity model per arm (follower node stopped, arm supported):
    `uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml`, set
    `confirmed: true` after checking the map, then
-   `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware`
+   `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect`
    (same for left). This works on the motors as `nodes/robot.yaml` commissioned them
-   (position mode). Do it first: every command on `experiment_bilateral`, `commission`
+   (position mode). Do it first: every command with `--with bilateral`, `commission`
    included, loads `nodes/effort.yaml` and stops while `effort_gravity_<side>.yaml` is missing.
 2. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/robot_bilateral.yaml`, then write
-   Operating Mode 5 and the Current Limit: `uv run roboloom commission rakuda2/experiment_bilateral robot --hardware`.
-   `nodes/robot.yaml` (Mode 3) refuses to start on these motors until you commission it back.
-3. `uv run roboloom run rakuda2/experiment_bilateral --hardware`: the follower should track and
+   Operating Mode 5 and the Current Limit: `uv run roboloom commission robot --with bilateral`
+   (or confirm the EEPROM write when launching with `bilateral`). Launching without
+   `bilateral` offers to write Mode 3 back; `nodes/robot.yaml` refuses to start on Mode 5 motors.
+3. `uv run roboloom run --with bilateral`: the follower should track and
    hold as before, and stop pushing at the goal current when it meets an obstacle. Watch
    `residual_l1` of the `effort` node while moving freely and while pushing, then set
    `contact_on` / `contact_off` in `nodes/effort.yaml` between the two.
@@ -176,11 +202,12 @@ is **not verified on hardware**; check every step with the arms supported. Files
 
 ## Inference
 
-8. `uv run roboloom infer rakuda2/experiment_policy --seconds 20 --hardware` first runs the
+8. `uv run roboloom infer --seconds 20` (turns on the `policy` option, which needs the DIGIT
+   serials and turns `gravity` off) first runs the
    template's `hold` policy, which keeps the arm where it is: it checks the inference path.
    Then pass yours: `--policy my_lab.policies:load --policy-kwargs '{"checkpoint": "..."}'`
    (or set `factory`/`kwargs` in `nodes/policy.yaml`). Add `--task` to record the run into
-   `datasets/rakuda2_eval`.
+   `datasets/rakuda2-digit-eval`.
 
 ## Operator screen
 

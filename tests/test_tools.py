@@ -93,9 +93,7 @@ def test_identify_gravity_refuses_unconfirmed_before_collecting(tmp_path, monkey
         lambda *a, **k: collected.append(a),
     )
     with pytest.raises(ConfigError, match="confirmed"):
-        setup.identify_gravity(
-            cal, tmp_path / "g.yaml", None, collect=True, hardware=True
-        )
+        setup.identify_gravity(cal, tmp_path / "g.yaml", None, collect=True)
     assert not collected
 
 
@@ -152,7 +150,7 @@ def synthetic_models(tmp_path):
 
 def gravity_tree(tmp_path):
     paths = synthetic_models(tmp_path)
-    tree = rakuda2_tree("experiment_gravity")
+    tree = rakuda2_tree(["gravity"])
     for group in tree["inputs"]["leader"]["control"]:
         if group["law"] == "gravity_comp":
             group["gravity_model"] = str(paths[group["group"].split("_")[0]])
@@ -190,9 +188,7 @@ def test_commission_writes_only_differences_after_confirmation(tmp_path, monkeyp
         lambda *_: parse_experiment(deepcopy(tree)),
     )
     monkeypatch.setattr("roboloom.drivers.dynamixel.DynamixelBus", FakeDynamixel)
-    with pytest.raises(Exception, match="hardware=True"):
-        setup.plan_commission("exp", "leader")
-    plan = setup.plan_commission("exp", "leader", hardware=True)
+    plan = setup.plan_commission("exp", "leader")
     assert len(plan.changes) == 28  # mode and current limit of 12 arm joints + 2 grips
     with pytest.raises(Cancelled):
         setup.apply_commission(plan, ScriptedOperator(confirm=False))

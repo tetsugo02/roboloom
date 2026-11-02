@@ -2,21 +2,30 @@
 
 roboloom の操作は，どれも Python の関数として使えます．CLI（`roboloom ...`）は，その関数を呼んで結果を表示するだけの薄い層です．
 
-[インストール](../quick-start/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．実験や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
+[インストール](../quick-start/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．設定や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
 
 | やること | CLI | Python |
 | --- | --- | --- |
 | プロジェクトを作る | `roboloom init rakuda2` | `roboloom.init_project("rakuda2")` |
-| EEPROM を合わせる | `roboloom commission <exp> <node> --hardware` | `setup.plan_commission(...)`，`setup.apply_commission(plan, operator)` |
+| EEPROM を合わせる | `roboloom commission [robot] <node>` | `setup.plan_commission(...)`，`setup.apply_commission(plan, operator)` |
 | 可動域を測る | `roboloom measure-travel <cal> --out ...` | `setup.measure_travel(cal, out, operator)` |
-| 重力モデルを同定する | `roboloom identify-gravity <cal> --out ... --collect --hardware` | `setup.identify_gravity(cal, out, operator, collect=True, hardware=True)` |
-| 重力補償を確かめる | `roboloom gravity-check <exp> leader right_arm --hardware` | `setup.gravity_check(...)` |
-| 重力補償を調整する | `roboloom tune-gravity <exp> leader right_arm --hardware` | `setup.open_tuning(...)` → `TuningSession` |
-| エピソードを録る | `roboloom record <exp> --task ... --seconds 30 --hardware` | `Session.launch(...)` → `record(...)` |
-| 方策で動かす | `roboloom infer <exp> --policy pkg:make --seconds 30 --hardware` | `Session.launch(exp, policy="pkg:make")` → `record(...)` |
-| 操作画面で続けて録る | `roboloom run <exp> --hardware` | `Session.launch(...)` の状態画面と `start()`／`stop()`／`save()` |
+| 重力モデルを同定する | `roboloom identify-gravity <cal> --out ... --collect` | `setup.identify_gravity(cal, out, operator, collect=True)` |
+| 重力補償を確かめる | `roboloom gravity-check [robot] leader right_arm --with gravity` | `setup.gravity_check(...)` |
+| 重力補償を調整する | `roboloom tune-gravity [robot] leader right_arm --with gravity` | `setup.open_tuning(...)` → `TuningSession` |
+| エピソードを録る | `roboloom record [robot] --task ... --seconds 30` | `Session.launch(...)` → `record(...)` |
+| 方策で動かす | `roboloom infer [robot] --policy pkg:make --seconds 30` | `Session.launch(cfg, options=["policy"], policy="pkg:make")` → `record(...)` |
+| 操作画面で続けて録る | `roboloom run [robot]` | `Session.launch(...)` の状態画面と `start()`／`stop()`／`save()` |
 
-実験は，ファイルのパスでも，`.roboloom/` の下の名前（`rakuda2`，`rakuda2/experiment_gravity`）でも指定できます．
+設定は，ファイルのパスでも，`.roboloom/` の下の機体名（`rakuda2` は `.roboloom/rakuda2/config.yaml`）でも指定できます．
+
+起動オプションは `options=` で選びます．指定したオプションと，それが必要とするオプションが有効になります．`None`（既定）なら `default: true` のオプションが有効です．CLIの `--with`／`--without` と違い，`options=` は有効にするものの全体を表します（既定のオプションに足すのではありません）．`mock=True` はmockデバイス，`mock=False` は実機で動かします．`None` ならYAMLの `mode`（既定 `hardware`）に従います．
+
+```python
+from roboloom import load_experiment
+
+cfg = load_experiment("rakuda2", options=["gravity", "digit"])
+print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
+```
 
 ## 1．収集と推論：`Session`
 
@@ -43,7 +52,7 @@ roboloom も同じ構成をとります．
 ```python
 from roboloom import Session
 
-with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
+with Session.launch("rakuda2", options=["gravity"]) as s:
     s.wait_ready()  # leader が follower に揃うまで待つ
     result = s.record("pick up the cup", seconds=30)
     print(result.index, result.frames, result.warnings)
@@ -51,14 +60,16 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 
 - `launch` は，すべてのノードが状態を報告し始めるまで待ちます．
 - 毎回の `start` の前に，followerがleaderから `alignment_tolerance` 以内にあるかを確かめます（最初の位置合わせだけではありません）．`record` はエピソードごとに，揃うまで待ちます（`ready_timeout`，既定 60 秒）．`start` は，ずれていると `SessionError` を出します．
-- 実機を開く実験では，`hardware=True` が必要です．
+- 既定は実機です．mockデバイスで動かすときは `mock=True` を渡します．
+- `launch` の `options`・`mock` は，設定をパスか機体名で渡したときだけ使われます．読み込み済みの `ExperimentConfig` を渡す場合は，`load_experiment(..., options=..., mock=...)` で選んでおきます．
+- 各ノードのプロセスには，有効なオプションが `ROBOLOOM_OPTIONS`，モードが `ROBOLOOM_MODE` で渡ります．
 - `with` を抜けると，次のことをします．
   - 途中のエピソードがあれば破棄する．
   - `operator` が設定されていれば，腕を支えるように求める．Enter で follower も脱力し，`hold` と入力すると follower は保持を続ける．
   - dataflow を止める．
   - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．
   - スクリプトから決めるときは `s.close(release=True)`（脱力）または `s.close(release=False)`（保持）を呼ぶ．
-- ログは，実験ファイルの隣の `logs/<実験名>-<時刻>/` に残ります．
+- ログは，設定ファイルの隣の `logs/<データセット名>-<時刻>/` に残ります（例：`logs/rakuda2-digit-20261102-101500/`）．
   - `dora.log`
   - leader のトレース
   - 場所は `s.log_dir` で分かります．
@@ -84,7 +95,7 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 | --- | --- |
 | `index` | データセットでのエピソード番号（保存済みのエピソード数） |
 | `number` | この Session で録った数 |
-| `experiment` | 実験ファイルの名前 |
+| `experiment` | 設定ファイルの名前（拡張子なし．`.roboloom/<robot>/config.yaml` では `config`） |
 | `previous` | この Session で保存した task の一覧 |
 
 ```python
@@ -92,7 +103,7 @@ import itertools
 
 objects = itertools.cycle(["cup", "bottle", "sponge"])
 
-with Session.launch("rakuda2", hardware=True) as s:
+with Session.launch("rakuda2") as s:
     s.wait_ready()
     for _ in range(9):
         s.record(lambda info: f"pick up the {next(objects)}", seconds=20)
@@ -114,7 +125,7 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 - `result` に入っているもの：
   - `metrics`：recorder の指標．欠損率，有効な行動の割合，制御周期の分布．
   - `warnings`：品質の上限を超えた項目．
-- 品質の上限は，実験の `recorder.quality` で変えられます．
+- 品質の上限は，`nodes/recorder.yaml` の `quality` で変えられます．
   - `max_missing_rate`（既定 0.05）
   - `min_action_valid_rate`（既定 0.9）
   - `max_interval_ms`（既定 100）
@@ -179,8 +190,8 @@ def load(checkpoint: str) -> MyPolicy:
 
 ```python
 with Session.launch(
-    "rakuda2/experiment_policy",
-    hardware=True,
+    "rakuda2",
+    options=["policy"],  # digit も有効になる（requires）
     policy="my_lab.policies:load",
     policy_kwargs={"checkpoint": "outputs/act/last"},
 ) as s:
@@ -207,14 +218,18 @@ with Session.launch(
   - 腕を支える，姿勢を置く，Enter を押す，など．
   - CLI は `TerminalOperator` を渡します．
   - スクリプトや試験では `ScriptedOperator` に答えを並べて渡せます．
-- モーターを動かす処理と，EEPROM を書く処理には，`hardware=True` が要ります．
+- 設定を取る関数は，パス，機体名，読み込み済みの `ExperimentConfig` のどれでも受け取ります．オプションやモードを選ぶときは，`load_experiment(..., options=..., mock=...)` で読み込んでから渡します．
+- `plan_commission`，`watchdog_test`，`gravity_check` は，mockの設定を拒否します．
 
 ```python
 from roboloom import setup
 from roboloom.operator import TerminalOperator
 
 op = TerminalOperator()
-plan = setup.plan_commission("rakuda2/experiment_gravity", "leader", hardware=True)
+from roboloom import load_experiment
+
+gravity = load_experiment("rakuda2", options=["gravity"])
+plan = setup.plan_commission(gravity, "leader")
 for line in plan.lines():
     print(line)
 setup.apply_commission(plan, op)  # 確認してから書く
@@ -224,7 +239,6 @@ fit = setup.identify_gravity(
     ".roboloom/rakuda2/calibration/gravity_right.yaml",
     op,
     collect=True,
-    hardware=True,
 )
 for joint in fit.joints:
     print(joint.joint, f"{joint.explained:.0%}")
@@ -232,9 +246,7 @@ for joint in fit.joints:
 
 ```python
 # 重力補償の調整を，画面なしで（例：値を順に試す自動化）
-tuning = setup.open_tuning(
-    "rakuda2/experiment_gravity", "leader", "right_arm", hardware=True
-)
+tuning = setup.open_tuning(gravity, "leader", "right_arm")
 try:
     tuning.start()
     tuning.key("]")  # 選んだ関節の gain +0.1
@@ -256,8 +268,9 @@ finally:
 - 方策を `step(policy=...)` に直接渡せます．
   - ただし，方策やセンサーが遅いと，制御の周期も遅れます．
 - 実機の Rakuda-2 は，`Session` で動かします．
-  - モーターを制御する leader（トリガーのばね，重力補償）を使う実験では，`from_yaml` を拒否します．
-  - 方策の controller を使う実験でも，`from_yaml` を拒否します．
+  - モーターを制御する leader（トリガーのばね，重力補償）を使う設定では，`from_yaml` を拒否します．
+  - 方策の controller を使う設定でも，`from_yaml` を拒否します．
+- `Experiment.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)` の `options`・`mock` は `load_experiment` と同じ意味です．
 
 デバイスやリポジトリ内のサンプルファイルを使わない模擬例です．`record` extraが必要です．この例の関節範囲・速度を実機へ流用しないでください．
 

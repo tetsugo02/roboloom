@@ -22,29 +22,37 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 センサーのシリアル番号は実機に合わせて設定します．センサー名はデータセットのfeature名にも使われます．
 
-## 実験の組み合わせ
+## 起動オプションと組み合わせ
 
-| 実験 | Leader | Sensors |
-| --- | --- | --- |
-| `rakuda2` / `rakuda2/experiment` | 通常 | RealSense + 左右DIGIT |
-| `rakuda2/experiment_camera` | 通常 | RealSense |
-| `rakuda2/experiment_gravity` | 重力補償付き | RealSense |
-| `rakuda2/experiment_bilateral` | 重力補償付き＋力の逆送（実機未検証） | なし |
+設定は `.roboloom/rakuda2/config.yaml` の1つです．オプションを何も有効にしない構成は，通常leader・`joint` controller・RealSenseです．テンプレートは次の起動オプションを持ちます（既定はすべて無効）．選び方は [CLI](../reference/cli.md)，規則は [設定](../reference/configuration.md) の「起動オプション」を参照してください．
 
-重力補償とDIGITを併用するときは，生成した `experiment_gravity.yaml` の `sensors` に次を追加します．
+| オプション | 内容 | 必要 / 競合 | データセット名 |
+| --- | --- | --- | --- |
+| `digit` | 左右DIGITを記録する | | `-digit` を付ける |
+| `gravity` | leaderの左右腕を重力補償する（`nodes/leader_gravity.yaml`） | | 変えない |
+| `bilateral` | 力の逆送（実機未検証）．leader・controller・robotを置き換え，推定器 `effort` を足す | `gravity` が必要 | `-bilateral` を付ける |
+| `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `digit` が必要，`gravity` と競合 | `-eval` を付ける |
 
-```yaml
-sensors:
-  camera: nodes/camera.yaml
-  digit_left: nodes/digit_left.yaml
-  digit_right: nodes/digit_right.yaml
-```
+| 有効なオプション | Leader | Sensors | `repo_id` |
+| --- | --- | --- | --- |
+| なし | 通常 | RealSense | `local/rakuda2` |
+| `digit` | 通常 | RealSense + 左右DIGIT | `local/rakuda2-digit` |
+| `gravity` | 重力補償付き | RealSense | `local/rakuda2` |
+| `gravity`，`digit` | 重力補償付き | RealSense + 左右DIGIT | `local/rakuda2-digit` |
+| `gravity`，`bilateral` | 重力補償付き＋力の逆送（実機未検証） | RealSense | `local/rakuda2-bilateral` |
+| `digit`，`policy` | なし（方策） | RealSense + 左右DIGIT | `local/rakuda2-digit-eval` |
 
-追加時には `repo_id` と `output` も，例として `local/rakuda2-gravity-digit` と `datasets/rakuda2-gravity-digit` に変更してください．画像featureが変わるため，RealSenseだけの既存データセットへは追記できません．
+制約：
+
+- `gravity` は，[Quick start](../quick-start/rakuda2.md) の測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）を済ませてから使います．測定値が `SET_...` のままだと読み込みを拒否します．
+- `gravity` の有無でleaderのOperating Modeが変わります．端末から実機で起動するとき，CLIはEEPROMの差分を表示し，確認してから書きます．
+- `policy` の方策（`nodes/policy.yaml`）はDIGITの画像を観測するので，`digit` が必要です．leaderを使わないため `gravity` とは同時に使えません．`gravity` を必要とする `bilateral` とも併用できません．
+- `gravity` はデータセット名を変えません．記録するfeatureが通常leaderと同じためです．通常leaderと重力補償付きleaderのエピソードは同じデータセットに入ります．
+- 画像featureが変わるため，`digit` の有無でデータセットが分かれます．RealSenseだけの既存データセットへDIGITのエピソードは追記しません．
 
 ## バイラテラル（実機未検証）
 
-`experiment_bilateral` は，followerが受けた外力をleaderへ返す組み合わせです．実機では確かめていません．模擬の試験だけを通しています．
+オプション `bilateral` は，followerが受けた外力をleaderへ返す組み合わせです．実機では確かめていません．模擬の試験だけを通しています．
 
 | ノード | 設定 | 内容 |
 | --- | --- | --- |
@@ -56,8 +64,8 @@ sensors:
 制約：
 
 - `goal_current_mA` は，EEPROMの `current_limit` 以下でなければ起動を拒否します．
-- Mode 5へ書き換えた後のモーターでは，通常の `nodes/robot.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission` で書き戻します．
-- `experiment_bilateral` を使うコマンドは，`commission` も含めて実験全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
+- Mode 5へ書き換えた後のモーターでは，通常の `nodes/robot.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission robot` で書き戻します．端末から実機で起動する場合は，CLIが起動前に差分を表示し，確認してから書き戻します．
+- `bilateral` を有効にしたコマンド（`roboloom commission robot --with bilateral` など）は，設定全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
 - 設定キーは [設定](../reference/configuration.md) の「力の逆送」にあります．
 
 ## 起動前の確認

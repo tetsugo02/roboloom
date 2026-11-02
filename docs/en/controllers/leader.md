@@ -14,7 +14,7 @@ input_timeout_ms: 150
 # The actual configuration also needs the joints mapping table for all 17 joints.
 ```
 
-`leader` is the node's role in the experiment and `type` names the device. To use another arm as the leader, change only `type`.
+`leader` is the node's role in the configuration and `type` names the device. To use another arm as the leader, change only `type`.
 
 These are the values from the distributed template. Set them after checking the robot's range of motion, communication cycle, and stopping behavior.
 
@@ -48,7 +48,7 @@ control:
 
 `position` writes the measured pose immediately before enabling torque, then enables only the selected joints. It does not move to an old Goal Position. Since the leader receives no external targets, it holds that pose. Locking begins when the Session launches, continues when `stop` ends collection, and releases on `estop`, `release`, or `quit`. Align the leader joints to be locked with the follower before launching.
 
-The motors need position control and the corresponding bus APIs. The Operating Mode is read back and must match `position` (3 on Rakuda2); a mismatch prevents torque enable. If a change is needed, stop the dataflow, support the robot, and use the existing `roboloom commission <exp> leader --hardware`. Setting `torque: false` in `robot.yaml` does not disable leader locking.
+The motors need position control and the corresponding bus APIs. The Operating Mode is read back and must match `position` (3 on Rakuda2); a mismatch prevents torque enable. If a change is needed, stop the dataflow, support the robot, and use the existing `roboloom commission leader` (add `--with` when a launch option selects the leader). Setting `torque: false` in `robot.yaml` does not disable leader locking.
 
 ## Configure joint compensation
 
@@ -88,7 +88,7 @@ The `home` command moves the leader and the follower slowly to a saved initial p
 **1. Save a pose.** Put the follower in the pose you want, then run this with the dataflow stopped. Each name becomes `poses/<name>.yaml`, and any number of poses can be saved. An existing name is not overwritten without `--force`.
 
 ```bash
-uv run roboloom capture-pose rakuda2/experiment_head_compensation ready --hardware
+uv run roboloom capture-pose ready
 ```
 
 To put the follower in the pose, teleoperate it and `quit` with `hold` (exit with the follower holding), or move it by hand after `release`. `capture-pose` only reads the follower's positions and moves nothing. Opening the bus runs the usual startup checks.
@@ -114,7 +114,7 @@ Current-mode groups of a gravity-compensated leader need a spring that pulls the
     max_mA: 40                # limit on the spring's current; the total with gravity stays within max_current_mA
 ```
 
-**3. Move.** Type `home` on the operator screen (also `roboloom session <exp> home`, or `Session.home()` from Python). The controller row shows the pose in use as `home pose: ready.yaml`. During the move, the robot and leader rows show progress, then `reached`.
+**3. Move.** Type `home` on the operator screen (also `roboloom session home`, or `Session.home()` from Python). The controller row shows the pose in use as `home pose: ready.yaml`. During the move, the robot and leader rows show progress, then `reached`.
 
 - All joints move on a smooth speed profile and arrive at the same time. Even the farthest joint never exceeds `max_speed`.
 - The follower moves through the same range and speed checks as normal commands. `stop` and `estop` interrupt the move.

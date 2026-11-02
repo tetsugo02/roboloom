@@ -1,9 +1,9 @@
-# Follower for bilateral teleoperation (experiment_bilateral.yaml): the same as robot.yaml,
+# Follower for bilateral teleoperation (option `bilateral` of ../config.yaml): the same as robot.yaml,
 # but the arms run current-based position control (Operating Mode 5), so a push or a
 # collision meets at most goal_current_mA. NOT verified on hardware.
 # Before the first run: choose SET_FOLLOWER_ARM_GOAL_CURRENT_mA (mA, the force limit of every
 #   arm joint; replace with per-joint values under registers.current_limit and goal_current_mA
-#   to differ), then `roboloom commission rakuda2/experiment_bilateral robot --hardware`
+#   to differ), then `roboloom commission robot --with bilateral`
 #   writes Operating Mode and Current Limit. Goal current may not exceed the Current Limit.
 # Operating Mode follows from `control` (registers.operating_mode is not listed).
 # Fill from `roboloom probe <port>` (see ../README.md). Re-run probe after any motor change.

@@ -13,7 +13,8 @@ def test_init_copies_the_template_once_and_ignores_raw_data(tmp_path):
     root = tmp_path / ".roboloom"
     assert "created" in init_project("rakuda2", root)
     project = root / "rakuda2"
-    assert (project / "experiment_gravity.yaml").is_file()
+    assert (project / "config.yaml").is_file()
+    assert not list(project.glob("experiment*.yaml"))
     assert (project / "calibration" / "gravity_tuning_right.yaml").is_file()
     assert "*.npz" in (root / ".gitignore").read_text()
     with pytest.raises(ConfigError, match="already exists"):
@@ -25,10 +26,13 @@ def test_init_copies_the_template_once_and_ignores_raw_data(tmp_path):
 def test_experiments_resolve_by_name_under_the_project_root(tmp_path):
     root = tmp_path / ".roboloom"
     init_project("rakuda2", root)
-    assert resolve_experiment("rakuda2", root) == root / "rakuda2" / "experiment.yaml"
-    assert resolve_experiment("rakuda2/experiment_gravity", root).name == (
-        "experiment_gravity.yaml"
-    )
+    assert resolve_experiment("rakuda2", root) == root / "rakuda2" / "config.yaml"
+    # the only robot under the root needs no name
+    assert resolve_experiment(None, root) == root / "rakuda2" / "config.yaml"
+    (root / "two").mkdir()
+    (root / "two" / "config.yaml").write_text("{}")
+    with pytest.raises(ConfigError, match="several robots"):
+        resolve_experiment(None, root)
     with pytest.raises(ConfigError, match="roboloom init"):
         resolve_experiment("missing", root)
 

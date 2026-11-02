@@ -1,10 +1,23 @@
 # Operator screen
 
-Interactive `run`, `record`, `infer`, and `tune-gravity` use Textual. The screen controls the experiment you launch; it does not select experiments or edit configuration.
+Interactive `run`, `record`, `infer`, and `tune-gravity` use Textual. There is a launcher that chooses the operation and launch options before starting, and an operator screen that controls the running dataflow. The operator screen does not edit configuration or switch options.
+
+## Launcher
+
+`roboloom` (or `roboloom launch`) opens it. The first screen is the robot list: on the left the robots under `.roboloom/` with a `config.yaml`, on the right the highlighted robot's configuration (file, dataset name, and each option with its help, `requires`, conflicts, dataset name, and whether it is on by default). The cursor starts on the last robot; Enter moves on to the next screen and Esc exits. Naming the robot, as in `roboloom rakuda2`, skips the list. In an interactive terminal, `run`, `record`, and `infer` also open the launcher first unless `--with`, `--without`, or `--plain` is given.
+
+- Operation: choose `run`, `record`, or `infer`. For `record` and `infer`, enter task, seconds, and episodes; for `record`, "move home before every episode" can also be chosen.
+- Options: lists the configuration's `options:` with their `help` text. Ticking one also enables the options in its `requires` and unticks those in `conflicts`; unticking one also unticks the options that require it. The tooltip shows the reason for a conflict.
+- Devices: "mock devices (no hardware)" uses mock devices.
+- Summary: shows the operation, `mock` or `HARDWARE`, the enabled options, the dataset name, and the node files that are replaced (removals as `(removed)`). For a combination that cannot start or missing input, it shows the reason and disables Launch.
+
+The next screen is split into the operation pane on the left (Operation, Devices), the options pane on the right (one card per option: green when on, a yellow line and the reason when a conflict would turn it off), and the summary pane at the bottom. On both screens the pane borders adjust like the operator screen's: drag them, or focus them and use the arrow keys; double-click or Ctrl-R resets. Below 90 columns the panes stack vertically.
+
+Launch (Ctrl-S) starts; Cancel exits without starting anything. When it came from the robot list, Back (Esc) returns to the list; otherwise Esc is the same as Cancel. The choice is saved in `.roboloom/<robot>/logs/last_launch.yaml` and becomes the next initial value.
 
 ## Layout and focus
 
-The header shows the experiment, mode, recording progress, and warnings. Select a node to inspect its state, fields, units, and update age. Node selection changes the display; experiment operations still target the whole experiment. Unavailable operations remain in the menu with a reason. The operations menu has initial focus.
+The header shows the robot, mode (operation, mock or hardware, enabled options), recording progress, and warnings. Select a node to inspect its state, fields, units, and update age. Node selection changes the display; operations still target the whole dataflow. Unavailable operations remain in the menu with a reason. The operations menu has initial focus.
 
 Status, Details, and Logs tabs are always available. Status shows the node list and details side by side at widths of 100 columns or more; below that, use Details to inspect the selected node. Logs stays hidden until its tab is selected. Operations stays visible below every tab and uses roughly half of the content area, with at least 10 rows by default at the supported 80×24 size. Resizing preserves the active tab, node selection, and command text. Drag the vertical divider between the node list and details to change their widths. Drag the horizontal divider above Operations to change the heights of the upper pane and Operations, including in Logs and at 80×24. Double-click a divider to reset that direction. Minimum sizes keep the panes and command input usable; Operations can be reduced to six rows. Width and height proportions last for the session and survive terminal resizing and tab changes. They are not saved to disk.
 
@@ -12,7 +25,7 @@ Ctrl-N / Ctrl-P also focus the dividers. When a divider is focused, use the arro
 
 Important items are shown in color. Node states in the list and the details are green when OK, yellow for warnings and red for errors; a node with no update for over 2 s turns into a red `STALE`. The details highlight the home pose name in magenta, the task being recorded in cyan, and limits, rejections and errors in yellow or red. The header warning and `UNSAVED` are yellow, Emergency stop is red, and unavailable operations are dimmed. Log lines keep the color of each report (recording, emergency stop and so on).
 
-The log scrolls independently; messages arriving while it is hidden are retained, and new entries preserve your position while reading older logs. Ctrl-O opens Logs at the latest entry. The log retains up to 10,000 lines; the full dora log stays beside the experiment.
+The log scrolls independently; messages arriving while it is hidden are retained, and new entries preserve your position while reading older logs. Ctrl-O opens Logs at the latest entry. The log retains up to 10,000 lines; the full dora log stays in `logs/` beside the configuration.
 
 | Key | Action |
 | --- | --- |
@@ -32,11 +45,11 @@ Outside input and confirmations, `e`, `q`, `h`, `s`, and `d` request estop, quit
 
 F2, F6 / Shift-F6, F12, and Ctrl-End remain aliases for command input, pane movement, emergency stop, and latest log. The footer displays the primary Ctrl combinations.
 
-## Experiment operations
+## Operations
 
 Use `start <task>`, `stop`, `save`, `discard`, `home`, `release`, `estop`, and `quit` from either the menu or input. Start in `run` opens the input for a task. A rejected start is a warning; status updates continue and you can retry once ready. Home is available only when a controller has a home pose, and readiness is checked again after arrival.
 
-Release asks you to confirm support. Exit offers Cancel, follower hold, and (when available) supported release. Cancel is initially selected. Actuated inputs release on exit even when followers hold. UI failure keeps followers holding unless a release choice was already confirmed. An emergency request reports send failure, sent but unconfirmed, and fresh follower ESTOP confirmation separately; it cannot guarantee delivery through a disconnected bus or dataflow.
+Release asks you to confirm support. Exit offers Cancel, follower hold, (when available) supported release, and choosing options again (Quit and choose options again (followers hold)). Cancel is initially selected. Options are never switched while the dataflow runs (they change control modes); choosing them again quits with the followers holding and returns to the launcher. This choice appears only in an interactive terminal started from the CLI. Actuated inputs release on exit even when followers hold. UI failure keeps followers holding unless a release choice was already confirmed. An emergency request reports send failure, sent but unconfirmed, and fresh follower ESTOP confirmation separately; it cannot guarantee delivery through a disconnected bus or dataflow.
 
 `record` and `infer` show readiness, episode count, remaining time, and save results. Select Start for each episode after readiness. `record --home` moves home before every episode. `record` saves; `infer` saves only with `--task`. Stop can finish a timed episode early and apply the same save policy. After the requested episodes, the exit confirmation opens.
 

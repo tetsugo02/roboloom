@@ -166,12 +166,12 @@ leader ──sample──► controller ──command──► robot ──state
 - Feedback messages carry an absolute deadline, like robot commands (the same shape as `make_command`).
 - The path is a cycle (leader → controller → robot → estimator → controller → leader). Stage 1 confirmed in mock that dora-rs dataflows accept cyclic edges (the controller and robot already formed a cycle).
 
-### Writing an experiment
+### Writing the configuration
 
-Users never write edges. As in roboloom today, the experiment YAML only lists nodes by role. `runtime/flow.py` derives the edges from each node's references.
+Users never write edges. As in roboloom today, the configuration YAML only lists nodes by role. `runtime/flow.py` derives the edges from each node's references.
 
 ```yaml
-# experiment_bilateral.yaml
+# nodes of the configuration (config.yaml) with the option bilateral enabled
 inputs:
   leader: nodes/leader_bilateral.yaml        # type: rakuda_mini
 controllers:
@@ -190,7 +190,7 @@ The pairing follows from references alone.
 | `robot: robot` | estimator | `robot/state` → estimator |
 | `feedback.estimator: effort` | controller | `effort/estimate` → controller, controller `feedback` → `leader` (the controller's `input`) |
 
-The rule is closed per pair. Treating the two arms as separate robots, or putting pairs of other robots in the same experiment, only means listing one set of nodes per pair (the current "one robot per experiment" limit is a separate issue). For example, another follower with another leader would be written as below. The device names are examples and do not exist in roboloom today.
+The rule is closed per pair. Treating the two arms as separate robots, or putting pairs of other robots in the same configuration, only means listing one set of nodes per pair (the current "one robot per configuration" limit is a separate issue). For example, another follower with another leader would be written as below. The device names are examples and do not exist in roboloom today.
 
 ```yaml
 inputs:
@@ -233,7 +233,7 @@ The leader drops messages whose joint names or unit do not match its own and sho
 
 ```yaml
 feedback:
-  estimator: effort               # a name under estimators in experiment.yaml
+  estimator: effort               # a name under estimators in the configuration
   deadline_ms: 100
   unit: mA/mA                     # leader unit / follower unit
   gain:                           # only joints listed here feed back (follower joint names)

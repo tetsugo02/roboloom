@@ -10,7 +10,7 @@
 # Usage:
 #   uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/leader_left.yaml
 #   uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_left.yaml \
-#       --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect --hardware
+#       --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect
 port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT7923HA-if00-port0
 urdf: roboloom:robots/rakuda2/model/assembly_2.urdf
 confirmed: true

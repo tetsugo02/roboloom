@@ -69,16 +69,16 @@ def test_pose_files_are_checked_against_the_robot(tmp_path, values, extra, match
 
 def test_capture_pose_saves_the_follower_pose_by_name(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
-    path = capture_pose(project / "experiment.yaml", "ready")
+    path = capture_pose(project / "config.yaml", "ready")
     assert path == project / "poses" / "ready.yaml"
     saved = yaml.safe_load(path.read_text())
     assert saved["robot_type"] == "rakuda2" and saved["pose"]["torso_yaw"] == 2048
     assert len(saved["pose"]) == 17
     with pytest.raises(SetupError, match="exists"):
-        capture_pose(project / "experiment.yaml", "ready")
-    capture_pose(project / "experiment.yaml", "ready", force=True)
+        capture_pose(project / "config.yaml", "ready")
+    capture_pose(project / "config.yaml", "ready", force=True)
     with pytest.raises(ConfigError, match="pose name"):
-        capture_pose(project / "experiment.yaml", "../escape")
+        capture_pose(project / "config.yaml", "../escape")
 
 
 def home_tree(tmp_path: Path, **home) -> dict:
@@ -278,7 +278,7 @@ def test_session_moves_home_then_records_from_there(tmp_path):
     from roboloom.runtime.session import Session
 
     project = mock_project(tmp_path / ".roboloom")
-    capture_pose(project / "experiment.yaml", "ready")
+    capture_pose(project / "config.yaml", "ready")
     pose = project / "poses" / "ready.yaml"
     saved = yaml.safe_load(pose.read_text())
     saved["pose"]["torso_yaw"], saved["pose"]["r_arm_sh_pitch1"] = 2100, 2000
@@ -288,7 +288,7 @@ def test_session_moves_home_then_records_from_there(tmp_path):
         controller.read_text()
         + "home:\n  pose: ../poses/ready.yaml\n  max_speed: 400\n  timeout_s: 20\n"
     )
-    with Session.launch(project / "experiment.yaml") as s:
+    with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)
         s.home()
         robot = s.status()["robot"]["fields"]

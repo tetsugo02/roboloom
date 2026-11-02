@@ -24,14 +24,14 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
-from ..config import ExperimentConfig, load_experiment
+from ..config import NO_OPTIONS, ExperimentConfig, load_experiment
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
 from ..recording.metrics import assess
@@ -71,7 +71,7 @@ class EpisodeInfo:
 
     index: int  # episode index in the dataset (episodes already saved)
     number: int  # episodes recorded by this session so far
-    experiment: str  # experiment file stem, e.g. experiment_gravity
+    experiment: str  # the dataset's name, e.g. rakuda2-digit (tells the options)
     previous: list[str] = field(default_factory=list)  # tasks saved by this session
 
 
@@ -97,11 +97,13 @@ ERROR_LINE = re.compile(r"^[A-Za-z_.]*(Error|Exception): ")  # a traceback's las
 
 
 def log_dir_for(cfg: ExperimentConfig) -> Path:
-    """Next to the experiment, so a project keeps its own logs (ignored by git)."""
+    """Next to the configuration, so a project keeps its own logs (ignored by git).
+    Named after the operation's dataset (`rakuda2-digit-...`), which tells the options."""
+    name = Path(cfg.path).stem
+    if name == "config":
+        name = cfg.repo_id.rpartition("/")[2]
     return (
-        Path(cfg.path).parent
-        / "logs"
-        / f"{Path(cfg.path).stem}-{time.strftime('%Y%m%d-%H%M%S')}"
+        Path(cfg.path).parent / "logs" / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}"
     ).resolve()
 
 
@@ -130,8 +132,9 @@ def validate_flow(cfg: ExperimentConfig, directory: Path) -> Path:
 
 
 def fifo_for(cfg: ExperimentConfig) -> Path:
-    """The command FIFO of a running dataflow; `roboloom session` writes to it."""
-    return Path(cfg.output).resolve().with_suffix(".fifo")
+    """The command FIFO of a running dataflow; `roboloom session` writes to it. One per
+    configuration file, whatever options the run enabled (they change the dataset name)."""
+    return Path(cfg.path).resolve().with_suffix(".fifo")
 
 
 class Session:
@@ -168,7 +171,8 @@ class Session:
         cls,
         experiment: str | Path | ExperimentConfig,
         *,
-        hardware: bool = False,
+        options: Iterable[str] | None = None,
+        mock: bool | None = None,
         policy: str | None = None,
         policy_kwargs: dict | None = None,
         log_dir: str | Path | None = None,
@@ -178,7 +182,9 @@ class Session:
     ) -> Session:
         """Validate and start the dataflow; returns once every node reports status.
 
-        - Real devices open only with `hardware=True`.
+        - `options`: the launch options to enable (None: their defaults); `mock`:
+          True runs mock devices, False real ones (None: the YAML's `mode`, default
+          hardware). Both apply only when `experiment` is a path or name.
         - `policy` ("module:callable") and `policy_kwargs` replace the policy of a
           `type: policy` controller.
         - `screen`: the node-status screen, drawn on a thread ("auto": when stdout is
@@ -189,12 +195,8 @@ class Session:
         cfg = (
             experiment
             if isinstance(experiment, ExperimentConfig)
-            else load_experiment(experiment)
+            else load_experiment(experiment, options=options, mock=mock)
         )
-        if not cfg.mock and not hardware:
-            raise HardwareError(
-                f"{cfg.path} opens real devices; pass hardware=True (--hardware)"
-            )
         if (policy or policy_kwargs) and not any(
             not c.uses_input for c in cfg.controllers.values()
         ):
@@ -224,6 +226,9 @@ class Session:
             "ROBOLOOM_REPORT_PATH": report,
             "ROBOLOOM_STATUS_PATH": status,
             "ROBOLOOM_LOG_DIR": logs,
+            # the nodes reload the configuration from cfg.path with the same choices
+            "ROBOLOOM_OPTIONS": ",".join(cfg.options) or NO_OPTIONS,
+            "ROBOLOOM_MODE": cfg.mode,
         }
         if policy:
             env["ROBOLOOM_POLICY"] = policy
@@ -614,7 +619,7 @@ class Session:
         return EpisodeInfo(
             self.episodes,
             len(self._recorded),
-            Path(self.cfg.path).stem,
+            self.cfg.repo_id.rpartition("/")[2],
             list(self._recorded),
         )
 

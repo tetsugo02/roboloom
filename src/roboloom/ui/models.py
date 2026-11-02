@@ -25,6 +25,7 @@ class Capabilities:
     release: bool = False
     hold: bool = False
     gravity: bool = False
+    reselect: bool = False  # quit can come back to the launcher's option choice
 
 
 @dataclass(frozen=True)

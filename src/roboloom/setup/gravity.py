@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..config import ExperimentConfig
 from ..control.tuning import TuningSession
 from ..drivers.dynamixel_table import MODELS, OPERATING_MODES
 from ..errors import Cancelled, ConfigError, HardwareError, SetupError
@@ -133,7 +134,7 @@ class GravityCheck:
         return out
 
 
-def _gravity_group(experiment: str | Path, node: str, group: str):
+def _gravity_group(experiment: str | Path | ExperimentConfig, node: str, group: str):
     from ..control.device import build_laws
     from ..inputs.base import JointInput
 
@@ -166,14 +167,12 @@ def _only(law, laws) -> None:
 
 
 def gravity_check(
-    experiment: str | Path,
+    experiment: str | Path | ExperimentConfig,
     node: str,
     group: str,
     operator: Operator,
     poses: int = 3,
     scales: Sequence[float] = (1.0, 0.0),
-    *,
-    hardware: bool = False,
 ) -> GravityCheck:
     """Objective A/B: at the same pose, release the arm once per scale of the configured
     gains (default: as configured, then 0) and compare how far and how fast each joint moves.
@@ -185,7 +184,7 @@ def gravity_check(
     cfg, owner, _, laws, law = _gravity_group(experiment, node, group)
     if not isinstance(law, CurrentLaw) or law.gravity is None:
         raise ConfigError(f"{group}: not a gravity-compensated group of {node}")
-    require_hardware(cfg, hardware, "gravity-check")
+    require_hardware(cfg, "gravity-check")
     configured = list(law.gain)
     _only(law, laws)
     device = JointDevice(
@@ -233,7 +232,7 @@ def gravity_check(
 
 
 def open_tuning(
-    experiment: str | Path, node: str, group: str, *, hardware: bool = False
+    experiment: str | Path | ExperimentConfig, node: str, group: str
 ) -> TuningSession:
     """A live tuning session for one gravity_comp group; the other groups stay limp.
     Saving writes the group's `tuning:` file. Close the session when done."""
@@ -245,8 +244,6 @@ def open_tuning(
         raise ConfigError(
             f"{group}: needs a gravity_comp group with `tuning:` (the file tuning writes)"
         )
-    if not cfg.mock:
-        require_hardware(cfg, hardware, "tune-gravity")
     _only(law, laws)
     ids = dict(zip(owner.joint_names, owner.cfg.get("motor_ids") or [], strict=False))
     device = JointDevice(
@@ -541,11 +538,10 @@ def identify_gravity(
     *,
     data: str | Path | None = None,
     collect: bool = False,
-    hardware: bool = False,
     delta: int = 30,
     max_rms_mA: float = 15.0,
 ) -> GravityFit:
-    """Optionally collect new poses (torques the arm: needs `hardware=True`), then fit the
+    """Optionally collect new poses (torques the arm, after the operator confirms), then fit the
     model to every pose in `data` (default: next to `out`, as .npz) and save it to `out`."""
     cal = (
         calibration
@@ -560,10 +556,6 @@ def identify_gravity(
             f"{cal.path}: check the URDF mapping, zeros and directions, then set confirmed: true"
         )
     if collect:
-        if not hardware:
-            raise HardwareError(
-                "collecting torques the arm; pass hardware=True (--hardware)"
-            )
         collect_holding_currents(cal, data_path, operator, delta)
     if not data_path.exists():
         raise SetupError(f"{data_path}: no holding currents yet; collect them first")

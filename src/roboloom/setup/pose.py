@@ -8,9 +8,9 @@ from pathlib import Path
 
 import yaml
 
-from ..config import load_experiment
+from ..config import ExperimentConfig
 from ..errors import ConfigError, SetupError
-from .common import require_hardware
+from .common import load
 
 
 def pose_path(experiment_path: str | Path, name: str) -> Path:
@@ -21,10 +21,9 @@ def pose_path(experiment_path: str | Path, name: str) -> Path:
 
 
 def capture_pose(
-    experiment: str | Path,
+    experiment: str | Path | ExperimentConfig,
     name: str,
     *,
-    hardware: bool = False,
     force: bool = False,
 ) -> Path:
     """Read the experiment's follower positions and save them as pose `name`.
@@ -34,9 +33,7 @@ def capture_pose(
     the follower by teleoperation (then `quit` with `hold`) or by hand after `release`.
     Every joint must be inside the robot's limits. Returns the written file.
     """
-    cfg = load_experiment(experiment)
-    if not cfg.mock:
-        require_hardware(cfg, hardware, "capture-pose")
+    cfg = load(experiment)
     robot = cfg.robot
     path = pose_path(cfg.path, name)
     if path.exists() and not force:

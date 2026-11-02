@@ -464,7 +464,7 @@ def bilateral_tree(tmp_path, goal_mA=1000):
     from test_tools import synthetic_models
 
     paths = synthetic_models(tmp_path)
-    tree = rakuda2_tree("experiment_bilateral")
+    tree = rakuda2_tree(["gravity", "bilateral"])
     for group in tree["inputs"]["leader"]["control"]:
         if group["law"] == "gravity_comp":
             group["gravity_model"] = str(paths[group["group"].split("_")[0]])
@@ -497,7 +497,7 @@ def test_template_refuses_unfilled_or_too_high_goal_current(tmp_path):
     from conftest import rakuda2_tree
 
     with pytest.raises(ValueError, match="SET_FOLLOWER_ARM_GOAL_CURRENT_mA"):
-        parse_experiment(rakuda2_tree("experiment_bilateral"))
+        parse_experiment(rakuda2_tree(["gravity", "bilateral"]))
     with pytest.raises(ValueError, match="exceeds registers.current_limit"):
         parse_experiment(bilateral_tree(tmp_path, goal_mA=1200))
 

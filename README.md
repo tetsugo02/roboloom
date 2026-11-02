@@ -44,11 +44,13 @@ roboloom の操作は，どれも Python の関数として使えます．CLI �
 ```python
 from roboloom import Session
 
-with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
+with Session.launch("rakuda2", options=["gravity"]) as s:  # 実機（mock=True で模擬）
     s.wait_ready()
     for _ in range(3):
         s.record(lambda info: f"pick up the cup #{info.index}", seconds=20)
 ```
+
+`options` は設定の `options:` から有効にするものです（`None` で各オプションの既定）．`mock=True` で模擬デバイス，省略時は YAML の `mode`（既定は hardware）に従います．
 
 `Experiment` は，バス，センサー，controller を呼び出し側のスレッドで動かします．以下はデバイスもリポジトリ内のサンプルファイルも使わない模擬例です．記録用extraを追加し，Python例を自分の `main.py` に保存して実行します．
 
@@ -92,7 +94,7 @@ with Experiment.from_components(
 この模擬例の関節範囲や速度を実機の安全値として使わないでください．
 
 `from_yaml` について：
-- 実験ファイルのパスでも，`.roboloom/` の下の名前でも指定できます．
+- 設定ファイルのパスでも，`.roboloom/` の下の名前（例：`rakuda2`）でも指定できます．`options=[...]` と `mock=` は `Session.launch` と同じです．
 - 模擬構成では，leader を自動で開きます．
 - 追加のセンサーは，`sensors={"camera": ..., "digit_left": ..., "digit_right": ..., "audio": ...}` で渡します．
 - 次の実験は拒否します．これらは `Session` で動かします．
@@ -102,14 +104,25 @@ with Experiment.from_components(
 
 ## dora dataflow
 
-実験 YAML はノード YAML を役割ごと（`inputs`，`controllers`，`robots`，`sensors`）に名前付きで参照し，`recorder` と `session` を加えます．各ノードの `type` で実装を選びます．ノード名がそのまま dora のノード ID と LeRobot の feature 名になります．leader と follower の Dynamixel バスはそれぞれのノードだけが開きます．`validate` は実機に接続しません．
+設定はロボットごとに1つ（`.roboloom/<robot>/config.yaml`）です．ノード YAML を役割ごと（`inputs`，`controllers`，`robots`，`sensors`）に名前付きで参照し，`recorder` と `session` を加えます．各ノードの `type` で実装を選びます．ノード名がそのまま dora のノード ID と LeRobot の feature 名になります．leader と follower の Dynamixel バスはそれぞれのノードだけが開きます．`validate` は実機に接続しません．
+
+DIGIT，重力補償，バイラテラル，方策のような構成の違いは `options:` で選びます．各オプションは `help`，`default`，`requires`，`conflicts`，`set`，`dataset` を持ちます．`set` は `<役割>.<ノード名>` をノード YAML に置き換えるか，`null` で取り除きます．オプションを有効にすると `requires` のものも有効になり，`conflicts` のものは無効になります．有効なオプションの `dataset` 名は `repo_id` と `output` に付け足されます（例：`local/rakuda2` に digit で `local/rakuda2-digit`）．記録する feature が変わる構成は別の dataset に入ります．`mode:` は省略でき，既定は hardware です．
 
 以下は `init` で生成した設定を使う実機の例です．先に [Rakuda2 Quick start](docs/ja/quick-start/rakuda2.md) に従って `SET_...` を埋め，EEPROM・安全範囲・停止動作を確認します．初回はfollowerの `torque: false` で経路を確認し，leaderを含めて腕を支えられる状態で行います．
 
 ```bash
-uv run roboloom validate rakuda2/experiment_camera
-uv run roboloom run rakuda2/experiment_camera --hardware
+uv run roboloom                       # ランチャー：ロボットを選び，run/record/infer，オプション，mock/実機を選んで起動
+uv run roboloom validate --with digit # 設定と dataflow の検査（機器は開かない）
+uv run roboloom run --with gravity    # ランチャーを出さずに起動
+uv run roboloom run --mock            # 模擬デバイス
 ```
+
+- 実機が既定です．`--mock` で模擬デバイスを使います．`--hardware` は廃止し，渡すとエラーになります．
+- `--with a,b`／`--without a,b` でオプションを選びます（`--without` は既定で有効なものも外します）．
+- `.roboloom/` にロボットが1台だけなら，設定の名前は省けます（`uv run roboloom run rakuda2` とも書けます）．ほかの位置引数を持つコマンドでは，最初の語が設定を指すときだけ設定として読みます（例：`uv run roboloom commission leader --with gravity`）．
+- `uv run roboloom` はまずロボットの一覧を出します（前回のロボットにカーソル．次の画面のBack/Escで一覧へ戻る）．`uv run roboloom rakuda2` なら一覧を飛ばします．
+- 対話端末の `run`・`record`・`infer` も，`--with`・`--without`・`--plain` がなければ先にランチャーを表示します．前回の選択は設定の隣の `logs/last_launch.yaml` に残ります．
+- 実行中にオプションは切り替えません．操作画面を「Quit and choose options again」で終えると，ランチャーに戻ります．
 
 `run`・`record`・`infer`・`tune-gravity` を対話端末で実行すると，Textualのノード一覧・詳細・操作メニュー・スクロール可能なログ・コマンド欄を表示します．Logsは幅にかかわらず専用タブに隠し，Operationsを広く表示します．幅100文字未満ではノード一覧と詳細も切り替えて表示します．ノード選択は表示だけで，操作は実験全体を対象にします．縦・横の境界をマウスでドラッグしてペインの幅・高さを調整でき，ダブルクリックで既定へ戻せます．サイズ比率はセッション内で保持します．
 
@@ -117,14 +130,14 @@ Ctrl-Lで入力，Tab/Shift-Tabで補完，↑↓で履歴，Ctrl-N/Ctrl-Pでペ
 
 `run --plain` は行入力，`record --plain`・`infer --plain` は非対話処理です．非TTYも同じ経路です．`tune-gravity` は機器open前に非TTYを拒否します．Python APIの `Session.launch(..., screen="auto")` は入力を読まないRich表示を維持し，`print()`・`input()` と既存の終了確認を使えます．
 
-コマンドは `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` です．各操作の利用可否と理由をメニューに表示します．doraの出力は実験の隣の `logs/<実験名>-<時刻>/dora.log` に保存し，画面のログにも表示します．新しい機種は通常の登録と状態通知で汎用表示でき，専用Presenterは任意です．キー・機能情報・表示拡張は [操作画面](docs/ja/reference/operator-screen.md)（[English](docs/en/reference/operator-screen.md)）を参照してください．mock検証と実機検証は別です．
+コマンドは `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` です．各操作の利用可否と理由をメニューに表示します．doraの出力は設定の隣の `logs/<dataset名>-<時刻>/dora.log` に保存し，画面のログにも表示します．新しい機種は通常の登録と状態通知で汎用表示でき，専用Presenterは任意です．キー・機能情報・表示拡張は [操作画面](docs/ja/reference/operator-screen.md)（[English](docs/en/reference/operator-screen.md)）を参照してください．mock検証と実機検証は別です．
 
-別端末からは `uv run roboloom session rakuda2/experiment_camera start handover` の形でも操作できます．
+別端末からは `uv run roboloom session start handover` の形でも操作できます．
 
 決まった長さのエピソードを録って終わるとき（`--episodes` で回数を指定，既定 1）：
 
 ```bash
-uv run roboloom record rakuda2/experiment_camera --task handover --seconds 10 --hardware
+uv run roboloom record --task handover --seconds 10
 ```
 
 - 動作：
@@ -134,22 +147,20 @@ uv run roboloom record rakuda2/experiment_camera --task handover --seconds 10 --
 - 保存したとき：
   - 欠損率，有効な行動の割合，制御周期の最大値が `recorder.quality` の上限を超えていれば，警告を出します．
 
-方策で動かす（`type: policy` の controller を持つ実験．テンプレートの `experiment_policy.yaml`）：
+方策で動かす（`infer` は `policy` オプションを有効にします．テンプレートでは `type: policy` の controller に置き換え，DIGIT を必要とし，重力補償とは両立しません）：
 
 ```bash
-uv run roboloom infer rakuda2/experiment_policy --policy my_lab.policies:load --seconds 30 --hardware
+uv run roboloom infer --policy my_lab.policies:load --seconds 30
 ```
 
-`--task` を付けると，その走行を保存します（評価データ）．
-
-hardware 構成を実行するときだけ `run --hardware` が必要です．
+`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-digit-eval`）．
 
 EEPROM について：
 
 - 実行中は EEPROM を書きません．起動時にモデル番号と EEPROM（Operating Mode，Current Limit，位置リミットなど）を読み，ノード YAML の `registers` と違えば起動を拒否します．
-- EEPROM を書くのは，明示的に実行する `roboloom commission` だけです．
+- オプションで Operating Mode や Current Limit が変わる（重力補償の有無など）ため，対話端末から実機で起動する前に，CLI は Dynamixel ノードの EEPROM と選んだ構成を比べます．違いを表示し，操作者が確認したときだけ書き込みます．`roboloom commission` で明示的に書くこともできます．
 
-機体固有の関節限界，速度上限，ポート，機器 ID は実験 YAML に明示してください．模擬構成の値を実機用の安全値として流用しないでください．
+機体固有の関節限界，速度上限，ポート，機器 ID はノード YAML に明示してください．模擬構成の値を実機用の安全値として流用しないでください．
 
 全ての関節値は **Dynamixel の生の位置カウント**です．電流は mA で扱い，モーターごとの単位変換はドライバが行います．
 
@@ -203,8 +214,8 @@ uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所�
 - 機体ごとに測る値は，テンプレートでは `SET_…` になっています．ポート，センサーのシリアル番号などです．
 - `SET_` が残っているあいだ，`run` や `validate` などは場所を示して止まります．
 - 埋める手順は，`.roboloom/rakuda2/README.md` にあります．probe，commission，identify-gravity，measure-travel，tune-gravity の順です．
-- 実験は，`.roboloom` からの名前で指定できます（例：`roboloom run rakuda2/experiment_gravity --hardware`）．ファイルのパスでも指定できます．
-- YAML（設定，重力モデル，可動域，調整値）は git に入れます．測定の生データ（`*.npz`），ログ，データセットは `.gitignore` で除きます．ログは，実験ファイルの隣の `logs/` に置かれます．
+- 設定は `.roboloom/rakuda2/config.yaml` の1つです．構成は `options:` で選びます（例：`roboloom run --with gravity`）．ロボットが複数あるときは `roboloom run rakuda2` のように名前で，またはファイルのパスで指定します．
+- YAML（設定，重力モデル，可動域，調整値）は git に入れます．測定の生データ（`*.npz`），ログ，データセットは `.gitignore` で除きます．ログと前回のランチャーの選択（`last_launch.yaml`）は，設定ファイルの隣の `logs/` に置かれます．
 - 自分のプロジェクトの `.roboloom/rakuda2/` に，使用する機体の設定を管理します．
 
 実機を動かす手順は，腕を支えられる状態で行ってください．
@@ -234,8 +245,8 @@ src/roboloom/
     audio/      PcmAudio（base），pcm_mono（microphone）
   recording/    時刻整列，LeRobot スキーマ，指標
   runtime/      dora dataflow の生成，ノードの実行，Session（dataflow の起動と指揮）
-  ui/           操作画面（rich Live），状態の描画，session との受け渡し
-  config.py     実験 YAML の読み込みと，ノード間の整合性検査
+  ui/           ランチャー（launcher），操作画面（rich Live），状態の描画，session との受け渡し
+  config.py     設定 YAML の読み込み，オプション（options）の適用，ノード間の整合性検査
   probe.py      Dynamixel バスの読み取り専用の調査
   setup/        セットアップと計測の本体（commission，calibrate-joints，measure-travel，identify-gravity，gravity-check，tune-gravity）．結果をデータで返し，操作者とのやりとりは Operator に任せる
   operator.py   Operator（CLI は TerminalOperator，スクリプトと試験は ScriptedOperator）

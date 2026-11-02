@@ -1,4 +1,4 @@
-# Leader for bilateral teleoperation (experiment_bilateral.yaml): leader_gravity.yaml with
+# Leader for bilateral teleoperation (option `bilateral` of ../config.yaml): leader_gravity.yaml with
 # `feedback:` on the arm groups, so they take the force the controller returns from the
 # follower. NOT verified on hardware. The controller's feedback.gain picks the joints.
 # The feedback shares max_current_mA and the EEPROM Current Limit with gravity: near the

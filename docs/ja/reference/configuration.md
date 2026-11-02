@@ -1,16 +1,15 @@
 # Configuration
 
-## 実験の指定
+## 設定の指定
 
-`roboloom init rakuda2` が `.roboloom/rakuda2/` に実験・ノード・calibration YAMLを作ります．既存のディレクトリを上書きしません．実験名 `rakuda2` は `experiment.yaml`，`rakuda2/experiment_gravity` は `experiment_gravity.yaml` を指します．ファイルパスでも指定できます．
+`roboloom init rakuda2` が `.roboloom/rakuda2/` に設定・ノード・calibration YAMLを作ります．既存のディレクトリを上書きしません．設定は機体ごとに1つ（`config.yaml`）で，機能の組み合わせは起動オプションで選びます．機体名 `rakuda2` は `.roboloom/rakuda2/config.yaml` を指します．`.roboloom/` の下に機体が1台だけなら省略でき，ファイルパスでも指定できます．
 
-## 実験YAML
+## 設定YAML
 
 ```yaml
 robot_id: rakuda2
 repo_id: local/rakuda2
 output: datasets/rakuda2
-mode: hardware
 dataset_fps: 15
 inputs:
   leader: nodes/leader.yaml
@@ -20,15 +19,81 @@ robots:
   robot: nodes/robot.yaml
 sensors:
   camera: nodes/camera.yaml
-  digit_left: nodes/digit_left.yaml
-  digit_right: nodes/digit_right.yaml
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
+options:
+  # 次の節を参照
 ```
 
-ノードYAMLのパスと `output` は実験ファイルのディレクトリが基準です．上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．ノード名はdoraのIDとデータセットのfeature名に使われます．現在は1実験につきrobotが1台，対応するcontrollerが1個です．
+`mode` は省略でき，既定は `hardware` です．`mode: mock` も書けます．CLIの `--mock` とPython APIの `mock=` はYAMLの `mode` より優先します．
+
+ノードYAMLのパスと `output` は設定ファイルのディレクトリが基準です．オプションを有効にしない場合，上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．ノード名はdoraのIDとデータセットのfeature名に使われます．現在は1つの設定につきrobotが1台，対応するcontrollerが1個です．
 
 各ノードの `type` が実装を選びます．`SET_...` は機体固有の未設定値で，参照する設定に残っていると実行が拒否されます．`validate` は設定とdataflowの整合性を調べ，デバイスは開きません．EEPROMの実機との一致，画像取得，停止挙動までは確認しません．
+
+## 起動オプション
+
+`options:` は，起動時に選ぶ機能（重力補償，追加のセンサーなど）を名前で定義します．各オプションはノードファイルを置き換え・追加・削除します．`nodes/` の下のノードファイルは機能ごとに分かれたままで，オプションはどれを使うかを選ぶだけです．
+
+| キー | 意味 |
+| --- | --- |
+| `help` | ランチャーに表示する説明 |
+| `default` | `true` なら，指定がないときに有効（既定 `false`） |
+| `requires` | 一緒に有効にするオプションのリスト |
+| `conflicts` | 同時に使えないオプションのリスト |
+| `set` | `<role>.<node>`（roleは `inputs`，`controllers`，`robots`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
+| `dataset` | 有効なときにデータセット名へ付ける短い名前 |
+
+規則は次のとおりです．
+
+- オプションを有効にすると，`requires` のオプションも有効になり，`conflicts` のオプションは無効になります．無効にすると，それを必要とするオプションも無効になります．
+- 有効な2つのオプションが同じノードを違うファイルにするとエラーです．ただし，片方がもう片方を `requires` に持つ場合は，必要とする側（依存する側）が優先します．テンプレートでは，`bilateral` のleaderが `gravity` のleaderを置き換えます．
+- 未知のオプション名はエラーです．
+- 有効なオプションの `dataset` を，宣言順に `-` でつないで `repo_id` と `output` の末尾に付けます．形の違うエピソードが同じデータセットに混ざらないようにするためです．
+- `dataset` を持たないオプションが記録するfeatureを変える場合，読み込みを拒否します．
+
+テンプレート（`src/roboloom/robots/rakuda2/template/config.yaml`）のオプションです．
+
+```yaml
+options:
+  digit:
+    help: record the left/right DIGIT tactile sensors
+    set:
+      sensors.digit_left: nodes/digit_left.yaml
+      sensors.digit_right: nodes/digit_right.yaml
+    dataset: digit
+  gravity:
+    help: gravity-compensated leader arms (after the measurement steps of README.md)
+    set:
+      inputs.leader: nodes/leader_gravity.yaml
+  bilateral:
+    help: force feedback from the follower to the leader (NOT verified on hardware)
+    requires: [gravity]
+    set:
+      inputs.leader: nodes/leader_bilateral.yaml
+      controllers.controller: nodes/controller_bilateral.yaml
+      robots.robot: nodes/robot_bilateral.yaml
+      estimators.effort: nodes/effort.yaml
+    dataset: bilateral
+  policy:
+    help: a learned policy drives the follower (`roboloom infer` turns this on)
+    requires: [digit]  # nodes/policy.yaml observes the DIGIT sensors
+    conflicts: [gravity]
+    set:
+      inputs.leader: null
+      controllers.controller: null
+      controllers.policy: nodes/policy.yaml
+    dataset: eval
+```
+
+| 有効なオプション | `repo_id` |
+| --- | --- |
+| なし | `local/rakuda2` |
+| `digit` | `local/rakuda2-digit` |
+| `digit`，`policy` | `local/rakuda2-digit-eval` |
+| `gravity`，`bilateral` | `local/rakuda2-bilateral` |
+
+`output` にも同じ名前が付きます（例：`datasets/rakuda2-digit`）．どのオプションが有効か，データセット名が何になるかは `roboloom validate --with digit` のように確かめられます．オプションの選び方は [CLI](cli.md) を，Rakuda2で使える組み合わせと制約は [Rakuda2](../robots/rakuda2.md) を参照してください．
 
 ## 関節固定と相殺
 
@@ -39,7 +104,7 @@ leaderノードの `control` は，`free`（脱力），`position`（leaderで�
 !!! warning "実機では未検証"
     followerが受けた外力をleaderへ返す経路です．模擬（mock）の試験だけを通しています．設計と今後の段階は [バイラテラル制御の設計](../contribution/bilateral.md) を参照してください．
 
-実験YAMLに `estimators` を足し，controllerの `feedback` で推定器を参照します．辺は書きません．各ノードの参照から次の経路を導きます．
+設定に `estimators` を足し，controllerの `feedback` で推定器を参照します．テンプレートでは，オプション `bilateral` が `estimators.effort` を追加し，leader・controller・robotを逆送用のノードファイルに置き換えます．辺は書きません．各ノードの参照から次の経路を導きます．
 
 ```text
 leader ──sample──► controller ──command──► robot ──state──► estimator
@@ -71,7 +136,7 @@ estimators:
 ```bash
 uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml
 uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml \
-    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware
+    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect
 ```
 
 followerの腕は，XM540とXM430が混在するため関節ごとに別々に同定します（`shared_parameters: false`）．leaderより多くの姿勢が要ります．同定中はfollowerのノードを止めておきます．
@@ -109,7 +174,7 @@ gate × (clip(受け取った電流, ±max_mA) − kd × 速度)
 
 逆送の電流は，重力補償と同じ `max_current_mA` とEEPROMのCurrent Limitの内側にあります．上限の近くでは削られます．Current Limitを上げると，ホストが止まったときに腕に残る力も大きくなります（XC330はBus Watchdogが作動しても電流を止めません）．
 
-`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1実験に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
+`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1つの設定に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
 
 読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`Experiment`）は推定器を扱いません．
 
@@ -153,12 +218,12 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 `record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損はゼロ値と有効フラグで表します．`task` はフレームに記録されます．
 
-同じデータセットに次のエピソードを追記できます．再開時はFPSとfeatureの互換性を検査します．センサー構成を変更したら `repo_id` / `output` を分けてください．
+同じデータセットに次のエピソードを追記できます．再開時はFPSとfeatureの互換性を検査します．記録するfeatureを変えるオプションには `dataset` を付け，データセットを分けます（「起動オプション」の節）．
 
 `recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．
 
 ## ログと設定の管理
 
-ログは実験ファイルの隣の `logs/<実験名>-<時刻>/` に置きます．leaderの電流制御は `<leader名>_trace.npz` に，robotは毎周期の状態（位置・速度・電流・目標・モード）を `<robot名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFOは生成した `.roboloom/.gitignore` で除外します．
+ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，robotは毎周期の状態（位置・速度・電流・目標・モード）を `<robot名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．

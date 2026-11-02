@@ -1,5 +1,5 @@
 # Gravity identification map for the Rakuda-2 FOLLOWER right arm, for the model_residual effort
-# estimator of experiment_bilateral.yaml (bilateral teleoperation, not verified on hardware).
+# estimator of the `bilateral` option (bilateral teleoperation, not verified on hardware).
 # Motor IDs are the follower's (the same as the leader's). urdf, zero and direction are copied
 #   from leader_right.yaml and NOT checked on the follower: check each joint's mapping and
 #   direction; identify-gravity tries every sign combination and prints a better one.
@@ -9,7 +9,7 @@
 # Usage:
 #   uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml
 #   uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml \
-#       --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware
+#       --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect
 port: SET_FOLLOWER_PORT
 urdf: roboloom:robots/rakuda2/model/assembly_2.urdf
 confirmed: false

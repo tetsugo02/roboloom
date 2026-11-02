@@ -79,7 +79,7 @@ gain は「重さをどれだけ消すか」，`hold_mA` は「どれくらい�
 - dataflow を止めておくこと．
 
 ```bash
-uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware
+uv run roboloom tune-gravity leader right_arm --with gravity
 ```
 
 1. 腕を支えたまま起動します．電流は `ramp_s` 秒かけて上がります．ほかの電流制御グループは重力gainとbreakaway holdをゼロにしますが，トルクオフではなく，可動域の押し戻しや減衰は残ります．位置制御グループは目標を保持する場合があります．調整終了時は全グループを明示的に脱力してからバスを閉じます．
@@ -93,7 +93,7 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardw
 7. メニューまたは `save` で保存します（`calibration/gravity_tuning_right.yaml`）．`quit` またはCtrl-Qで終了し，保存・破棄・キャンセル（初期選択）を選びます．保存中の追加変更は未保存として残ります．
 8. 左腕も `left_arm` で同じように調整します．
 
-調整した値は，`roboloom run rakuda2/experiment_gravity --hardware` でそのまま使われます．
+調整した値は，オプション `gravity` を有効にした起動（`roboloom run --with gravity`，またはランチャーで `gravity` を選ぶ）でそのまま使われます．
 
 ## 6．安全のための仕組み
 
@@ -118,7 +118,7 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardw
 - 体感を数値で確かめたいときは，`gravity-check` が使えます．同じ姿勢で，gain の倍率を変えて手を離し，各関節が動いた量を比べます．
 
 ```bash
-uv run roboloom gravity-check rakuda2/experiment_gravity leader right_arm --poses 1 --scales 1,0,2,-2 --hardware
+uv run roboloom gravity-check leader right_arm --poses 1 --scales 1,0,2,-2 --with gravity
 ```
 
 メニューと編集可能な入力欄は `joint <name>`・`gain + / -`・`hold + / -`・`compare`・`resume`・`save`・`estop`・`quit` を共用します．Ctrl-Gは次の制御処理で脱力して再起動までESTOPをラッチします．`resume` は通常のSTOPPEDだけを再開します．制御とファイル保存は描画から独立し，非TTYは機器open前に拒否します．フォーカス・入力・確認のキーは [操作画面](operator-screen.md) を参照してください．

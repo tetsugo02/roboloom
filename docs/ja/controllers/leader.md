@@ -14,7 +14,7 @@ input_timeout_ms: 150
 # 実際の設定には17関節のjoints対応表も必要です．
 ```
 
-`leader` は実験の中での役割の名前で，`type` は使う機器の名前です．別のアームをleaderに使う場合は，`type` だけを変えます．
+`leader` は設定の中での役割の名前で，`type` は使う機器の名前です．別のアームをleaderに使う場合は，`type` だけを変えます．
 
 これらは配布テンプレートの値です．機体の可動域・通信周期・停止挙動を確かめた上で設定してください．
 
@@ -48,7 +48,7 @@ control:
 
 `position` は通電直前の実測位置を目標として書いてから，選択した関節だけトルクをオンにします．古いGoal Positionへ移動させる処理ではありません．leaderは外部目標を受けないため，その位置を保持します．固定はSessionの起動時から有効で，`stop` で収集を止めても続き，`estop`・`release`・`quit` で脱力します．起動前に，固定するleader関節をfollowerの姿勢へ揃えてください．
 
-モーターの位置制御と対応バスAPIが必要です．Operating Modeは `position`（Rakuda2では3）を読み返して検査し，不一致では通電しません．変更が必要な場合はdataflowを止め，機体を支持した上で既存の `roboloom commission <exp> leader --hardware` を使います．`robot.yaml` の `torque: false` はleaderの固定を無効にしません．
+モーターの位置制御と対応バスAPIが必要です．Operating Modeは `position`（Rakuda2では3）を読み返して検査し，不一致では通電しません．変更が必要な場合はdataflowを止め，機体を支持した上で既存の `roboloom commission leader` を使います（起動オプションでleaderを選ぶ場合は `--with` も指定します）．`robot.yaml` の `torque: false` はleaderの固定を無効にしません．
 
 ## 関節間の相殺を設定する
 
@@ -88,7 +88,7 @@ couplings:
 **1. 姿勢を保存します．** followerを使いたい姿勢にしてから，dataflowを止めた状態で実行します．名前ごとに `poses/<名前>.yaml` が作られ，いくつでも保存できます．同じ名前は `--force` なしでは上書きしません．
 
 ```bash
-uv run roboloom capture-pose rakuda2/experiment_head_compensation ready --hardware
+uv run roboloom capture-pose ready
 ```
 
 followerを姿勢にするには，遠隔操作で動かしてから `quit` で `hold`（followerを保持したまま終了）とするか，`release` 後に手で動かします．`capture-pose` はfollowerの位置を読むだけで，動かしません．バスを開くときの通常の起動時の検査は行います．
@@ -114,7 +114,7 @@ home:
     max_mA: 40                # ばねの電流の上限．重力補償との合計は max_current_mA で制限
 ```
 
-**3. 動かします．** 操作画面で `home` と入力します（`roboloom session <exp> home`，Pythonでは `Session.home()` も同じ）．controllerの行に `home pose: ready.yaml` と，使う姿勢の名前が表示されます．移動中はrobotとleaderの行に進み具合が出て，到着すると `reached` になります．
+**3. 動かします．** 操作画面で `home` と入力します（`roboloom session home`，Pythonでは `Session.home()` も同じ）．controllerの行に `home pose: ready.yaml` と，使う姿勢の名前が表示されます．移動中はrobotとleaderの行に進み具合が出て，到着すると `reached` になります．
 
 - 全関節が同じ時間で到着するよう，滑らかな速度の曲線で動かします．最も遠い関節でも速さは `max_speed` を超えません．
 - followerは，通常の指令と同じ範囲と速度の検査を通して動きます．`stop`・`estop` で移動を止められます．
