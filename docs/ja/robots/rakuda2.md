@@ -57,6 +57,7 @@ sensors:
 
 - `goal_current_mA` は，EEPROMの `current_limit` 以下でなければ起動を拒否します．
 - Mode 5へ書き換えた後のモーターでは，通常の `nodes/robot.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission` で書き戻します．
+- `experiment_bilateral` を使うコマンドは，`commission` も含めて実験全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
 - 設定キーは [設定](../reference/configuration.md) の「力の逆送」にあります．
 
 ## 起動前の確認

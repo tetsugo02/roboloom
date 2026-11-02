@@ -98,8 +98,12 @@ class FeedbackMap:
         now = time.monotonic_ns() if now_ns is None else now_ns
         payload = estimate.payload
         residual = payload.get("residual")
+        robot_t = payload.get("robot_t_ns")
         if (
             estimate.kind != Estimator.kind
+            or not isinstance(robot_t, int)
+            or isinstance(robot_t, bool)
+            or robot_t > now
             or tuple(payload.get("joints") or ()) != self.estimator_joints
             or payload.get("unit") != self.estimator_unit
             or not isinstance(residual, list)
@@ -108,6 +112,16 @@ class FeedbackMap:
             self.gate = False
             self.error = (
                 f"estimate from {estimate.source_id} does not match its configuration"
+            )
+            return None
+        # The deadline counts from the robot sample, not from now: a late estimate
+        # (a stalled estimator) must not renew an old force.
+        deadline = robot_t + int(self.deadline_ms * 1e6)
+        if deadline < now:
+            self.gate = False
+            self.error = (
+                f"estimate from {estimate.source_id} is stale "
+                f"({(now - robot_t) / 1e6:.0f} ms after its robot sample)"
             )
             return None
         self.error = ""
@@ -130,9 +144,9 @@ class FeedbackMap:
                 "joints": list(self.leader_joints),
                 "effort": effort,
                 "unit": self.leader_unit,
-                "deadline_ns": now + int(self.deadline_ms * 1e6),
+                "deadline_ns": deadline,
                 "gate": self.gate,
-                "robot_t_ns": payload.get("robot_t_ns", 0),
+                "robot_t_ns": robot_t,
             },
             now,
         )

@@ -87,7 +87,7 @@ feedback:
     r_arm_el_yaw: 0.1
 ```
 
-leaderへの電流は `−gain × sign × 残差` です（`sign` は `joints` の対応の符号）．controllerは，推定が有効で接触中，followerが `ACTIVE`，controllerが `following` のときだけ，適用の希望（gate）を立てます．leaderは，`feedback:` を書いた電流制御のグループ（`gravity_comp`，`impedance`）の関節だけで受け取ります．位置制御のグループや `free` には書けません．
+leaderへの電流は `−gain × sign × 残差` です（`sign` は `joints` の対応の符号）．controllerは，推定が有効で接触中，followerが `ACTIVE`，controllerが `following` のときだけ，適用の希望（gate）を立てます．期限は，推定の元になったfollowerの状態の時刻から `deadline_ms` です．推定が遅れて届き，その時点で期限を過ぎていれば送らず，controllerのstatusの `feedback_error` に理由を出します．leaderは，`feedback:` を書いた電流制御のグループ（`gravity_comp`，`impedance`）の関節だけで受け取ります．位置制御のグループや `free` には書けません．
 
 ```yaml
 - group: right_arm

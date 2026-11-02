@@ -21,7 +21,9 @@ ARM = [
 ]
 
 
-def estimate(cfg, residual, *, valid=True, contact=True, joints=None, unit="mA"):
+def estimate(
+    cfg, residual, *, valid=True, contact=True, joints=None, unit="mA", robot_t_ns=None
+):
     est = cfg.estimators["effort"]
     payload = {
         "robot": "robot",
@@ -30,7 +32,7 @@ def estimate(cfg, residual, *, valid=True, contact=True, joints=None, unit="mA")
         "residual": residual,
         "contact": contact,
         "valid": valid,
-        "robot_t_ns": 1,
+        "robot_t_ns": time.monotonic_ns() if robot_t_ns is None else robot_t_ns,
     }
     return Publisher("effort").make(Estimator.kind, payload)
 
@@ -127,13 +129,28 @@ def test_feedback_maps_residuals_to_leader_joints_with_sign_and_gain():
     residual[est.joint_names.index("r_arm_el_yaw")] = 20.0
     residual[est.joint_names.index("l_arm_el_yaw")] = 20.0
     now = time.monotonic_ns()
-    msg = feedback.make(estimate(cfg, residual), "ACTIVE", True, now)
+    msg = feedback.make(
+        estimate(cfg, residual, robot_t_ns=now - 30_000_000), "ACTIVE", True, now
+    )
     assert msg is not None and msg.kind == "feedback"
     p = msg.payload
     assert p["joints"] == ["r_arm_el_yaw", "l_arm_el_yaw"]
     assert p["effort"] == pytest.approx([-2.0, 2.0])  # -k * sign * residual
     assert p["unit"] == "mA" and p["gate"] is True
-    assert p["deadline_ns"] == now + 100_000_000
+    assert p["deadline_ns"] == now - 30_000_000 + 100_000_000  # from the robot sample
+
+
+def test_feedback_refuses_an_estimate_older_than_its_deadline():
+    cfg = parse_experiment(read_experiment(PATH))
+    controller = cfg.controllers["controller"]
+    zeros = [0.0] * len(cfg.estimators["effort"].joint_names)
+    now = time.monotonic_ns()
+    stale = estimate(cfg, zeros, robot_t_ns=now - 10_000_000_000)
+    assert controller.feedback.make(stale, "ACTIVE", True, now) is None
+    assert "stale" in controller.status()["feedback_error"]
+    assert controller.status()["feedback_gate"] is False
+    future = estimate(cfg, zeros, robot_t_ns=now + 1)
+    assert controller.feedback.make(future, "ACTIVE", True, now) is None
 
 
 @pytest.mark.parametrize(

@@ -57,6 +57,7 @@ Limitations:
 
 - Start is refused unless `goal_current_mA` is at most the EEPROM `current_limit`.
 - After the motors are rewritten to Mode 5, the standard `nodes/robot.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission`.
+- Every command on `experiment_bilateral`, `commission` included, loads the whole experiment, so it stops while the follower gravity models (`calibration/effort_gravity_<side>.yaml`) are missing. Identification works before the Mode is changed (still Mode 3), so identify first, then `commission`.
 - The configuration keys are under "Force feedback" in [Configuration](../reference/configuration.md).
 
 ## Checks before launch
