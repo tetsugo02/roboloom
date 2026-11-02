@@ -42,6 +42,7 @@ CONFIGURED = {
     "session",
     "commission",
     "watchdog-test",
+    "check-hold",
     "gravity-check",
     "tune-gravity",
     "capture-pose",
@@ -131,8 +132,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     init.add_argument("robot")
     init.add_argument("--root", default=".roboloom")
-    probe_cmd = sub.add_parser("probe", help="read-only inspection of a Dynamixel bus")
-    probe_cmd.add_argument("port")
+    probe_cmd = sub.add_parser(
+        "probe",
+        help="read-only inspection of a Dynamixel bus, or of a PiPER arm on a CAN interface",
+    )
+    probe_cmd.add_argument(
+        "port", help="serial port (Dynamixel) or CAN interface (PiPER)"
+    )
     probe_cmd.add_argument(
         "--ids", type=lambda text: [int(x) for x in text.split(",")], default=None
     )
@@ -151,6 +157,20 @@ def main(argv: list[str] | None = None) -> None:
     wd.add_argument("node")
     wd.add_argument("joint")
     wd.add_argument("--current-mA", type=float, default=30.0)
+    hold = sub.add_parser(
+        "check-hold",
+        parents=[configured, devices],
+        help="bench test: does a follower keep its pose once roboloom stops commanding it "
+        "(torques it; measures an unknown `unattended`)",
+    )
+    hold.add_argument("follower")
+    hold.add_argument(
+        "--tolerance",
+        type=float,
+        required=True,
+        help="largest change still counted as holding, in the follower's unit",
+    )
+    hold.add_argument("--seconds", type=float, default=10.0)
     gc = sub.add_parser(
         "gravity-check",
         parents=[configured, devices],
@@ -339,6 +359,12 @@ def _dispatch(args: argparse.Namespace) -> None:
             _load(args), args.node, args.joint, operator, args.current_mA
         )
         print("\n".join(result.lines()))
+        return
+    if args.command == "check-hold":
+        held = setup.check_hold(
+            _load(args), args.follower, operator, args.tolerance, args.seconds
+        )
+        print("\n".join(held.lines()))
         return
     if args.command == "gravity-check":
         check = setup.gravity_check(

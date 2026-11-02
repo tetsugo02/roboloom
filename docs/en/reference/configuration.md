@@ -88,7 +88,7 @@ Each follower model and each actuated input model (a leader that runs control la
 - The `release` confirmation tells you to support the `falls` devices and to take objects out of the `lets_go` devices; `stays` devices are not named. Release is confirmed for every device.
 - When a follower is `RELEASED`, or latched `FAULT` and does not hold unattended, its screen row says what to do.
 - `ESTOP` holds in place and latches, whatever the traits.
-- Only an `unattended` that the model declares `unknown` may be set in the follower YAML, to a measured value (`unattended: holds` or `torque_off`). A value that contradicts the model's declaration is refused when the configuration loads.
+- Only an `unattended` that the model declares `unknown` may be set in the follower YAML, to a measured value (`unattended: holds` or `torque_off`); `roboloom check-hold` ([CLI](cli.md)) measures it and writes it after confirmation. A value that contradicts the model's declaration is refused when the configuration loads.
 
 ## Launch options
 

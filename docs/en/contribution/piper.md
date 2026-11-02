@@ -60,9 +60,26 @@ limits:                  # rad; each joint inside the PiPER range
 
 Because of `unknown`, the exit confirmation offers no "quit with followers holding" and names the arms as ones that may fall at the end. The values are explained in "Behaviour without torque and when left alone" in [Configuration](../reference/configuration.md).
 
+## First steps on hardware
+
+1. Ask an administrator to create the CAN interfaces (1 Mbps, one name per arm).
+2. With the arm powered, check its state read-only. Nothing is enabled or moved.
+
+    ```bash
+    uv run roboloom probe can_left
+    ```
+
+    It shows the firmware, joint angles (rad and degrees), control mode, enabling, temperatures, faults and feedback rates.
+
+3. Measure whether it holds when left alone. Be ready to support the arm and clear the space around it. It holds the current pose for 2 s, closes the bus with the motors enabled, and reads the joints for up to `--seconds`. A change beyond `--tolerance` (rad) or a disabled motor means `torque_off`; otherwise `holds`. Typing `record` writes `unattended:` to the follower YAML. Finally, choose `release` to turn the torque off, or leave it as it is.
+
+    ```bash
+    uv run roboloom check-hold left --tolerance 0.02
+    ```
+
 ## To check on hardware
 
 - Whether the joint signs and zeros match the SDK's description.
-- Whether the arm holds when the bus is closed with the motors enabled. Once checked, write `unattended:` in the follower YAML.
+- Whether the arm holds when the bus is closed with the motors enabled (`check-hold`).
 - How fast the loop runs on 1 Mbps CAN when every command is preceded by the control mode, to choose `control_hz`.
 - The sign and size of the joint torque (`efforts_Nm`).

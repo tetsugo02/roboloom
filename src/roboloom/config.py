@@ -327,8 +327,9 @@ def read_config(
         file = (path.parent / relative).resolve()
         return {
             **_read(file),
-            "__dir__": str(file.parent),
-        }  # resolves files a node names, e.g. gravity models
+            "__dir__": str(file.parent),  # resolves files a node names (gravity models)
+            "__file__": str(file),  # where setup steps record measured values
+        }
 
     for role in ROLES:
         group = raw.pop(role, None) or {}

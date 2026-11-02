@@ -237,3 +237,42 @@ class PiperBus:
 
 def _name(value: Any) -> str:
     return getattr(value, "name", None) or f"0x{int(value):02X}"
+
+
+def probe(can: str) -> str:
+    """Read-only look at one arm: firmware, joints, modes, enable state, faults and
+    feedback rates. Never enables or moves the arm (it only sends queries)."""
+    bus = PiperBus(can, speed_percent=1)
+    try:
+        frames = bus._feedback()
+        status = frames["status"].arm_status
+        health = bus.read_health()
+        positions = bus.read_positions()
+        lines = [
+            f"PiPER on {can}: firmware {bus.firmware}",
+            (
+                f"control mode {_name(status.ctrl_mode)}, arm status "
+                f"{_name(status.arm_status)}, move mode {_name(status.mode_feed)}"
+            ),
+            "joints (rad / deg): "
+            + ", ".join(
+                f"joint{i} {p:+.4f} / {math.degrees(p):+.2f}"
+                for i, p in enumerate(positions, start=1)
+            ),
+            "enabled: " + ", ".join(str(on) for on in bus.enable_status()),
+            "temperature (C): " + ", ".join(f"{t:.0f}" for t in health.temperature_c),
+            "feedback Hz: "
+            + ", ".join(f"{k} {getattr(m, 'Hz', 0):.0f}" for k, m in frames.items()),
+            "faults: " + ("; ".join(health.faults) if health.faults else "none"),
+        ]
+        errors = status.err_status
+        limits = [
+            i
+            for i in range(1, DIMENSION + 1)
+            if getattr(errors, f"joint_{i}_angle_limit", False)
+        ]
+        if limits:
+            lines.append(f"joints at their angle limit: {limits}")
+        return "\n".join(lines)
+    finally:
+        bus.close()

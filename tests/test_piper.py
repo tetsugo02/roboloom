@@ -331,3 +331,113 @@ def test_a_policy_drives_two_mock_pipers_and_records_rad(tmp_path, monkeypatch):
     assert action["shape"] == [12] and action["names"][6] == "right.joint1"
     assert info["features"]["observation.effort"]["names"][0] == "left.joint1"
     assert info["robot_type"] == "piper"
+
+
+# -- check-hold -----------------------------------------------------------------
+
+
+class LeftAlone:
+    """A 6-joint bus whose joints sag by `sag` per read once it was closed while enabled
+    (sag 0: it holds), and whose motors may drop out (`drops`)."""
+
+    def __init__(self, sag: float = 0.0, drops: bool = False):
+        from roboloom.drivers.mock import MockBus
+
+        self.mock = MockBus(initial=0.0, dimension=6)
+        self.mock.values[0] = 0.5
+        self.sag, self.drops = sag, drops
+        self.closed = False
+
+    def __getattr__(self, name):
+        return getattr(self.mock, name)
+
+    def read_positions(self):
+        if self.closed and self.mock.enabled:
+            self.mock.values[0] -= self.sag
+        return self.mock.read_positions()
+
+    def read_state(self):
+        from roboloom.drivers.base import JointState
+
+        return JointState(self.read_positions())
+
+    def enable_status(self):
+        return [self.mock.enabled and not (self.closed and self.drops)] * 6
+
+    def close(self):
+        self.closed = True  # the motors keep their torque, as PiPER's close does
+
+
+def test_hold_trial_tells_holding_from_sagging():
+    from roboloom.setup.hold import hold_trial
+
+    follower = PiperFollower("left", follower_cfg())
+    clock = Clock()
+    for bus, holds in ((LeftAlone(), True), (LeftAlone(sag=0.01), False)):
+        result, watched = hold_trial(
+            follower, lambda b=bus: b, 2.0, 0.02, sleep=clock.sleep, clock=clock
+        )
+        assert result.holds is holds, result.lines()
+        assert result.unattended == ("holds" if holds else "torque_off")
+        assert watched is bus and bus.mock.enabled  # left as it was: the caller decides
+    result, _ = hold_trial(
+        follower,
+        lambda: LeftAlone(drops=True),
+        1.0,
+        0.02,
+        sleep=clock.sleep,
+        clock=clock,
+    )
+    assert not result.holds and "motors [1, 2, 3, 4, 5, 6] became disabled" in (
+        "\n".join(result.lines())
+    )
+
+
+def test_check_hold_records_the_measurement_in_the_follower_yaml(tmp_path, monkeypatch):
+    import yaml
+
+    from roboloom.config import load_config
+    from roboloom.errors import ConfigError
+    from roboloom.operator import ScriptedOperator
+    from roboloom.setup import check_hold
+
+    path = piper_project(tmp_path)
+    config = yaml.safe_load(path.read_text())
+    config["mode"] = "hardware"
+    path.write_text(yaml.safe_dump(config, sort_keys=False))
+    bus = LeftAlone()
+    monkeypatch.setattr(PiperFollower, "open_device", lambda self, mock: bus)
+    monkeypatch.setattr("roboloom.setup.hold.time.sleep", lambda s: None)
+    operator = ScriptedOperator(prompts=["record", "release"])
+    result = check_hold(path, "left", operator, tolerance=0.01, seconds=0.05)
+    assert result.holds
+    assert not bus.mock.enabled  # 'release' turned the torque off
+    text = (path.parent / "nodes" / "left.yaml").read_text()
+    assert "unattended: holds  # roboloom check-hold" in text
+    cfg = load_config(path)
+    assert cfg.followers["left"].traits().unattended == "holds"
+    assert cfg.followers["right"].traits().unattended == "unknown"
+    with pytest.raises(ConfigError, match="mock mode"):
+        check_hold(load_config(path, mock=True), "right", operator, tolerance=0.01)
+
+
+def test_check_hold_refuses_a_model_that_declares_it(tmp_path):
+    from conftest import mock_project
+
+    from roboloom.config import load_config
+    from roboloom.errors import ConfigError
+    from roboloom.operator import ScriptedOperator
+    from roboloom.setup import check_hold
+
+    project = mock_project(tmp_path / ".roboloom")
+    cfg = load_config(project / "config.yaml", mock=False)
+    with pytest.raises(ConfigError, match="declares unattended: holds"):
+        check_hold(cfg, "follower", ScriptedOperator(), tolerance=10)
+
+
+def test_probe_reads_a_network_interface_as_a_piper():
+    from roboloom.probe import is_network_interface
+
+    assert is_network_interface("lo")
+    assert not is_network_interface("/dev/ttyUSB0")
+    assert not is_network_interface("can_does_not_exist")

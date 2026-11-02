@@ -20,6 +20,7 @@ from .gravity import (
     open_tuning,
     release_trial,
 )
+from .hold import HoldResult, check_hold, hold_trial
 from .pose import capture_pose
 from .watchdog import WatchdogResult, watchdog_test, watchdog_trial
 
@@ -28,15 +29,18 @@ __all__ = [
     "CommissionPlan",
     "GravityCheck",
     "GravityFit",
+    "HoldResult",
     "Travel",
     "TuningSession",
     "WatchdogResult",
     "apply_commission",
     "calibrate_joints",
     "capture_pose",
+    "check_hold",
     "collect_holding_currents",
     "fit_gravity",
     "gravity_check",
+    "hold_trial",
     "identify_gravity",
     "measure_travel",
     "open_tuning",
