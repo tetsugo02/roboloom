@@ -1,28 +1,32 @@
-"""Shared lookups for setup steps: the node an experiment names, and the hardware gate."""
+"""Shared lookups for setup steps: the node a configuration names, and the hardware gate."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from ..config import ExperimentConfig, load_experiment
-from ..errors import ConfigError, HardwareError
+from ..errors import ConfigError
+
+
+def load(experiment: str | Path | ExperimentConfig) -> ExperimentConfig:
+    """A loaded configuration as is (the CLI loads it with the chosen options and mode),
+    or a path or robot name loaded with its default options."""
+    if isinstance(experiment, ExperimentConfig):
+        return experiment
+    return load_experiment(experiment)
 
 
 def experiment_node(
-    experiment: str | Path, node: str
+    experiment: str | Path | ExperimentConfig, node: str
 ) -> tuple[ExperimentConfig, object]:
-    cfg = load_experiment(experiment)
+    cfg = load(experiment)
     owner = {**cfg.inputs, **cfg.robots}.get(node)
     if owner is None:
         raise ConfigError(f"{node}: no such input or robot in {cfg.path}")
     return cfg, owner
 
 
-def require_hardware(cfg: ExperimentConfig, hardware: bool, what: str) -> None:
-    """Moving or writing real motors needs an explicit `hardware=True` (CLI: --hardware)."""
+def require_hardware(cfg: ExperimentConfig, what: str) -> None:
+    """Steps that only make sense on real motors refuse a mock configuration."""
     if cfg.mock:
-        raise ConfigError(f"{what} needs a hardware experiment; {cfg.path} is mock")
-    if not hardware:
-        raise HardwareError(
-            f"{what} acts on real motors; pass hardware=True (--hardware)"
-        )
+        raise ConfigError(f"{what} needs real motors; {cfg.path} runs in mock mode")

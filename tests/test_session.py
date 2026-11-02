@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import mock_project
 
-from roboloom.errors import HardwareError
+from roboloom.config import load_experiment
 from roboloom.runtime.session import EpisodeInfo, Session, SessionError
 
 pytestmark = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
@@ -23,7 +23,7 @@ def test_session_records_episodes_named_by_a_function(tmp_path):
         names.append(info)
         return f"pick #{info.index}"
 
-    with Session.launch(project / "experiment.yaml") as s:
+    with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)
         first = s.record(task, 1.0)
         dropped = s.record("drop me", 0.5, keep=lambda ep: False)
@@ -45,12 +45,12 @@ def test_session_records_episodes_named_by_a_function(tmp_path):
     assert tasks == {"pick #0", "pick #1"}
 
 
-def test_hardware_experiments_need_an_explicit_flag(tmp_path):
+def test_hardware_is_the_default_and_mock_overrides_it(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
-    path = project / "experiment.yaml"
-    path.write_text(path.read_text().replace("mode: mock", "mode: hardware"))
-    with pytest.raises(HardwareError, match="hardware=True"):
-        Session.launch(path)
+    path = project / "config.yaml"
+    path.write_text(path.read_text().replace("mode: mock\n", ""))
+    assert not load_experiment(path).mock  # no `mode:` means the hardware
+    assert load_experiment(path, mock=True).mock
 
 
 def test_cli_records_one_episode_by_name(tmp_path):
@@ -89,7 +89,8 @@ def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypa
         "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
     )
     with Session.launch(
-        project / "experiment_policy.yaml",
+        project / "config.yaml",
+        options=["policy"],
         policy="policies:creep",
         policy_kwargs={"step": 5.0},
     ) as s:
@@ -103,7 +104,7 @@ def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypa
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
     dataset = LeRobotDataset(
-        "local/rakuda2_eval", root=project / "datasets" / "rakuda2_eval"
+        "local/rakuda2-digit-eval", root=project / "datasets" / "rakuda2-digit-eval"
     )
     first = [float(dataset[i]["observation.state"][0]) for i in range(len(dataset))]
     assert first[-1] > first[0] + 20  # the policy moved joint 0 up
@@ -114,7 +115,7 @@ def test_a_policy_that_fails_to_load_blocks_start(tmp_path, monkeypatch):
     tests = str(Path(__file__).parent.resolve())
     monkeypatch.setenv("PYTHONPATH", tests)
     with Session.launch(
-        project / "experiment_policy.yaml", policy="policies:broken"
+        project / "config.yaml", options=["policy"], policy="policies:broken"
     ) as s:
         with pytest.raises(SessionError, match="failed"):
             s.wait_ready(3)
@@ -142,9 +143,7 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
 
     project = mock_project(tmp_path / ".roboloom")
     operator = ScriptedOperator()
-    with Session.launch(
-        project / "experiment.yaml", screen=True, operator=operator
-    ) as s:
+    with Session.launch(project / "config.yaml", screen=True, operator=operator) as s:
         assert s.actuated == ["leader"]  # the trigger spring runs a control law
         s.wait_ready(30)
         s.record("wave", 0.5)
@@ -159,7 +158,7 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
 
 def test_no_screen_or_question_without_a_terminal(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
-    with Session.launch(project / "experiment_camera.yaml") as s:  # pytest: not a tty
+    with Session.launch(project / "config.yaml") as s:  # pytest: not a tty
         assert s.screen is None and s.operator is None
 
 
@@ -172,9 +171,7 @@ def test_closing_releases_the_follower_unless_the_operator_says_hold(
     project = mock_project(tmp_path / ".roboloom")
     operator = ScriptedOperator(prompts=[answer])
     sent: list[str] = []
-    with Session.launch(
-        project / "experiment.yaml", screen=False, operator=operator
-    ) as s:
+    with Session.launch(project / "config.yaml", screen=False, operator=operator) as s:
         assert s.held == ["robot"]
         s.wait_ready(30)
         send = s.client.send
@@ -187,7 +184,7 @@ def test_release_while_following_stops_then_turns_the_torque_off(tmp_path):
     import time
 
     project = mock_project(tmp_path / ".roboloom")
-    with Session.launch(project / "experiment.yaml", screen=False, operator=None) as s:
+    with Session.launch(project / "config.yaml", screen=False, operator=None) as s:
         s.wait_ready(30)
         s.start("released mid-episode")
         s.release(confirm=True)

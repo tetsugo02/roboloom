@@ -9,16 +9,123 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .config import load_experiment, resolve_experiment
+import yaml
+
+from .config import (
+    INFER_OPTION,
+    ExperimentConfig,
+    Option,
+    is_configuration,
+    load_experiment,
+    parse_options,
+    resolve_experiment,
+    select_options,
+)
 from .errors import Cancelled, ConfigError, RoboloomError
 from .runtime.flow import build_flow
 
+if TYPE_CHECKING:
+    from .ui.launcher import LaunchPlan
 
-def main() -> None:
-    parser = argparse.ArgumentParser(prog="roboloom")
+# Subcommands whose first word may name the configuration (a robot under .roboloom/ or a
+# YAML file). Commands without other positional words always read it as one.
+CONFIGURED = {
+    "launch",
+    "run",
+    "record",
+    "infer",
+    "validate",
+    "session",
+    "commission",
+    "watchdog-test",
+    "gravity-check",
+    "tune-gravity",
+    "capture-pose",
+}
+ONLY_CONFIG = {"launch", "run", "record", "infer", "validate"}
+SESSION_OPERATIONS = (
+    "start",
+    "stop",
+    "save",
+    "discard",
+    "estop",
+    "release",
+    "home",
+    "quit",
+)
+
+
+class _Removed(argparse.Action):
+    """`--hardware` is gone: real devices are the default; say so instead of ignoring it."""
+
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, help=argparse.SUPPRESS)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        parser.error(
+            "--hardware is no longer needed: real devices are the default; "
+            "pass --mock for mock devices"
+        )
+
+
+def _names(text: str) -> list[str]:
+    return [n.strip() for n in text.split(",") if n.strip()]
+
+
+def _with_config(argv: list[str]) -> list[str]:
+    """Move an optional leading configuration word into `--config`, so `roboloom run`,
+    `roboloom run rakuda2` and `roboloom commission robot` all parse."""
+    if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
+        argv = ["launch", *argv]  # `roboloom`, `roboloom --mock`: the launcher
+    elif argv[0] not in CONFIGURED and is_configuration(argv[0]):
+        argv = ["launch", *argv]  # `roboloom rakuda2`
+    command, rest = argv[0], argv[1:]
+    if command not in CONFIGURED or not rest or rest[0].startswith("-"):
+        return argv
+    word = rest[0]
+    if (
+        command in ONLY_CONFIG
+        or (command == "session" and word not in SESSION_OPERATIONS)
+        or is_configuration(word)
+    ):
+        return [command, "--config", word, *rest[1:]]
+    return argv
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        prog="roboloom",
+        description="Without a command: the launcher (choose operation and options).",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
+    # --config: the robot under .roboloom/ (optional when there is only one) or a YAML file
+    configured = argparse.ArgumentParser(add_help=False)
+    configured.add_argument("--config", default=None, help=argparse.SUPPRESS)
+    configured.add_argument("--hardware", action=_Removed)
+    # devices: launch options and mock/hardware
+    devices = argparse.ArgumentParser(add_help=False)
+    devices.add_argument(
+        "--with",
+        dest="with_",
+        type=_names,
+        default=None,
+        metavar="A,B",
+        help="enable these options (and what they require)",
+    )
+    devices.add_argument(
+        "--without",
+        type=_names,
+        default=None,
+        metavar="A,B",
+        help="disable these options (also ones enabled by default)",
+    )
+    devices.add_argument(
+        "--mock", action="store_true", help="mock devices instead of the hardware"
+    )
     init = sub.add_parser(
         "init", help="create .roboloom/<robot>/ from the robot's configuration template"
     )
@@ -32,25 +139,23 @@ def main() -> None:
     probe_cmd.add_argument("--baudrate", type=int, default=1_000_000)
     com = sub.add_parser(
         "commission",
+        parents=[configured, devices],
         help="write the Operating Mode / Current Limit a node expects (EEPROM)",
     )
-    com.add_argument("experiment")
     com.add_argument("node")
-    com.add_argument("--hardware", action="store_true", required=True)
     wd = sub.add_parser(
         "watchdog-test",
+        parents=[configured, devices],
         help="bench test: does the Bus Watchdog stop a current-mode motor (torques it)",
     )
-    wd.add_argument("experiment")
     wd.add_argument("node")
     wd.add_argument("joint")
     wd.add_argument("--current-mA", type=float, default=30.0)
-    wd.add_argument("--hardware", action="store_true", required=True)
     gc = sub.add_parser(
         "gravity-check",
+        parents=[configured, devices],
         help="release the arm with and without gravity compensation and compare (torques it)",
     )
-    gc.add_argument("experiment")
     gc.add_argument("node")
     gc.add_argument("group", help="control group, e.g. right_arm")
     gc.add_argument("--poses", type=int, default=3)
@@ -60,15 +165,13 @@ def main() -> None:
         default=[1.0, 0.0],
         help="multiples of the configured gains to try at each pose, e.g. 1,0,2,-2",
     )
-    gc.add_argument("--hardware", action="store_true", required=True)
     tune = sub.add_parser(
         "tune-gravity",
+        parents=[configured, devices],
         help="tune gravity compensation joint by joint with a live guide (torques the arm)",
     )
-    tune.add_argument("experiment")
     tune.add_argument("node")
     tune.add_argument("group", help="gravity_comp group, e.g. right_arm")
-    tune.add_argument("--hardware", action="store_true")
     calib = sub.add_parser(
         "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
     )
@@ -82,12 +185,11 @@ def main() -> None:
     travel.add_argument("--out", required=True)
     pose = sub.add_parser(
         "capture-pose",
+        parents=[configured, devices],
         help="save the follower's current pose as poses/<name>.yaml (for home)",
     )
-    pose.add_argument("experiment")
     pose.add_argument("name")
     pose.add_argument("--force", action="store_true", help="replace an existing pose")
-    pose.add_argument("--hardware", action="store_true")
     ident = sub.add_parser(
         "identify-gravity", help="collect holding currents and fit a gravity model"
     )
@@ -99,22 +201,27 @@ def main() -> None:
     ident.add_argument(
         "--collect",
         action="store_true",
-        help="collect new poses first (needs --hardware)",
+        help="collect new poses first (torques the arm)",
     )
-    ident.add_argument("--hardware", action="store_true")
+    ident.add_argument("--hardware", action=_Removed)
     ident.add_argument(
         "--delta", type=int, default=30, help="approach offset in counts"
     )
     ident.add_argument("--max-rms-mA", type=float, default=15.0)
     sub.add_parser(
-        "validate", help="check an experiment and its dora dataflow"
-    ).add_argument("experiment")
-    run_cmd = sub.add_parser(
-        "run", help="start the dataflow with the operator screen (many episodes)"
+        "validate",
+        parents=[configured, devices],
+        help="check a configuration and its dora dataflow (opens no device)",
     )
-    run_cmd.add_argument("experiment")
-    run_cmd.add_argument(
-        "--hardware", action="store_true", help="explicitly allow opening real devices"
+    sub.add_parser(
+        "launch",
+        parents=[configured, devices],
+        help="the launcher: choose the operation and options, then start (default)",
+    )
+    run_cmd = sub.add_parser(
+        "run",
+        parents=[configured, devices],
+        help="start the dataflow with the operator screen (many episodes)",
     )
     run_cmd.add_argument(
         "--plain",
@@ -122,9 +229,10 @@ def main() -> None:
         help="line-by-line prompt instead of the fixed screen",
     )
     rec = sub.add_parser(
-        "record", help="record episodes of a fixed length (default: one) and exit"
+        "record",
+        parents=[configured, devices],
+        help="record episodes of a fixed length (default: one) and exit",
     )
-    rec.add_argument("experiment")
     rec.add_argument(
         "--plain", action="store_true", help="use non-interactive recording"
     )
@@ -136,13 +244,11 @@ def main() -> None:
         action="store_true",
         help="move to the controller's saved home pose before every episode",
     )
-    rec.add_argument(
-        "--hardware", action="store_true", help="explicitly allow opening real devices"
-    )
     inf = sub.add_parser(
-        "infer", help="run a policy experiment for fixed-length episodes"
+        "infer",
+        parents=[configured, devices],
+        help="run a learned policy for fixed-length episodes (enables option `policy`)",
     )
-    inf.add_argument("experiment")
     inf.add_argument(
         "--plain", action="store_true", help="use non-interactive inference"
     )
@@ -157,26 +263,12 @@ def main() -> None:
     inf.add_argument(
         "--task", default="", help="task given to the policy; with it, runs are saved"
     )
-    inf.add_argument(
-        "--hardware", action="store_true", help="explicitly allow opening real devices"
+    sess = sub.add_parser(
+        "session", parents=[configured], help="send one command to a running `run`"
     )
-    sess = sub.add_parser("session", help="send one command to a running `run`")
-    sess.add_argument("experiment")
-    sess.add_argument(
-        "operation",
-        choices=(
-            "start",
-            "stop",
-            "save",
-            "discard",
-            "estop",
-            "release",
-            "home",
-            "quit",
-        ),
-    )
+    sess.add_argument("operation", choices=SESSION_OPERATIONS)
     sess.add_argument("task", nargs="?", default="")
-    args = parser.parse_args()
+    args = parser.parse_args(_with_config(list(sys.argv[1:] if argv is None else argv)))
     try:
         _dispatch(args)
     except Cancelled as exc:
@@ -185,13 +277,37 @@ def main() -> None:
         raise SystemExit(f"error: {exc}") from None
 
 
+def _selection(args: argparse.Namespace, path: Path) -> tuple[str, ...] | None:
+    """The options the command line asks for (None: the configuration's defaults)."""
+    with_ = list(getattr(args, "with_", None) or [])
+    without = getattr(args, "without", None) or []
+    options = _declared(path)
+    if args.command == "infer" and INFER_OPTION in options:
+        with_.append(INFER_OPTION)
+    if not with_ and not without:
+        return None
+    return select_options(options, with_, without)
+
+
+def _declared(path: Path) -> dict[str, Option]:
+    """The configuration's options, read without loading its nodes."""
+    return parse_options((yaml.safe_load(path.read_text()) or {}).get("options"))
+
+
+def _load(args: argparse.Namespace) -> ExperimentConfig:
+    path = resolve_experiment(args.config)
+    return load_experiment(
+        path,
+        options=_selection(args, path),
+        mock=True if getattr(args, "mock", False) else None,
+    )
+
+
 def _dispatch(args: argparse.Namespace) -> None:
     from . import setup
     from .operator import TerminalOperator
 
     operator = TerminalOperator()
-    if getattr(args, "experiment", None):
-        args.experiment = str(resolve_experiment(args.experiment))
     if args.command == "init":
         from .project import init_project
 
@@ -203,7 +319,7 @@ def _dispatch(args: argparse.Namespace) -> None:
         print(probe(args.port, args.ids, args.baudrate))
         return
     if args.command == "commission":
-        plan = setup.plan_commission(args.experiment, args.node, hardware=args.hardware)
+        plan = setup.plan_commission(_load(args), args.node)
         if not plan.changes:
             print(f"{args.node}: EEPROM already matches the configuration")
             return
@@ -213,24 +329,13 @@ def _dispatch(args: argparse.Namespace) -> None:
         return
     if args.command == "watchdog-test":
         result = setup.watchdog_test(
-            args.experiment,
-            args.node,
-            args.joint,
-            operator,
-            args.current_mA,
-            hardware=args.hardware,
+            _load(args), args.node, args.joint, operator, args.current_mA
         )
         print("\n".join(result.lines()))
         return
     if args.command == "gravity-check":
         check = setup.gravity_check(
-            args.experiment,
-            args.node,
-            args.group,
-            operator,
-            args.poses,
-            args.scales,
-            hardware=args.hardware,
+            _load(args), args.node, args.group, operator, args.poses, args.scales
         )
         print("\n".join(check.lines()))
         return
@@ -241,11 +346,10 @@ def _dispatch(args: argparse.Namespace) -> None:
             raise ConfigError(
                 "tune-gravity requires an interactive terminal; no device was opened"
             )
-        mode = "mock" if load_experiment(args.experiment).mock else "hardware"
+        tuned = _load(args)
+        mode = "mock" if tuned.mock else "hardware"
         outcome = run(
-            lambda: setup.open_tuning(
-                args.experiment, args.node, args.group, hardware=args.hardware
-            ),
+            lambda: setup.open_tuning(tuned, args.node, args.group),
             f"tune-gravity  {args.node}.{args.group}  ({mode})",
         )
         print(outcome)
@@ -258,9 +362,7 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         return
     if args.command == "capture-pose":
-        path = setup.capture_pose(
-            args.experiment, args.name, hardware=args.hardware, force=args.force
-        )
+        path = setup.capture_pose(_load(args), args.name, force=args.force)
         print(f"saved {path}; select it with home: {{pose: ../poses/{path.name}}}")
         return
     if args.command == "measure-travel":
@@ -274,80 +376,187 @@ def _dispatch(args: argparse.Namespace) -> None:
             operator,
             data=args.data,
             collect=args.collect,
-            hardware=args.hardware,
             delta=args.delta,
             max_rms_mA=args.max_rms_mA,
         )
         print("\n".join(fit.lines()))
         return
-    from .runtime.session import Session, fifo_for, validate_flow
+    from .runtime.session import fifo_for, validate_flow
 
-    cfg = load_experiment(args.experiment)
     if args.command == "session":
+        # the FIFO belongs to the configuration file, whatever options the run chose
+        cfg = load_experiment(resolve_experiment(args.config), mock=True)
         send_session(
             fifo_for(cfg), " ".join(x for x in (args.operation, args.task) if x)
         )
         return
     if args.command == "validate":
+        cfg = _load(args)
         with tempfile.TemporaryDirectory(prefix="roboloom-flow-") as directory:
             validate_flow(cfg, Path(directory))
-        print(f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes)")
+        options = ", ".join(cfg.options) or "none"
+        print(
+            f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes; "
+            f"options: {options}; dataset: {cfg.repo_id})"
+        )
         return
+    _operate(args)
+
+
+def _operate(args: argparse.Namespace) -> None:
+    """run / record / infer / the launcher. `roboloom` without a robot starts with the
+    robot list; the options screen's Back returns to it."""
+    from .ui.launcher import BACK, choose_robot
+
+    terminal = sys.stdin.isatty() and sys.stdout.isatty()
+    if args.command == "launch" and not terminal:
+        raise ConfigError("the launcher needs an interactive terminal; use run --plain")
+    pick = args.command == "launch" and args.config is None
+    while True:
+        if pick:
+            robot = choose_robot()
+            if robot is None:
+                print("cancelled; nothing was started")
+                return
+            args.config = robot
+        if _operate_robot(args, terminal, back=pick) != BACK:
+            return
+
+
+def _operate_robot(
+    args: argparse.Namespace, terminal: bool, *, back: bool
+) -> str | None:
+    """One robot: in a terminal the options screen comes first unless the options were
+    given (--with/--without); quitting the operator screen with "choose options again"
+    comes back to it. Returns BACK when the operator went back to the robot list."""
+    from .ui.launcher import BACK, LaunchPlan, choose, load_last
+
+    path = resolve_experiment(args.config)
+    plain = getattr(args, "plain", False)
+    given = _selection(args, path)
+    asked = bool(getattr(args, "with_", None) or getattr(args, "without", None))
+    mock = bool(getattr(args, "mock", False))
+    plan = LaunchPlan(
+        mode="run" if args.command == "launch" else args.command,
+        options=given or (),
+        mock=mock,
+        task=getattr(args, "task", "") or "",
+        seconds=getattr(args, "seconds", 0.0) or 0.0,
+        episodes=getattr(args, "episodes", 1) or 1,
+        home=getattr(args, "home", False),
+    )
+    show = terminal and not plain and not asked
+    if show:
+        options = _declared(path)
+        last = load_last(path, options)
+        if args.command == "launch" and last is not None:
+            plan = replace(last, mock=last.mock or mock)
+        elif given is None:  # the options start as last time, else the defaults
+            plan = replace(
+                plan,
+                options=last.options if last is not None else select_options(options),
+            )
+    while True:
+        if show:
+            chosen = choose(path, plan, back=back)
+            if chosen == BACK:
+                return BACK
+            if not isinstance(chosen, LaunchPlan):
+                print("cancelled; nothing was started")
+                return None
+            plan = chosen
+        selected = plan.options if (show or given is not None) else None
+        cfg = load_experiment(path, options=selected, mock=True if plan.mock else None)
+        if terminal and not cfg.mock:
+            _commission(cfg)
+        outcome = _start(
+            args, cfg, plan, live=terminal and not plain, reselect=terminal
+        )
+        if outcome != "reselect":
+            return None
+        show = True
+
+
+def _commission(cfg: ExperimentConfig) -> None:
+    """Options can change a node's Operating Mode or Current Limit (EEPROM), which the
+    nodes check at startup. Before launching, show the differences and write them after
+    the operator confirms (as `roboloom commission` does)."""
+    from . import setup
+    from .operator import TerminalOperator
+
+    for name, owner in {**cfg.inputs, **cfg.robots}.items():
+        if getattr(owner, "expected_eeprom", None) is None:
+            continue
+        plan = setup.plan_commission(cfg, name)
+        if not plan.changes:
+            continue
+        print(f"{name}: the chosen options need different EEPROM values:")
+        print("\n".join(f"  {line}" for line in plan.lines()))
+        written = setup.apply_commission(plan, TerminalOperator())
+        print(f"{name}: wrote and read back {written} values")
+
+
+def _start(
+    args: argparse.Namespace,
+    cfg: ExperimentConfig,
+    plan: LaunchPlan,
+    *,
+    live: bool,
+    reselect: bool,
+) -> str:
+    from .runtime.session import Session
+
     policy = getattr(args, "policy", None)
-    live = not args.plain and sys.stdin.isatty() and sys.stdout.isatty()
+    policy_kwargs = getattr(args, "policy_kwargs", None)
     if live:
         from .ui.app import run_backend
         from .ui.backend import RecordingPlan, SessionBackend
 
         recording = None
-        if args.command in ("record", "infer"):
+        if plan.mode in ("record", "infer"):
             recording = RecordingPlan(
-                args.task or "inference",
-                args.seconds,
-                args.episodes,
-                save=args.command == "record" or bool(args.task),
-                home=getattr(args, "home", False),
+                plan.task or "inference",
+                plan.seconds,
+                plan.episodes,
+                save=plan.mode == "record" or bool(plan.task),
+                home=plan.home,
             )
         backend = SessionBackend(
             lambda: Session.launch(
                 cfg,
-                hardware=args.hardware,
                 policy=policy,
-                policy_kwargs=getattr(args, "policy_kwargs", None),
+                policy_kwargs=policy_kwargs,
                 screen=False,
                 operator=None,
             ),
-            mode=args.command,
+            mode=plan.mode,
             recording=recording,
+            reselect=reselect,
         )
         outcome = run_backend(backend)
         if outcome == "failed":
             raise ConfigError(backend.failure)
         if backend.session is not None:
             print(f"logs: {backend.session.log_dir}")
-        return
+        return outcome
     session = Session.launch(
-        cfg,
-        hardware=args.hardware,
-        policy=policy,
-        policy_kwargs=getattr(args, "policy_kwargs", None),
-        screen=False,
+        cfg, policy=policy, policy_kwargs=policy_kwargs, screen=False
     )
     try:
-        if args.command == "record":
+        if plan.mode == "record":
             from .ui.record import record
 
-            record(session, args.task, args.seconds, args.episodes, home=args.home)
-        elif args.command == "infer":
+            record(session, plan.task, plan.seconds, plan.episodes, home=plan.home)
+        elif plan.mode == "infer":
             from .ui.record import record
 
             # a task names the run and keeps it; without one nothing is saved
             record(
                 session,
-                args.task or "inference",
-                args.seconds,
-                args.episodes,
-                keep=lambda _: bool(args.task),
+                plan.task or "inference",
+                plan.seconds,
+                plan.episodes,
+                keep=lambda _: bool(plan.task),
             )
         else:
             _plain_loop(session.client, session.process)
@@ -359,10 +568,16 @@ def _dispatch(args: argparse.Namespace) -> None:
                 f"{session.log_path.read_text()[-4000:]}"
             )
         print(f"logs: {session.log_dir}")
+    return "done"
 
 
 def send_session(fifo: Path, line: str) -> None:
-    fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+    try:
+        fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+    except (FileNotFoundError, OSError) as exc:
+        raise ConfigError(
+            f"no running `run` to send to ({fifo}: {exc.strerror})"
+        ) from None
     try:
         os.write(fd, (line + "\n").encode())
     finally:

@@ -22,29 +22,37 @@ The current operation guide covers the [Leader](../controllers/leader.md). Joint
 
 Set the sensor serial numbers to match the hardware. Sensor names are also used as feature names in the dataset.
 
-## Experiment combinations
+## Launch options and combinations
 
-| Experiment | Leader | Sensors |
-| --- | --- | --- |
-| `rakuda2` / `rakuda2/experiment` | Standard | RealSense + left/right DIGIT |
-| `rakuda2/experiment_camera` | Standard | RealSense |
-| `rakuda2/experiment_gravity` | With gravity compensation | RealSense |
-| `rakuda2/experiment_bilateral` | With gravity compensation + force feedback (not verified on hardware) | None |
+There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enabled it uses the standard leader, the `joint` controller, and the RealSense. The template has the following launch options (all disabled by default). See [CLI](../reference/cli.md) for choosing them and "Launch options" in [Configuration](../reference/configuration.md) for the rules.
 
-To use gravity compensation together with DIGIT, add the following to `sensors` in the generated `experiment_gravity.yaml`.
+| Option | What it does | Requires / conflicts | Dataset name |
+| --- | --- | --- | --- |
+| `digit` | Records the left and right DIGIT | | Appends `-digit` |
+| `gravity` | Gravity-compensates the leader's left and right arms (`nodes/leader_gravity.yaml`) | | Unchanged |
+| `bilateral` | Force feedback (not verified on hardware); replaces the leader, controller, and robot and adds the estimator `effort` | Requires `gravity` | Appends `-bilateral` |
+| `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Requires `digit`, conflicts with `gravity` | Appends `-eval` |
 
-```yaml
-sensors:
-  camera: nodes/camera.yaml
-  digit_left: nodes/digit_left.yaml
-  digit_right: nodes/digit_right.yaml
-```
+| Enabled options | Leader | Sensors | `repo_id` |
+| --- | --- | --- | --- |
+| none | Standard | RealSense | `local/rakuda2` |
+| `digit` | Standard | RealSense + left/right DIGIT | `local/rakuda2-digit` |
+| `gravity` | With gravity compensation | RealSense | `local/rakuda2` |
+| `gravity`, `digit` | With gravity compensation | RealSense + left/right DIGIT | `local/rakuda2-digit` |
+| `gravity`, `bilateral` | With gravity compensation + force feedback (not verified on hardware) | RealSense | `local/rakuda2-bilateral` |
+| `digit`, `policy` | None (policy) | RealSense + left/right DIGIT | `local/rakuda2-digit-eval` |
 
-When adding them, also change `repo_id` and `output`, for example to `local/rakuda2-gravity-digit` and `datasets/rakuda2-gravity-digit`. Because the image features change, you cannot append to an existing RealSense-only dataset.
+Limitations:
+
+- Use `gravity` only after the measurement steps of the [Quick start](../quick-start/rakuda2.md) (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`). Loading is refused while measured values are still `SET_...`.
+- Enabling or disabling `gravity` changes the leader's Operating Mode. On a hardware launch from a terminal, the CLI shows the EEPROM differences and writes them after confirmation.
+- The policy of `policy` (`nodes/policy.yaml`) observes the DIGIT images, so it requires `digit`. It does not use the leader, so it cannot be combined with `gravity`, nor with `bilateral`, which requires `gravity`.
+- `gravity` does not change the dataset name because it records the same features as the standard leader; episodes with the standard and the gravity-compensated leader go into the same dataset.
+- Because the image features change, `digit` separates the dataset; DIGIT episodes are not appended to an existing RealSense-only dataset.
 
 ## Bilateral (not verified on hardware)
 
-`experiment_bilateral` is the combination that returns the external force on the follower to the leader. It has not been verified on hardware; only the mock tests pass.
+The option `bilateral` is the combination that returns the external force on the follower to the leader. It has not been verified on hardware; only the mock tests pass.
 
 | Node | Configuration | Contents |
 | --- | --- | --- |
@@ -56,8 +64,8 @@ When adding them, also change `repo_id` and `output`, for example to `local/raku
 Limitations:
 
 - Start is refused unless `goal_current_mA` is at most the EEPROM `current_limit`.
-- After the motors are rewritten to Mode 5, the standard `nodes/robot.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission`.
-- Every command on `experiment_bilateral`, `commission` included, loads the whole experiment, so it stops while the follower gravity models (`calibration/effort_gravity_<side>.yaml`) are missing. Identification works before the Mode is changed (still Mode 3), so identify first, then `commission`.
+- After the motors are rewritten to Mode 5, the standard `nodes/robot.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission robot`; on a hardware launch from a terminal, the CLI shows the differences before launching and writes them back after confirmation.
+- Every command with `bilateral` enabled (such as `roboloom commission robot --with bilateral`) loads the whole configuration, so it stops while the follower gravity models (`calibration/effort_gravity_<side>.yaml`) are missing. Identification works before the Mode is changed (still Mode 3), so identify first, then `commission`.
 - The configuration keys are under "Force feedback" in [Configuration](../reference/configuration.md).
 
 ## Checks before launch

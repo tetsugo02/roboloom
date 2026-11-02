@@ -26,6 +26,8 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | Left and right DIGIT `serial` |
 | `calibration/leader_right.yaml`, `calibration/leader_left.yaml` | Leader `port`, joint-to-URDF mapping, zero points, directions |
 
+`config.yaml` is the robot's configuration; gravity compensation, DIGIT, force feedback, policy execution and other features are launch options in it (see [Configuration](../reference/configuration.md)). The node files for each option are kept separately under `nodes/`.
+
 Apply values such as each joint's `homing_offset` from the `probe` results to the configuration. Gravity compensation deliberately changes the operating mode and Current Limit, so do not copy the current EEPROM as-is; check the difference from the configuration with `commission`, described below.
 
 Template values are not a safety guarantee for your robot. In particular, the follower's `limits.min/max` are wide initial values. Narrow them to the measured safe range, and verify the stop and torque-off methods on each robot unit. Even with the standard leader, the trigger is powered.
@@ -34,10 +36,10 @@ For the first path check, **change `torque: true` to `torque: false` in `nodes/r
 
 ## 2. Check the collection path with the standard leader
 
-You can start with the RealSense-only configuration. This experiment does not reference DIGIT, even if DIGIT is not connected yet.
+With no option enabled, the configuration uses only the standard leader and the RealSense. It does not reference DIGIT unless the option `digit` is enabled, even if DIGIT is not connected yet.
 
 ```bash
-uv run roboloom validate rakuda2/experiment_camera
+uv run roboloom validate
 ```
 
 If `SET_...` remains in a referenced configuration, its location is shown. Fill it in and validate again. `validate` does not open devices, so the hardware EEPROM and stop behavior must be checked separately.
@@ -45,10 +47,12 @@ If `SET_...` remains in a referenced configuration, its location is shown. Fill 
 If the EEPROM differs from the intended configuration, stop the dataflow and run `commission` while supporting both arms. Review the displayed changes before approving. This operation writes the EEPROM and reads it back.
 
 ```bash
-uv run roboloom commission rakuda2/experiment_camera robot --hardware
-uv run roboloom commission rakuda2/experiment_camera leader --hardware
-uv run roboloom run rakuda2/experiment_camera --hardware
+uv run roboloom commission robot
+uv run roboloom commission leader
+uv run roboloom run
 ```
+
+In a terminal, `run` first opens the [launcher](../reference/cli.md). Choose the operation `run`, leave every option unticked, and press Launch (Ctrl-S). To start without the launcher, use `uv run roboloom run --plain` (a line-input screen).
 
 IDs, models, and EEPROM are also checked at startup, and startup is refused on a mismatch. Check the status of all nodes and the sensor acquisition rates on the screen. Align the leader to the follower's pose, and once the controller is `following`, enter the following in order.
 
@@ -87,22 +91,26 @@ This operation only reads positions from the bus, but saves the result to YAML. 
 `identify-gravity --collect` **powers the motors** to measure holding current. Check the surroundings and how the arm is supported, and follow the on-screen instructions for pose placement and releasing your hands.
 
 ```bash
-uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect --hardware
-uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_left.yaml --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect --hardware
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_left.yaml --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect
 ```
+
+It asks whether to continue before energizing the motors.
 
 Check the output fit and warnings. Saving is refused if joint directions or measurement quality are inadequate. Fix the cause and measure again; do not proceed with a model that was not generated. Errors remain depending on the configuration and measured poses, so tune gain and hold next.
 
 ## 5. Configure and tune gravity compensation mode
 
-`nodes/leader_gravity.yaml` references the left and right `gravity_<side>.yaml`, `travel_<side>.yaml`, and `gravity_tuning_<side>.yaml`. After checking the current limits, watchdog, and travel, validate the configuration and check the EEPROM changes.
+Gravity compensation is the option `gravity`. Enabling it replaces the leader `nodes/leader.yaml` with `nodes/leader_gravity.yaml`. `nodes/leader_gravity.yaml` references the left and right `gravity_<side>.yaml`, `travel_<side>.yaml`, and `gravity_tuning_<side>.yaml`. After checking the current limits, watchdog, and travel, validate the configuration and check the EEPROM changes.
 
 ```bash
-uv run roboloom validate rakuda2/experiment_gravity
-uv run roboloom commission rakuda2/experiment_gravity leader --hardware
-uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware
-uv run roboloom tune-gravity rakuda2/experiment_gravity leader left_arm --hardware
+uv run roboloom validate --with gravity
+uv run roboloom commission leader --with gravity
+uv run roboloom tune-gravity leader right_arm --with gravity
+uv run roboloom tune-gravity leader left_arm --with gravity
 ```
+
+The leader's Operating Mode depends on whether `gravity` is enabled. If you later launch without `gravity`, the CLI shows the EEPROM differences before launching and writes them back after you confirm.
 
 Support both arms when tuning starts. The side not being tuned has torque off.
 
@@ -121,14 +129,16 @@ If the arm drops, increase gain; if it rises, decrease it. If starting to move f
 
 Before collecting, optionally configure [leader joint locking and torso-yaw compensation](../controllers/leader.md). Edit `control` in the active `leader*.yaml` and `couplings` in `controller.yaml`. Align the leader joints to be locked with the follower before launch. These settings work with both standard and gravity-compensated configurations, but the combination has not been tested on hardware.
 
-The default for the gravity-compensated configuration is **RealSense only**. To also record DIGIT, change the sensors and save location following the [Rakuda2 configuration examples](../robots/rakuda2.md). For the standard leader + RealSense + DIGIT, specify `rakuda2`.
+With only `gravity` enabled, the configuration records **RealSense only**. To also record DIGIT, enable the option `digit` as well (`--with gravity,digit`); the save location is separated automatically as `rakuda2-digit`. For the supported combinations and limitations, see [Rakuda2](../robots/rakuda2.md).
 
 Before moving the follower, verify the robot's safe range, low-speed following, stop, and torque off, then change `nodes/robot.yaml` to `torque: true`. Support both arms, and start after completing the EEPROM check with the dataflow stopped.
 
 ```bash
-uv run roboloom validate rakuda2/experiment_gravity
-uv run roboloom run rakuda2/experiment_gravity --hardware
+uv run roboloom validate --with gravity
+uv run roboloom run --with gravity
 ```
+
+With `--with`, the launcher is not opened. To start from the launcher, run `uv run roboloom`, choose `rakuda2` in the robot list, and tick `gravity`.
 
 1. Check the robot status, sensor acquisition rates, and recorder. If an initial pose ([home](../controllers/leader.md)) is configured, `home` moves both arms there before you start.
 2. Align the leader to the follower and confirm the controller is `following`. While an `aligning` warning is shown, match the pose and retry starting.
@@ -143,7 +153,7 @@ uv run roboloom run rakuda2/experiment_gravity --hardware
 Fixed-duration collection can also be done with the following. After the controller is ready, follow the on-screen instructions and press Enter to start.
 
 ```bash
-uv run roboloom record rakuda2/experiment_gravity --task "pick up the cup" --seconds 30 --episodes 3 --hardware
+uv run roboloom record --task "pick up the cup" --seconds 30 --episodes 3 --with gravity
 ```
 
 The same dataflow can be used from Python.
@@ -151,7 +161,7 @@ The same dataflow can be used from Python.
 ```python
 from roboloom import Session
 
-with Session.launch("rakuda2/experiment_gravity", hardware=True) as session:
+with Session.launch("rakuda2", options=["gravity"]) as session:
     session.wait_ready()
     result = session.record("pick up the cup", seconds=30)
     print(result.index, result.frames, result.warnings)
@@ -159,6 +169,6 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as session:
 
 The arms must be supported when the script ends as well. To build in manual stop and release, see [Python API](../reference/python-api.md).
 
-The default save location is `.roboloom/rakuda2/datasets/rakuda2-camera` (`output` is relative to the experiment YAML). Logs are kept in `.roboloom/rakuda2/logs/`. Keep the configuration, calibration, and tuning YAMLs under management, and you can resume collection into a dataset with the same configuration, FPS, and features.
+With only `gravity` enabled, the save location is `.roboloom/rakuda2/datasets/rakuda2` (`output` is relative to the configuration YAML); with `digit` it becomes `datasets/rakuda2-digit`. Logs are kept in `.roboloom/rakuda2/logs/<dataset name>-<time>/`. Keep the configuration, calibration, and tuning YAMLs under management, and you can resume collection into a dataset with the same configuration, FPS, and features.
 
 Interactive CLI commands use the [Textual operator screen](../reference/operator-screen.md): Ctrl-L for command input, Ctrl-N for panes, Ctrl-G for emergency stop, Ctrl-C/Ctrl-Q for exit confirmation. `record --plain` and non-TTY runs start without an Enter prompt. Python API displays remain input-free Rich views.

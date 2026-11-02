@@ -1,4 +1,4 @@
-# Follower effort estimator for experiment_bilateral.yaml. NOT verified on hardware.
+# Follower effort estimator for the `bilateral` option. NOT verified on hardware.
 # model_residual: measured current - g(q), with g identified on the follower
 #   (calibration/follower_<side>.yaml -> roboloom identify-gravity -> effort_gravity_<side>.yaml).
 #   Friction and inertia stay in the residual, so it is non-zero while the arm moves freely.

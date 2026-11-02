@@ -79,7 +79,7 @@ Prerequisites:
 - The dataflow is stopped.
 
 ```bash
-uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware
+uv run roboloom tune-gravity leader right_arm --with gravity
 ```
 
 1. Start it while supporting the arm. The current rises over `ramp_s` seconds. Other current-control groups have gravity gains and breakaway hold zeroed; this does not turn their torque off or disable range barriers and damping. Position-control groups may hold their targets. On tuning exit, all groups are explicitly released before the bus closes.
@@ -93,7 +93,7 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardw
 7. Save with the menu or `save` (`calibration/gravity_tuning_right.yaml`). Quit with `quit` or Ctrl-Q and choose Save, Discard, or Cancel (initial selection). Changes made during saving remain unsaved.
 8. Tune the left arm the same way with `left_arm`.
 
-The tuned values are used as-is by `roboloom run rakuda2/experiment_gravity --hardware`.
+The tuned values are used as-is by a launch with the option `gravity` enabled (`roboloom run --with gravity`, or `gravity` chosen in the launcher).
 
 ## 6. Safety mechanisms
 
@@ -118,7 +118,7 @@ The tuned values are used as-is by `roboloom run rakuda2/experiment_gravity --ha
 - To check the feel numerically, use `gravity-check`. In the same pose, it releases the arm with different gain multipliers and compares how much each joint moved.
 
 ```bash
-uv run roboloom gravity-check rakuda2/experiment_gravity leader right_arm --poses 1 --scales 1,0,2,-2 --hardware
+uv run roboloom gravity-check leader right_arm --poses 1 --scales 1,0,2,-2 --with gravity
 ```
 
 The menu and editable command input share `joint <name>`, `gain + / -`, `hold + / -`, `compare`, `resume`, `save`, `estop`, and `quit`. Ctrl-G releases at the next control step and latches ESTOP until restart; `resume` only recovers ordinary STOPPED states. Control and file saving run independently of rendering. Non-TTY invocation is rejected before device open. See [Operator screen](operator-screen.md) for focus, input, and confirmation keys.

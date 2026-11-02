@@ -23,9 +23,7 @@ from roboloom.ui.command import CommandInput
 async def test_textual_records_and_saves_a_mock_episode(tmp_path: Path):
     project = mock_project(tmp_path / ".roboloom")
     backend = SessionBackend(
-        lambda: Session.launch(
-            project / "experiment.yaml", screen=False, operator=None
-        ),
+        lambda: Session.launch(project / "config.yaml", screen=False, operator=None),
         mode="record",
         recording=RecordingPlan("Pilot collection", 0.6),
     )
@@ -51,7 +49,7 @@ async def test_textual_records_and_saves_a_mock_episode(tmp_path: Path):
         while backend.session.alive:
             assert time.monotonic() < deadline
             await asyncio.sleep(0.1)
-    assert not (project / "datasets" / "rakuda2.fifo").exists()
+    assert not (project / "config.fifo").exists()
 
 
 def test_non_tty_tuning_is_rejected_before_open(tmp_path: Path, monkeypatch):
@@ -71,7 +69,7 @@ def test_non_tty_tuning_is_rejected_before_open(tmp_path: Path, monkeypatch):
         [
             "roboloom",
             "tune-gravity",
-            str(project / "experiment_gravity.yaml"),
+            str(project / "config.yaml"),
             "leader",
             "right_arm",
         ],
@@ -114,7 +112,7 @@ def test_api_auto_screen_leaves_input_to_the_script(
     stdin = ScriptInput("answer from script\n")
     monkeypatch.setattr(sys, "stdin", stdin)
     monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
-    with Session.launch(project / "experiment.yaml", operator=None) as session:
+    with Session.launch(project / "config.yaml", operator=None) as session:
         assert session.screen is not None
         print("script output")
         assert input("script prompt: ") == "answer from script"

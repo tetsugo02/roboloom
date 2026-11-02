@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from ..config import CONFIG_FILE
 from ..errors import Cancelled
 from ..runtime.node import start_warning
 from ..runtime.session import Session, _ui_launch
@@ -49,8 +50,13 @@ class SessionBackend:
         *,
         mode: str = "run",
         recording: RecordingPlan | None = None,
+        reselect: bool = False,
     ):
+        """`reselect`: the quit dialog also offers to close and choose the launch options
+        again (the run then ends with the outcome "reselect")."""
         self.launch, self.mode, self.recording = launch, mode, recording
+        self.reselect = reselect
+        self._reselected = False
         self.session: Session | None = None
         self._publish: Publish = lambda _: None
         self._queue: queue.Queue[str] = queue.Queue()
@@ -134,6 +140,7 @@ class SessionBackend:
                 home=any(c.home is not None for c in session.cfg.controllers.values()),
                 release=bool(session.held or session.actuated),
                 hold=bool(session.held),
+                reselect=self.reselect,
             )
             readiness = start_warning(session.cfg, status, now) or ""
             warning = self._warning or readiness
@@ -206,9 +213,16 @@ class SessionBackend:
                 Operation("estop", "Emergency stop"),
                 Operation("quit", "Quit", confirmation="quit"),
             )
+            path = Path(session.cfg.path)
             return Snapshot(
-                str(Path(session.cfg.path).stem),
-                self.mode + (" / mock" if session.cfg.mock else " / hardware"),
+                path.parent.name if path.name == CONFIG_FILE else path.stem,
+                self.mode
+                + (" / mock" if session.cfg.mock else " / hardware")
+                + (
+                    f" / {', '.join(session.cfg.options)}"
+                    if session.cfg.options
+                    else ""
+                ),
                 self._phase,
                 tuple(nodes),
                 operations,
@@ -386,6 +400,8 @@ class SessionBackend:
             finally:
                 self._emergencies.put(False)
                 self._threads[1].join()
+                if self._reselected and outcome == "done":
+                    outcome = "reselect"
                 self._publish(Closed(outcome))
 
     def _monitor(self) -> None:
@@ -455,6 +471,7 @@ class SessionBackend:
             if self._closing:
                 return
             self._release = choice == "release"
+            self._reselected = choice == "reselect"
             self._closing = True
             self._cancel.set()
 

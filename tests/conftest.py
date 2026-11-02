@@ -5,10 +5,12 @@ from roboloom.config import read_experiment
 TEMPLATE = Path("src/roboloom/robots/rakuda2/template")
 
 
-def rakuda2_tree(name: str = "experiment") -> dict:
-    """The shipped Rakuda-2 template with its device placeholders filled, as `init` users do."""
-    tree = read_experiment(TEMPLATE / f"{name}.yaml")
-    tree["inputs"]["leader"]["port"] = "/dev/serial/by-id/leader"
+def rakuda2_tree(options: list[str] | None = None) -> dict:
+    """The shipped Rakuda-2 template with these launch options (None: the defaults) and its
+    device placeholders filled, as `init` users do."""
+    tree = read_experiment(TEMPLATE / "config.yaml", options)
+    if "leader" in tree["inputs"]:
+        tree["inputs"]["leader"]["port"] = "/dev/serial/by-id/leader"
     tree["robots"]["robot"]["port"] = "/dev/serial/by-id/follower"
     for limit in tree["robots"]["robot"]["limits"]:
         limit["min"], limit["max"] = 1000, 3000
@@ -32,7 +34,7 @@ def mock_project(root: Path) -> Path:
         "SET_REALSENSE_SERIAL": "RS1",
         "SET_DIGIT_LEFT_SERIAL": "D1",
         "SET_DIGIT_RIGHT_SERIAL": "D2",
-        "mode: hardware": "mode: mock",
+        "dataset_fps: 15": "mode: mock\ndataset_fps: 15",
         # the mock follower starts at 2048; a leader trigger resting there is aligned
         "rest: 2500": "rest: 2048",
     }

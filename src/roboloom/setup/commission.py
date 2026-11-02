@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..config import ExperimentConfig
 from ..errors import Cancelled, ConfigError, HardwareError
 from ..operator import Operator
 from .common import experiment_node, require_hardware
@@ -41,14 +42,14 @@ def _open(port: str, ids: list[int]):
 
 
 def plan_commission(
-    experiment: str | Path, node: str, *, hardware: bool = False
+    experiment: str | Path | ExperimentConfig, node: str
 ) -> CommissionPlan:
     """Read the node's EEPROM and list the values that differ from its configuration."""
     cfg, owner = experiment_node(experiment, node)
     expected = getattr(owner, "expected_eeprom", None)
     if expected is None:
         raise ConfigError(f"{node}: not a commissionable Dynamixel node")
-    require_hardware(cfg, hardware, "commission")
+    require_hardware(cfg, "commission")
     joints, ids, want = expected()
     plan = CommissionPlan(node, str(getattr(owner, "port", "")), list(ids))
     bus = _open(plan.port, plan.ids)

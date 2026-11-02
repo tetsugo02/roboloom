@@ -12,7 +12,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from roboloom.config import ExperimentConfig, load_experiment
+from roboloom.config import ExperimentConfig, env_options, load_experiment
 from roboloom.control.trace import RobotTrace
 from roboloom.controllers.base import Controller
 from roboloom.controllers.policy import PolicyController
@@ -703,7 +703,12 @@ def main() -> None:
     from dora import Node
 
     name, path = sys.argv[1:3]
-    cfg = load_experiment(path)
+    mode = os.environ.get("ROBOLOOM_MODE")
+    cfg = load_experiment(
+        path,
+        options=env_options(os.environ.get("ROBOLOOM_OPTIONS")),
+        mock=None if mode is None else mode == "mock",
+    )
     node = Node()
     if name == "session":
         _session(node, cfg)

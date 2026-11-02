@@ -3,7 +3,8 @@
 Each step returns its result as data and raises a `roboloom.errors` exception when it
 cannot proceed. Steps that need the person at the robot take an `Operator`
 (`TerminalOperator` in the CLI, `ScriptedOperator` in scripts and tests). Steps that
-torque motors or write EEPROM also need `hardware=True`.
+take a configuration accept a path, a robot name or a loaded `ExperimentConfig` (load it
+with `load_experiment(..., options=..., mock=...)` to choose its options and mode).
 """
 
 from ..control.tuning import TuningSession

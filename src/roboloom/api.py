@@ -10,7 +10,7 @@ The dora runner uses the same controller, safety and recorder components.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Self
 
@@ -65,13 +65,14 @@ class Experiment:
         cls,
         path: str | Path,
         *,
-        hardware: bool = False,
+        options: Iterable[str] | None = None,
+        mock: bool | None = None,
         sensors: dict[str, Callable[[], Sample | None]] | None = None,
         dataset=None,
     ) -> Experiment:
-        cfg = load_experiment(path)
-        if not cfg.mock and not hardware:
-            raise ValueError("hardware=True is required to open real devices")
+        """`options`: launch options to enable (None: their defaults); `mock`: override
+        the YAML's `mode` (None: as written, default hardware)."""
+        cfg = load_experiment(path, options=options, mock=mock)
         mapper = cfg.controller_for(cfg.robot.name)
         source = mapper.source
         if source is None:

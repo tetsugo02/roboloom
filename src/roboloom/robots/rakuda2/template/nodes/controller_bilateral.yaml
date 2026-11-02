@@ -1,4 +1,4 @@
-# controller.yaml with force feedback (experiment_bilateral.yaml). NOT verified on hardware.
+# controller.yaml with force feedback (option `bilateral` of ../config.yaml). NOT verified on hardware.
 # feedback.gain: follower joints whose estimated external effort is returned to the mapped
 #   leader joint as -gain * sign * residual (leader mA per follower mA). Start with one joint
 #   and a small gain; check the direction on hardware before adding more.
@@ -21,7 +21,7 @@ input_timeout_ms: 150
 # position-loop lag (optional, default 0). The head leader can be locked separately.
 couplings: []
 # Optional saved initial pose: the `home` command moves leader and follower there slowly,
-# and the leader returns to its normal laws one second after arriving. Save poses with `roboloom capture-pose <exp> <name>`
+# and the leader returns to its normal laws one second after arriving. Save poses with `roboloom capture-pose <name>`
 # (several names can coexist under ../poses/); choose one here. max_speed: counts/s.
 # A gravity leader needs `homing:` on its arm groups (leader_gravity.yaml).
 # home:

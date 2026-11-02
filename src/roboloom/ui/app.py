@@ -468,6 +468,11 @@ class OperatorApp(App[str]):
                     and self.snapshot.capabilities.hold
                     else ()
                 ),
+                *(
+                    ((("reselect", "Quit and choose options again (followers hold)"),))
+                    if self.snapshot.capabilities.reselect
+                    else ()
+                ),
             )
         )
         prompt = (

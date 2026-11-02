@@ -2,21 +2,30 @@
 
 Every roboloom operation is available as a Python function. The CLI (`roboloom ...`) is only a thin layer that calls those functions and prints the result.
 
-Add roboloom to your own uv project following [Installation](../quick-start/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Experiment and `.roboloom/` paths are relative to your project root.
+Add roboloom to your own uv project following [Installation](../quick-start/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Configuration and `.roboloom/` paths are relative to your project root.
 
 | Task | CLI | Python |
 | --- | --- | --- |
 | Create a project | `roboloom init rakuda2` | `roboloom.init_project("rakuda2")` |
-| Align the EEPROM | `roboloom commission <exp> <node> --hardware` | `setup.plan_commission(...)`, `setup.apply_commission(plan, operator)` |
+| Align the EEPROM | `roboloom commission [robot] <node>` | `setup.plan_commission(...)`, `setup.apply_commission(plan, operator)` |
 | Measure the range of motion | `roboloom measure-travel <cal> --out ...` | `setup.measure_travel(cal, out, operator)` |
-| Identify the gravity model | `roboloom identify-gravity <cal> --out ... --collect --hardware` | `setup.identify_gravity(cal, out, operator, collect=True, hardware=True)` |
-| Check gravity compensation | `roboloom gravity-check <exp> leader right_arm --hardware` | `setup.gravity_check(...)` |
-| Tune gravity compensation | `roboloom tune-gravity <exp> leader right_arm --hardware` | `setup.open_tuning(...)` → `TuningSession` |
-| Record an episode | `roboloom record <exp> --task ... --seconds 30 --hardware` | `Session.launch(...)` → `record(...)` |
-| Run with a policy | `roboloom infer <exp> --policy pkg:make --seconds 30 --hardware` | `Session.launch(exp, policy="pkg:make")` → `record(...)` |
-| Record continuously from the operation screen | `roboloom run <exp> --hardware` | The `Session.launch(...)` status screen and `start()` / `stop()` / `save()` |
+| Identify the gravity model | `roboloom identify-gravity <cal> --out ... --collect` | `setup.identify_gravity(cal, out, operator, collect=True)` |
+| Check gravity compensation | `roboloom gravity-check [robot] leader right_arm --with gravity` | `setup.gravity_check(...)` |
+| Tune gravity compensation | `roboloom tune-gravity [robot] leader right_arm --with gravity` | `setup.open_tuning(...)` → `TuningSession` |
+| Record an episode | `roboloom record [robot] --task ... --seconds 30` | `Session.launch(...)` → `record(...)` |
+| Run with a policy | `roboloom infer [robot] --policy pkg:make --seconds 30` | `Session.launch(cfg, options=["policy"], policy="pkg:make")` → `record(...)` |
+| Record continuously from the operation screen | `roboloom run [robot]` | The `Session.launch(...)` status screen and `start()` / `stop()` / `save()` |
 
-An experiment can be specified either by file path or by its name under `.roboloom/` (`rakuda2`, `rakuda2/experiment_gravity`).
+A configuration can be specified either by file path or by its robot name under `.roboloom/` (`rakuda2` is `.roboloom/rakuda2/config.yaml`).
+
+Launch options are chosen with `options=`: the listed options and the options they require are enabled. With `None` (the default), the options with `default: true` are enabled. Unlike the CLI's `--with` / `--without`, `options=` is the whole set to enable (it is not added to the default options). `mock=True` runs mock devices and `mock=False` real ones; `None` follows the YAML's `mode` (default `hardware`).
+
+```python
+from roboloom import load_experiment
+
+cfg = load_experiment("rakuda2", options=["gravity", "digit"])
+print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
+```
 
 ## 1. Collection and inference: `Session`
 
@@ -43,7 +52,7 @@ roboloom takes the same structure.
 ```python
 from roboloom import Session
 
-with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
+with Session.launch("rakuda2", options=["gravity"]) as s:
     s.wait_ready()  # wait until the leader is aligned with the follower
     result = s.record("pick up the cup", seconds=30)
     print(result.index, result.frames, result.warnings)
@@ -51,14 +60,16 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
 
 - `launch` waits until every node has started reporting its status.
 - Every `start` is checked: the follower must be within `alignment_tolerance` of the leader, not only at the first alignment. `record` waits for this (`ready_timeout`, default 60 s) before each episode; `start` raises `SessionError` when the arms differ.
-- Experiments that open real hardware require `hardware=True`.
+- Real hardware is the default. Pass `mock=True` to run mock devices.
+- `launch` uses `options` and `mock` only when the configuration is given as a path or robot name. When passing a loaded `ExperimentConfig`, choose them with `load_experiment(..., options=..., mock=...)` first.
+- Each node process receives the enabled options in `ROBOLOOM_OPTIONS` and the mode in `ROBOLOOM_MODE`.
 - Leaving the `with` block does the following:
   - Discards any in-progress episode.
   - If an `operator` is configured, asks you to support the arms. Enter releases the follower too; typing `hold` keeps the follower holding.
   - Stops the dataflow.
   - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target.
   - To decide from a script, call `s.close(release=True)` (release) or `s.close(release=False)` (hold).
-- Logs are kept in `logs/<experiment name>-<time>/` next to the experiment file.
+- Logs are kept in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`).
   - `dora.log`
   - The leader trace
   - The location is available as `s.log_dir`.
@@ -84,7 +95,7 @@ For `task`, you can pass either a string or a function that takes an `EpisodeInf
 | --- | --- |
 | `index` | Episode number in the dataset (number of saved episodes) |
 | `number` | Number recorded in this Session |
-| `experiment` | Name of the experiment file |
+| `experiment` | Name of the configuration file without extension (`config` for `.roboloom/<robot>/config.yaml`) |
 | `previous` | List of tasks saved in this Session |
 
 ```python
@@ -92,7 +103,7 @@ import itertools
 
 objects = itertools.cycle(["cup", "bottle", "sponge"])
 
-with Session.launch("rakuda2", hardware=True) as s:
+with Session.launch("rakuda2") as s:
     s.wait_ready()
     for _ in range(9):
         s.record(lambda info: f"pick up the {next(objects)}", seconds=20)
@@ -114,7 +125,7 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 - What `result` contains:
   - `metrics`: recorder metrics. Missing rate, valid action rate, control period distribution.
   - `warnings`: items that exceeded quality limits.
-- Quality limits can be changed in the experiment's `recorder.quality`.
+- Quality limits can be changed in `quality` of `nodes/recorder.yaml`.
   - `max_missing_rate` (default 0.05)
   - `min_action_valid_rate` (default 0.9)
   - `max_interval_ms` (default 100)
@@ -179,8 +190,8 @@ def load(checkpoint: str) -> MyPolicy:
 
 ```python
 with Session.launch(
-    "rakuda2/experiment_policy",
-    hardware=True,
+    "rakuda2",
+    options=["policy"],  # also enables digit (requires)
     policy="my_lab.policies:load",
     policy_kwargs={"checkpoint": "outputs/act/last"},
 ) as s:
@@ -207,14 +218,18 @@ with Session.launch(
   - Supporting the arm, placing a pose, pressing Enter, etc.
   - The CLI passes a `TerminalOperator`.
   - In scripts and tests, you can pass a `ScriptedOperator` with a list of answers.
-- Steps that move motors and steps that write the EEPROM require `hardware=True`.
+- Functions that take a configuration accept a path, a robot name, or a loaded `ExperimentConfig`. To choose options or the mode, load it with `load_experiment(..., options=..., mock=...)` and pass that.
+- `plan_commission`, `watchdog_test`, and `gravity_check` refuse a mock configuration.
 
 ```python
 from roboloom import setup
 from roboloom.operator import TerminalOperator
 
 op = TerminalOperator()
-plan = setup.plan_commission("rakuda2/experiment_gravity", "leader", hardware=True)
+from roboloom import load_experiment
+
+gravity = load_experiment("rakuda2", options=["gravity"])
+plan = setup.plan_commission(gravity, "leader")
 for line in plan.lines():
     print(line)
 setup.apply_commission(plan, op)  # write after confirmation
@@ -224,7 +239,6 @@ fit = setup.identify_gravity(
     ".roboloom/rakuda2/calibration/gravity_right.yaml",
     op,
     collect=True,
-    hardware=True,
 )
 for joint in fit.joints:
     print(joint.joint, f"{joint.explained:.0%}")
@@ -232,9 +246,7 @@ for joint in fit.joints:
 
 ```python
 # tune gravity compensation without the screen (e.g. automation that tries values in turn)
-tuning = setup.open_tuning(
-    "rakuda2/experiment_gravity", "leader", "right_arm", hardware=True
-)
+tuning = setup.open_tuning(gravity, "leader", "right_arm")
 try:
     tuning.start()
     tuning.key("]")  # gain +0.1 for the selected joint
@@ -256,8 +268,9 @@ finally:
 - A policy can be passed directly to `step(policy=...)`.
   - However, if the policy or sensors are slow, the control period is delayed too.
 - Run the real Rakuda-2 with `Session`.
-  - `from_yaml` rejects experiments that use a motor-controlling leader (trigger spring, gravity compensation).
-  - `from_yaml` also rejects experiments that use a policy controller.
+  - `from_yaml` rejects configurations that use a motor-controlling leader (trigger spring, gravity compensation).
+  - `from_yaml` also rejects configurations that use a policy controller.
+- In `Experiment.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)`, `options` and `mock` mean the same as in `load_experiment`.
 
 This mock example uses no devices or sample files from the repository. The `record` extra is required. Do not reuse its joint ranges or speeds on hardware.
 

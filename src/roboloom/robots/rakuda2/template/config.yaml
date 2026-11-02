@@ -1,0 +1,49 @@
+# Rakuda-2: leader teleoperation with the RealSense; the rest are launch options.
+# Start:  uv run roboloom            (launcher: choose run/record/infer and the options)
+#         uv run roboloom run --with gravity,digit      (no launcher)
+#         uv run roboloom run --mock                    (mock devices, no hardware)
+# Options replace, add or remove node files (`set:`). An option that changes the recorded
+# features names its own dataset (`dataset:`), appended to repo_id and output below.
+robot_id: rakuda2
+repo_id: local/rakuda2
+output: datasets/rakuda2
+dataset_fps: 15
+inputs:
+  leader: nodes/leader.yaml
+controllers:
+  controller: nodes/controller.yaml
+robots:
+  robot: nodes/robot.yaml
+sensors:
+  camera: nodes/camera.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml
+options:
+  digit:
+    help: record the left/right DIGIT tactile sensors
+    set:
+      sensors.digit_left: nodes/digit_left.yaml
+      sensors.digit_right: nodes/digit_right.yaml
+    dataset: digit
+  gravity:
+    help: gravity-compensated leader arms (after the measurement steps of README.md)
+    set:
+      inputs.leader: nodes/leader_gravity.yaml
+  bilateral:
+    help: force feedback from the follower to the leader (NOT verified on hardware)
+    requires: [gravity]
+    set:
+      inputs.leader: nodes/leader_bilateral.yaml
+      controllers.controller: nodes/controller_bilateral.yaml
+      robots.robot: nodes/robot_bilateral.yaml
+      estimators.effort: nodes/effort.yaml
+    dataset: bilateral
+  policy:
+    help: a learned policy drives the follower (`roboloom infer` turns this on)
+    requires: [digit]  # nodes/policy.yaml observes the DIGIT sensors
+    conflicts: [gravity]
+    set:
+      inputs.leader: null
+      controllers.controller: null
+      controllers.policy: nodes/policy.yaml
+    dataset: eval

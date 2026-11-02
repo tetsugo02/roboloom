@@ -1,16 +1,15 @@
 # Configuration
 
-## Specifying an experiment
+## Specifying the configuration
 
-`roboloom init rakuda2` creates experiment, node, and calibration YAML in `.roboloom/rakuda2/`. It does not overwrite an existing directory. The experiment name `rakuda2` refers to `experiment.yaml`, and `rakuda2/experiment_gravity` refers to `experiment_gravity.yaml`. You can also specify a file path.
+`roboloom init rakuda2` creates configuration, node, and calibration YAML in `.roboloom/rakuda2/`. It does not overwrite an existing directory. Each robot has one configuration (`config.yaml`); combinations of features are chosen with launch options. The robot name `rakuda2` refers to `.roboloom/rakuda2/config.yaml`. When `.roboloom/` holds a single robot it can be omitted; you can also specify a file path.
 
-## Experiment YAML
+## Configuration YAML
 
 ```yaml
 robot_id: rakuda2
 repo_id: local/rakuda2
 output: datasets/rakuda2
-mode: hardware
 dataset_fps: 15
 inputs:
   leader: nodes/leader.yaml
@@ -20,15 +19,81 @@ robots:
   robot: nodes/robot.yaml
 sensors:
   camera: nodes/camera.yaml
-  digit_left: nodes/digit_left.yaml
-  digit_right: nodes/digit_right.yaml
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
+options:
+  # see the next section
 ```
 
-Node YAML paths and `output` are relative to the experiment file's directory. The output location above is `.roboloom/rakuda2/datasets/rakuda2`. Node names are used as dora IDs and as dataset feature names. Currently, each experiment has one robot and one corresponding controller.
+`mode` is optional and defaults to `hardware`; `mode: mock` is also valid. The CLI's `--mock` and the Python API's `mock=` take precedence over the YAML's `mode`.
+
+Node YAML paths and `output` are relative to the configuration file's directory. With no option enabled, the output location above is `.roboloom/rakuda2/datasets/rakuda2`. Node names are used as dora IDs and as dataset feature names. Currently, each configuration has one robot and one corresponding controller.
 
 Each node's `type` selects the implementation. `SET_...` are robot-specific unset values; execution is refused if any remain in a referenced configuration. `validate` checks the consistency of the configuration and dataflow without opening devices. It does not check that EEPROM matches the hardware, image capture, or stopping behavior.
+
+## Launch options
+
+`options:` names the features chosen at launch (gravity compensation, extra sensors, and so on). Each option replaces, adds, or removes node files. The node files under `nodes/` stay split by feature; an option only chooses which of them are used.
+
+| Key | Meaning |
+| --- | --- |
+| `help` | Description shown in the launcher |
+| `default` | `true` enables it when nothing is specified (default `false`) |
+| `requires` | List of options enabled together with it |
+| `conflicts` | List of options that cannot be used at the same time |
+| `set` | Maps `<role>.<node>` (role one of `inputs`, `controllers`, `robots`, `sensors`, `estimators`) to a node file; `null` removes that node |
+| `dataset` | Short name appended to the dataset name while the option is enabled |
+
+The rules are:
+
+- Enabling an option also enables the options in its `requires` and disables those in `conflicts`. Disabling one also disables the options that require it.
+- Two enabled options setting the same node to different files is an error, unless one has the other in its `requires`; then the requiring (dependent) one wins. In the template, `bilateral`'s leader replaces `gravity`'s.
+- Unknown option names are an error.
+- The `dataset` names of the enabled options are appended with `-`, in declaration order, to `repo_id` and `output`, so episodes of different shapes do not mix in one dataset.
+- Loading is refused when an option without `dataset` changes the recorded features.
+
+The options of the template (`src/roboloom/robots/rakuda2/template/config.yaml`):
+
+```yaml
+options:
+  digit:
+    help: record the left/right DIGIT tactile sensors
+    set:
+      sensors.digit_left: nodes/digit_left.yaml
+      sensors.digit_right: nodes/digit_right.yaml
+    dataset: digit
+  gravity:
+    help: gravity-compensated leader arms (after the measurement steps of README.md)
+    set:
+      inputs.leader: nodes/leader_gravity.yaml
+  bilateral:
+    help: force feedback from the follower to the leader (NOT verified on hardware)
+    requires: [gravity]
+    set:
+      inputs.leader: nodes/leader_bilateral.yaml
+      controllers.controller: nodes/controller_bilateral.yaml
+      robots.robot: nodes/robot_bilateral.yaml
+      estimators.effort: nodes/effort.yaml
+    dataset: bilateral
+  policy:
+    help: a learned policy drives the follower (`roboloom infer` turns this on)
+    requires: [digit]  # nodes/policy.yaml observes the DIGIT sensors
+    conflicts: [gravity]
+    set:
+      inputs.leader: null
+      controllers.controller: null
+      controllers.policy: nodes/policy.yaml
+    dataset: eval
+```
+
+| Enabled options | `repo_id` |
+| --- | --- |
+| none | `local/rakuda2` |
+| `digit` | `local/rakuda2-digit` |
+| `digit`, `policy` | `local/rakuda2-digit-eval` |
+| `gravity`, `bilateral` | `local/rakuda2-bilateral` |
+
+`output` gets the same name (for example `datasets/rakuda2-digit`). Check which options are enabled and what the dataset is called with, for example, `roboloom validate --with digit`. See [CLI](cli.md) for choosing options and [Rakuda2](../robots/rakuda2.md) for the combinations and limitations on Rakuda2.
 
 ## Joint locking and compensation
 
@@ -39,7 +104,7 @@ The leader node's `control` selects a law per joint group, such as `free` (torqu
 !!! warning "Not verified on hardware"
     This is the path that returns the external force on the follower to the leader. Only the mock tests pass. See [Bilateral control design](../contribution/bilateral.md) for the design and the remaining stages.
 
-Add `estimators` to the experiment YAML and reference the estimator from the controller's `feedback`. You do not write edges; the path below follows from each node's references.
+Add `estimators` to the configuration and reference the estimator from the controller's `feedback`. In the template, the option `bilateral` adds `estimators.effort` and replaces the leader, controller, and robot with the node files for feedback. You do not write edges; the path below follows from each node's references.
 
 ```text
 leader ──sample──► controller ──command──► robot ──state──► estimator
@@ -71,7 +136,7 @@ An estimator computes a per-joint residual (measured − predicted for free moti
 ```bash
 uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml
 uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml \
-    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware
+    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect
 ```
 
 Because the follower arm mixes XM540 and XM430 motors, each joint is identified separately (`shared_parameters: false`), which needs more poses than the leader. Stop the follower node during identification.
@@ -109,7 +174,7 @@ gate × (clip(received current, ±max_mA) − kd × velocity)
 
 The feedback current stays inside the same `max_current_mA` and EEPROM Current Limit as gravity compensation, so near the limit it is clipped. Raising the Current Limit also raises the force left on the arm if the host stops (an XC330 does not stop its current when the Bus Watchdog fires).
 
-An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One experiment records at most one estimator (a second one collides on the feature names and is refused).
+An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One configuration records at most one estimator (a second one collides on the feature names and is refused).
 
 At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`Experiment`) does not handle estimators.
 
@@ -153,12 +218,12 @@ There was one stall of about 120 ms during the run. Stalls of the same size also
 
 With the `record` extra, data is saved as LeRobotDataset 0.6.1. Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by zero values and validity flags. `task` is recorded in each frame.
 
-You can append further episodes to the same dataset. On resume, FPS and feature compatibility are checked. If you change the sensor configuration, use a separate `repo_id` / `output`.
+You can append further episodes to the same dataset. On resume, FPS and feature compatibility are checked. Give an option that changes the recorded features a `dataset`, so it gets a dataset of its own (see "Launch options").
 
 Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_valid_rate`, and `max_interval_ms` in `recorder.quality`. Check the metrics and warnings in the save result.
 
 ## Managing logs and configuration
 
-Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and the robot's per-tick state (positions, velocities, currents, target, mode) to `<robot name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
+Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`); the dataset name tells which options were enabled. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and the robot's per-tick state (positions, velocities, currents, target, mode) to `<robot name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs (`config.fifo`) are excluded by the generated `.roboloom/.gitignore`.
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).

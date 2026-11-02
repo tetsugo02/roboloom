@@ -26,6 +26,8 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | 左右DIGITの `serial` |
 | `calibration/leader_right.yaml`, `calibration/leader_left.yaml` | leaderの `port`，関節とURDFの対応，零点，方向 |
 
+`config.yaml` は機体の設定で，重力補償・DIGIT・力の逆送・方策実行などの機能を起動オプションとして持ちます（[設定](../reference/configuration.md)）．ノードファイルはオプションごとに `nodes/` に分かれています．
+
 `probe` の結果から，各関節の `homing_offset` などを設定へ反映します．重力補償では動作モードとCurrent Limitを意図的に変えるので，現在のEEPROMをそのままコピーせず，後述の `commission` で設定との差を確認します．
 
 テンプレートの値は機体に対する安全保証ではありません．とくにfollowerの `limits.min/max` は広い初期値です．実測した安全な範囲へ狭め，停止・脱力方法も機体ごとに確かめます．通常leaderでもトリガーには通電します．
@@ -34,10 +36,10 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 
 ## 2. 通常leaderで収集経路を確認
 
-最初はRealSenseのみの構成を使えます．DIGITをまだ接続しない場合も，この実験なら参照しません．
+オプションを何も有効にしない構成は，通常leaderとRealSenseだけを使います．DIGITをまだ接続していなくても，オプション `digit` を有効にしなければ参照しません．
 
 ```bash
-uv run roboloom validate rakuda2/experiment_camera
+uv run roboloom validate
 ```
 
 参照する設定に `SET_...` が残っていれば，場所が表示されます．埋めてから再検証します．`validate` はデバイスを開かないので，実機のEEPROMや停止挙動の照合は別途必要です．
@@ -45,10 +47,12 @@ uv run roboloom validate rakuda2/experiment_camera
 EEPROMが意図した設定と違う場合は，dataflowを止め，両腕を支えた状態で `commission` を実行します．表示された変更を確認してから承認します．EEPROMを書き込み，読み戻す操作です．
 
 ```bash
-uv run roboloom commission rakuda2/experiment_camera robot --hardware
-uv run roboloom commission rakuda2/experiment_camera leader --hardware
-uv run roboloom run rakuda2/experiment_camera --hardware
+uv run roboloom commission robot
+uv run roboloom commission leader
+uv run roboloom run
 ```
+
+`run` は端末ではまず [ランチャー](../reference/cli.md) を開きます．操作 `run` を選び，オプションのチェックをすべて外したまま Launch（Ctrl-S）を押します．ランチャーを開かずに起動するときは `uv run roboloom run --plain` を使います（行入力の画面になります）．
 
 起動時にもID・モデル・EEPROMを照合し，不一致なら拒否します．画面で全ノードの状態とセンサーの取得周期を確認します．leaderをfollowerの姿勢へ揃え，controllerが `following` になったら，次を順に入力します．
 
@@ -87,22 +91,26 @@ uv run roboloom measure-travel .roboloom/rakuda2/calibration/leader_left.yaml --
 `identify-gravity --collect` は保持電流を測るため **モーターに通電** します．周囲と支持方法を確認し，画面の姿勢配置・手を離す指示に従います．
 
 ```bash
-uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect --hardware
-uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_left.yaml --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect --hardware
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_left.yaml --out .roboloom/rakuda2/calibration/gravity_left.yaml --collect
 ```
+
+通電の前に，続けてよいかを確認します．
 
 出力の適合度と警告を確認します．関節方向や計測品質が不適切だと保存を拒否します．原因を直して再計測し，未生成のモデルで次へ進まないでください．設定・測定した姿勢によって誤差が残るため，次にgainとholdを調整します．
 
 ## 5. 重力補償モードを設定・調整
 
-`nodes/leader_gravity.yaml` が左右の `gravity_<side>.yaml`，`travel_<side>.yaml`，`gravity_tuning_<side>.yaml` を参照します．電流上限・watchdog・可動域を確認した上で設定を検証し，EEPROMの変更を確認します．
+重力補償はオプション `gravity` です．有効にすると，leaderが `nodes/leader.yaml` から `nodes/leader_gravity.yaml` に置き換わります．`nodes/leader_gravity.yaml` が左右の `gravity_<side>.yaml`，`travel_<side>.yaml`，`gravity_tuning_<side>.yaml` を参照します．電流上限・watchdog・可動域を確認した上で設定を検証し，EEPROMの変更を確認します．
 
 ```bash
-uv run roboloom validate rakuda2/experiment_gravity
-uv run roboloom commission rakuda2/experiment_gravity leader --hardware
-uv run roboloom tune-gravity rakuda2/experiment_gravity leader right_arm --hardware
-uv run roboloom tune-gravity rakuda2/experiment_gravity leader left_arm --hardware
+uv run roboloom validate --with gravity
+uv run roboloom commission leader --with gravity
+uv run roboloom tune-gravity leader right_arm --with gravity
+uv run roboloom tune-gravity leader left_arm --with gravity
 ```
+
+`gravity` の有無でleaderのOperating Modeが変わります．このあと `gravity` なしで起動すると，CLIは起動前にEEPROMの差分を表示し，確認してから書き戻します．
 
 調整開始時は両腕を支えます．調整対象でない側は脱力しています．
 
@@ -121,14 +129,16 @@ uv run roboloom tune-gravity rakuda2/experiment_gravity leader left_arm --hardwa
 
 収集前に，必要なら [leaderの関節固定と腰yaw相殺](../controllers/leader.md) を設定します．使用する `leader*.yaml` の `control` と `controller.yaml` の `couplings` を変更します．固定するleader関節は起動前にfollowerへ揃えます．通常・重力補償付き構成のどちらでも使える設定ですが，組み合わせの実機動作は未検証です．
 
-重力補償付き構成の既定は **RealSenseのみ** です．DIGITも記録するときは [Rakuda2の構成例](../robots/rakuda2.md) に従いセンサーと保存先を変更します．通常leader + RealSense + DIGITなら `rakuda2` を指定します．
+`gravity` だけを有効にした構成は **RealSenseのみ** を記録します．DIGITも記録するときはオプション `digit` も有効にします（`--with gravity,digit`）．保存先は自動で `rakuda2-digit` に分かれます．使える組み合わせと制約は [Rakuda2](../robots/rakuda2.md) を参照してください．
 
 followerを動かす前に，機体の安全範囲・低速での追従・停止・脱力を確認し，`nodes/robot.yaml` を `torque: true` に変更します．両腕を支え，dataflow停止状態でEEPROMの確認を済ませてから起動します．
 
 ```bash
-uv run roboloom validate rakuda2/experiment_gravity
-uv run roboloom run rakuda2/experiment_gravity --hardware
+uv run roboloom validate --with gravity
+uv run roboloom run --with gravity
 ```
+
+`--with` を指定するとランチャーを開きません．ランチャーから起動する場合は `uv run roboloom` を実行し，ロボットの一覧で `rakuda2` を選んでから `gravity` にチェックを入れます．
 
 1. robotの状態，センサー取得周期，recorderを確認します．初期姿勢（[home](../controllers/leader.md)）を設定した場合は，`home` で両方を初期姿勢へ動かしてから始められます．
 2. leaderをfollowerに揃え，controllerの `following` を確認します．`aligning` の警告中は，姿勢を合わせてから開始を再試行します．
@@ -143,7 +153,7 @@ uv run roboloom run rakuda2/experiment_gravity --hardware
 一定時間の収集は次でも行えます．controllerの準備後，画面の指示に従いEnterで開始します．
 
 ```bash
-uv run roboloom record rakuda2/experiment_gravity --task "pick up the cup" --seconds 30 --episodes 3 --hardware
+uv run roboloom record --task "pick up the cup" --seconds 30 --episodes 3 --with gravity
 ```
 
 Pythonからは同じdataflowを使えます．
@@ -151,7 +161,7 @@ Pythonからは同じdataflowを使えます．
 ```python
 from roboloom import Session
 
-with Session.launch("rakuda2/experiment_gravity", hardware=True) as session:
+with Session.launch("rakuda2", options=["gravity"]) as session:
     session.wait_ready()
     result = session.record("pick up the cup", seconds=30)
     print(result.index, result.frames, result.warnings)
@@ -159,6 +169,6 @@ with Session.launch("rakuda2/experiment_gravity", hardware=True) as session:
 
 スクリプト終了時も腕の支持が必要です．手動の停止・解放を組み込む場合は [Python API](../reference/python-api.md) を参照してください．
 
-既定の保存先は `.roboloom/rakuda2/datasets/rakuda2-camera` です（`output` は実験YAMLからの相対パス）．ログは `.roboloom/rakuda2/logs/` に残ります．設定・校正・調整のYAMLを管理し，同じ設定・FPS・featureのデータセットへ収集を再開できます．
+`gravity` だけを有効にしたときの保存先は `.roboloom/rakuda2/datasets/rakuda2` です（`output` は設定YAMLからの相対パス）．`digit` を有効にすると `datasets/rakuda2-digit` になります．ログは `.roboloom/rakuda2/logs/<データセット名>-<時刻>/` に残ります．設定・校正・調整のYAMLを管理し，同じ設定・FPS・featureのデータセットへ収集を再開できます．
 
 対話CLIは [Textual操作画面](../reference/operator-screen.md) を使います．Ctrl-Lで入力，Ctrl-Nでペイン移動，Ctrl-Gで非常停止，Ctrl-C/Ctrl-Qで終了確認です．`record --plain` と非TTYはEnter待ちなしで始めます．Python APIは入力を読まないRich表示を維持します．
