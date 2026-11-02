@@ -554,6 +554,11 @@ def identify_gravity(
     )
     out = Path(out)
     data_path = Path(data) if data else out.with_suffix(".npz")
+    # The fit refuses an unconfirmed calibration: say so before the operator holds poses.
+    if cal.data.get("confirmed") is not True:
+        raise ConfigError(
+            f"{cal.path}: check the URDF mapping, zeros and directions, then set confirmed: true"
+        )
     if collect:
         if not hardware:
             raise HardwareError(

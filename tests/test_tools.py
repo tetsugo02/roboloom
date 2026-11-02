@@ -84,6 +84,21 @@ def test_fit_gravity_refuses_unconfirmed_wrong_or_noisy(tmp_path):
         fit_gravity(cal, tmp_path / "data.npz", tmp_path / "g.yaml", max_rms_mA=2.0)
 
 
+def test_identify_gravity_refuses_unconfirmed_before_collecting(tmp_path, monkeypatch):
+    cal = toy_calibration(tmp_path)
+    cal.data["confirmed"] = False
+    collected = []
+    monkeypatch.setattr(
+        "roboloom.setup.gravity.collect_holding_currents",
+        lambda *a, **k: collected.append(a),
+    )
+    with pytest.raises(ConfigError, match="confirmed"):
+        setup.identify_gravity(
+            cal, tmp_path / "g.yaml", None, collect=True, hardware=True
+        )
+    assert not collected
+
+
 class FakeDynamixel:
     """Registers of a commissioned-or-not bus for `commission`."""
 
