@@ -461,12 +461,13 @@ class OperatorApp(App[str]):
                     "hold",
                     "Quit with followers holding"
                     if self.snapshot.capabilities.hold
+                    else "Quit without releasing"
+                    if self.snapshot.capabilities.torqued
                     else "Quit",
                 ),
                 *(
                     ((("release", "Done: release torque and quit"),))
-                    if self.snapshot.capabilities.release
-                    and self.snapshot.capabilities.hold
+                    if self.snapshot.capabilities.torqued
                     else ()
                 ),
                 *(
@@ -491,7 +492,7 @@ class OperatorApp(App[str]):
         caps = self.snapshot.capabilities
         notes = [
             f"When the session ends, {caps.quit_note}." if caps.quit_note else "",
-            f"Releasing torque: {caps.release_note}." if caps.hold else "",
+            f"Releasing torque: {caps.release_note}." if caps.torqued else "",
         ]
         prompt = (
             "Save tuning changes before quitting? The tuning device will release torque."

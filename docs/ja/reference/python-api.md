@@ -84,7 +84,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - 腕を支えてから Enter を押すと，follower のトルクも切って終了します．
   - `hold` と入力すると，follower は保持を続けたまま終了します．
   - follower が `torque: false` のときは，leader の確認だけを出します．
-  - 確認文は機器の性質から作ります．支える機器（`falls`）と物を外す機器（`lets_go`）を名前で示し，保持できる follower がなければ `hold` は選べません．`s.release_note()` で，`release` の前にすることを文字列で得られます．`release(confirm=False)` は，これを添えた `HardwareError` を出します．
+  - 確認文は機器の性質から作ります．支える機器（`falls`）と物を外す機器（`lets_go`）を名前で示し，保持できる follower がなければ，`hold` は脱力せずに終了することを示します（その follower は保持しないかもしれません）．`s.release_note()` で，`release` の前にすることを文字列で得られます．`release(confirm=False)` は，これを添えた `HardwareError` を出します．
   - `operator=None`，または標準入力が端末でない場合は，この確認を出さず，follower は保持を続けます．`screen=False` だけでは確認は無効になりません．
   - 保持を続けた follower は，電源を切る前に腕を支えるか安全な姿勢に下ろしてください．
 

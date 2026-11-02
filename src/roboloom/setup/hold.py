@@ -1,8 +1,13 @@
 """Bench test: does a follower keep its pose once roboloom stops commanding it?
 
 This fills in a follower model's `unattended: unknown` safety trait (core.traits) for one
-unit: hold the arm at its pose, close the bus without releasing torque (what quitting
-with the followers holding does), reopen it read-only and watch the joints.
+unit: hold the arm at its pose, then stop writing to it without releasing torque (as a
+quit with the followers holding, an ESTOP or a FAULT do) and watch the joints.
+
+The bus stays open and is only read while watching: closing and reopening a CAN
+interface within one process is not reliable with piper_sdk. What a driver's own
+`close()` does to the motors is known from its code; a model whose `close()` releases
+them declares `unattended: torque_off` instead of measuring it.
 """
 
 from __future__ import annotations
@@ -70,57 +75,43 @@ class HoldResult:
 
 def hold_trial(
     follower: Follower,
-    open_bus: Callable[[], JointBus],
+    bus: JointBus,
     seconds: float,
     tolerance: float,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
-) -> tuple[HoldResult, JointBus]:
-    """Hold, let go without releasing, then watch. Returns the result and the reopened
-    bus (motors as they were left; the caller decides whether to release them)."""
-    bus = open_bus()
-    try:
-        safety = FollowerSafety(follower.safety_config(), bus)
-        safety.start()  # the current pose becomes the target, then torque on
-        if safety.mode != "HOLD":
-            raise ConfigError(f"{follower.name}: could not hold ({safety.mode})")
-        end = clock() + HOLD_BEFORE_S
-        while clock() < end:
-            safety.tick()
-            sleep(1 / follower.control_hz)
-        if safety.mode != "HOLD":
-            raise ConfigError(
-                f"{follower.name}: {safety.mode} while holding ({safety.reason})"
-            )
-        start = list(safety.hold_target or bus.read_positions())
-    finally:
-        bus.close()  # what quitting with the followers holding does
-    watched = open_bus()
+) -> HoldResult:
+    """Hold for HOLD_BEFORE_S, stop writing (torque stays on), then watch for up to
+    `seconds`, stopping early once a joint moved beyond `tolerance`. The motors are left
+    as they ended up; the caller decides whether to release them."""
+    safety = FollowerSafety(follower.safety_config(), bus)
+    safety.start()  # the current pose becomes the target, then torque on
+    if safety.mode != "HOLD":
+        raise ConfigError(f"{follower.name}: could not hold ({safety.mode})")
+    end = clock() + HOLD_BEFORE_S
+    while clock() < end:
+        safety.tick()
+        sleep(1 / follower.control_hz)
+    if safety.mode != "HOLD":
+        raise ConfigError(
+            f"{follower.name}: {safety.mode} while holding ({safety.reason})"
+        )
+    start = list(safety.hold_target or bus.read_positions())
     drift = dict.fromkeys(follower.joint_names, 0.0)
     began = clock()
-    try:
-        while clock() - began < seconds:
-            now = watched.read_positions()
-            for joint, a, b in zip(follower.joint_names, start, now, strict=True):
-                if abs(b - a) > abs(drift[joint]):
-                    drift[joint] = b - a
-            if max(abs(d) for d in drift.values()) > tolerance:
-                break  # it is moving away: stop and tell the operator
-            sleep(1 / READ_HZ)
-        status = getattr(watched, "enable_status", None)
-        enabled = list(status()) if status is not None else None
-    except BaseException:
-        watched.close()
-        raise
-    result = HoldResult(
-        follower.name,
-        follower.unit,
-        clock() - began,
-        tolerance,
-        drift,
-        enabled,
+    while clock() - began < seconds:  # from here on nothing is written
+        now = bus.read_positions()
+        for joint, a, b in zip(follower.joint_names, start, now, strict=True):
+            if abs(b - a) > abs(drift[joint]):
+                drift[joint] = b - a
+        if max(abs(d) for d in drift.values()) > tolerance:
+            break  # it is moving away: stop and tell the operator
+        sleep(1 / READ_HZ)
+    status = getattr(bus, "enable_status", None)
+    enabled = list(status()) if status is not None else None
+    return HoldResult(
+        follower.name, follower.unit, clock() - began, tolerance, drift, enabled
     )
-    return result, watched
 
 
 def record_unattended(path: Path, value: str, note: str) -> None:
@@ -163,10 +154,9 @@ def check_hold(
         "clear the space around it."
     ):
         raise Cancelled("check-hold cancelled")
-    result, bus = hold_trial(
-        model, lambda: model.open_device(False), seconds, tolerance
-    )
+    bus = model.open_device(False)
     try:
+        result = hold_trial(model, bus, seconds, tolerance)
         for line in result.lines():
             operator.notify(line)
         path = Path(str(model.cfg.get("__file__", "")))
@@ -174,13 +164,15 @@ def check_hold(
             f"Type 'record' to write 'unattended: {result.unattended}' to {path.name}; "
             "Enter skips: "
         )
-        if answer == "record" and path.is_file():
+        if answer == "record":
+            if not path.is_file():
+                raise ConfigError(f"{follower}: its YAML file is unknown; not recorded")
             joint, drift = result.worst
             record_unattended(
                 path,
                 result.unattended,
-                f"roboloom check-hold {datetime.now().astimezone().date().isoformat()}: {drift:+.4g} "
-                f"{result.unit} at {joint} over {result.seconds:.1f} s",
+                f"roboloom check-hold {datetime.now().astimezone().date().isoformat()}: "
+                f"{drift:+.4g} {result.unit} at {joint} over {result.seconds:.1f} s",
             )
             operator.notify(f"recorded in {path}")
         answer = operator.prompt(
@@ -190,6 +182,13 @@ def check_hold(
         if answer == "release":
             disable_torque(bus)
             operator.notify(f"{follower}: torque off")
+    except BaseException:
+        # whatever failed, the motors may still be on with nothing commanding them
+        operator.notify(
+            f"{follower} may still have torque with nothing commanding it: support it, "
+            "then power it off or run roboloom again"
+        )
+        raise
     finally:
         bus.close()
     return result

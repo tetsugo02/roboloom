@@ -37,9 +37,13 @@ class FakeSdk:
         self.ctrl_mode, self.arm_status = 1, 0
         self.comm_error: set[int] = set()
         self.stamp_lag = 0.0  # how old every frame is
+        self.stops_at: float | None = None  # frames stop arriving at this time
 
     def _stamp(self) -> float:
-        return 0.0 if self.silent else self.clock() - self.stamp_lag
+        if self.silent:
+            return 0.0
+        now = self.clock() - self.stamp_lag
+        return now if self.stops_at is None else min(now, self.stops_at)
 
     def GetArmJointMsgs(self):
         joints = SimpleNamespace(
@@ -143,6 +147,16 @@ def test_opening_waits_for_real_feedback_and_refuses_silence():
     with pytest.raises(ConnectionError, match="ask an administrator"):
         bus(sdk)
     assert sdk.sent[-1] == ("DisconnectPort",)  # a failed open closes what it opened
+
+
+def test_one_frame_after_opening_is_not_enough():
+    # one stamp covers joints 1-2, 3-4 and 5-6: a stamp just after opening may come from
+    # the first of those frames only, so feedback must keep arriving for a while
+    clock = Clock()
+    sdk = FakeSdk(clock)
+    sdk.stops_at = clock.now + 0.01
+    with pytest.raises(ConnectionError, match="no joint, motor, driver, status"):
+        bus(sdk)
 
 
 def test_stale_feedback_raises_so_the_follower_faults():
@@ -337,8 +351,8 @@ def test_a_policy_drives_two_mock_pipers_and_records_rad(tmp_path, monkeypatch):
 
 
 class LeftAlone:
-    """A 6-joint bus whose joints sag by `sag` per read once it was closed while enabled
-    (sag 0: it holds), and whose motors may drop out (`drops`)."""
+    """A 6-joint bus whose joint1 sags by `sag` per read once writes stopped (two reads in
+    a row; sag 0: it holds), and whose motors may drop out then (`drops`)."""
 
     def __init__(self, sag: float = 0.0, drops: bool = False):
         from roboloom.drivers.mock import MockBus
@@ -346,13 +360,19 @@ class LeftAlone:
         self.mock = MockBus(initial=0.0, dimension=6)
         self.mock.values[0] = 0.5
         self.sag, self.drops = sag, drops
+        self.unwritten = 0  # reads since the last write
         self.closed = False
 
     def __getattr__(self, name):
         return getattr(self.mock, name)
 
+    def write_positions(self, values):
+        self.unwritten = 0
+        self.mock.write_positions(values)
+
     def read_positions(self):
-        if self.closed and self.mock.enabled:
+        self.unwritten += 1
+        if self.unwritten > 1 and self.mock.enabled:
             self.mock.values[0] -= self.sag
         return self.mock.read_positions()
 
@@ -362,7 +382,7 @@ class LeftAlone:
         return JointState(self.read_positions())
 
     def enable_status(self):
-        return [self.mock.enabled and not (self.closed and self.drops)] * 6
+        return [self.mock.enabled and not (self.unwritten > 1 and self.drops)] * 6
 
     def close(self):
         self.closed = True  # the motors keep their torque, as PiPER's close does
@@ -374,19 +394,12 @@ def test_hold_trial_tells_holding_from_sagging():
     follower = PiperFollower("left", follower_cfg())
     clock = Clock()
     for bus, holds in ((LeftAlone(), True), (LeftAlone(sag=0.01), False)):
-        result, watched = hold_trial(
-            follower, lambda b=bus: b, 2.0, 0.02, sleep=clock.sleep, clock=clock
-        )
+        result = hold_trial(follower, bus, 2.0, 0.02, sleep=clock.sleep, clock=clock)
         assert result.holds is holds, result.lines()
         assert result.unattended == ("holds" if holds else "torque_off")
-        assert watched is bus and bus.mock.enabled  # left as it was: the caller decides
-    result, _ = hold_trial(
-        follower,
-        lambda: LeftAlone(drops=True),
-        1.0,
-        0.02,
-        sleep=clock.sleep,
-        clock=clock,
+        assert bus.mock.enabled and not bus.closed  # left as it was: the caller decides
+    result = hold_trial(
+        follower, LeftAlone(drops=True), 1.0, 0.02, sleep=clock.sleep, clock=clock
     )
     assert not result.holds and "motors [1, 2, 3, 4, 5, 6] became disabled" in (
         "\n".join(result.lines())
@@ -411,7 +424,7 @@ def test_check_hold_records_the_measurement_in_the_follower_yaml(tmp_path, monke
     operator = ScriptedOperator(prompts=["record", "release"])
     result = check_hold(path, "left", operator, tolerance=0.01, seconds=0.05)
     assert result.holds
-    assert not bus.mock.enabled  # 'release' turned the torque off
+    assert not bus.mock.enabled and bus.closed  # 'release' turned the torque off
     text = (path.parent / "nodes" / "left.yaml").read_text()
     assert "unattended: holds  # roboloom check-hold" in text
     cfg = load_config(path)

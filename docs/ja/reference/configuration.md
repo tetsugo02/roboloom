@@ -84,9 +84,9 @@ options:
 | 外部のバス（`InProcessSession.from_components`） | `falls` | `unknown`（分からないので最悪の場合） |
 | PiPERフォロワ（[開発中](../contribution/piper.md)） | `falls` | `unknown`（確かめていない） |
 
-- 「保持したまま終了」は，`unattended: holds` のフォロワがあるときだけ選べます．保持しないフォロワは，終了の確認で名前と，脱力する（または，するかもしれない）ことを示します．
+- 「保持したまま終了」は，`unattended: holds` のフォロワがあるときだけ選べます．保持しないフォロワは，終了の確認で名前と，脱力する（または，するかもしれない）ことを示します．トルクのあるフォロワがあれば，保持できなくても「支えてから脱力して終了」を選べます．指令のないまま有効のフォロワは，終了後にroboloomから脱力させられないためです．
 - `release` の確認では，`falls` の機器に「支える」，`lets_go` の機器に「物を外す」と表示します．`stays` の機器は名前を出しません．確認そのものは，どの機器でも必要です．
-- フォロワが `RELEASED` のときと，`FAULT` で保持しない（`unattended` が `holds` でない）ときは，画面のフォロワの行にすることを表示します．
+- フォロワが `RELEASED` のときと，`FAULT` か `ESTOP` で保持しない（`unattended` が `holds` でない）ときは，画面のフォロワの行にすることを表示します．`FAULT` と `ESTOP` では，フォロワへ書くのをやめるためです．
 - `ESTOP` は性質に依らず，その場で保持してラッチします．
 - 機種が `unknown` と宣言した `unattended` だけは，フォロワのYAMLに実測した値（`unattended: holds` か `torque_off`）を書けます．値は `roboloom check-hold`（[CLI](cli.md)）が測り，確認の後に書きます．機種が宣言した値と違う値を書くと，設定の読み込みで拒否します．
 

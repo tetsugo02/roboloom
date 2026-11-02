@@ -58,7 +58,7 @@ limits:                  # rad; each joint inside the PiPER range
 | `torque_off` | `falls` (it falls when the motors are disabled) |
 | `unattended` | `unknown` (whether it holds when commands stop has not been checked) |
 
-Because of `unknown`, the exit confirmation offers no "quit with followers holding" and names the arms as ones that may fall at the end. The values are explained in "Behaviour without torque and when left alone" in [Configuration](../reference/configuration.md).
+Because of `unknown`, the exit confirmation offers no "quit with followers holding". It offers supporting the arms and quitting with the torque off, or quitting without releasing (the arms may fall). The values are explained in "Behaviour without torque and when left alone" in [Configuration](../reference/configuration.md).
 
 ## First steps on hardware
 
@@ -71,7 +71,7 @@ Because of `unknown`, the exit confirmation offers no "quit with followers holdi
 
     It shows the firmware, joint angles (rad and degrees), control mode, enabling, temperatures, faults and feedback rates.
 
-3. Measure whether it holds when left alone. Be ready to support the arm and clear the space around it. It holds the current pose for 2 s, closes the bus with the motors enabled, and reads the joints for up to `--seconds`. A change beyond `--tolerance` (rad) or a disabled motor means `torque_off`; otherwise `holds`. Typing `record` writes `unattended:` to the follower YAML. Finally, choose `release` to turn the torque off, or leave it as it is.
+3. Measure whether it holds when left alone. Be ready to support the arm and clear the space around it. It holds the current pose for 2 s, stops writing with the motors enabled, and only reads the joints for up to `--seconds` (the state after quitting with holding, an ESTOP or a FAULT). The bus stays open, because closing and reopening CAN within one process is not reliable with piper_sdk; the PiPER driver does not disable the motors on close, so closing leaves the same state. A short `--seconds` can miss an arm that sags slowly. A change beyond `--tolerance` (rad) or a disabled motor means `torque_off`; otherwise `holds`. Typing `record` writes `unattended:` to the follower YAML. Finally, choose `release` to turn the torque off, or leave it as it is.
 
     ```bash
     uv run roboloom check-hold left --tolerance 0.02
@@ -80,6 +80,9 @@ Because of `unknown`, the exit confirmation offers no "quit with followers holdi
 ## To check on hardware
 
 - Whether the joint signs and zeros match the SDK's description.
-- Whether the arm holds when the bus is closed with the motors enabled (`check-hold`).
+- Whether the arm holds when commands stop with the motors enabled (`check-hold`).
+- Whether the firmware takes a `JointCtrl` sent while the motors are disabled as its target on enabling. If so, the current pose written just before enabling becomes that target.
+- What happens when enabling stops halfway (only some joints enabled). Today it gives up after 5 s with an error and leaves the enabled joints as they are.
+- A single CAN frame of a message (for example joints 3-4) that stops alone goes unnoticed (the SDK keeps one receive time per message).
 - How fast the loop runs on 1 Mbps CAN when every command is preceded by the control mode, to choose `control_hz`.
 - The sign and size of the joint torque (`efforts_Nm`).

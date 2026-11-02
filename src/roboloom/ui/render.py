@@ -80,7 +80,7 @@ def _gc(f: dict) -> Text | None:
 
 def _without_torque(f: dict) -> Text | None:
     """What the operator must do about a follower roboloom no longer commands (released,
-    or latched FAULT after which it is left alone), from its safety traits."""
+    or latched FAULT or ESTOP, after which it is left alone), from its safety traits."""
     mode, torque_off = f.get("mode"), f.get("torque_off")
     todo = {
         "falls": "support it (falls without torque)",
@@ -90,7 +90,8 @@ def _without_torque(f: dict) -> Text | None:
         return None
     if mode == "RELEASED":
         return Text(f"torque off: {todo}", style=WATCH)
-    if mode == "FAULT" and f.get("unattended") != "holds":
+    # FAULT and ESTOP both stop writing to the bus: the follower is left alone
+    if mode in ("FAULT", "ESTOP") and f.get("unattended") != "holds":
         limp = "goes limp" if f.get("unattended") == "torque_off" else "may go limp"
         return Text(f"left uncommanded it {limp}: {todo}", style=BAD)
     return None

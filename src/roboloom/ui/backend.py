@@ -141,6 +141,7 @@ class SessionBackend:
                 home=any(c.homes for c in session.cfg.controllers.values()),
                 release=bool(session.torqued or session.actuated),
                 hold=bool(session.held),
+                torqued=bool(session.torqued),
                 reselect=self.reselect,
                 release_note=session.release_note(),
                 quit_note=ending_note(session.limp_at_end),

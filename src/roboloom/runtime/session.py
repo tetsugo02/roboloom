@@ -564,19 +564,20 @@ class Session:
         releases the followers."""
         assert self.operator is not None
         limp, held = self.limp_at_end, self.held
-        if not (limp or held):
+        if not (limp or self.torqued):
             return False
         try:
-            if not held:
+            if not self.torqued:  # only actuated inputs, which go limp anyway
                 self.operator.prompt(
                     f"When the session ends, {ending_note(limp)}. Press Enter to end: "
                 )
                 return False
+            # followers that do not hold are offered the release too: left enabled
+            # without commands, nothing could turn them off safely afterwards
+            keep = f"with {', '.join(held)} holding" if held else "without releasing"
             answer = self.operator.prompt(
                 f"Enter ends with the torque off ({self.release_note()}); 'hold' ends "
-                f"with {', '.join(held)} holding"
-                + (f" ({ending_note(limp)})" if limp else "")
-                + ": "
+                f"{keep}" + (f" ({ending_note(limp)})" if limp else "") + ": "
             )
         except (KeyboardInterrupt, EOFError):
             return False  # nobody confirmed supporting the arms

@@ -8,7 +8,8 @@ that cache into the bus contract and refuses stale data:
   first frame the SDK reports zeros, which would seed a hold target of 0 rad (a jump).
 - Every read checks the age of the cached frame (`stale_ms`): the SDK keeps returning
   the last values after a cable is pulled, so stale feedback raises ConnectionError and
-  the follower latches FAULT.
+  the follower latches FAULT. The age is per message, not per CAN frame (the SDK keeps
+  one stamp for all of them), so a single frame that stops alone goes unnoticed.
 - Writes switch the arm to CAN control, MOVE J (`speed_percent` of the firmware's joint
   speed) before each `JointCtrl`, as the vendor demos do.
 - `close` disconnects without disabling the motors: what the arm does then is its
@@ -46,6 +47,8 @@ FOC_ERRORS = {
 FOC_ENABLED = 1 << 6
 # low-speed feedback (temperatures, driver status) comes slower than joint feedback
 LOW_SPEED_STALE_S = 0.5
+# how long each kind of feedback must keep arriving after opening before it is used
+SETTLE_S = {"joint": 0.1, "motor": 0.1, "status": 0.1, "driver": LOW_SPEED_STALE_S}
 ADMIN_HINT = (
     "check the arm's power and the CAN interface (1 Mbps, `ip -details link show {can}`); "
     "creating or renaming CAN interfaces needs sudo, so ask an administrator"
@@ -113,12 +116,22 @@ class PiperBus:
         }
 
     def _wait_feedback(self, timeout_s: float) -> None:
-        """Until every kind of feedback has arrived since opening: the SDK object is one
-        per interface and keeps the frames of an earlier connection in the process."""
+        """Until every kind of feedback has kept arriving for a while since opening.
+
+        The SDK object is one per interface and keeps the frames of an earlier connection
+        in the process, and one message's `time_stamp` is shared by its CAN frames
+        (joints 1-2, 3-4 and 5-6 come in three frames, motors one frame each): a stamp
+        newer than opening proves only that one of them arrived. Waiting `SETTLE_S` more
+        (several periods of every frame) means each joint has a value of this connection,
+        not the SDK's initial 0."""
         opened = self.clock()
         deadline = opened + timeout_s
         while True:
-            missing = [k for k, m in self._feedback().items() if m.time_stamp < opened]
+            missing = [
+                k
+                for k, m in self._feedback().items()
+                if m.time_stamp < opened + SETTLE_S[k]
+            ]
             if not missing:
                 return
             if self.clock() >= deadline:
@@ -247,6 +260,8 @@ def probe(can: str) -> str:
         frames = bus._feedback()
         status = frames["status"].arm_status
         health = bus.read_health()
+        # standby is the normal mode until something commands the arm over CAN
+        faults = [f for f in health.faults if not f.startswith("control mode STANDBY")]
         positions = bus.read_positions()
         lines = [
             f"PiPER on {can}: firmware {bus.firmware}",
@@ -263,7 +278,7 @@ def probe(can: str) -> str:
             "temperature (C): " + ", ".join(f"{t:.0f}" for t in health.temperature_c),
             "feedback Hz: "
             + ", ".join(f"{k} {getattr(m, 'Hz', 0):.0f}" for k, m in frames.items()),
-            "faults: " + ("; ".join(health.faults) if health.faults else "none"),
+            "faults: " + ("; ".join(faults) if faults else "none"),
         ]
         errors = status.err_status
         limits = [

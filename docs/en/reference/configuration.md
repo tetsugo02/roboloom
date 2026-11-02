@@ -84,9 +84,9 @@ Each follower model and each actuated input model (a leader that runs control la
 | External bus (`InProcessSession.from_components`) | `falls` | `unknown` (the worst case, since nothing is known) |
 | PiPER follower ([in development](../contribution/piper.md)) | `falls` | `unknown` (not checked) |
 
-- "Quit with followers holding" is offered only when some follower has `unattended: holds`. The exit confirmation names the followers that do not hold and says that they go (or may go) limp.
+- "Quit with followers holding" is offered only when some follower has `unattended: holds`. The exit confirmation names the followers that do not hold and says that they go (or may go) limp. When any follower has torque, "support, release and quit" is offered even if nothing holds: a follower left enabled without commands cannot be released by roboloom after the session.
 - The `release` confirmation tells you to support the `falls` devices and to take objects out of the `lets_go` devices; `stays` devices are not named. Release is confirmed for every device.
-- When a follower is `RELEASED`, or latched `FAULT` and does not hold unattended, its screen row says what to do.
+- When a follower is `RELEASED`, or latched `FAULT` or `ESTOP` and does not hold unattended, its screen row says what to do; `FAULT` and `ESTOP` stop writing to the follower.
 - `ESTOP` holds in place and latches, whatever the traits.
 - Only an `unattended` that the model declares `unknown` may be set in the follower YAML, to a measured value (`unattended: holds` or `torque_off`); `roboloom check-hold` ([CLI](cli.md)) measures it and writes it after confirmation. A value that contradicts the model's declaration is refused when the configuration loads.
 

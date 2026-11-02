@@ -134,7 +134,28 @@ def test_the_screen_says_what_to_do_about_a_follower_left_alone():
         {"mode": "FAULT", "torque_off": "falls", "unattended": "unknown"}
     )
     assert "may go limp: support it" in fault.plain
+    _, estop = render_follower(
+        {"mode": "ESTOP", "torque_off": "falls", "unattended": "torque_off"}
+    )
+    assert "goes limp: support it" in estop.plain  # ESTOP stops writing, too
     _, held = render_follower(
         {"mode": "FAULT", "torque_off": "falls", "unattended": "holds"}
     )
     assert "support" not in held.plain
+
+
+def test_quit_offers_the_release_also_when_nothing_holds(tmp_path):
+    from conftest import mock_project
+
+    from roboloom.operator import ScriptedOperator
+
+    project = mock_project(tmp_path / ".roboloom")
+    session = session_for(load_config(project / "config.yaml", options=[]))
+    session.cfg.followers["follower"] = external()  # unknown: nothing holds
+    for answer, release in (("", True), ("hold", False)):
+        session.operator = ScriptedOperator(prompts=[answer])
+        assert session._ask_close() is release
+        prompt = session.operator.log[-1]
+        assert "Enter ends with the torque off (support leader, follower" in prompt
+        assert "'hold' ends without releasing (" in prompt
+        assert "follower may go limp" in prompt
