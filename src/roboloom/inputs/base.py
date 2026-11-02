@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -22,6 +22,7 @@ from ..control.trace import Trace
 from ..core.checks import finite, names, positions, positive
 from ..core.protocol import Envelope
 from ..core.source import Features, Reader, Sample, Source
+from ..core.traits import WORST_CASE, SafetyTraits
 from ..robots.base import JointBus
 
 
@@ -186,6 +187,18 @@ class JointInput(InputDevice):
     """
 
     kind = "joint_intent"
+    # What its joints do when torque goes off (core.traits); an actuated leader goes limp
+    # when the session ends, so the operator is told what to support. Every model declares
+    # it; a leader nobody described gets the worst case.
+    safety_traits: ClassVar[SafetyTraits] = WORST_CASE
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "safety_traits" not in cls.__dict__:
+            raise TypeError(
+                f"{cls.__name__}: declare safety_traits: what the joints do when torque "
+                "goes off (roboloom.core.traits)"
+            )
 
     def __init__(
         self,

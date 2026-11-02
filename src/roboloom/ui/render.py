@@ -78,11 +78,30 @@ def _gc(f: dict) -> Text | None:
     return Text(f"gc pause {pause} ms", style=WATCH) if pause >= GC_SHOWN_MS else None
 
 
+def _without_torque(f: dict) -> Text | None:
+    """What the operator must do about a follower roboloom no longer commands (released,
+    or latched FAULT after which it is left alone), from its safety traits."""
+    mode, torque_off = f.get("mode"), f.get("torque_off")
+    todo = {
+        "falls": "support it (falls without torque)",
+        "lets_go": "take out any object (lets go without torque)",
+    }.get(str(torque_off))
+    if todo is None:
+        return None
+    if mode == "RELEASED":
+        return Text(f"torque off: {todo}", style=WATCH)
+    if mode == "FAULT" and f.get("unattended") != "holds":
+        limp = "goes limp" if f.get("unattended") == "torque_off" else "may go limp"
+        return Text(f"left uncommanded it {limp}: {todo}", style=BAD)
+    return None
+
+
 @register("follower")
 def follower(f: dict) -> tuple[str, Text]:
     detail = joined(
         [
             Text(f"reason: {f['reason']}", style=BAD) if f.get("reason") else None,
+            _without_torque(f),
             Text("armed", style=GOOD) if f.get("armed") else Text("not armed", "dim"),
             f"tick {f['tick_ms']} ms (max {f.get('tick_max_ms')})"
             if f.get("tick_ms") is not None

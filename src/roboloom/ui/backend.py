@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import cast
 
 from ..config import CONFIG_FILE
+from ..core.traits import ending_note
 from ..errors import Cancelled
 from ..runtime.node import start_warning
 from ..runtime.session import Session, _ui_launch
@@ -138,9 +139,11 @@ class SessionBackend:
                 )
             caps = Capabilities(
                 home=any(c.homes for c in session.cfg.controllers.values()),
-                release=bool(session.held or session.actuated),
+                release=bool(session.torqued or session.actuated),
                 hold=bool(session.held),
                 reselect=self.reselect,
+                release_note=session.release_note(),
+                quit_note=ending_note(session.limp_at_end),
             )
             readiness = start_warning(session.cfg, status, now) or ""
             warning = self._warning or readiness

@@ -74,6 +74,10 @@ Python 3.12とuvを使い，`uv sync --locked --only-group docs` でlock済み�
 
 初回はリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定します（[GitHubの設定手順](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)）．workflowを `main` に反映すると公開され，URLは `github-pages` environmentとActionsのデプロイ結果に表示されます．ビルドが失敗した場合は公開しません．
 
+## 新しいフォロワを足す
+
+フォロワの機種（`Follower` のサブクラス）は，安全に関わる性質 `safety_traits`（設定で変わる場合は `declared_traits()`）を必ず宣言します．宣言のないクラスはimportの時点でTypeErrorになります．値の意味は [設定](reference/configuration.md) の「脱力したときと放置したときの性質」にあります．確かめていない性質は `unknown` にします．制御則で動く入力機器（`JointInput` のサブクラス）も `safety_traits` を宣言します．
+
 ## 操作画面の拡張
 
 新しい機種の機器アクセスはBackendへ置き，標準の状態項目を通知します．任意の機種別・役割別Presenterの明示登録，Backend契約，Pilot/MockBusでの検証は [操作画面](reference/operator-screen.md) を参照してください．

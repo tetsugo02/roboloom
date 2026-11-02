@@ -26,6 +26,9 @@ class Capabilities:
     hold: bool = False
     gravity: bool = False
     reselect: bool = False  # quit can come back to the launcher's option choice
+    # what to do before release and quit, from the devices' safety traits (core.traits)
+    release_note: str = ""
+    quit_note: str = ""  # what goes limp when the session ends without release
 
 
 @dataclass(frozen=True)

@@ -67,7 +67,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - 途中のエピソードがあれば破棄する．
   - `operator` が設定されていれば，腕を支えるように求める．Enter で follower も脱力し，`hold` と入力すると follower は保持を続ける．
   - dataflow を止める．
-  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．
+  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．ただし，放置したときに保持しない（`unattended` が `holds` でない）follower は保持しない．性質は [設定](configuration.md) の「脱力したときと放置したときの性質」にある．
   - スクリプトから決めるときは `s.close(release=True)`（脱力）または `s.close(release=False)`（保持）を呼ぶ．
 - ログは，設定ファイルの隣の `logs/<データセット名>-<時刻>/` に残ります（例：`logs/rakuda2-digit-20261102-101500/`）．
   - `dora.log`
@@ -84,6 +84,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - 腕を支えてから Enter を押すと，follower のトルクも切って終了します．
   - `hold` と入力すると，follower は保持を続けたまま終了します．
   - follower が `torque: false` のときは，leader の確認だけを出します．
+  - 確認文は機器の性質から作ります．支える機器（`falls`）と物を外す機器（`lets_go`）を名前で示し，保持できる follower がなければ `hold` は選べません．`s.release_note()` で，`release` の前にすることを文字列で得られます．`release(confirm=False)` は，これを添えた `HardwareError` を出します．
   - `operator=None`，または標準入力が端末でない場合は，この確認を出さず，follower は保持を続けます．`screen=False` だけでは確認は無効になりません．
   - 保持を続けた follower は，電源を切る前に腕を支えるか安全な姿勢に下ろしてください．
 

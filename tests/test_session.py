@@ -159,7 +159,11 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
         messages = [m.plain for m in s.screen.messages]
     assert any("recording 'wave'" in m for m in messages), messages
     assert any("saved" in m for m in messages), messages
-    assert "Support the arms of leader" in operator.log[-1]
+    # the leader goes limp at the end either way; the follower holds unless released
+    assert (
+        "'hold' ends with follower holding (leader goes limp: support leader"
+        in (operator.log[-1])
+    )
     out = capsys.readouterr().out
     assert "from the script" in out and "nodes" in out  # printed above the screen
 
@@ -184,7 +188,7 @@ def test_closing_releases_the_follower_unless_the_operator_says_hold(
         s.wait_ready(30)
         send = s.client.send
         s.client.send = lambda line: (sent.append(line), send(line))[1]  # type: ignore[method-assign]
-    assert "Enter ends with the follower torque off" in operator.log[-1]
+    assert "Enter ends with the torque off" in operator.log[-1]
     assert sent == (["release", "quit"] if released else ["quit"])
 
 

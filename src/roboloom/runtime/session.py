@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Self
 
 from ..config import NO_OPTIONS, RobotConfig, load_config
+from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
 from ..recording.metrics import assess
@@ -286,9 +287,41 @@ class Session:
         return [n for n, i in self.cfg.inputs.items() if getattr(i, "actuated", False)]
 
     @property
+    def torqued(self) -> dict[str, SafetyTraits]:
+        """Followers that run with torque, with their safety traits."""
+        return {n: f.traits() for n, f in self.cfg.followers.items() if f.torque}
+
+    @property
     def held(self) -> list[str]:
-        """Followers with torque; they keep holding after the session unless released."""
-        return [n for n, r in self.cfg.followers.items() if r.torque]
+        """Followers that keep holding after the session unless released: torque on and
+        `unattended: holds` (core.traits)."""
+        return [n for n, t in self.torqued.items() if t.holds_unattended]
+
+    @property
+    def limp_at_end(self) -> dict[str, SafetyTraits]:
+        """What goes, or may go, limp when the session ends without release: actuated
+        inputs, and followers that do not hold unattended (or are not known to)."""
+        return {
+            **self._actuated_traits(),
+            **{n: t for n, t in self.torqued.items() if not t.holds_unattended},
+        }
+
+    def _actuated_traits(self) -> dict[str, SafetyTraits]:
+        return {
+            n: getattr(i, "safety_traits", WORST_CASE)
+            for n, i in self.cfg.inputs.items()
+            if getattr(i, "actuated", False)
+        }
+
+    def release_note(self) -> str:
+        """What the operator does before `release` turns torque off on the actuated inputs
+        and the followers."""
+        devices = {**self._actuated_traits(), **self.torqued}
+        if not devices:
+            return "nothing has torque"
+        return precautions(devices) or (
+            f"{', '.join(devices)} neither falls nor lets go without torque"
+        )
 
     def close(self, timeout: float = 15.0, *, release: bool | None = None) -> None:
         """Discard an unfinished episode, stop every node and wait for the dataflow to exit.
@@ -311,7 +344,7 @@ class Session:
                 if self.operator is not None and release is None:
                     release = self._ask_close()
                 try:
-                    if release and self.held:
+                    if release and (self.torqued or self.actuated):
                         self.client.send("release")
                     self.client.send("quit")
                 except OSError:
@@ -527,21 +560,23 @@ class Session:
         self._episode = None
 
     def _ask_close(self) -> bool:
-        """Ask the operator to support what goes limp; True releases the follower."""
+        """Tell the operator what goes limp and what to do about it (core.traits); True
+        releases the followers."""
         assert self.operator is not None
-        if not (self.actuated or self.held):
+        limp, held = self.limp_at_end, self.held
+        if not (limp or held):
             return False
         try:
-            if not self.held:
+            if not held:
                 self.operator.prompt(
-                    f"Support the arms of {', '.join(self.actuated)}: it goes limp "
-                    "when the session ends. Press Enter to end: "
+                    f"When the session ends, {ending_note(limp)}. Press Enter to end: "
                 )
                 return False
             answer = self.operator.prompt(
-                f"Support the arms of {', '.join(self.actuated + self.held)}: Enter ends "
-                f"with the follower torque off; 'hold' ends with {', '.join(self.held)} "
-                "holding: "
+                f"Enter ends with the torque off ({self.release_note()}); 'hold' ends "
+                f"with {', '.join(held)} holding"
+                + (f" ({ending_note(limp)})" if limp else "")
+                + ": "
             )
         except (KeyboardInterrupt, EOFError):
             return False  # nobody confirmed supporting the arms
@@ -606,10 +641,11 @@ class Session:
         self.send("estop")
 
     def release(self, *, confirm: bool = False) -> None:
-        """Torque off the follower after stopping; support the arms first."""
+        """Torque off the actuated inputs and the followers after stopping; first do what
+        `release_note()` says (support what falls, empty what lets go)."""
         if not confirm:
             raise HardwareError(
-                "release drops the arms; support them and pass confirm=True"
+                f"release turns torque off: {self.release_note()}; then pass confirm=True"
             )
         self.send("release")
 

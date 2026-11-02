@@ -64,6 +64,31 @@ The speed limit `max_speed` appears in several places, always in the follower's 
 
 `home.tolerance` (how close counts as arrived) is required, also in the follower's unit.
 
+## Behaviour without torque and when left alone
+
+Each follower model and each actuated input model (a leader that runs control laws) declares two safety-relevant traits. The `release` confirmation, the exit choices and the screen hints follow them.
+
+| Trait | Value | Meaning |
+| --- | --- | --- |
+| `torque_off` (when torque goes off: `release`, power loss) | `falls` | Gravity pulls it down; the operator supports it |
+| | `lets_go` | It stays put but lets go of what it grips (a gripper); take the object out first |
+| | `stays` | Nothing moves |
+| `unattended` (when roboloom stops writing to it: quit with holding, a crashed process, a lost cable) | `holds` | It keeps its last target |
+| | `torque_off` | It goes limp (a bus watchdog, a driver that releases on close) |
+| | `unknown` | Not established; treated like `torque_off` |
+
+| Model | `torque_off` | `unattended` |
+| --- | --- | --- |
+| Rakuda2 follower | `falls` | `holds`; `torque_off` when a group runs a current-mode law (`gravity_comp`, `impedance`, `spring`), which goes limp on close and on the watchdog. `current_position` keeps its goal position, so it holds |
+| Rakuda-mini (leader) | `falls` | `torque_off` (limp when the session ends) |
+| External bus (`InProcessSession.from_components`) | `falls` | `unknown` (the worst case, since nothing is known) |
+
+- "Quit with followers holding" is offered only when some follower has `unattended: holds`. The exit confirmation names the followers that do not hold and says that they go (or may go) limp.
+- The `release` confirmation tells you to support the `falls` devices and to take objects out of the `lets_go` devices; `stays` devices are not named. Release is confirmed for every device.
+- When a follower is `RELEASED`, or latched `FAULT` and does not hold unattended, its screen row says what to do.
+- `ESTOP` holds in place and latches, whatever the traits.
+- Only an `unattended` that the model declares `unknown` may be set in the follower YAML, to a measured value (`unattended: holds` or `torque_off`). A value that contradicts the model's declaration is refused when the configuration loads.
+
 ## Launch options
 
 `options:` names the features chosen at launch (gravity compensation, extra sensors, and so on). Each option replaces, adds, or removes node files. The node files under `nodes/` stay split by feature; an option only chooses which of them are used.

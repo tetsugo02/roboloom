@@ -74,6 +74,10 @@ The workflow uses Python 3.12 and uv, installing only the locked documentation d
 
 For the initial setup, set the repository's **Settings → Pages → Build and deployment → Source** to **GitHub Actions** ([GitHub setup instructions](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)). Once the workflow reaches `main`, it publishes the site; the URL appears in the `github-pages` environment and the Actions deployment result. Failed builds are not deployed.
 
+## Adding a follower
+
+A follower model (a `Follower` subclass) must declare its safety traits, `safety_traits` (or `declared_traits()` when they depend on the configuration). A class without them raises TypeError on import. The values are explained in "Behaviour without torque and when left alone" in [Configuration](reference/configuration.md). Declare what has not been established as `unknown`. Input models that run control laws (`JointInput` subclasses) declare `safety_traits` too.
+
 ## Operator UI extensions
 
 For new device kinds, keep device access in the backend and publish standard status fields. Optional explicit kind/role presenters, backend contracts, and Pilot/MockBus verification are described in [Operator screen](reference/operator-screen.md).

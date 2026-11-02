@@ -462,6 +462,8 @@ def parse_config(tree: dict) -> RobotConfig:
     }
     if not followers:
         raise ValueError("followers: configure at least one follower")
+    for model in followers.values():
+        model.traits()  # a measured `unattended` must fill in an unknown one
     inputs = {
         name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
     }

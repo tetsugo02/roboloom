@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ...core.checks import identity
+from ...core.traits import SafetyTraits
 from ...robots.base import JointBus
 from ...robots.rakuda2.spec import (
     JOINTS,
@@ -17,6 +18,9 @@ from ..base import JointInput
 
 
 class RakudaMini(JointInput):
+    # the arms fall without torque; closing the reader releases every joint
+    safety_traits = SafetyTraits(torque_off="falls", unattended="torque_off")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg, JOINTS, UNIT)
         check_motor_ids(cfg, name)

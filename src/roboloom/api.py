@@ -287,6 +287,8 @@ class InProcessSession:
         self.safety.release()
 
     def close(self) -> None:
+        """Close the recorder and the bus without releasing torque: what the follower does
+        next is its `traits().unattended` (holds, goes limp, or not known)."""
         try:
             self.recorder.close()
         finally:

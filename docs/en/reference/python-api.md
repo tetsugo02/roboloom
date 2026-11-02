@@ -67,7 +67,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - Discards any in-progress episode.
   - If an `operator` is configured, asks you to support the arms. Enter releases the follower too; typing `hold` keeps the follower holding.
   - Stops the dataflow.
-  - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target.
+  - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target. A follower that does not hold when left alone (`unattended` other than `holds`) does not keep holding; see "Behaviour without torque and when left alone" in [Configuration](configuration.md).
   - To decide from a script, call `s.close(release=True)` (release) or `s.close(release=False)` (hold).
 - Logs are kept in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`).
   - `dora.log`
@@ -84,6 +84,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - Support the arms and press Enter to end with the follower torque off as well.
   - Type `hold` to end with the follower still holding.
   - When the follower has `torque: false`, only the leader confirmation is shown.
+  - The confirmation is built from the devices' traits: it names what to support (`falls`) and what to empty (`lets_go`), and `hold` is not offered when no follower holds. `s.release_note()` returns what to do before `release` as a string; `release(confirm=False)` raises `HardwareError` with it.
   - With `operator=None`, or when stdin is not a terminal, this confirmation is skipped and the follower keeps holding. Setting only `screen=False` does not disable it.
   - If the follower is left holding, support its arms or lower them to a safe pose before switching off its power.
 

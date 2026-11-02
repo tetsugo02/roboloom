@@ -309,6 +309,7 @@ def _home_fields(safety: FollowerSafety) -> dict:
 def _follower(node, robot: Follower, cfg: RobotConfig):
     bus = robot.open_device(cfg.mock)
     safety = FollowerSafety(robot.safety_config(), bus)
+    traits = robot.traits()
     status = StatusReporter(Publisher(robot.name), "follower")
     intervals: deque[float] = deque(maxlen=int(robot.control_hz * 2))
     clamped: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
@@ -376,6 +377,8 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                     "gc_max_ms": gc_pauses.take(),
                     "error": error,
                     **_home_fields(safety),
+                    "torque_off": traits.torque_off,
+                    "unattended": traits.unattended,
                 }
                 level = {"FAULT": "error", "ESTOP": "error", "RELEASED": "warn"}.get(
                     safety.mode, "warn" if any(rejected) else "ok"

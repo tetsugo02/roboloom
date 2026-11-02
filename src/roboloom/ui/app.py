@@ -408,8 +408,9 @@ class OperatorApp(App[str]):
             self._cancel_drag()
             self.push_screen(
                 Confirmation(
-                    "Support every actuated input and follower before releasing torque.",
-                    (("release", "Supported: release torque"),),
+                    "Before releasing torque: "
+                    f"{self.snapshot.capabilities.release_note}.",
+                    (("release", "Done: release torque"),),
                 ),
                 lambda choice: self.backend.submit(line) if choice else None,
             )
@@ -463,22 +464,39 @@ class OperatorApp(App[str]):
                     else "Quit",
                 ),
                 *(
-                    ((("release", "Supported: release followers and quit"),))
+                    ((("release", "Done: release torque and quit"),))
                     if self.snapshot.capabilities.release
                     and self.snapshot.capabilities.hold
                     else ()
                 ),
                 *(
-                    ((("reselect", "Quit and choose options again (followers hold)"),))
+                    (
+                        (
+                            (
+                                "reselect",
+                                "Quit and choose options again"
+                                + (
+                                    " (followers hold)"
+                                    if self.snapshot.capabilities.hold
+                                    else ""
+                                ),
+                            ),
+                        )
+                    )
                     if self.snapshot.capabilities.reselect
                     else ()
                 ),
             )
         )
+        caps = self.snapshot.capabilities
+        notes = [
+            f"When the session ends, {caps.quit_note}." if caps.quit_note else "",
+            f"Releasing torque: {caps.release_note}." if caps.hold else "",
+        ]
         prompt = (
             "Save tuning changes before quitting? The tuning device will release torque."
             if tuning
-            else "Support actuated inputs before quitting: they go limp. Choose follower torque on exit."
+            else " ".join(n for n in notes if n) or "Quit?"
         )
 
         def confirmed(choice: str | None) -> None:

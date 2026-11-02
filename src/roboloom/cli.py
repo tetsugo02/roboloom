@@ -577,7 +577,7 @@ def _start(
                 keep=lambda _: bool(plan.task),
             )
         else:
-            _plain_loop(session.client, session.process)
+            _plain_loop(session.client, session.process, session.release_note())
     finally:
         session.close()
         if session.process.returncode:
@@ -602,8 +602,9 @@ def send_session(fifo: Path, line: str) -> None:
         os.close(fd)
 
 
-def _plain_loop(client, process: subprocess.Popen) -> None:
-    """Line input for pipes and non-terminal use; reports are printed as they arrive."""
+def _plain_loop(client, process: subprocess.Popen, release_note: str) -> None:
+    """Line input for pipes and non-terminal use; reports are printed as they arrive.
+    `release_note`: what to do before release (Session.release_note)."""
     from .ui.render import describe_report
 
     print("Commands: start <task>, stop, save, discard, estop, release, quit")
@@ -618,9 +619,7 @@ def _plain_loop(client, process: subprocess.Popen) -> None:
             continue
         if (
             line == "release"
-            and input(
-                "Support the arms. Type yes to turn the follower torque off: "
-            ).strip()
+            and input(f"Before release: {release_note}. Type yes to release: ").strip()
             != "yes"
         ):
             print("release cancelled")

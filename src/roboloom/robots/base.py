@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar
+from dataclasses import replace
+from typing import Any, ClassVar, get_args
 
 import numpy as np
 
@@ -17,9 +18,10 @@ from ..control.device import (
 from ..core.checks import finite, names, positive
 from ..core.protocol import Envelope
 from ..core.source import Features, Joined
+from ..core.traits import WORST_CASE, SafetyTraits, Unattended
 from ..drivers.base import JointBus
 
-__all__ = ["Follower", "JointBus", "check_limits"]
+__all__ = ["Follower", "JointBus", "SafetyTraits", "check_limits"]
 
 
 LIMIT_KEYS = ("min", "max", "max_speed", "max_jump")
@@ -85,6 +87,22 @@ class Follower:
     # (follower_state field, unit) of the effort the robot measures, for effort estimators;
     # None when it measures none
     effort_signal: ClassVar[tuple[str, str] | None] = None
+    # What it does when torque goes off and when roboloom stops commanding it
+    # (core.traits). Every model declares it, as this attribute or, when it depends on
+    # the configuration, as `declared_traits()`; a bus nobody described gets the worst case.
+    safety_traits: ClassVar[SafetyTraits] = WORST_CASE
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if (
+            "safety_traits" not in cls.__dict__
+            and "declared_traits" not in cls.__dict__
+        ):
+            raise TypeError(
+                f"{cls.__name__}: declare safety_traits (or declared_traits()): what the "
+                "joints do when torque goes off and when roboloom stops commanding them "
+                "(roboloom.core.traits); use 'unknown' for what is not established"
+            )
 
     def __init__(
         self,
@@ -124,6 +142,29 @@ class Follower:
 
     def device_ids(self) -> tuple[str, ...]:
         return ()
+
+    def declared_traits(self) -> SafetyTraits:
+        """The model's safety traits for this configuration (override when they depend on it)."""
+        return self.safety_traits
+
+    def traits(self) -> SafetyTraits:
+        """The declared traits, with an `unattended` the model leaves unknown filled in from
+        the YAML (written by `roboloom check-hold` after measuring this unit)."""
+        declared = self.declared_traits()
+        measured = self.cfg.get("unattended")
+        if measured is None:
+            return declared
+        known = [u for u in get_args(Unattended) if u != "unknown"]
+        if measured not in known:
+            raise ValueError(
+                f"{self.name}.unattended must be one of {', '.join(known)}, not {measured!r}"
+            )
+        if declared.unattended != "unknown":
+            raise ValueError(
+                f"{self.name}.unattended: {self.model} declares "
+                f"{declared.unattended!r} for this configuration; remove the key"
+            )
+        return replace(declared, unattended=measured)
 
     def open_bus(self, mock: bool) -> JointBus:
         raise RuntimeError(f"{self.name}: no bus driver; pass an opened bus instead")
