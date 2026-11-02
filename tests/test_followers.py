@@ -382,13 +382,21 @@ def test_one_latched_follower_stops_commands_to_the_whole_group(tmp_path, monkey
             ("state_follower", ok),
             ("intent", intent),  # left has not reported: nothing moves
             ("state_left", follower_state("left", [1000.0] * 17, mode="FAULT")),
+            ("intent", intent),  # left latched: nobody in the group moves
+        ],
+    )
+    assert controller.resets == 1 and controller.updates == 0 and sent == []
+    healthy = Recorder(cfg.controllers["policy"])
+    sent = run_controller(
+        monkeypatch,
+        healthy,
+        [
+            ("state_follower", ok),
+            ("state_left", follower_state("left", [1000.0] * 17)),
             ("intent", intent),
         ],
     )
-    assert controller.resets == 1
-    # update ran once both had reported; the controller (not the loop) then decides; a
-    # real controller sends nothing after reset until it has re-aligned
-    assert sent == ["command_follower", "command_left"] and controller.updates == 1
+    assert healthy.updates == 1 and sent == ["command_follower", "command_left"]
 
 
 def test_a_silent_follower_resets_the_group(tmp_path, monkeypatch):
@@ -479,3 +487,46 @@ def test_count_specific_keys_were_renamed(tmp_path):
     tree["controllers"]["policy"]["max_speed"] = 50
     with pytest.raises(ValueError, match="one value per follower"):
         parse_config(tree)
+
+
+def test_a_policy_stops_its_episode_when_a_follower_goes_silent(tmp_path, monkeypatch):
+    from roboloom.runtime import node as runtime
+
+    cfg = parse_config(policy_tree(tmp_path))
+    policy = cfg.controllers["policy"]
+    policy.cfg["follower_timeout_ms"] = 1
+    stops = []
+    monkeypatch.setattr(policy, "load", lambda *a: setattr(policy, "state", "ready"))
+    monkeypatch.setattr(policy, "stop", lambda: stops.append(True))
+    monkeypatch.setattr(policy, "tick", dict)
+    policy.running = True
+    real = runtime.time.monotonic_ns
+    offset = {"ns": 0}
+    monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: real() + offset["ns"])
+
+    def later():
+        offset["ns"] = 10_000_000
+        return ("tick", None)
+
+    quit = Envelope("session", "session", "b", 0, 0, 0, {"command": "quit"})
+    events = iter(
+        [
+            ("state_follower", follower_state("follower", [2000.0] * 17)),
+            ("state_left", follower_state("left", [1000.0] * 17)),
+            later,
+            ("session", quit),
+        ]
+    )
+
+    def event(node):
+        item = next(events)
+        return item() if callable(item) else item
+
+    monkeypatch.setattr(runtime, "_event", event)
+
+    class Node:
+        def send_output(self, output, value):
+            pass
+
+    runtime._policy(Node(), policy)
+    assert stops == [True]

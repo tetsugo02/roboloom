@@ -45,7 +45,7 @@ Each controller lists the followers it drives under `followers:`. Each follower 
 | `joint` | Exactly one (maps the leader's joints onto one follower's joints) |
 | `policy` | Every follower, in configuration order. The recorded `action` and `observation.state` join all followers, so the policy's output has the same layout; it is split in that order and sent to each follower |
 
-A controller of several followers sends nothing until every one of them has reported its state. When any of its followers latches `FAULT` or `ESTOP`, or its state gets older than `follower_timeout_ms`, the controller stops commanding all of them. A follower without commands keeps holding its target. The controller sends no further command until it has re-aligned. The controller's row on the screen shows why it stopped (`stopped_by`) and the followers it waits for (`waiting_state`).
+A controller of several followers sends nothing until every one of them has reported its state. When any of its followers latches `FAULT` or `ESTOP`, or its state gets older than `follower_timeout_ms`, the controller stops commanding all of them. A follower without commands keeps holding its target. The controller sends no further command until it has re-aligned. A `policy` controller stops running the policy for the current episode when a follower's state gets stale. The controller's row on the screen shows why it stopped (`stopped_by`) and the followers it waits for (`waiting_state`).
 
 `feedback` (force feedback) is available only on a controller of one follower.
 
@@ -262,7 +262,7 @@ With several followers, the following features are one vector joining all follow
 | `action.clamped` | 1 in rows where any follower limited its command |
 | `action.meta.<follower>.valid` / `clamped` / `seq` / `sent_ns` | Each follower's own: command present, limited, command number, send time |
 
-A follower that sent no command fills its part with the target it held (its state's `target`); filling with zeros would teach a policy a jump to 0. LeRobot training does not read `action.valid`, so select rows by `action.valid` when you only want valid ones. A row is final once every follower's commands have passed its interval, or after `grace_ms` (default 500 ms).
+A follower that sent no command fills its part with the target it held (its state's `target`, else its position); filling with zeros would teach a policy a jump to 0. LeRobot training does not read `action.valid`, so select rows by `action.valid` when you only want valid ones. A row is final once every follower's commands have passed its interval, or after `grace_ms` (default 500 ms).
 
 You can append further episodes to the same dataset. On resume, FPS and feature compatibility are checked. Give an option that changes the recorded features a `dataset`, so it gets a dataset of its own (see "Launch options").
 

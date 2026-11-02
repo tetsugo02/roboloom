@@ -325,8 +325,10 @@ def describe_report(report: dict) -> Text:
         missing = {
             k: round(v * 100, 1) for k, v in m.get("missing_rate", {}).items() if v
         }
-        tick = m.get("control_interval_ms", {})
-        text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {tick.get('p99', 0):.1f} ms max {tick.get('max', 0):.1f} ms"
+        ticks = list((m.get("control_interval_ms") or {}).values())  # per follower
+        p99 = max((t.get("p99", 0) for t in ticks), default=0)
+        worst = max((t.get("max", 0) for t in ticks), default=0)
+        text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {p99:.1f} ms max {worst:.1f} ms"
         if missing:
             text += f"  missing % {missing}"
         return Text(text, style="green")

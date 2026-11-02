@@ -280,7 +280,7 @@ def _home_follower(safety: FollowerSafety, robot: Follower, cfg: RobotConfig) ->
     """Start the move to the controller's saved pose; the error text, or ""."""
     spec = cfg.controller_for(robot.name).homes.get(robot.name)
     if spec is None:
-        return "home: no home pose configured for this follower's controller"
+        return ""  # this follower has no home pose; it stays where it is
     try:
         safety.home(spec.target(robot.joint_names), spec.max_speed, spec.pose.name)
     except (RuntimeError, ValueError) as exc:
@@ -442,9 +442,12 @@ def _controller(node, controller: Controller):
                 stopped = f"{silent[0]} silent"
             elif not silent and stopped.endswith(" silent"):
                 stopped = ""
-            if not missing and not silent:
-                for name, command in controller.update(msg, views).items():
+            latched = [n for n, v in views.items() if v.mode in ("FAULT", "ESTOP")]
+            if not missing and not silent and not latched:
+                sent = controller.update(msg, views)
+                for name, command in sent.items():
                     _send(node, command_output(name), command)
+                if sent:
                     commands.append(time.monotonic_ns())
         if status.due(now):
             fields = controller.status()
@@ -533,6 +536,9 @@ def _policy(node, controller: PolicyController):
         maxlen=1000
     )  # send times; command_hz counts the last second
     warmed: set[str] = set()
+    received: dict[str, int] = {}  # when each follower's state last arrived
+    stale_ns = int(controller.cfg.get("follower_timeout_ms", 150) * 1e6)
+    stopped = ""  # why the running episode was stopped: a silent follower
     while True:
         event_id, msg = _event(node)
         if _quit(event_id, msg):
@@ -543,6 +549,7 @@ def _policy(node, controller: PolicyController):
             else None
         )
         if follower in controller.followers and msg is not None:
+            received[follower] = time.monotonic_ns()
             controller.observe(follower, msg)
             if follower not in warmed:
                 # The first message on a dora connection stalls the receiving follower
@@ -564,9 +571,20 @@ def _policy(node, controller: PolicyController):
             command = msg.payload["command"]
             if command == "start":
                 controller.start(msg.payload.get("task", ""))
+                stopped = ""
             elif command in ("stop", "discard", "estop", "release"):
                 controller.stop()
         elif event_id == "tick":
+            now = time.monotonic_ns()
+            silent = [
+                n
+                for n in controller.followers
+                if n in received and now - received[n] > stale_ns
+            ]
+            if silent and controller.running:
+                # a frozen state would make the policy act on a robot that is not there
+                controller.stop()
+                stopped = f"{silent[0]} silent"
             try:
                 sent = controller.tick()
             except Exception as exc:  # noqa: BLE001 - a bad policy output stops the episode
@@ -581,6 +599,8 @@ def _policy(node, controller: PolicyController):
         if status.due(now):
             fields = controller.status()
             fields["command_hz"] = len([t for t in commands if now - t < 1e9])
+            if stopped:
+                fields["stopped_by"] = stopped
             level = (
                 "error"
                 if controller.state == "failed"

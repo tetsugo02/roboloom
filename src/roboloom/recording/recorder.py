@@ -6,7 +6,8 @@ Rows are finalized while the episode runs, so memory stays bounded:
 - Observations for row k are those the recorder had received by t_k.
 - `action[k]` joins, per follower, the first command it sent in [t_k, t_{k+1}). A
   follower that sent none fills its part with the target it held (its last state's
-  `target`), so a policy never learns a jump to zero; `action.meta.<follower>.valid`
+  `target`, else its position; zeros only without any state), so a policy does not
+  learn a jump to zero; `action.meta.<follower>.valid`
   is 0 and `action.valid` (every follower sent one) is 0 for that row.
 - A row is final once every follower's action stream has passed t_{k+1} (watermark),
   or `grace_ms` after t_{k+1} if a follower is silent.
@@ -285,9 +286,13 @@ class EpisodeRecorder:
             )
             if action is not None:
                 parts.append(action.payload["positions"])
-            else:  # the target it held: what the follower actually did
+            else:  # the target it held (else where it was): what it actually did
                 state = selected.get(name)
-                held = state.payload.get("target") if state is not None else None
+                held = (
+                    state.payload.get("target") or state.payload.get("positions")
+                    if state is not None
+                    else None
+                )
                 parts.append(held or [0.0] * len(follower.joint_names))
             clamped = bool(action and action.payload.get("clamped"))
             all_valid &= action is not None
