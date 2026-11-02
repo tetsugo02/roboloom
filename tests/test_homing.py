@@ -102,7 +102,7 @@ def home_tree(tmp_path: Path, **home) -> dict:
     pose["torso_yaw"], pose["head_yaw"] = 2148, 2000
     path = write_pose(tmp_path / "ready.yaml", pose)
     controller = tree["controllers"]["controller"]
-    controller["home"] = {"pose": str(path), "max_speed": 200, **home}
+    controller["home"] = {"pose": str(path), "max_speed": 200, "tolerance": 30, **home}
     controller["couplings"] = [
         {"joint": "head_yaw", "source": "torso_yaw", "scale": -1.0, "reference": 2048}
     ]
@@ -135,11 +135,11 @@ def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
 
 
 def test_home_settings_are_checked(tmp_path):
-    with pytest.raises(ConfigError, match="max_speed_counts_per_s"):
+    with pytest.raises(ConfigError, match="exceeds the controller's max_speed"):
         parse_config(home_tree(tmp_path, max_speed=10_000))
     tree = home_tree(tmp_path)
     tree["controllers"]["controller"]["home"].pop("max_speed")
-    with pytest.raises(ConfigError, match="needs pose and max_speed"):
+    with pytest.raises(ConfigError, match="needs pose, max_speed and tolerance"):
         parse_config(tree)
 
 
@@ -165,7 +165,13 @@ def safety() -> tuple[FollowerSafety, MockBus]:
     bus = MockBus(dimension=2)
     limit = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
     ctl = FollowerSafety(
-        {"name": "r", "limits": [limit, limit], "control_hz": 100}, bus
+        {
+            "name": "r",
+            "unit": "dynamixel_count",
+            "limits": [limit, limit],
+            "control_hz": 100,
+        },
+        bus,
     )
     ctl.start()
     return ctl, bus
@@ -302,7 +308,8 @@ def test_session_moves_home_then_records_from_there(tmp_path):
     controller = project / "nodes" / "controller.yaml"
     controller.write_text(
         controller.read_text()
-        + "home:\n  pose: ../poses/follower/ready.yaml\n  max_speed: 400\n  timeout_s: 20\n"
+        + "home:\n  pose: ../poses/follower/ready.yaml\n  max_speed: 400\n  tolerance: 30\n"
+        "  timeout_s: 20\n"
     )
     with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)

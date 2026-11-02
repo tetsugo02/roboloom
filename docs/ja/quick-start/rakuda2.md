@@ -47,7 +47,7 @@ uv run roboloom validate
 EEPROMが意図した設定と違う場合は，dataflowを止め，両腕を支えた状態で `commission` を実行します．表示された変更を確認してから承認します．EEPROMを書き込み，読み戻す操作です．
 
 ```bash
-uv run roboloom commission robot
+uv run roboloom commission follower
 uv run roboloom commission leader
 uv run roboloom run
 ```

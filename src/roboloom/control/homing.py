@@ -115,21 +115,26 @@ def parse_home(
     if raw is None:
         return None
     keys = {"pose", "max_speed", "tolerance", "timeout_s"}
-    if not isinstance(raw, dict) or not {"pose", "max_speed"} <= set(raw) <= keys:
+    if (
+        not isinstance(raw, dict)
+        or not {"pose", "max_speed", "tolerance"} <= set(raw) <= keys
+    ):
         raise ConfigError(
-            f"{owner}.home needs pose and max_speed (and may set tolerance, timeout_s)"
+            f"{owner}.home needs pose, max_speed and tolerance (in the follower's "
+            "unit; it may set timeout_s)"
         )
     if not isinstance(raw["pose"], str):
         raise ConfigError(f"{owner}.home.pose must be a path to a saved pose")
     try:
         max_speed = positive(raw["max_speed"], f"{owner}.home.max_speed")
-        tolerance = positive(raw.get("tolerance", 30), f"{owner}.home.tolerance")
+        tolerance = positive(raw.get("tolerance"), f"{owner}.home.tolerance")
         timeout_s = positive(raw.get("timeout_s", 30), f"{owner}.home.timeout_s")
     except ValueError as exc:
         raise ConfigError(str(exc)) from exc
     if max_speed > speed_limit:
         raise ConfigError(
-            f"{owner}.home.max_speed {max_speed} exceeds max_speed_counts_per_s {speed_limit}"
+            f"{owner}.home.max_speed {max_speed} exceeds the controller's max_speed "
+            f"{speed_limit} ({robot.unit}/s)"
         )
     path = Path(base_dir or ".") / raw["pose"]
     pose = load_pose(

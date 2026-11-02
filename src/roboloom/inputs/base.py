@@ -198,7 +198,12 @@ class JointInput(InputDevice):
         self.joint_names = names(
             cfg.get("joints") if joint_names is None else joint_names, f"{name}.joints"
         )
-        self.unit = unit or cfg.get("unit", "dynamixel_count")
+        declared = unit or cfg.get("unit")
+        if not isinstance(declared, str) or not declared:
+            raise ValueError(
+                f"{name}.unit: declare the unit of the joint positions (e.g. rad)"
+            )
+        self.unit = declared
         self.rate_hz(0)
         self.control: list[GroupSpec] | None = (
             parse_groups(cfg["control"], self.joint_names, name)

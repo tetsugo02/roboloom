@@ -141,7 +141,10 @@ def _gravity_group(config: str | Path | RobotConfig, node: str, group: str):
     cfg, owner = config_node(config, node)
     control = owner.control if isinstance(owner, JointInput) else None
     if not isinstance(owner, JointInput) or not control:
-        raise ConfigError(f"{node}: not an actuated input in {cfg.path}")
+        raise ConfigError(
+            f"{node}: not an actuated input in {cfg.path} (gravity tools are for "
+            "Dynamixel leaders whose groups run current-mode laws)"
+        )
     spec = next((g for g in control if g.name == group), None)
     if spec is None:
         raise ConfigError(f"{group}: no such control group of {node}")

@@ -47,7 +47,7 @@ If `SET_...` remains in a referenced configuration, its location is shown. Fill 
 If the EEPROM differs from the intended configuration, stop the dataflow and run `commission` while supporting both arms. Review the displayed changes before approving. This operation writes the EEPROM and reads it back.
 
 ```bash
-uv run roboloom commission robot
+uv run roboloom commission follower
 uv run roboloom commission leader
 uv run roboloom run
 ```

@@ -49,6 +49,21 @@ A controller of several followers sends nothing until every one of them has repo
 
 `feedback` (force feedback) is available only on a controller of one follower.
 
+## Units
+
+Followers and leaders (`inputs`) each declare the unit of their joint positions; there is no default. Rakuda2 uses `dynamixel_count`. A controller's `unit` must equal its leader's and follower's. Commands carry the unit too, and a follower refuses a command in another unit.
+
+The speed limit `max_speed` appears in several places, always in the follower's unit/s:
+
+| Where | What it limits |
+| --- | --- |
+| `max_speed` in the follower's `limits` (per joint) | The follower's safety check: targets beyond it are clipped. It is the last line of defence, so keep it above the controller's value |
+| A `joint` controller's `max_speed` | How far a teleoperation target may move per period |
+| A `policy` controller's `max_speed` | How far a policy target may move per period, one value per follower as `{follower: value}` (followers differ in unit) |
+| A controller's `home.max_speed` | The speed of the move to a saved pose; at most the controller's `max_speed` |
+
+`home.tolerance` (how close counts as arrived) is required, also in the follower's unit.
+
 ## Launch options
 
 `options:` names the features chosen at launch (gravity compensation, extra sensors, and so on). Each option replaces, adds, or removes node files. The node files under `nodes/` stay split by feature; an option only chooses which of them are used.

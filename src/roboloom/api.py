@@ -144,7 +144,7 @@ class InProcessSession:
         control_hz: int = 30,
         output: str | Path = "dataset",
         repo_id: str = "local/in-process",
-        unit: str = "dynamixel_count",
+        unit: str,
         dataset=None,
     ) -> InProcessSession:
         if (

@@ -10,6 +10,7 @@ from typing import ClassVar
 from ..control.homing import HomeSpec, parse_home
 from ..core.checks import positions, positive
 from ..core.protocol import Envelope
+from ..errors import ConfigError
 from ..inputs.base import InputDevice, JointInput
 from ..robots.base import Follower
 from .base import Controller, FollowerView
@@ -62,11 +63,12 @@ class JointController(Controller):
                 or not math.isfinite(j["offset"])
             ):
                 raise ValueError("joint sign must be +/-1 and offset finite")
-        for field in (
-            "alignment_tolerance",
-            "max_speed_counts_per_s",
-            "input_timeout_ms",
-        ):
+        if "max_speed_counts_per_s" in cfg:
+            raise ConfigError(
+                f"{name}.max_speed_counts_per_s was renamed: use max_speed "
+                f"({robot.unit}/s, the follower's unit)"
+            )
+        for field in ("alignment_tolerance", "max_speed", "input_timeout_ms"):
             positive(cfg.get(field), f"{name}.{field}")
         self.source_joints = source.joint_names
         self.couplings = JointCouplings(
@@ -77,7 +79,7 @@ class JointController(Controller):
             name,
             cfg.get("__dir__"),
             robot,
-            cfg["max_speed_counts_per_s"],
+            cfg["max_speed"],
         )
         if home is not None:
             self.homes[robot.name] = home
@@ -118,7 +120,7 @@ class JointController(Controller):
         if self.worst is not None and self.state in ("aligning", "following"):
             out["worst_joint"], out["worst_diff"] = (
                 self.worst[0],
-                round(self.worst[1], 1),
+                float(f"{self.worst[1]:.4g}"),  # 4 significant digits in any unit
             )
         if self.feedback is not None:
             out["feedback_gate"] = self.feedback.gate
@@ -185,7 +187,7 @@ class JointController(Controller):
             self.last_target = current
             self.last_target_ns = now
         dt = max((now - self.last_target_ns) / 1e9, 1e-6)
-        step = self.cfg["max_speed_counts_per_s"] * dt
+        step = self.cfg["max_speed"] * dt
         # Step from what the follower holds, not from our own last output: while it is
         # not armed (or refuses a command) our targets would otherwise run ahead of it.
         previous = (

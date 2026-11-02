@@ -78,7 +78,7 @@ def _names(text: str) -> list[str]:
 
 def _with_config(argv: list[str]) -> list[str]:
     """Move an optional leading configuration word into `--config`, so `roboloom run`,
-    `roboloom run rakuda2` and `roboloom commission robot` all parse."""
+    `roboloom run rakuda2` and `roboloom commission follower` all parse."""
     if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
         argv = ["launch", *argv]  # `roboloom`, `roboloom --mock`: the launcher
     elif argv[0] not in CONFIGURED and is_configuration(argv[0]):
@@ -140,13 +140,13 @@ def main(argv: list[str] | None = None) -> None:
     com = sub.add_parser(
         "commission",
         parents=[configured, devices],
-        help="write the Operating Mode / Current Limit a node expects (EEPROM)",
+        help="Dynamixel: write the Operating Mode / Current Limit a node expects (EEPROM)",
     )
     com.add_argument("node")
     wd = sub.add_parser(
         "watchdog-test",
         parents=[configured, devices],
-        help="bench test: does the Bus Watchdog stop a current-mode motor (torques it)",
+        help="Dynamixel bench test: does the Bus Watchdog stop a current-mode motor (torques it)",
     )
     wd.add_argument("node")
     wd.add_argument("joint")
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> None:
     gc = sub.add_parser(
         "gravity-check",
         parents=[configured, devices],
-        help="release the arm with and without gravity compensation and compare (torques it)",
+        help="Dynamixel leader: release the arm with and without gravity compensation and compare (torques it)",
     )
     gc.add_argument("node")
     gc.add_argument("group", help="control group, e.g. right_arm")
@@ -168,18 +168,19 @@ def main(argv: list[str] | None = None) -> None:
     tune = sub.add_parser(
         "tune-gravity",
         parents=[configured, devices],
-        help="tune gravity compensation joint by joint with a live guide (torques the arm)",
+        help="Dynamixel leader: tune gravity compensation joint by joint with a live guide (torques the arm)",
     )
     tune.add_argument("node")
     tune.add_argument("group", help="gravity_comp group, e.g. right_arm")
     calib = sub.add_parser(
-        "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
+        "calibrate-joints",
+        help="Dynamixel: record zero counts at the URDF zero pose (read-only)",
     )
     calib.add_argument("calibration")
     calib.add_argument("--joints", type=lambda text: text.split(","), default=None)
     travel = sub.add_parser(
         "measure-travel",
-        help="record each joint's travel while moving the limp arm (read-only)",
+        help="Dynamixel: record each joint's travel while moving the limp arm (read-only)",
     )
     travel.add_argument("calibration")
     travel.add_argument("--out", required=True)
@@ -196,7 +197,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     pose.add_argument("--force", action="store_true", help="replace an existing pose")
     ident = sub.add_parser(
-        "identify-gravity", help="collect holding currents and fit a gravity model"
+        "identify-gravity",
+        help="Dynamixel: collect holding currents and fit a gravity model",
     )
     ident.add_argument("calibration")
     ident.add_argument("--out", required=True)

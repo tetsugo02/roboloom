@@ -4,7 +4,7 @@
 
 ## 設定とデバイスの選び方
 
-設定は機体ごとに1つ（`.roboloom/<robot>/config.yaml`）です．表の `[robot]` は省略でき，`.roboloom/` の下に機体が1台だけならそれを使います．機体名（`rakuda2`）やYAMLファイルのパスも指定できます．ほかの位置引数を取るコマンドでは，先頭の語が設定を指すときだけ設定として扱います（`roboloom commission robot` と `roboloom commission rakuda2 robot`，`roboloom session home` と `roboloom session rakuda2 home` はどちらも有効です）．
+設定は機体ごとに1つ（`.roboloom/<robot>/config.yaml`）です．表の `[robot]` は省略でき，`.roboloom/` の下に機体が1台だけならそれを使います．機体名（`rakuda2`）やYAMLファイルのパスも指定できます．ほかの位置引数を取るコマンドでは，先頭の語が設定を指すときだけ設定として扱います（`roboloom commission follower` と `roboloom commission rakuda2 follower`，`roboloom session home` と `roboloom session rakuda2 home` はどちらも有効です）．
 
 既定は実機です．デバイスを開くコマンドは次の指定を受け付けます．
 
@@ -36,6 +36,8 @@
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存 |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る |
+
+`probe`，`calibrate-joints`，`measure-travel`，`identify-gravity`，`commission`，`watchdog-test`，`tune-gravity`，`gravity-check` はDynamixelの機体専用です．Dynamixelでないノードを指定すると，理由を示して拒否します．
 
 例：
 

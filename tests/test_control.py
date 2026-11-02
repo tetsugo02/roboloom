@@ -31,7 +31,16 @@ def command(seq, target, now, deadline=None):
 
 def safety(**cfg):
     bus = MockBus(dimension=1)
-    ctl = FollowerSafety({"name": "r", "limits": [LIMIT], "control_hz": 30, **cfg}, bus)
+    ctl = FollowerSafety(
+        {
+            "name": "r",
+            "unit": "dynamixel_count",
+            "limits": [LIMIT],
+            "control_hz": 30,
+            **cfg,
+        },
+        bus,
+    )
     ctl.start()
     ctl.arm()
     return ctl, bus
@@ -226,5 +235,5 @@ def test_controller_steps_from_the_follower_target_not_its_own_output():
         t = now + k * 33_000_000
         cmd = ctl.step(intent(k, 2048 + 20 * k, t), hold, t, follower_target=hold)
     assert cmd is not None
-    step = 500 * 0.033  # max_speed_counts_per_s in the mock controller
+    step = 500 * 0.033  # max_speed of the mock controller (counts/s)
     assert max(abs(x - 2048) for x in cmd.payload["positions"]) <= step + 1e-6

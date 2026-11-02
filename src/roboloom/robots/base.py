@@ -97,7 +97,12 @@ class Follower:
         self.joint_names = names(
             cfg.get("joints") if joint_names is None else joint_names, f"{name}.joints"
         )
-        self.unit = unit or cfg.get("unit", "dynamixel_count")
+        declared = unit or cfg.get("unit")
+        if not isinstance(declared, str) or not declared:
+            raise ValueError(
+                f"{name}.unit: declare the unit of the joint positions (e.g. rad)"
+            )
+        self.unit = declared
         self.control_hz = positive(cfg.get("control_hz"), f"{name}.control_hz")
         self.limits = check_limits(self.joint_names, cfg.get("limits"), name)
         self.health = check_health(cfg.get("health"), len(self.joint_names), name)

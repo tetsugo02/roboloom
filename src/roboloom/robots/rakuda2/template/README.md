@@ -186,7 +186,7 @@ is **not verified on hardware**; check every step with the arms supported. Files
    (position mode). Do it first: every command with `--with bilateral`, `commission`
    included, loads `nodes/effort.yaml` and stops while `effort_gravity_<side>.yaml` is missing.
 2. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/follower_bilateral.yaml`, then write
-   Operating Mode 5 and the Current Limit: `uv run roboloom commission robot --with bilateral`
+   Operating Mode 5 and the Current Limit: `uv run roboloom commission follower --with bilateral`
    (or confirm the EEPROM write when launching with `bilateral`). Launching without
    `bilateral` offers to write Mode 3 back; `nodes/follower.yaml` refuses to start on Mode 5 motors.
 3. `uv run roboloom run --with bilateral`: the follower should track and

@@ -8,7 +8,7 @@ input: leader
 followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
-max_speed_counts_per_s: 2048
+max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
 # The actual configuration also needs the joints mapping table for all 17 joints.
@@ -21,7 +21,8 @@ These are the values from the distributed template. Set them after checking the 
 | Key | Meaning |
 | --- | --- |
 | `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
-| `max_speed_counts_per_s` | Upper limit on the rate of change of the target |
+| `unit` | Unit of the joint positions; must equal the leader's and the follower's (Rakuda2: `dynamixel_count`) |
+| `max_speed` | Upper limit on the rate of change of the target (follower unit/s; counts/s on Rakuda2) |
 | `followers` | The followers it drives; a `joint` controller drives exactly one |
 | `command_deadline_ms` | Validity period of commands sent to the follower |
 | `input_timeout_ms` | Time until leader input is judged stale |
@@ -101,7 +102,7 @@ To put the follower in the pose, teleoperate it and `quit` with `hold` (exit wit
 home:
   pose: ../poses/follower/ready.yaml   # one of the saved poses
   max_speed: 200              # counts/s (about 18°/s); a limit that keeps the move slow
-  tolerance: 30               # reached when every joint is this close
+  tolerance: 30               # reached when every joint is this close (required; follower unit)
   timeout_s: 30
 ```
 

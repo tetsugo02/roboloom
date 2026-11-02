@@ -9,6 +9,7 @@ def create(output):
         robot="toy",
         bus=MockBus(dimension=2),
         joint_names=["a", "b"],
+        unit="count",
         limits=[
             {"name": name, "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
             for name in ("a", "b")

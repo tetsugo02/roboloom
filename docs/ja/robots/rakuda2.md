@@ -64,8 +64,8 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 制約：
 
 - `goal_current_mA` は，EEPROMの `current_limit` 以下でなければ起動を拒否します．
-- Mode 5へ書き換えた後のモーターでは，通常の `nodes/follower.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission robot` で書き戻します．端末から実機で起動する場合は，CLIが起動前に差分を表示し，確認してから書き戻します．
-- `bilateral` を有効にしたコマンド（`roboloom commission robot --with bilateral` など）は，設定全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
+- Mode 5へ書き換えた後のモーターでは，通常の `nodes/follower.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission follower` で書き戻します．端末から実機で起動する場合は，CLIが起動前に差分を表示し，確認してから書き戻します．
+- `bilateral` を有効にしたコマンド（`roboloom commission follower --with bilateral` など）は，設定全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
 - 設定キーは [設定](../reference/configuration.md) の「力の逆送」にあります．
 
 ## 起動前の確認

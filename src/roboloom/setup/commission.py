@@ -46,7 +46,10 @@ def plan_commission(config: str | Path | RobotConfig, node: str) -> CommissionPl
     cfg, owner = config_node(config, node)
     expected = getattr(owner, "expected_eeprom", None)
     if expected is None:
-        raise ConfigError(f"{node}: not a commissionable Dynamixel node")
+        raise ConfigError(
+            f"{node}: commission is for Dynamixel nodes (it writes their EEPROM); "
+            f"{type(owner).__name__} declares no EEPROM"
+        )
     require_hardware(cfg, "commission")
     joints, ids, want = expected()
     plan = CommissionPlan(node, str(getattr(owner, "port", "")), list(ids))

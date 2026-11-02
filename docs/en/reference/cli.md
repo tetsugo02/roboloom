@@ -4,7 +4,7 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 
 ## Choosing the configuration and devices
 
-Each robot has one configuration (`.roboloom/<robot>/config.yaml`). `[robot]` in the table is optional: when `.roboloom/` holds a single robot, that one is used. A robot name (`rakuda2`) or a YAML file path also works. For commands that take other positional words, the first word is the configuration only when it names one (`roboloom commission robot` and `roboloom commission rakuda2 robot`, `roboloom session home` and `roboloom session rakuda2 home` are all valid).
+Each robot has one configuration (`.roboloom/<robot>/config.yaml`). `[robot]` in the table is optional: when `.roboloom/` holds a single robot, that one is used. A robot name (`rakuda2`) or a YAML file path also works. For commands that take other positional words, the first word is the configuration only when it names one (`roboloom commission follower` and `roboloom commission rakuda2 follower`, `roboloom session home` and `roboloom session rakuda2 home` are all valid).
 
 Real hardware is the default. Commands that open devices accept:
 
@@ -36,6 +36,8 @@ Real hardware is the default. Commands that open devices accept:
 | `record [robot] --task <text> --seconds <n>` | Collect fixed-duration episodes (`--episodes` sets the count; `--home` moves to the initial pose before each) |
 | `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task` |
 | `session [robot] <operation> [task]` | Send an operation to a running `run` |
+
+`probe`, `calibrate-joints`, `measure-travel`, `identify-gravity`, `commission`, `watchdog-test`, `tune-gravity` and `gravity-check` are for Dynamixel robots only; given a node that is not Dynamixel, they refuse and say why.
 
 Examples:
 

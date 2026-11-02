@@ -82,7 +82,7 @@ Gainは0.1刻みで[0, 3]，holdは5 mA刻みで[0, 100]です．入力欄・確
 
 ## 表示の拡張
 
-通常の拡張は，既存のrobot・input・sensor・controller登録と状態通知を使います．`StatusReporter` で標準のrole・level・timestamp・fieldsを通知し，項目名には単位を含めます．共通画面は関節数・名前・ID・単位を固定しません．未知の役割・項目も汎用key/valueで表示します．
+通常の拡張は，既存のfollower・input・sensor・controller登録と状態通知を使います．`StatusReporter` で標準のrole・level・timestamp・fieldsを通知し，項目名には単位を含めます．共通画面は関節数・名前・ID・単位を固定しません．未知の役割・項目も汎用key/valueで表示します．
 
 専用表示が必要な場合だけ，起動前にPresenterを明示登録します．機種（ノードYAMLの `type`），役割Presenter，既存の `ui.render.RENDERERS` の役割表示，汎用表示の順に選びます．Presenterは `NodeSnapshot` を受け取り `Presentation` を返し，Widgetやデバイスを扱いません．
 

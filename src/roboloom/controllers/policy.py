@@ -17,7 +17,7 @@ FollowerSafety checks them like any teleoperation command.
     observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
     action_horizon: 8
-    max_speed_counts_per_s: 1024
+    max_speed: {follower: 1024}         # per follower, in its unit/s
     command_deadline_ms: 200
 """
 
@@ -32,6 +32,7 @@ import numpy as np
 
 from ..core.checks import positive
 from ..core.protocol import Envelope
+from ..errors import ConfigError
 from ..robots.base import Follower
 from .base import Controller, FollowerView
 
@@ -66,9 +67,21 @@ class PolicyController(Controller):
         self.horizon = int(
             positive(cfg.get("action_horizon", 1), f"{name}.action_horizon")
         )
-        self.max_speed = positive(
-            cfg.get("max_speed_counts_per_s"), f"{name}.max_speed_counts_per_s"
-        )
+        if "max_speed_counts_per_s" in cfg:
+            raise ConfigError(
+                f"{name}.max_speed_counts_per_s was renamed: use max_speed, one value "
+                "per follower in its unit/s: {follower: ...}"
+            )
+        speeds = cfg.get("max_speed")
+        if not isinstance(speeds, dict) or set(speeds) != set(self.followers):
+            raise ValueError(
+                f"{name}.max_speed: one value per follower, in that follower's unit/s "
+                f"({', '.join(f'{n}: <{f.unit}/s>' for n, f in self.followers.items())})"
+            )
+        # followers differ in unit (rad, m, counts): never one speed for all of them
+        self.max_speed = {
+            n: positive(v, f"{name}.max_speed.{n}") for n, v in speeds.items()
+        }
         self.policy: Policy | None = None
         self.sources: dict[str, Recordable] = {}  # set by `bind`
         self.dataset_fps = 30.0  # set by `bind`
@@ -172,7 +185,7 @@ class PolicyController(Controller):
             now = time.monotonic_ns()
         action = self.queue.popleft()
         dt = max((now - self.last_ns) / 1e9, 1e-6) if self.last_ns else 1 / self.rate_hz
-        step = self.max_speed * min(dt, 2 / self.rate_hz)
+        span = min(dt, 2 / self.rate_hz)
         out: dict[str, Envelope] = {}
         start = 0
         for name, follower in self.followers.items():
@@ -181,6 +194,7 @@ class PolicyController(Controller):
             payload = states[name].payload  # type: ignore[union-attr]  # checked above
             # step from what the follower holds, as the joint controller does
             previous = list(payload.get("target") or payload["positions"])
+            step = self.max_speed[name] * span
             limited = [
                 max(p - step, min(p + step, float(x)))
                 for p, x in zip(previous, part, strict=True)

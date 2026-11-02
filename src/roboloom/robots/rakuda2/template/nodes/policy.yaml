@@ -11,5 +11,5 @@ kwargs: {}
 observe: [camera, digit_left, digit_right]
 rate_hz: 15
 action_horizon: 8
-max_speed_counts_per_s: 1024
+max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)
 command_deadline_ms: 300

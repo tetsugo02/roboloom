@@ -104,7 +104,10 @@ def watchdog_test(
     cfg, owner = config_node(config, node)
     expected = getattr(owner, "expected_eeprom", None)
     if expected is None:
-        raise ConfigError(f"{node}: not a Dynamixel node")
+        raise ConfigError(
+            f"{node}: watchdog-test is for Dynamixel nodes; "
+            f"{type(owner).__name__} is not one"
+        )
     require_hardware(cfg, "watchdog-test")
     period_ms = getattr(owner, "cfg", {}).get("bus_watchdog_ms")
     if not period_ms:

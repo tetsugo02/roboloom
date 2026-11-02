@@ -8,7 +8,7 @@ input: leader
 followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
-max_speed_counts_per_s: 2048
+max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
 # 実際の設定には17関節のjoints対応表も必要です．
@@ -21,7 +21,8 @@ input_timeout_ms: 150
 | 項目 | 意味 |
 | --- | --- |
 | `alignment_tolerance` | 追従を始める前と，毎回のエピソード開始（`start`）の前に許すleaderとfollowerの関節差（counts）．超えていると `start` を拒否します |
-| `max_speed_counts_per_s` | 目標値の変化速度の上限 |
+| `unit` | 関節の位置の単位．leaderとfollowerの単位と一致させる（Rakuda2は `dynamixel_count`） |
+| `max_speed` | 目標値の変化速度の上限（followerの単位/s．Rakuda2はcounts/s） |
 | `followers` | 動かすフォロワ．`joint` controllerはちょうど1台です |
 | `command_deadline_ms` | followerへ送る指令の有効期限 |
 | `input_timeout_ms` | leader入力が古いと判定するまでの時間 |
@@ -101,7 +102,7 @@ followerを姿勢にするには，遠隔操作で動かしてから `quit` で 
 home:
   pose: ../poses/follower/ready.yaml   # 保存した姿勢のどれか
   max_speed: 200              # counts/s（約18°/s）．遅く動かすための上限
-  tolerance: 30               # 各関節がこの差以内なら到着
+  tolerance: 30               # 各関節がこの差以内なら到着（必須．followerの単位）
   timeout_s: 30
 ```
 

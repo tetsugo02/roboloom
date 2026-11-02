@@ -57,6 +57,8 @@ class FollowerSafety:
     LATCHED = ("FAULT", "ESTOP", "RELEASED")
 
     def __init__(self, cfg: dict, bus):
+        if not cfg.get("unit"):
+            raise ValueError("FollowerSafety needs the follower's unit (cfg['unit'])")
         self.cfg, self.bus = cfg, bus
         self.dim = len(cfg["limits"])
         self.names = [
@@ -118,7 +120,7 @@ class FollowerSafety:
         if (
             command.kind != "command"
             or command.payload.get("follower") != self.cfg.get("name", "follower")
-            or command.payload.get("unit") != self.cfg.get("unit", "dynamixel_count")
+            or command.payload.get("unit") != self.cfg["unit"]
         ):
             return
         if command.boot_id != self.last_boot:
@@ -260,7 +262,7 @@ class FollowerSafety:
                 return (
                     None,
                     False,
-                    f"{name} jumps {inside - ref:+.0f} > max_jump {bound['max_jump']}",
+                    f"{name} jumps {inside - ref:+.4g} > max_jump {bound['max_jump']}",
                 )
             step = bound["max_speed"] * dt
             limited = min(ref + step, max(ref - step, inside))

@@ -129,7 +129,15 @@ def test_follower_safety_drives_a_device_like_a_bus():
     ]
     dev, bus = device(groups, [3, 3, 5])
     limit = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
-    safety = FollowerSafety({"name": "r", "limits": [limit] * 3, "control_hz": 30}, dev)
+    safety = FollowerSafety(
+        {
+            "name": "r",
+            "unit": "dynamixel_count",
+            "limits": [limit] * 3,
+            "control_hz": 30,
+        },
+        dev,
+    )
     safety.start()
     assert bus.torque == [True, True, True] and bus.goal_current[2] == 300
     safety.stop()

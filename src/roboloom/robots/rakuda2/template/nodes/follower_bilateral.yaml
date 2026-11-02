@@ -12,7 +12,7 @@
 # limits: min/max are only the EEPROM bounds for now (no extra protection); narrow them to the
 #   measured safe travel of each joint before unattended use.
 # limits: software range in counts (inside the EEPROM limits), max_speed counts/s (soft clamp;
-#   keep it above the controller's max_speed_counts_per_s so it only catches real overspeed),
+#   keep it above the controller's max_speed so it only catches real overspeed),
 # max_jump counts (hard reject). Measure the range on this robot; do not copy the mock values.
 # health.max_current_mA: FAULT before the motor's own overload shutdown; validate on hardware.
 # torque: set false for the first run to record states and sensors without moving the follower.

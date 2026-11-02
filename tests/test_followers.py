@@ -220,7 +220,7 @@ def policy_tree(tmp_path: Path) -> dict:
             "observe": ["camera"],
             "rate_hz": 10,
             "action_horizon": 2,
-            "max_speed_counts_per_s": 50,
+            "max_speed": {"follower": 50, "left": 50},
             "command_deadline_ms": 300,
         }
     }
@@ -439,3 +439,36 @@ def test_one_policy_drives_two_followers_in_mock(tmp_path, monkeypatch):
     assert result.saved, result
     assert result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert max(result.metrics["action_missing_rate"].values()) < 0.5, result.metrics
+
+
+# -- units ----------------------------------------------------------------------
+
+
+def test_followers_and_inputs_declare_their_unit():
+    from roboloom.inputs.base import JointInput
+    from roboloom.robots.base import Follower
+    from roboloom.robots.safety import FollowerSafety
+
+    limits = [{"name": "a", "min": 0, "max": 1, "max_speed": 1, "max_jump": 1}]
+    with pytest.raises(ValueError, match="declare the unit"):
+        Follower("arm", {"limits": limits, "control_hz": 30}, ["a"])
+    assert (
+        Follower("arm", {"limits": limits, "control_hz": 30, "unit": "rad"}, ["a"]).unit
+        == "rad"
+    )
+    with pytest.raises(ValueError, match="declare the unit"):
+        JointInput("leader", {}, ["a"])
+    with pytest.raises(ValueError, match="unit"):
+        FollowerSafety({"name": "arm", "limits": limits}, None)
+
+
+def test_count_specific_keys_were_renamed(tmp_path):
+    tree = read_config(dual_mock(tmp_path))
+    controller = tree["controllers"]["left_controller"]
+    controller["max_speed_counts_per_s"] = controller.pop("max_speed")
+    with pytest.raises(ConfigError, match="renamed: use max_speed"):
+        parse_config(tree)
+    tree = policy_tree(tmp_path / "p")
+    tree["controllers"]["policy"]["max_speed"] = 50
+    with pytest.raises(ValueError, match="one value per follower"):
+        parse_config(tree)

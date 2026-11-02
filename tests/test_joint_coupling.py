@@ -260,7 +260,13 @@ def test_compensated_commands_still_pass_through_robot_safety_limits(
     ]
     limits[1]["min"] = 2000  # head has little travel left in this direction
     safety = FollowerSafety(
-        {"name": ctl.follower.name, "limits": limits, "control_hz": 30}, bus
+        {
+            "name": ctl.follower.name,
+            "unit": ctl.follower.unit,
+            "limits": limits,
+            "control_hz": 30,
+        },
+        bus,
     )
     safety.start()
     safety.arm()

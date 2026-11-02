@@ -64,8 +64,8 @@ The option `bilateral` is the combination that returns the external force on the
 Limitations:
 
 - Start is refused unless `goal_current_mA` is at most the EEPROM `current_limit`.
-- After the motors are rewritten to Mode 5, the standard `nodes/follower.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission robot`; on a hardware launch from a terminal, the CLI shows the differences before launching and writes them back after confirmation.
-- Every command with `bilateral` enabled (such as `roboloom commission robot --with bilateral`) loads the whole configuration, so it stops while the follower gravity models (`calibration/effort_gravity_<side>.yaml`) are missing. Identification works before the Mode is changed (still Mode 3), so identify first, then `commission`.
+- After the motors are rewritten to Mode 5, the standard `nodes/follower.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission follower`; on a hardware launch from a terminal, the CLI shows the differences before launching and writes them back after confirmation.
+- Every command with `bilateral` enabled (such as `roboloom commission follower --with bilateral`) loads the whole configuration, so it stops while the follower gravity models (`calibration/effort_gravity_<side>.yaml`) are missing. Identification works before the Mode is changed (still Mode 3), so identify first, then `commission`.
 - The configuration keys are under "Force feedback" in [Configuration](../reference/configuration.md).
 
 ## Checks before launch

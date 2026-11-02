@@ -56,6 +56,7 @@ with InProcessSession.from_components(
     robot="my-mock",
     bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
+    unit="count",
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
         {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
