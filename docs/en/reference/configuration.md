@@ -82,6 +82,7 @@ Each follower model and each actuated input model (a leader that runs control la
 | Rakuda2 follower | `falls` | `holds`; `torque_off` when a group runs a current-mode law (`gravity_comp`, `impedance`, `spring`), which goes limp on close and on the watchdog. `current_position` keeps its goal position, so it holds |
 | Rakuda-mini (leader) | `falls` | `torque_off` (limp when the session ends) |
 | External bus (`InProcessSession.from_components`) | `falls` | `unknown` (the worst case, since nothing is known) |
+| PiPER follower ([in development](../contribution/piper.md)) | `falls` | `unknown` (not checked) |
 
 - "Quit with followers holding" is offered only when some follower has `unattended: holds`. The exit confirmation names the followers that do not hold and says that they go (or may go) limp.
 - The `release` confirmation tells you to support the `falls` devices and to take objects out of the `lets_go` devices; `stays` devices are not named. Release is confirmed for every device.

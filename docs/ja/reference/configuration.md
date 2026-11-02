@@ -82,6 +82,7 @@ options:
 | Rakuda2フォロワ | `falls` | `holds`．電流制御の制御則（`gravity_comp`，`impedance`，`spring`）のグループがあると `torque_off`（閉じるときとwatchdogで脱力するため）．`current_position` は位置を保つので `holds` |
 | Rakuda-mini（leader） | `falls` | `torque_off`（セッションの終了時に脱力） |
 | 外部のバス（`InProcessSession.from_components`） | `falls` | `unknown`（分からないので最悪の場合） |
+| PiPERフォロワ（[開発中](../contribution/piper.md)） | `falls` | `unknown`（確かめていない） |
 
 - 「保持したまま終了」は，`unattended: holds` のフォロワがあるときだけ選べます．保持しないフォロワは，終了の確認で名前と，脱力する（または，するかもしれない）ことを示します．
 - `release` の確認では，`falls` の機器に「支える」，`lets_go` の機器に「物を外す」と表示します．`stays` の機器は名前を出しません．確認そのものは，どの機器でも必要です．

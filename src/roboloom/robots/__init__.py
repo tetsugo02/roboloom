@@ -12,5 +12,6 @@ FOLLOWERS: Registry[Follower] = Registry(
     "follower",
     {
         "rakuda2_follower": "roboloom.robots.rakuda2.follower:RakudaFollower",
+        "piper_follower": "roboloom.robots.piper.follower:PiperFollower",
     },
 )

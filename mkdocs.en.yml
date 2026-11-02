@@ -31,3 +31,4 @@ nav:
   - Contribution:
       - Development: contribution.md
       - Bilateral control design: contribution/bilateral.md
+      - PiPER follower (in development): contribution/piper.md

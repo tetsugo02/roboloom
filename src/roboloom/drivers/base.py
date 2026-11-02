@@ -23,6 +23,7 @@ class JointState:
     positions: list[float]
     velocities: list[float] | None = None  # position units per second
     currents_mA: list[float] | None = None
+    efforts_Nm: list[float] | None = None  # joint torque, for buses that report it
 
 
 @dataclass
@@ -30,6 +31,9 @@ class Health:
     hardware_error: list[int] = field(default_factory=list)  # per motor, 0 = none
     temperature_c: list[float] = field(default_factory=list)
     watchdog_fired: bool = False
+    # problems the bus already put into words (e.g. "joint3: driver over-current"); any
+    # entry latches FAULT
+    faults: list[str] = field(default_factory=list)
 
 
 def read_state(bus: JointBus) -> JointState:

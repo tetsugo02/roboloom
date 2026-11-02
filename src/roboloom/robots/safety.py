@@ -218,6 +218,8 @@ class FollowerSafety:
         if health is not None:
             if health.watchdog_fired:
                 return "bus watchdog fired"
+            if health.faults:
+                return "; ".join(health.faults)
             if any(health.hardware_error):
                 return f"hardware error {health.hardware_error}"
             limit = self.health.get("max_temperature_c")
@@ -316,6 +318,7 @@ class FollowerSafety:
                 "positions": state.positions,
                 "velocities": state.velocities,
                 "currents_mA": state.currents_mA,
+                "efforts_Nm": state.efforts_Nm,
                 "mode": self.mode,
                 "reason": self.reason,
                 "tick_interval_ms": interval,
