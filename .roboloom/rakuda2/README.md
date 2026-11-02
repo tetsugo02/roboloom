@@ -8,7 +8,7 @@ measurements (`*.npz`), logs and datasets.
 | file | what | filled by |
 | --- | --- | --- |
 | `config.yaml` | the one configuration: leader teleop + RealSense, and the launch `options:` below | — |
-| `nodes/robot.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
+| `nodes/follower.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
 | `nodes/camera.yaml`, `nodes/digit_*.yaml` | sensor serials | step 1 |
 | `calibration/leader_<side>.yaml` | joint map for gravity identification | step 4 |
 | `calibration/gravity_<side>.yaml` | identified gravity model | step 4 |

@@ -9,6 +9,13 @@
 - When a repository's documentation and its existing code disagree, follow the conventions used in the existing code, and in your final reply point out each inconsistency you found between the documentation and the code.
 - Design and build the system to easily accommodate future additions of new robots, controller arms, or control systems such as gello.
 
+## Paused work
+- Bilateral control (force feedback from the follower to the leader: `feedback:`, the effort estimators, the `bilateral` option, `docs/*/contribution/bilateral.md`) is paused as of 2026-11-03 until the user says to resume it.
+  - Do not extend, fix, tune, or test it on hardware, and do not propose bilateral work or ask about it.
+  - Do not delete the existing bilateral code, tests, or docs. When other changes touch them (renames, signature changes), keep them compiling and their tests passing, without adding features.
+  - Still design new work so that bilateral control can be added later: keep a path for effort feedback from followers to inputs (one-follower controllers, follower effort signals, input-side current laws) instead of designing it out.
+  - Uncommitted bilateral files in a user's `.roboloom/<robot>/` are the user's; leave them as they are.
+
 # Documentation
 
 - When adding a feature or changing existing behavior, update the affected pages in `docs/` in the same change. Keep configuration examples, CLI commands, Python API examples, defaults, and limitations consistent with the implementation. Update the README and robot templates' README when their instructions are affected.

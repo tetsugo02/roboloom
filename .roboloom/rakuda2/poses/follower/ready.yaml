@@ -1,6 +1,7 @@
-# roboloom capture-pose 2026-10-27 19:28, robot `robot` (/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT1JD4T5-if00-port0).
-# Select it in the controller YAML: home: {pose: ../poses/ready.yaml, ...}
-robot_type: rakuda2
+# roboloom capture-pose 2026-10-27 19:28, follower `follower` (/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT1JD4T5-if00-port0).
+# Select it in the controller YAML: home: {pose: ../poses/follower/ready.yaml, ...}
+follower: follower
+model: rakuda2
 unit: dynamixel_count
 pose:
   torso_yaw: 2104
