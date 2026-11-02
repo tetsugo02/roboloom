@@ -4,22 +4,34 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Mapping
+from typing import ClassVar
 
-from ..control.homing import parse_home
+from ..control.homing import HomeSpec, parse_home
 from ..core.checks import positions, positive
 from ..core.protocol import Envelope
+from ..errors import ConfigError
 from ..inputs.base import InputDevice, JointInput
-from ..robots.base import Robot
-from .base import Controller
+from ..robots.base import Follower
+from .base import Controller, FollowerView
 from .coupling import JointCouplings
 from .feedback import FeedbackMap
 
 
 class JointController(Controller):
+    """One leader's joints onto one follower's joints."""
+
+    max_followers: ClassVar[int | None] = 1
+
     def __init__(
-        self, name: str, cfg: dict, source: InputDevice, robot: Robot, robot_id: str
+        self,
+        name: str,
+        cfg: dict,
+        source: InputDevice,
+        followers: Mapping[str, Follower],
     ):
-        super().__init__(name, cfg, source, robot, robot_id)
+        super().__init__(name, cfg, source, followers)
+        robot = self.follower
         if not isinstance(source, JointInput):
             raise TypeError(
                 f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}"
@@ -51,23 +63,26 @@ class JointController(Controller):
                 or not math.isfinite(j["offset"])
             ):
                 raise ValueError("joint sign must be +/-1 and offset finite")
-        for field in (
-            "alignment_tolerance",
-            "max_speed_counts_per_s",
-            "input_timeout_ms",
-        ):
+        if "max_speed_counts_per_s" in cfg:
+            raise ConfigError(
+                f"{name}.max_speed_counts_per_s was renamed: use max_speed "
+                f"({robot.unit}/s, the follower's unit)"
+            )
+        for field in ("alignment_tolerance", "max_speed", "input_timeout_ms"):
             positive(cfg.get(field), f"{name}.{field}")
         self.source_joints = source.joint_names
         self.couplings = JointCouplings(
             cfg.get("couplings", []), robot.joint_names, name
         )
-        self.home = parse_home(
+        home = parse_home(
             cfg.get("home"),
             name,
             cfg.get("__dir__"),
             robot,
-            cfg["max_speed_counts_per_s"],
+            cfg["max_speed"],
         )
+        if home is not None:
+            self.homes[robot.name] = home
         if "feedback" in cfg:
             self.feedback = FeedbackMap(cfg["feedback"], name, mapping)
         self.last_seq = -1
@@ -82,7 +97,7 @@ class JointController(Controller):
 
     def reset(self) -> None:
         self.aligned = False
-        self.state = "robot_fault"
+        self.state = "follower_fault"
 
     def leader_pose(self, follower: list[float]) -> dict[str, float]:
         """Leader joint values that map onto `follower` (a pose at rest): the inverse of
@@ -93,6 +108,11 @@ class JointController(Controller):
             for j, f, extra in zip(self.cfg["joints"], follower, added, strict=True)
         }
 
+    @property
+    def home(self) -> HomeSpec | None:
+        """The follower's saved pose `home` moves to (with the leader), if configured."""
+        return self.homes.get(self.follower.name)
+
     def status(self) -> dict:
         out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
         if self.home is not None:
@@ -100,7 +120,7 @@ class JointController(Controller):
         if self.worst is not None and self.state in ("aligning", "following"):
             out["worst_joint"], out["worst_diff"] = (
                 self.worst[0],
-                round(self.worst[1], 1),
+                float(f"{self.worst[1]:.4g}"),  # 4 significant digits in any unit
             )
         if self.feedback is not None:
             out["feedback_gate"] = self.feedback.gate
@@ -111,11 +131,29 @@ class JointController(Controller):
     def update(
         self,
         intent: Envelope,
+        views: Mapping[str, FollowerView],
+        now_ns: int | None = None,
+    ) -> dict[str, Envelope]:
+        view = views[self.follower.name]
+        command = self.step(
+            intent,
+            view.positions,
+            now_ns,
+            follower_target=view.target,
+            follower_velocity=view.velocities,
+        )
+        return {} if command is None else {self.follower.name: command}
+
+    def step(
+        self,
+        intent: Envelope,
         follower: list[float],
         now_ns: int | None = None,
         follower_target: list[float] | None = None,
         follower_velocity: list[float] | None = None,
     ) -> Envelope | None:
+        """The next command for the follower at `follower`, or None while it must not
+        move (input stale, not aligned yet)."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         if (
             intent.kind != JointInput.kind
@@ -136,11 +174,11 @@ class JointController(Controller):
         target = [
             by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
         ]
-        current = positions(follower, len(self.robot.joint_names))
+        current = positions(follower, len(self.follower.joint_names))
         target = self.couplings.apply(target, current, follower_velocity)
         diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
         worst = max(range(len(diffs)), key=diffs.__getitem__)
-        self.worst = (self.robot.joint_names[worst], diffs[worst])
+        self.worst = (self.follower.joint_names[worst], diffs[worst])
         if not self.aligned:
             if diffs[worst] > self.cfg["alignment_tolerance"]:
                 self.state = "aligning"
@@ -149,8 +187,8 @@ class JointController(Controller):
             self.last_target = current
             self.last_target_ns = now
         dt = max((now - self.last_target_ns) / 1e9, 1e-6)
-        step = self.cfg["max_speed_counts_per_s"] * dt
-        # Step from what the follower holds, not from our own last output: while the robot is
+        step = self.cfg["max_speed"] * dt
+        # Step from what the follower holds, not from our own last output: while it is
         # not armed (or refuses a command) our targets would otherwise run ahead of it.
         previous = (
             list(follower_target) if follower_target is not None else self.last_target
@@ -163,4 +201,4 @@ class JointController(Controller):
         ]
         self.last_target, self.last_target_ns = limited, now
         self.state = "following"
-        return self.command(limited, now, input_seq=intent.seq)
+        return self.command(self.follower.name, limited, now, input_seq=intent.seq)

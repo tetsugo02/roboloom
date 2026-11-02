@@ -114,9 +114,9 @@ Points to note:
 | Joint limits | The range barrier of `gravity_comp` (`barrier_mA_per_count`) and the runaway check (`max_velocity`, out of range) |
 | Stiction | Breakaway hold (`hold_mA`). The opposite of FACTR's dither: it keeps the arm where it is left |
 | Damping | `kd` (mA per count/s) |
-| Follower state | The robot node's `state` has `positions`, `velocities`, `currents_mA` and the target actually written, `target` (= `q_cmd`) |
+| Follower state | The follower node's `state` has `positions`, `velocities`, `currents_mA` and the target actually written, `target` (= `q_cmd`) |
 | Recording | `record_effort: true` records `observation.effort` (current) |
-| Follower control laws | `control` in `robot.yaml` applies control laws on the follower too (e.g. current-based position). Not verified on hardware |
+| Follower control laws | `control` in `follower.yaml` applies control laws on the follower too (e.g. current-based position). Not verified on hardware |
 | Safety | `FollowerSafety`, command deadlines, Bus Watchdog detection, leader goes limp on estop, release and quit |
 
 Missing:
@@ -151,20 +151,20 @@ i_feedback[leader j] = − k_j · sign_j · residual[follower j]
 ### Dataflow
 
 ```text
-leader ──sample──► controller ──command──► robot ──state──► estimator
+leader ──sample──► controller ──command──► follower ──state──► estimator
   ▲                    │  ▲                                  │
   └──── feedback ──────┘  └────────────── estimate ──────────┘
 ```
 
 | Node | Added inputs and outputs | Role |
 | --- | --- | --- |
-| estimator (new role `estimators`) | Input `<robot>/state` (latest only); outputs `estimate`, `status` | Compute `residual` and contact from the follower state. A separate process, so that heavy inference never disturbs the robot node's period |
+| estimator (new role `estimators`) | Input `<follower>/state` (latest only); outputs `estimate`, `status` | Compute `residual` and contact from the follower state. A separate process, so that heavy inference never disturbs the follower node's period |
 | controller | Input `<estimator>/estimate` (latest only); output `feedback` | Map follower residuals to leader joints through `joints`, apply `gain`, send with a deadline. Send zero while the follower is not `ACTIVE` or before alignment (any state other than `following`) |
 | leader | Input `<controller>/feedback` (latest only) | Add the feedback term to the control law. The deadline, gate, ramp and limits are applied on the leader every tick |
 
 - Joint correspondence and signs are written only in the controller's `joints`. No separate map for feedback.
-- Feedback messages carry an absolute deadline, like robot commands (the same shape as `make_command`).
-- The path is a cycle (leader → controller → robot → estimator → controller → leader). Stage 1 confirmed in mock that dora-rs dataflows accept cyclic edges (the controller and robot already formed a cycle).
+- Feedback messages carry an absolute deadline, like follower commands (the same shape as `make_command`).
+- The path is a cycle (leader → controller → follower → estimator → controller → leader). Stage 1 confirmed in mock that dora-rs dataflows accept cyclic edges (the controller and follower already formed a cycle).
 
 ### Writing the configuration
 
@@ -176,31 +176,31 @@ inputs:
   leader: nodes/leader_bilateral.yaml        # type: rakuda_mini
 controllers:
   controller: nodes/controller_bilateral.yaml
-robots:
-  robot: nodes/robot.yaml                     # type: rakuda2_follower
+followers:
+  follower: nodes/follower.yaml                     # type: rakuda2_follower
 estimators:
-  effort: nodes/effort.yaml                   # robot: robot
+  effort: nodes/effort.yaml                   # follower: follower
 ```
 
 The pairing follows from references alone.
 
 | Reference | Written in | Derived edges |
 | --- | --- | --- |
-| `input: leader`, `robot: robot` | controller | `leader/sample` → controller, controller `command` → robot (as today) |
-| `robot: robot` | estimator | `robot/state` → estimator |
+| `input: leader`, `follower: follower` | controller | `leader/sample` → controller, controller `command` → follower (as today) |
+| `follower: follower` | estimator | `follower/state` → estimator |
 | `feedback.estimator: effort` | controller | `effort/estimate` → controller, controller `feedback` → `leader` (the controller's `input`) |
 
-The rule is closed per pair. Treating the two arms as separate robots, or putting pairs of other robots in the same configuration, only means listing one set of nodes per pair (the current "one robot per configuration" limit is a separate issue). For example, another follower with another leader would be written as below. The device names are examples and do not exist in roboloom today.
+The rule is closed per pair. Treating the two arms as separate followers, or putting pairs of other robots in the same configuration, only means listing one set of nodes per pair. For example, another follower with another leader would be written as below. The device names are examples and do not exist in roboloom today.
 
 ```yaml
 inputs:
   leader: nodes/leader.yaml                   # type: gello_dynamixel (example)
 controllers:
   controller: nodes/controller.yaml           # type: joint, feedback.estimator: effort
-robots:
-  robot: nodes/robot.yaml                     # type: piper_follower (example)
+followers:
+  follower: nodes/follower.yaml                     # type: piper_follower (example)
 estimators:
-  effort: nodes/effort.yaml                   # type: next, robot: robot
+  effort: nodes/effort.yaml                   # type: next, follower: follower
 ```
 
 ### Capabilities devices declare
@@ -209,10 +209,10 @@ Whether a combination works is checked when the configuration is read. Nothing b
 
 | Declared by | Value | Checked |
 | --- | --- | --- |
-| Follower (`Robot`) | `effort_signal`: the force quantity in `state` (one of `currents_mA`, `torques_Nm`, `external_torques_Nm`) and its unit | It matches the estimator's input. `sensor` works only with robots that provide `external_torques_Nm` |
+| Follower (`Follower`) | `effort_signal`: the force quantity in `state` (one of `currents_mA`, `torques_Nm`, `external_torques_Nm`) and its unit | It matches the estimator's input. `sensor` works only with robots that provide `external_torques_Nm` |
 | Leader (`JointInput`) | Joints that accept feedback (groups of a current-mode law with `feedback`) and their unit (`mA`, `Nm`) | Every joint in `feedback.gain` accepts feedback |
 | Controller | The unit of `feedback.gain` (leader unit / follower unit) | The unit matches both sides' declarations; every feedback joint maps one-to-one in `joints` |
-| Estimator | `robot`, `joint_names`, `unit`, the `state` fields it needs | The robot exists and provides those fields |
+| Estimator | `follower`, `joint_names`, `unit`, the `state` fields it needs | The follower exists and provides those fields |
 
 The feedback term is a part shared by every current-mode law (subclasses of `CurrentLaw`), not only `gravity_comp`. Another leader using another law accepts feedback with the same configuration.
 
@@ -259,7 +259,7 @@ The implementation puts contact detection (`contact_on` / `contact_off`) in the 
 
 ```yaml
 type: model_residual              # none | sensor | model_residual | next (none and model_residual are implemented)
-robot: robot
+follower: follower
 joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
 models: [../calibration/effort_gravity_right.yaml]   # implemented as a list of per-arm models
 smoothing_alpha: 0.2
@@ -270,11 +270,11 @@ record: true                      # records observation.effort_ext / observation
 
 ### Estimator contract
 
-Like robots, inputs and sensors, estimators live in a registry `ESTIMATORS` (`roboloom/estimators/`) that selects the class by `type`. Robot-independent estimators are implemented in `roboloom/estimators/`; those for one robot only live in `roboloom/robots/<model>/` and register in the same registry.
+Like followers, inputs and sensors, estimators live in a registry `ESTIMATORS` (`roboloom/estimators/`) that selects the class by `type`. Robot-independent estimators are implemented in `roboloom/estimators/`; those for one robot only live in `roboloom/robots/<model>/` and register in the same registry.
 
 ```python
 class EffortEstimator(Protocol):
-    robot: str  # the robot node it reads
+    follower: str  # the follower node it reads
     joint_names: tuple[str, ...]  # follower joints
     unit: str  # e.g. "mA" or "Nm"
     needs: tuple[
@@ -282,7 +282,7 @@ class EffortEstimator(Protocol):
     ]  # state fields used, e.g. ("positions", "velocities", "currents_mA", "target")
 
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...  # robot_state payload
+    def update(self, state: dict, t_ns: int) -> Estimate: ...  # follower_state payload
 
 
 @dataclass
@@ -310,7 +310,7 @@ Measured values and trained weights are kept with the configuration of each phys
 | `calibration/effort_gravity_<side>.yaml` | The follower gravity model for `model_residual` (the existing regressor format) | Tracked |
 | `models/<estimator name>/<run_id>/model.yaml` | The NEXT manifest (table below) | Tracked |
 | `models/<estimator name>/<run_id>/weights.safetensors` | Trained weights | Excluded (`*.safetensors`) |
-| `logs/<run>/robot_trace.npz` | Free-motion training data (the stage-2 trace) | Excluded (existing `*.npz`, `logs/`) |
+| `logs/<run>/follower_trace.npz` | Free-motion training data (the stage-2 trace) | Excluded (existing `*.npz`, `logs/`) |
 
 - `run_id` is the training date and time (e.g. `20261101-153000`). The node YAML names the version explicitly; "latest" is never chosen automatically, so that which model ran stays reproducible.
 - Weights are stored as safetensors. Without pickle, loading never executes code. `torch` becomes an optional extra (`next`).
@@ -330,8 +330,8 @@ What the manifest (`model.yaml`) records:
 
 On loading, these are checked and startup is refused on any mismatch:
 
-- The robot `type`, joint names and motor IDs match.
-- `rate_hz` equals the robot's `control_hz`. NEXT's history length depends on the rate, so a changed rate needs retraining.
+- The follower `type`, joint names and motor IDs match.
+- `rate_hz` equals the follower's `control_hz`. NEXT's history length depends on the rate, so a changed rate needs retraining.
 - The sha256 of the weights matches.
 - `port` is the same unit. Using it on another unit requires an explicit setting that allows it.
 
@@ -351,17 +351,17 @@ The `roboloom init` template gains a description of `models/` and `*.safetensors
 
 Each stage is committed and passes mock tests before moving to hardware. Hardware checks are done by the user.
 
-Status (2026-11-02): stages 1–5 are implemented and pass the mock tests (`tests/test_bilateral.py`, including the whole path from the estimate through the gate to the leader current on dora). The hardware checks of stages 3–5 have not been done. The stage 2 trace is `<robot name>_trace.npz`; stage 4 identification uses the existing `identify-gravity` on a follower calibration (`calibration/follower_<side>.yaml`).
+Status (2026-11-02): stages 1–5 are implemented and pass the mock tests (`tests/test_bilateral.py`, including the whole path from the estimate through the gate to the leader current on dora). The hardware checks of stages 3–5 have not been done. The stage 2 trace is `<follower name>_trace.npz`; stage 4 identification uses the existing `identify-gravity` on a follower calibration (`calibration/follower_<side>.yaml`).
 
 | Stage | Content | Done when |
 | --- | --- | --- |
 | 1. Path | Add the `estimators` role, the `ESTIMATORS` registry and the `none` estimator. Add capability declarations and their check when the configuration is read. Derive edges from references in `flow.py`; add the controller `feedback` output and the leader `feedback` input. Feedback values are always zero | Tests in a mock dataflow cover the cyclic edges, the feedback deadline, latest-only delivery, and refusal of configurations whose units or joints do not match. Existing tests pass |
-| 2. Follower recording | Add a per-tick trace to the robot node (`positions`, `velocities`, `currents_mA`, `target`, `mode`) in the same form as the leader's `leader_trace.npz`. Allow recording estimator output as `observation.effort_ext` and `observation.contact` | The npz and dataset features are checked in mock |
-| 3. Follower mode | Add a configuration example that runs the arms in current-based position (`current_position`, Mode 5) through `control` in `robot.yaml`. Write the mode and Current Limit with `commission` | Hardware: tracking and holding match today's; current stops at the limit in contact |
+| 2. Follower recording | Add a per-tick trace to the follower node (`positions`, `velocities`, `currents_mA`, `target`, `mode`) in the same form as the leader's `leader_trace.npz`. Allow recording estimator output as `observation.effort_ext` and `observation.contact` | The npz and dataset features are checked in mock |
+| 3. Follower mode | Add a configuration example that runs the arms in current-based position (`current_position`, Mode 5) through `control` in `follower.yaml`. Write the mode and Current Limit with `commission` | Hardware: tracking and holding match today's; current stops at the limit in contact |
 | 4. `model_residual` | Build a tool that measures holding currents on the follower and identifies `g_f(q)` with the existing regressor (`identify-gravity` for the follower). Implement the `model_residual` estimator | Hardware: record residual size at rest and in free motion; check the residual under a known weight |
 | 5. Leader feedback term | Add `feedback` as a part shared by current-mode laws: gate, ramp, deadline, contact hysteresis, `max_mA`, `kd`. Show `feedback_mA` and the gate in status and the trace | Mock: tests ramp to zero on deadline expiry, HOLD and estop. Hardware: enable one joint with a small gain; check the sign and that it does not oscillate |
 | 6. Gripper | Move the trigger to a new current-mode law (spring + damping + contact term, like factr2_next's `compute_gripper_feedback_torque`), driven by follower gripper current (Mode 5, Current Limit 54 mA) | Hardware: the trigger gets heavier when gripping an object and returns when released |
-| 7. NEXT | Recording procedure for free motion (the stage-2 trace), training (`torch` as an optional extra) and an inference node (running at the robot's rate), under the same contract as `model_residual`. Write weights and manifest as in "Where models are stored" and check them on loading | Hardware: compare with `model_residual` under known weights and pushes. Document the training and inference commands |
+| 7. NEXT | Recording procedure for free motion (the stage-2 trace), training (`torch` as an optional extra) and an inference node (running at the follower's rate), under the same contract as `model_residual`. Write weights and manifest as in "Where models are stored" and check them on loading | Hardware: compare with `model_residual` under known weights and pushes. Document the training and inference commands |
 | 8. Delay | Report feedback delay (from the follower state's time until the leader writes current) in status. For the rate, see §9 | Hardware: record the delay distribution; document it with the gain limits |
 | 9. Docs | For each implemented stage, update Controllers, Robots, Reference and Quick start, and remove the corresponding part of this page | The strict docs build passes |
 

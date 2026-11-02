@@ -114,9 +114,9 @@ tau = np.clip(tau, -self.max_torque, self.max_torque)
 | 可動域 | `gravity_comp` の範囲バリア（`barrier_mA_per_count`），逸走の検査（`max_velocity`，範囲外） |
 | 静止摩擦への対処 | breakaway hold（`hold_mA`）．FACTRのディザーとは逆で，「置いた所に止まる」ための項 |
 | 減衰 | `kd`（mA/(count/s)） |
-| followerの状態 | robotノードの `state` に `positions`，`velocities`，`currents_mA`，実際に書いた目標 `target`（= `q_cmd`）がある |
+| followerの状態 | followerノードの `state` に `positions`，`velocities`，`currents_mA`，実際に書いた目標 `target`（= `q_cmd`）がある |
 | 記録 | `record_effort: true` で `observation.effort`（電流）を記録 |
-| followerの制御則 | `robot.yaml` の `control` で，follower側にも制御則を使える（電流制限つき位置制御など）．実機では未検証 |
+| followerの制御則 | `follower.yaml` の `control` で，follower側にも制御則を使える（電流制限つき位置制御など）．実機では未検証 |
 | 安全 | `FollowerSafety`，指令の期限，Bus Watchdog の検出，estop・release・quit で leader を脱力 |
 
 足りないもの：
@@ -151,20 +151,20 @@ i_feedback[leader j] = − k_j · sign_j · residual[follower j]
 ### dataflow
 
 ```text
-leader ──sample──► controller ──command──► robot ──state──► estimator
+leader ──sample──► controller ──command──► follower ──state──► estimator
   ▲                    │  ▲                                  │
   └──── feedback ──────┘  └────────────── estimate ──────────┘
 ```
 
 | ノード | 追加する入出力 | 役割 |
 | --- | --- | --- |
-| estimator（新しい役割 `estimators`） | 入力 `<robot>/state`（最新1件），出力 `estimate`，`status` | followerの状態から `residual` と接触の判定を出す．重い推論で robot ノードの周期を乱さないよう，別プロセスにする |
+| estimator（新しい役割 `estimators`） | 入力 `<follower>/state`（最新1件），出力 `estimate`，`status` | followerの状態から `residual` と接触の判定を出す．重い推論で follower ノードの周期を乱さないよう，別プロセスにする |
 | controller | 入力 `<estimator>/estimate`（最新1件），出力 `feedback` | follower関節の残差を `joints` の対応でleader関節へ写し，`gain` をかけ，期限をつけて送る．followerが `ACTIVE` でない，または整列前（`following` 以外）のときは0を送る |
 | leader | 入力 `<controller>/feedback`（最新1件） | 制御則に逆送の項を足す．期限・gate・ramp・制限はleader側で毎周期かける |
 
 - 関節の対応と符号は，controllerの `joints` だけに書きます．逆送用に別の対応表を作りません．
-- 逆送の指令は，robotへの指令と同じく，絶対時刻の期限を持ちます（`make_command` と同じ形）．
-- 経路は循環します（leader → controller → robot → estimator → controller → leader）．dora-rsのdataflowで循環する辺が使えることは，段階1で模擬で確かめました（controllerとrobotの間にも，以前から循環があります）．
+- 逆送の指令は，followerへの指令と同じく，絶対時刻の期限を持ちます（`make_command` と同じ形）．
+- 経路は循環します（leader → controller → follower → estimator → controller → leader）．dora-rsのdataflowで循環する辺が使えることは，段階1で模擬で確かめました（controllerとfollowerの間にも，以前から循環があります）．
 
 ### 設定の書き方
 
@@ -176,31 +176,31 @@ inputs:
   leader: nodes/leader_bilateral.yaml        # type: rakuda_mini
 controllers:
   controller: nodes/controller_bilateral.yaml
-robots:
-  robot: nodes/robot.yaml                     # type: rakuda2_follower
+followers:
+  follower: nodes/follower.yaml                     # type: rakuda2_follower
 estimators:
-  effort: nodes/effort.yaml                   # robot: robot
+  effort: nodes/effort.yaml                   # follower: follower
 ```
 
 組み合わせは参照だけで決まります．
 
 | 参照 | 書く場所 | 導かれる辺 |
 | --- | --- | --- |
-| `input: leader`，`robot: robot` | controller | `leader/sample` → controller，controller `command` → robot（今と同じ） |
-| `robot: robot` | estimator | `robot/state` → estimator |
+| `input: leader`，`follower: follower` | controller | `leader/sample` → controller，controller `command` → follower（今と同じ） |
+| `follower: follower` | estimator | `follower/state` → estimator |
 | `feedback.estimator: effort` | controller | `effort/estimate` → controller，controller `feedback` → `leader`（controllerの `input`） |
 
-この規則は1組ごとに閉じています．双腕を別々のrobotとして扱う場合や，別の機体の組を同じ設定に置く場合も，組の数だけノードを並べれば辺が決まります（現在の「1つの設定にrobotは1台」の制限は別の課題です）．例えば，別のfollowerと別のleaderの組は次のように書けます．機体名は例で，今のroboloomにはありません．
+この規則は1組ごとに閉じています．双腕を別々のfollowerとして扱う場合や，別の機体の組を同じ設定に置く場合も，組の数だけノードを並べれば辺が決まります．例えば，別のfollowerと別のleaderの組は次のように書けます．機体名は例で，今のroboloomにはありません．
 
 ```yaml
 inputs:
   leader: nodes/leader.yaml                   # type: gello_dynamixel（例）
 controllers:
   controller: nodes/controller.yaml           # type: joint, feedback.estimator: effort
-robots:
-  robot: nodes/robot.yaml                     # type: piper_follower（例）
+followers:
+  follower: nodes/follower.yaml                     # type: piper_follower（例）
 estimators:
-  effort: nodes/effort.yaml                   # type: next, robot: robot
+  effort: nodes/effort.yaml                   # type: next, follower: follower
 ```
 
 ### 機器が申告する能力
@@ -212,7 +212,7 @@ estimators:
 | follower（`Robot`） | `effort_signal`：`state` が持つ力の量（`currents_mA`，`torques_Nm`，`external_torques_Nm` のどれか）と単位 | 推定器の入力と合うか．`sensor` は `external_torques_Nm` を出す機体だけに使える |
 | leader（`JointInput`） | 逆送を受けられる関節（電流制御の制御則に `feedback` を書いたグループ）と，その単位（`mA`，`Nm`） | `feedback.gain` に書いた関節がすべて受けられるか |
 | controller | `feedback.gain` の単位（leaderの単位 / followerの単位） | 単位が両側の申告と一致するか．逆送する関節が `joints` で1対1に対応するか |
-| estimator | `robot`，`joint_names`，`unit`，必要な `state` の項目 | 参照するrobotが存在し，項目を出すか |
+| estimator | `follower`，`joint_names`，`unit`，必要な `state` の項目 | 参照するfollowerが存在し，項目を出すか |
 
 逆送の項は，`gravity_comp` だけでなく，電流制御のすべての制御則（`CurrentLaw` の派生）に共通の部品として入れます．別のleaderが別の制御則を使っても，同じ設定で逆送を受けられます．
 
@@ -259,7 +259,7 @@ feedback:
 
 ```yaml
 type: model_residual              # none | sensor | model_residual | next（実装済みは none と model_residual）
-robot: robot
+follower: follower
 joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
 models: [../calibration/effort_gravity_right.yaml]   # 実装では腕ごとのモデルのリスト
 smoothing_alpha: 0.2
@@ -270,11 +270,11 @@ record: true                      # observation.effort_ext / observation.contact
 
 ### 推定器の契約
 
-推定器は，robot・input・sensorと同じく，`type` からクラスを選ぶ登録表 `ESTIMATORS`（`roboloom/estimators/`）に置きます．機体に依存しない推定器は `roboloom/estimators/` に，特定の機体だけのものは `roboloom/robots/<model>/` に実装し，同じ登録表へ登録します．
+推定器は，follower・input・sensorと同じく，`type` からクラスを選ぶ登録表 `ESTIMATORS`（`roboloom/estimators/`）に置きます．機体に依存しない推定器は `roboloom/estimators/` に，特定の機体だけのものは `roboloom/robots/<model>/` に実装し，同じ登録表へ登録します．
 
 ```python
 class EffortEstimator(Protocol):
-    robot: str  # 参照するrobotノード
+    follower: str  # 参照するfollowerノード
     joint_names: tuple[str, ...]  # follower関節
     unit: str  # "mA" や "Nm"
     needs: tuple[
@@ -282,7 +282,7 @@ class EffortEstimator(Protocol):
     ]  # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
 
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...  # robot_state の payload
+    def update(self, state: dict, t_ns: int) -> Estimate: ...  # follower_state の payload
 
 
 @dataclass
@@ -310,7 +310,7 @@ class Estimate:
 | `calibration/effort_gravity_<side>.yaml` | `model_residual` 用のfollowerの重力モデル（既存の回帰の形式） | 管理する |
 | `models/<推定器名>/<run_id>/model.yaml` | NEXTのmanifest（下表） | 管理する |
 | `models/<推定器名>/<run_id>/weights.safetensors` | 学習した重み | 除外（`*.safetensors`） |
-| `logs/<run>/robot_trace.npz` | 学習用の自由運動のデータ（段階2のトレース） | 除外（既存の `*.npz`，`logs/`） |
+| `logs/<run>/follower_trace.npz` | 学習用の自由運動のデータ（段階2のトレース） | 除外（既存の `*.npz`，`logs/`） |
 
 - `run_id` は学習した日時です（例 `20261101-153000`）．ノードYAMLは版を明示して指定します．「最新」を自動で選びません．どのモデルで動いたかを再現できるようにするためです．
 - 重みはsafetensorsで保存します．pickleを使わないので，読み込みでコードが実行されません．`torch` は optional extra（`next`）にします．
@@ -321,7 +321,7 @@ manifest（`model.yaml`）に書く内容：
 | 項目 | 例 |
 | --- | --- |
 | 形式 | `format: 1`，`type: next` |
-| 機体 | robotの `type`，ノード名，`port`（by-id，個体の識別），関節名，モーターID |
+| 機体 | followerの `type`，ノード名，`port`（by-id，個体の識別），関節名，モーターID |
 | 入力 | 特徴量と順序（`positions`，`velocities`，`target - positions`），単位，**`rate_hz`**，履歴の長さ，正規化の平均と分散 |
 | モデル | 構造（LSTM 2×128 など），学習の設定 |
 | データ | 使った `logs/` のパスと各ファイルのsha256 |
@@ -330,8 +330,8 @@ manifest（`model.yaml`）に書く内容：
 
 読み込み時に次を確かめ，合わなければ起動を拒否します．
 
-- robotの `type`，関節名，モーターIDが一致すること．
-- `rate_hz` がrobotの `control_hz` と一致すること．NEXTの履歴の長さは周期で決まるので，周期を変えたら学習し直します．
+- followerの `type`，関節名，モーターIDが一致すること．
+- `rate_hz` がfollowerの `control_hz` と一致すること．NEXTの履歴の長さは周期で決まるので，周期を変えたら学習し直します．
 - 重みのsha256が一致すること．
 - `port` が同じ個体であること．別の個体に使うときは，明示的に許可する設定を要求します．
 
@@ -351,17 +351,17 @@ manifest（`model.yaml`）に書く内容：
 
 各段階でコミットし，模擬の試験を通してから実機に移ります．実機での確認は利用者が行います．
 
-実装の状況（2026-11-02）：段階1〜5は実装し，模擬の試験（`tests/test_bilateral.py`．dora上で，推定 → gate → leaderの電流までの全経路を含む）を通しました．段階3〜5の実機の確認は未実施です．段階2のトレースは `<robot名>_trace.npz`，段階4の同定は既存の `identify-gravity` をfollowerのcalibration（`calibration/follower_<side>.yaml`）で使います．
+実装の状況（2026-11-02）：段階1〜5は実装し，模擬の試験（`tests/test_bilateral.py`．dora上で，推定 → gate → leaderの電流までの全経路を含む）を通しました．段階3〜5の実機の確認は未実施です．段階2のトレースは `<フォロワ名>_trace.npz`，段階4の同定は既存の `identify-gravity` をfollowerのcalibration（`calibration/follower_<side>.yaml`）で使います．
 
 | 段階 | 内容 | 完了の条件 |
 | --- | --- | --- |
 | 1．経路 | `estimators` の役割，登録表 `ESTIMATORS`，`none` 推定器を加える．各クラスの能力の申告と，設定読み込み時の照合を入れる．`flow.py` で参照から辺を導き，controller の `feedback` 出力と leader の `feedback` 入力を作る．逆送の値は常に0 | 模擬dataflowで，循環する辺，feedbackの期限，最新1件の受け渡し，単位や関節が合わない設定の拒否を試験で確かめる．既存の試験が通る |
-| 2．followerの記録 | robotノードに毎周期のトレース（`positions`，`velocities`，`currents_mA`，`target`，`mode`）を加える．leaderの `leader_trace.npz` と同じ形にする．推定器の出力を `observation.effort_ext` と `observation.contact` として記録できるようにする | 模擬で npz とデータセットの特徴量を確かめる |
-| 3．followerのモード | `robot.yaml` の `control` で，腕を電流制限つき位置制御（`current_position`，Mode 5）にする設定例を作る．`commission` でモードとCurrent Limitを書く | 実機：位置の追従と保持が今と同等であること．接触時に電流が上限で止まること |
+| 2．followerの記録 | followerノードに毎周期のトレース（`positions`，`velocities`，`currents_mA`，`target`，`mode`）を加える．leaderの `leader_trace.npz` と同じ形にする．推定器の出力を `observation.effort_ext` と `observation.contact` として記録できるようにする | 模擬で npz とデータセットの特徴量を確かめる |
+| 3．followerのモード | `follower.yaml` の `control` で，腕を電流制限つき位置制御（`current_position`，Mode 5）にする設定例を作る．`commission` でモードとCurrent Limitを書く | 実機：位置の追従と保持が今と同等であること．接触時に電流が上限で止まること |
 | 4．`model_residual` | follower で保持電流を計測し，既存の回帰で `g_f(q)` を同定する道具を作る（`identify-gravity` を follower に対応させる）．`model_residual` 推定器を実装する | 実機：静止時と自由運動中の残差の大きさを記録する．既知の重りをかけたときの残差を確かめる |
 | 5．leaderの逆送の項 | 電流制御の制御則に共通の部品として `feedback` を加える．gate，ramp，期限，接触のヒステリシス，`max_mA`，`kd` を入れる．status とトレースに `feedback_mA` と gate を出す | 模擬：期限切れ・HOLD・estopで ramp して0になる試験．実機：1関節だけ小さいゲインで有効にし，符号と振動のなさを確かめる |
 | 6．グリッパー | トリガーを電流制御の新しい制御則（ばね＋減衰＋接触の項，factr2_next の `compute_gripper_feedback_torque` と同じ形）にする．followerグリッパーの電流（Mode 5，Current Limit 54 mA）を入力にする | 実機：物を握るとトリガーが重くなること．離すと戻ること |
-| 7．NEXT | 自由運動のデータの記録手順（段階2のトレース），学習（`torch` を optional extra にする），推論ノード（robotの周期で動く）を作る．`model_residual` と同じ契約にする．重みとmanifestを「モデルの保存先」の形で書き，読み込み時に照合する | 実機：既知の重り・押し付けで `model_residual` と比べる．学習・推論のコマンドを docs に書く |
+| 7．NEXT | 自由運動のデータの記録手順（段階2のトレース），学習（`torch` を optional extra にする），推論ノード（followerの周期で動く）を作る．`model_residual` と同じ契約にする．重みとmanifestを「モデルの保存先」の形で書き，読み込み時に照合する | 実機：既知の重り・押し付けで `model_residual` と比べる．学習・推論のコマンドを docs に書く |
 | 8．遅れ | feedback の遅れ（followerの状態の時刻からleaderが電流を書くまで）を status に出す．周期は§9を参照 | 実機：遅れの分布を記録する．ゲインの上限と合わせて docs に書く |
 | 9．docs | 実装した段階ごとに，Controllers・Robots・Reference・Quick startを更新する．このページの該当部分は削る | docs の strict build が通る |
 

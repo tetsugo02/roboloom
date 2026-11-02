@@ -1,8 +1,12 @@
-"""Read-only Dynamixel bus inspection: identify a port and gather values for the node YAML."""
+"""Read-only bus inspection: identify a port and gather values for the node YAML.
+
+A network interface name (e.g. `can_left`) is a PiPER arm on CAN; anything else is a
+Dynamixel serial port."""
 
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 from .drivers.dynamixel_table import MODELS, REGISTERS
 
@@ -25,6 +29,10 @@ SHOWN = (
 )
 
 
+def is_network_interface(port: str) -> bool:
+    return "/" not in port and Path("/sys/class/net", port).exists()
+
+
 def probe(
     port: str,
     ids: list[int] | None = None,
@@ -32,7 +40,12 @@ def probe(
     repeats: int = 50,
 ) -> str:
     """Ping IDs (all 0..252 if none given), read registers, and time the state read (plain and
-    Fast Sync Read) and the Bus Watchdog read. Never writes."""
+    Fast Sync Read) and the Bus Watchdog read. Never writes. On a CAN interface, read the
+    PiPER arm there instead (`drivers.piper.probe`)."""
+    if is_network_interface(port):
+        from .drivers.piper import probe as probe_piper
+
+        return probe_piper(port)
     import dynamixel_sdk as dxl
 
     from .drivers.dynamixel import DynamixelBus, latency_timer_ms

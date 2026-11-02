@@ -23,9 +23,13 @@ class Operation:
 class Capabilities:
     home: bool = False
     release: bool = False
-    hold: bool = False
+    hold: bool = False  # some follower keeps holding after quit
+    torqued: bool = False  # some follower has torque: quit may release it
     gravity: bool = False
     reselect: bool = False  # quit can come back to the launcher's option choice
+    # what to do before release and quit, from the devices' safety traits (core.traits)
+    release_note: str = ""
+    quit_note: str = ""  # what goes limp when the session ends without release
 
 
 @dataclass(frozen=True)

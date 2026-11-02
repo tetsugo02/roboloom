@@ -249,8 +249,8 @@ async def test_log_scroll_is_preserved_and_latest_is_explicit():
 
 def test_presenters_keep_the_renderer_emphasis():
     node = NodeSnapshot(
-        "robot",
-        "robot",
+        "follower",
+        "follower",
         "rakuda2",
         level="error",
         fields={"mode": "HOLD", "home": "ready", "error": "overload"},

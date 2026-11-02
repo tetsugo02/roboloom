@@ -1,9 +1,9 @@
-# Follower for bilateral teleoperation (option `bilateral` of ../config.yaml): the same as robot.yaml,
+# Follower for bilateral teleoperation (option `bilateral` of ../config.yaml): the same as follower.yaml,
 # but the arms run current-based position control (Operating Mode 5), so a push or a
 # collision meets at most goal_current_mA. NOT verified on hardware.
 # Before the first run: choose SET_FOLLOWER_ARM_GOAL_CURRENT_mA (mA, the force limit of every
 #   arm joint; replace with per-joint values under registers.current_limit and goal_current_mA
-#   to differ), then `roboloom commission robot --with bilateral`
+#   to differ), then `roboloom commission follower --with bilateral`
 #   writes Operating Mode and Current Limit. Goal current may not exceed the Current Limit.
 # Operating Mode follows from `control` (registers.operating_mode is not listed).
 # Fill from `roboloom probe <port>` (see ../README.md). Re-run probe after any motor change.
@@ -12,7 +12,7 @@
 # limits: min/max are only the EEPROM bounds for now (no extra protection); narrow them to the
 #   measured safe travel of each joint before unattended use.
 # limits: software range in counts (inside the EEPROM limits), max_speed counts/s (soft clamp;
-#   keep it above the controller's max_speed_counts_per_s so it only catches real overspeed),
+#   keep it above the controller's max_speed so it only catches real overspeed),
 # max_jump counts (hard reject). Measure the range on this robot; do not copy the mock values.
 # health.max_current_mA: FAULT before the motor's own overload shutdown; validate on hardware.
 # torque: set false for the first run to record states and sensors without moving the follower.

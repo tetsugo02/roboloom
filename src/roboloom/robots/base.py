@@ -1,9 +1,10 @@
-"""Follower contract: joint space, limits, and the bus the robot node owns exclusively."""
+"""Follower contract: joint space, limits, and the bus the follower node owns exclusively."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar
+from dataclasses import replace
+from typing import Any, ClassVar, get_args
 
 import numpy as np
 
@@ -16,10 +17,11 @@ from ..control.device import (
 )
 from ..core.checks import finite, names, positive
 from ..core.protocol import Envelope
-from ..core.source import Features
-from ..drivers.base import RobotBus
+from ..core.source import Features, Joined
+from ..core.traits import WORST_CASE, SafetyTraits, Unattended
+from ..drivers.base import JointBus
 
-__all__ = ["Robot", "RobotBus", "check_limits"]
+__all__ = ["Follower", "JointBus", "SafetyTraits", "check_limits"]
 
 
 LIMIT_KEYS = ("min", "max", "max_speed", "max_jump")
@@ -75,16 +77,32 @@ def check_health(cfg: object, dimension: int, name: str) -> dict:
     return out
 
 
-class Robot:
+class Follower:
     """Joint-position follower. Used directly when the caller supplies the bus.
 
     Models subclass this with fixed joint names and unit and implement `open_bus`.
     """
 
-    robot_type = "external"
-    # (robot_state field, unit) of the effort the robot measures, for effort estimators;
+    model = "external"
+    # (follower_state field, unit) of the effort the robot measures, for effort estimators;
     # None when it measures none
     effort_signal: ClassVar[tuple[str, str] | None] = None
+    # What it does when torque goes off and when roboloom stops commanding it
+    # (core.traits). Every model declares it, as this attribute or, when it depends on
+    # the configuration, as `declared_traits()`; a bus nobody described gets the worst case.
+    safety_traits: ClassVar[SafetyTraits] = WORST_CASE
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if (
+            "safety_traits" not in cls.__dict__
+            and "declared_traits" not in cls.__dict__
+        ):
+            raise TypeError(
+                f"{cls.__name__}: declare safety_traits (or declared_traits()): what the "
+                "joints do when torque goes off and when roboloom stops commanding them "
+                "(roboloom.core.traits); use 'unknown' for what is not established"
+            )
 
     def __init__(
         self,
@@ -97,11 +115,18 @@ class Robot:
         self.joint_names = names(
             cfg.get("joints") if joint_names is None else joint_names, f"{name}.joints"
         )
-        self.unit = unit or cfg.get("unit", "dynamixel_count")
+        declared = unit or cfg.get("unit")
+        if not isinstance(declared, str) or not declared:
+            raise ValueError(
+                f"{name}.unit: declare the unit of the joint positions (e.g. rad)"
+            )
+        self.unit = declared
         self.control_hz = positive(cfg.get("control_hz"), f"{name}.control_hz")
         self.limits = check_limits(self.joint_names, cfg.get("limits"), name)
         self.health = check_health(cfg.get("health"), len(self.joint_names), name)
         self.record_effort = bool(cfg.get("record_effort", False))
+        if self.record_effort and self.effort_signal is None:
+            raise ValueError(f"{name}.record_effort: {self.model} measures no effort")
         # false: never torque on; records state only (first hardware data-path check)
         self.torque = bool(cfg.get("torque", True))
         # control: per-joint law groups; without it the bus receives plain position goals
@@ -118,10 +143,33 @@ class Robot:
     def device_ids(self) -> tuple[str, ...]:
         return ()
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def declared_traits(self) -> SafetyTraits:
+        """The model's safety traits for this configuration (override when they depend on it)."""
+        return self.safety_traits
+
+    def traits(self) -> SafetyTraits:
+        """The declared traits, with an `unattended` the model leaves unknown filled in from
+        the YAML (written by `roboloom check-hold` after measuring this unit)."""
+        declared = self.declared_traits()
+        measured = self.cfg.get("unattended")
+        if measured is None:
+            return declared
+        known = [u for u in get_args(Unattended) if u != "unknown"]
+        if measured not in known:
+            raise ValueError(
+                f"{self.name}.unattended must be one of {', '.join(known)}, not {measured!r}"
+            )
+        if declared.unattended != "unknown":
+            raise ValueError(
+                f"{self.name}.unattended: {self.model} declares "
+                f"{declared.unattended!r} for this configuration; remove the key"
+            )
+        return replace(declared, unattended=measured)
+
+    def open_bus(self, mock: bool) -> JointBus:
         raise RuntimeError(f"{self.name}: no bus driver; pass an opened bus instead")
 
-    def open_device(self, mock: bool) -> RobotBus:
+    def open_device(self, mock: bool) -> JointBus:
         """The bus, wrapped in its control-law groups when `control` is configured."""
         bus = self.open_bus(mock)
         if self.control is None:
@@ -142,10 +190,9 @@ class Robot:
         if self.control:
             check_hardware(self.control, self.cfg, self.name, self.current_limits_mA())
 
-    def safety_config(self, robot_id: str) -> dict:
+    def safety_config(self) -> dict:
         return {
             "name": self.name,
-            "robot_id": robot_id,
             "limits": self.limits,
             "unit": self.unit,
             "control_hz": self.control_hz,
@@ -154,27 +201,30 @@ class Robot:
         }
 
     def features(self, dataset_fps: float) -> Features:
-        dim = (len(self.joint_names),)
-        out: Features = {
-            "observation.state": {"dtype": "float32", "shape": dim, "names": None}
-        }
-        if self.record_effort:
-            out["observation.effort"] = {
-                "dtype": "float32",
-                "shape": dim,
-                "names": None,
-            }
-        return out
+        return {}  # everything a follower records is joined with the other followers
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
+        return {}
+
+    def joined(self, dataset_fps: float) -> dict[str, Joined]:
+        """Its part of `observation.state` (and of `observation.effort`)."""
+        names = tuple(f"{self.name}.{j}" for j in self.joint_names)
+        out = {"observation.state": Joined(names)}
+        if self.record_effort and self.effort_signal is not None:
+            out["observation.effort"] = Joined(names, unit=self.effort_signal[1])
+        return out
+
+    def joined_frame(
+        self, msg: Envelope | None, dataset_fps: float
+    ) -> dict[str, np.ndarray]:
         zeros = [0.0] * len(self.joint_names)
         out = {
             "observation.state": np.asarray(
                 msg.payload["positions"] if msg else zeros, dtype=np.float32
             )
         }
-        if self.record_effort:
-            effort = msg.payload.get("currents_mA") if msg else None
+        if self.record_effort and self.effort_signal is not None:
+            effort = msg.payload.get(self.effort_signal[0]) if msg else None
             out["observation.effort"] = np.asarray(
                 effort if effort is not None else zeros, dtype=np.float32
             )

@@ -5,10 +5,10 @@ Rakuda2の遠隔操作では，`inputs` の `leader` ノード（機器は `type
 ```yaml
 type: joint
 input: leader
-robot: robot
+followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
-max_speed_counts_per_s: 2048
+max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
 # 実際の設定には17関節のjoints対応表も必要です．
@@ -21,13 +21,16 @@ input_timeout_ms: 150
 | 項目 | 意味 |
 | --- | --- |
 | `alignment_tolerance` | 追従を始める前と，毎回のエピソード開始（`start`）の前に許すleaderとfollowerの関節差（counts）．超えていると `start` を拒否します |
-| `max_speed_counts_per_s` | 目標値の変化速度の上限 |
-| `command_deadline_ms` | robotへ送る指令の有効期限 |
+| `unit` | 関節の位置の単位．leaderとfollowerの単位と一致させる（Rakuda2は `dynamixel_count`） |
+| `max_speed` | 目標値の変化速度の上限（followerの単位/s．Rakuda2はcounts/s） |
+| `followers` | 動かすフォロワ．`joint` controllerはちょうど1台です |
+| `command_deadline_ms` | followerへ送る指令の有効期限 |
 | `input_timeout_ms` | leader入力が古いと判定するまでの時間 |
+| `follower_timeout_ms` | followerの状態が古いと判定するまでの時間（既定150）．古くなると追従をやめ，位置を合わせ直すまで指令を送りません |
 
 画面で `aligning` が出たら，表示された関節差を見ながらleaderをfollowerに揃えます．`following` になってから `start <task>` します．入力が古いと `input_stale` となり，新しい入力なしに追従を続けません．
 
-leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`Experiment.from_yaml()` は制御則を実行するleaderを受け付けません．
+leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`InProcessSession.from_yaml()` は制御則を実行するleaderを受け付けません．
 
 具体的なセットアップは [Rakuda2 Quick start](../quick-start/rakuda2.md) にあります．
 
@@ -73,7 +76,7 @@ couplings:
 - `joint` と `source` はfollowerの関節名です．同じ関節の指定，未知の関節，重複した `joint`，有限値でない `scale` は設定読み込み時に拒否します．
 - 基準は設定した固定値です．位置合わせの時点の姿勢は使いません．位置合わせは許容差（`alignment_tolerance`）内のずれを認めるため，その時点の姿勢を基準にすると，ずれの分だけ首が常に偏ります．再位置合わせやleaderノードの再起動でも基準は変わりません．
 - 位置合わせでは相殺後の首の目標とfollowerの首を比べます．followerのカメラが正面から大きく外れた状態で起動すると，`head_yaw` が許容差を超えて `aligning` のままになります．起動前にfollowerのカメラ向きとleaderの首を揃えてください．
-- 腰の目標値ではなく実測値を使うため，腰が指令に追いついていない段階で首だけを先回りさせません．相殺後にも既存の速度制限とrobot側の範囲・期限・変化量検査がかかります．
+- 腰の目標値ではなく実測値を使うため，腰が指令に追いついていない段階で首だけを先回りさせません．相殺後にも既存の速度制限とfollower側の範囲・期限・変化量検査がかかります．
 - `joint`・`source`・`scale`・`reference` はすべて必須です．
 - `lead_ms`（任意，既定0，0〜500）は，腰の実測速度の方向へ目標を先読みする時間です．首のモーターは位置制御で目標に遅れて追従するため，腰が動いている間はカメラが遅れてずれます．Rakuda2では，腰を最大69°/sで回したときのずれ（最大4.6°）が，腰の速度×約70 msでほぼ説明できました（相関0.99，2026-10-27の記録）．このため例では70としています．大きすぎると首が行き過ぎます．robotが速度を出さない場合，先読みは加えません．
 - これは指定した関節間の線形な相殺です．全姿勢のカメラ安定化，IMUフィードバック，台座の回転補償ではありません．軸が平行で，符号と単位比が正しいことが前提です．他の機体では `scale` に軸の符号と単位比を設定します．速度制限や可動域端，追従遅れではカメラの向きに誤差が残ります．
@@ -85,7 +88,7 @@ couplings:
 
 保存した初期姿勢へ，leaderとfollowerを `home` の操作でゆっくり動かせます．エピソードを毎回同じ姿勢から始めるためのものです．着いてから1秒後，leaderは通常の制御（重力補償とbreakaway hold）に戻るので，そのまま手で持って操作を始められます．
 
-**1. 姿勢を保存します．** followerを使いたい姿勢にしてから，dataflowを止めた状態で実行します．名前ごとに `poses/<名前>.yaml` が作られ，いくつでも保存できます．同じ名前は `--force` なしでは上書きしません．
+**1. 姿勢を保存します．** followerを使いたい姿勢にしてから，dataflowを止めた状態で実行します．名前ごとに `poses/<フォロワ名>/<名前>.yaml` が作られ，いくつでも保存できます．同じ名前は `--force` なしでは上書きしません．ファイルには保存したフォロワの名前が入り，別のフォロワでは読み込めません（左腕の姿勢を右腕で使う事故を防ぐため）．フォロワが複数ある設定では，`capture-pose left ready` のようにフォロワを指定します．
 
 ```bash
 uv run roboloom capture-pose ready
@@ -97,9 +100,9 @@ followerを姿勢にするには，遠隔操作で動かしてから `quit` で 
 
 ```yaml
 home:
-  pose: ../poses/ready.yaml   # 保存した姿勢のどれか
+  pose: ../poses/follower/ready.yaml   # 保存した姿勢のどれか
   max_speed: 200              # counts/s（約18°/s）．遅く動かすための上限
-  tolerance: 30               # 各関節がこの差以内なら到着
+  tolerance: 30               # 各関節がこの差以内なら到着（必須．followerの単位）
   timeout_s: 30
 ```
 

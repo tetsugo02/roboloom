@@ -1,14 +1,14 @@
-"""Minimal Python entry point; see README for the full Experiment API."""
+"""Minimal Python entry point; see README for the full InProcessSession API."""
 
-from roboloom import Experiment
+from roboloom import InProcessSession
 
 
 def main():
-    with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
-        experiment.start_episode("mock handover")
-        experiment.run(1.0)
-        experiment.stop_episode()
-        print(f"saved {experiment.save_episode()} frames")
+    with InProcessSession.from_yaml("examples/mock/config.yaml") as session:
+        session.start_episode("mock handover")
+        session.run(1.0)
+        session.stop_episode()
+        print(f"saved {session.save_episode()} frames")
 
 
 if __name__ == "__main__":

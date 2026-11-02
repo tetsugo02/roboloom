@@ -3,9 +3,9 @@
 #         uv run roboloom run --with head_compensation   (no launcher)
 #         uv run roboloom run --mock                     (mock devices, no hardware)
 # Replaces experiment.yaml / experiment_camera / _gravity / _head_compensation.
-# Datasets: camera + gravity -> datasets/rakuda2 (was datasets/rakuda2-camera; rename it to
-# keep appending), head_compensation -> datasets/rakuda2-head-compensation (unchanged).
-robot_id: rakuda2
+# Datasets: camera + gravity -> datasets/rakuda2, head_compensation ->
+# datasets/rakuda2-head-compensation. Datasets recorded before 2026-11-03 have the old
+# feature layout and cannot be appended to; move them aside before recording here.
 repo_id: local/rakuda2
 output: datasets/rakuda2
 dataset_fps: 15
@@ -13,8 +13,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml

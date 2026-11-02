@@ -10,7 +10,7 @@ from conftest import TEMPLATE, rakuda2_tree
 from test_dynamics import INPUTS, URDF, physics, poses
 
 from roboloom import setup
-from roboloom.config import parse_experiment
+from roboloom.config import parse_config
 from roboloom.dynamics.regressor import Fit, JointMap, Regressor, RegressorGravityModel
 from roboloom.errors import Cancelled, ConfigError, SetupError
 from roboloom.inputs.base import ActuatedReader, JointInput
@@ -160,13 +160,13 @@ def gravity_tree(tmp_path):
 
 def test_gravity_leader_example_parses_and_runs_in_mock(tmp_path):
     tree = gravity_tree(tmp_path)
-    cfg = parse_experiment(
+    cfg = parse_config(
         deepcopy(tree)
     )  # hardware checks: watchdog and current limits present
     leader = cfg.inputs["leader"]
     assert isinstance(leader, JointInput) and leader.actuated
-    tree["experiment"]["mode"] = "mock"
-    cfg = parse_experiment(tree)
+    tree["settings"]["mode"] = "mock"
+    cfg = parse_config(tree)
     reader = cfg.inputs["leader"].open(True, cfg.dataset_fps)
     assert isinstance(reader, ActuatedReader)
     reader.start_trace(tmp_path / "leader_trace.npz")
@@ -184,8 +184,8 @@ def test_gravity_leader_example_parses_and_runs_in_mock(tmp_path):
 def test_commission_writes_only_differences_after_confirmation(tmp_path, monkeypatch):
     tree = gravity_tree(tmp_path)
     monkeypatch.setattr(
-        "roboloom.setup.common.load_experiment",
-        lambda *_: parse_experiment(deepcopy(tree)),
+        "roboloom.setup.common.load_config",
+        lambda *_: parse_config(deepcopy(tree)),
     )
     monkeypatch.setattr("roboloom.drivers.dynamixel.DynamixelBus", FakeDynamixel)
     plan = setup.plan_commission("exp", "leader")

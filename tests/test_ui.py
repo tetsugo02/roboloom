@@ -3,7 +3,8 @@ import time
 
 from rich.console import Console
 
-from roboloom.config import load_experiment
+from roboloom.config import load_config
+from roboloom.controllers.joint import JointController
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.status import StatusReporter
 from roboloom.ui.client import SessionClient
@@ -20,20 +21,25 @@ def text_of(renderable) -> str:
 
 
 def test_status_reporter_is_throttled():
-    reporter = StatusReporter(Publisher("robot"), "robot", period_s=0.25)
+    reporter = StatusReporter(Publisher("follower"), "follower", period_s=0.25)
     assert reporter.maybe({"mode": "HOLD"}, now_ns=S) is not None
     assert reporter.maybe({"mode": "HOLD"}, now_ns=S + S // 10) is None
     msg = reporter.maybe({"mode": "ACTIVE"}, "ok", now_ns=S + S // 2)
     assert msg is not None
-    assert msg.payload == {"role": "robot", "level": "ok", "fields": {"mode": "ACTIVE"}}
+    assert msg.payload == {
+        "role": "follower",
+        "level": "ok",
+        "fields": {"mode": "ACTIVE"},
+    }
 
 
 def test_controller_reports_why_it_is_not_following():
-    ctl = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
+    ctl = load_config("examples/mock/config.yaml").controllers["controller"]
+    assert isinstance(ctl, JointController)
     now = time.monotonic_ns()
     far = [2048] * 17
     far[2] = 2400  # head_pitch 352 counts away
-    ctl.update(
+    ctl.step(
         Envelope("joint_intent", "leader", "boot", 0, now, now, {"positions": far}),
         [2048] * 17,
         now,
@@ -44,7 +50,7 @@ def test_controller_reports_why_it_is_not_following():
         and status["worst_joint"] == "head_pitch"
         and status["worst_diff"] == 352
     )
-    ctl.update(
+    ctl.step(
         Envelope(
             "joint_intent", "leader", "boot", 1, now, now, {"positions": [2048] * 17}
         ),
@@ -53,7 +59,7 @@ def test_controller_reports_why_it_is_not_following():
     )
     assert ctl.status()["state"] == "following"
     old = now - 2 * S
-    ctl.update(
+    ctl.step(
         Envelope(
             "joint_intent", "leader", "boot", 2, old, old, {"positions": [2048] * 17}
         ),
@@ -69,8 +75,8 @@ def test_render_known_unknown_and_stale_nodes():
         "experiment": "/x/experiment.yaml",
         "mode": "hardware",
         "nodes": {
-            "robot": {
-                "role": "robot",
+            "follower": {
+                "role": "follower",
                 "level": "error",
                 "t_ns": now,
                 "fields": {
@@ -109,8 +115,8 @@ def test_render_known_unknown_and_stale_nodes():
     assert "head_pitch differs by 310" in text
     assert "fz_N=1.5" in text  # unregistered role falls back to key=value
     assert "no status 5 s" in text
-    assert text.index("robot") < text.index("controller") < text.index("camera")
-    assert "sensor" in RENDERERS and "robot" in RENDERERS
+    assert text.index("follower") < text.index("controller") < text.index("camera")
+    assert "sensor" in RENDERERS and "follower" in RENDERERS
 
 
 def test_report_lines():
@@ -131,7 +137,9 @@ def test_report_lines():
             }
         ).plain
     )
-    assert describe_report({"robot_mode": "FAULT", "reason": "bus"}).style == "bold red"
+    assert (
+        describe_report({"follower_mode": "FAULT", "reason": "bus"}).style == "bold red"
+    )
     assert (
         "save failed"
         in describe_report({"command": "save", "error": "empty episode"}).plain
@@ -168,7 +176,7 @@ def test_home_pose_and_problems_stand_out_in_the_detail():
     _, detail = RENDERERS["controller"]({"state": "following", "home": "ready"})
     assert "home pose: ready.yaml" in detail.plain
     assert styles_of(detail)["ready.yaml"] == "bold magenta"
-    _, detail = RENDERERS["robot"](
+    _, detail = RENDERERS["follower"](
         {
             "mode": "HOMING",
             "armed": False,

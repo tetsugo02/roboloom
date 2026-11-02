@@ -5,10 +5,10 @@ For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_m
 ```yaml
 type: joint
 input: leader
-robot: robot
+followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
-max_speed_counts_per_s: 2048
+max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
 # The actual configuration also needs the joints mapping table for all 17 joints.
@@ -21,13 +21,16 @@ These are the values from the distributed template. Set them after checking the 
 | Key | Meaning |
 | --- | --- |
 | `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
-| `max_speed_counts_per_s` | Upper limit on the rate of change of the target |
-| `command_deadline_ms` | Validity period of commands sent to the robot |
+| `unit` | Unit of the joint positions; must equal the leader's and the follower's (Rakuda2: `dynamixel_count`) |
+| `max_speed` | Upper limit on the rate of change of the target (follower unit/s; counts/s on Rakuda2) |
+| `followers` | The followers it drives; a `joint` controller drives exactly one |
+| `command_deadline_ms` | Validity period of commands sent to the follower |
 | `input_timeout_ms` | Time until leader input is judged stale |
+| `follower_timeout_ms` | Time until the follower's state is judged stale (default 150). It then stops following and sends no command until it has re-aligned |
 
 When `aligning` appears on screen, align the leader with the follower while watching the displayed joint differences. Run `start <task>` once it is `following`. If the input is stale, the state becomes `input_stale`, and following does not continue without new input.
 
-The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `Experiment.from_yaml()` does not accept a leader that executes control laws.
+The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `InProcessSession.from_yaml()` does not accept a leader that executes control laws.
 
 The concrete setup is in [Rakuda2 Quick start](../quick-start/rakuda2.md).
 
@@ -73,7 +76,7 @@ head target = head target mapped from the leader
 - `joint` and `source` name follower joints. Self-coupling, unknown joints, repeated `joint` entries, and nonfinite `scale` values are rejected when loading the configuration.
 - The reference is a configured constant, not the pose at alignment. Alignment accepts differences within `alignment_tolerance`, so a reference taken at that moment would offset the head by that difference for the whole session. Re-alignment and leader restarts keep the same reference.
 - Alignment compares the compensated head target with the follower's head. If the follower camera starts far from forward, `head_yaw` exceeds the tolerance and the controller stays `aligning`. Align the follower camera heading with the leader's neck before launch.
-- Using measured torso position rather than its target avoids commanding the neck ahead of a torso that has not caught up. Existing speed limits and robot-side range, deadline, and jump checks still apply after compensation.
+- Using measured torso position rather than its target avoids commanding the neck ahead of a torso that has not caught up. Existing speed limits and follower-side range, deadline, and jump checks still apply after compensation.
 - `joint`, `source`, `scale`, and `reference` are all required.
 - `lead_ms` (optional, default 0, 0–500) is how far ahead the target looks along the measured torso velocity. The neck motor trails its target under position control, so the camera lags while the torso moves. On Rakuda2, the camera error while turning the torso at up to 69°/s (up to 4.6°) was almost fully explained by torso velocity × about 70 ms (correlation 0.99, recording of 2026-10-27), so the example uses 70. Too large a value makes the neck overshoot. Without velocity from the robot, no lead is added.
 - This is linear compensation between specified joints. It does not stabilize the full camera orientation, use IMU feedback, or compensate for base rotation. It assumes parallel axes and correct signs and unit ratios. On another robot, set `scale` to account for axis signs and unit ratios. Speed limits, travel limits, and tracking lag leave errors in camera direction.
@@ -85,7 +88,7 @@ Joint locking and compensation have been verified with mock buses and controller
 
 The `home` command moves the leader and the follower slowly to a saved initial pose, so that every episode starts from the same pose. One second after arriving, the leader returns to its normal laws (gravity compensation and breakaway hold), so you can take it and start operating.
 
-**1. Save a pose.** Put the follower in the pose you want, then run this with the dataflow stopped. Each name becomes `poses/<name>.yaml`, and any number of poses can be saved. An existing name is not overwritten without `--force`.
+**1. Save a pose.** Put the follower in the pose you want, then run this with the dataflow stopped. Each name becomes `poses/<follower>/<name>.yaml`, and any number of poses can be saved. An existing name is not overwritten without `--force`. The file records the follower it was saved on and does not load on another one (so a left-arm pose is never used on the right arm). With several followers, name the follower: `capture-pose left ready`.
 
 ```bash
 uv run roboloom capture-pose ready
@@ -97,9 +100,9 @@ To put the follower in the pose, teleoperate it and `quit` with `hold` (exit wit
 
 ```yaml
 home:
-  pose: ../poses/ready.yaml   # one of the saved poses
+  pose: ../poses/follower/ready.yaml   # one of the saved poses
   max_speed: 200              # counts/s (about 18°/s); a limit that keeps the move slow
-  tolerance: 30               # reached when every joint is this close
+  tolerance: 30               # reached when every joint is this close (required; follower unit)
   timeout_s: 30
 ```
 

@@ -1,9 +1,21 @@
-"""Controller contract: one input's intents -> deadline-bound commands for one robot."""
+"""Controller contract: one input's intents -> deadline-bound commands for its followers.
+
+A controller drives one or more followers (`followers: [...]` in its YAML; each follower
+has exactly one controller). It sees each follower's latest state as a `FollowerView`
+and returns at most one command per follower.
+
+Safety contract for every controller: after `reset()` (a follower latched FAULT or
+ESTOP, or its state went stale) it sends no command until it has re-aligned with what
+the followers actually do. A follower that gets no command keeps holding its target
+(`FollowerSafety`), still armed, so this is what keeps a stopped group from moving again
+on its own.
+"""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import ClassVar
 
 from ..control.homing import HomeSpec
@@ -11,39 +23,72 @@ from ..core.checks import positive
 from ..core.protocol import Envelope, Publisher
 from ..estimators.base import Estimator
 from ..inputs.base import InputDevice
-from ..robots.base import Robot
+from ..robots.base import Follower
 from ..robots.safety import make_command
 from .feedback import FeedbackMap
+
+
+@dataclass(frozen=True)
+class FollowerView:
+    """A follower's latest `follower_state`, as its controller sees it."""
+
+    positions: list[float]
+    target: list[float] | None  # the goal it holds or tracks; steps start from here
+    velocities: list[float] | None  # measured, when the follower reports them
+    mode: str
+    t_ns: int  # when the controller received it
+
+    @classmethod
+    def of(cls, msg: Envelope, t_ns: int) -> FollowerView:
+        p = msg.payload
+        return cls(
+            list(p["positions"]),
+            p.get("target"),
+            p.get("velocities"),
+            str(p.get("mode", "")),
+            t_ns,
+        )
 
 
 class Controller(ABC):
     # False for controllers that do not follow one operator input (e.g. a policy); they get
     # `source=None` and name what they read in `observes()`.
     uses_input: ClassVar[bool] = True
+    # how many followers one controller of this type drives (None: any number)
+    max_followers: ClassVar[int | None] = None
 
     def __init__(
         self,
         name: str,
         cfg: dict,
         source: InputDevice | None,
-        robot: Robot,
-        robot_id: str,
+        followers: Mapping[str, Follower],
     ):
-        self.name, self.cfg, self.source, self.robot, self.robot_id = (
-            name,
-            cfg,
-            source,
-            robot,
-            robot_id,
-        )
+        self.name, self.cfg, self.source = name, cfg, source
+        self.followers = dict(followers)
+        if not self.followers:
+            raise ValueError(f"{name}.followers: name at least one follower")
+        if self.max_followers is not None and len(self.followers) > self.max_followers:
+            raise ValueError(
+                f"{name}: a {type(self).__name__} drives {self.max_followers} "
+                f"follower(s), not {len(self.followers)}"
+            )
         self.deadline_ms = positive(
             cfg.get("command_deadline_ms"), f"{name}.command_deadline_ms"
         )
         self.publisher = Publisher(name)
-        # the saved pose `home` moves this pair to (leader and robot), if configured
-        self.home: HomeSpec | None = None
+        # saved poses `home` moves the followers (and the leader) to, by follower
+        self.homes: dict[str, HomeSpec] = {}
         # force feedback to the input (`feedback:`), for controllers that support it
         self.feedback: FeedbackMap | None = None
+
+    @property
+    def follower(self) -> Follower:
+        """The follower of a controller that drives exactly one."""
+        if len(self.followers) != 1:
+            raise RuntimeError(f"{self.name} drives {len(self.followers)} followers")
+        (follower,) = self.followers.values()
+        return follower
 
     def bind_feedback(self, estimators: Mapping[str, Estimator]) -> None:
         """Connect `feedback:` to its estimator and check the input takes it."""
@@ -53,20 +98,27 @@ class Controller(ABC):
                     f"{self.name}: {type(self).__name__} cannot send feedback"
                 )
             return
+        if len(self.followers) != 1:
+            raise ValueError(f"{self.name}.feedback needs a controller of one follower")
         estimator = estimators.get(self.feedback.estimator_name)
         if estimator is None:
             raise ValueError(
                 f"{self.name}.feedback.estimator: no estimator "
-                f"{self.feedback.estimator_name!r} in the experiment"
+                f"{self.feedback.estimator_name!r} in the configuration"
             )
         units = getattr(self.source, "feedback_units", None)
-        self.feedback.bind(estimator, self.robot, units() if units is not None else {})
+        self.feedback.bind(
+            estimator, self.follower, units() if units is not None else {}
+        )
 
-    def command(self, target: list[float], now_ns: int, **extra: object) -> Envelope:
+    def command(
+        self, follower: str, target: list[float], now_ns: int, **extra: object
+    ) -> Envelope:
+        """A command for `follower`, in its unit, valid for `command_deadline_ms`."""
         return make_command(
             self.publisher,
-            robot_id=self.robot_id,
-            unit=self.robot.unit,
+            follower=follower,
+            unit=self.followers[follower].unit,
             target=target,
             now_ns=now_ns,
             deadline_ms=self.deadline_ms,
@@ -77,21 +129,19 @@ class Controller(ABC):
     def update(
         self,
         intent: Envelope,
-        follower: list[float],
+        views: Mapping[str, FollowerView],
         now_ns: int | None = None,
-        follower_target: list[float] | None = None,
-        follower_velocity: list[float] | None = None,
-    ) -> Envelope | None:
-        """Return the next command, or None when the robot must not move.
+    ) -> dict[str, Envelope]:
+        """The next command per follower; an empty dict when nothing may move.
 
-        `follower_target` is the goal the robot currently holds or tracks; controllers limit
-        their steps from it so they never drift away from what the follower actually does.
-        `follower_velocity` is the measured velocity, when the robot reports one.
+        `views` holds the latest state of every follower of this controller. Controllers
+        step from each view's `target` (what the follower holds) so they never drift
+        away from what the follower actually does.
         """
 
     @abstractmethod
     def reset(self) -> None:
-        """Require re-alignment, e.g. after the robot latched FAULT or ESTOP."""
+        """Require re-alignment before any further command (see the module docstring)."""
 
     def observes(self) -> list[str]:
         """Inputs and sensors whose samples this controller reads besides its input."""

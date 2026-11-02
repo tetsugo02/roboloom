@@ -31,16 +31,17 @@ MAX_CLAMP_DT_S = 0.1  # a stalled tick never widens the speed clamp beyond this
 def make_command(
     publisher: Publisher,
     *,
-    robot_id: str,
+    follower: str,
     unit: str,
     target: list[float],
     now_ns: int,
     deadline_ms: float,
     **extra: object,
 ) -> Envelope:
-    """RobotCommand: target, unit and absolute deadline, validated again by FollowerSafety."""
+    """A follower command: target, unit and absolute deadline, addressed to one follower
+    node by name and validated again by its FollowerSafety."""
     payload = {
-        "robot_id": robot_id,
+        "follower": follower,
         "unit": unit,
         "positions": target,
         "deadline_ns": now_ns + int(deadline_ms * 1e6),
@@ -56,6 +57,8 @@ class FollowerSafety:
     LATCHED = ("FAULT", "ESTOP", "RELEASED")
 
     def __init__(self, cfg: dict, bus):
+        if not cfg.get("unit"):
+            raise ValueError("FollowerSafety needs the follower's unit (cfg['unit'])")
         self.cfg, self.bus = cfg, bus
         self.dim = len(cfg["limits"])
         self.names = [
@@ -66,7 +69,7 @@ class FollowerSafety:
         )
         self.health = cfg.get("health") or {}
         self.period_s = 1 / cfg.get("control_hz", 30)
-        self.publisher = Publisher(cfg.get("name", "robot"))
+        self.publisher = Publisher(cfg.get("name", "follower"))
         self.mode = "IDLE"
         self.reason = ""
         self.pending: Envelope | None = None
@@ -116,8 +119,8 @@ class FollowerSafety:
             return
         if (
             command.kind != "command"
-            or command.payload.get("robot_id") != self.cfg["robot_id"]
-            or command.payload.get("unit") != self.cfg.get("unit", "dynamixel_count")
+            or command.payload.get("follower") != self.cfg.get("name", "follower")
+            or command.payload.get("unit") != self.cfg["unit"]
         ):
             return
         if command.boot_id != self.last_boot:
@@ -215,6 +218,8 @@ class FollowerSafety:
         if health is not None:
             if health.watchdog_fired:
                 return "bus watchdog fired"
+            if health.faults:
+                return "; ".join(health.faults)
             if any(health.hardware_error):
                 return f"hardware error {health.hardware_error}"
             limit = self.health.get("max_temperature_c")
@@ -259,7 +264,7 @@ class FollowerSafety:
                 return (
                     None,
                     False,
-                    f"{name} jumps {inside - ref:+.0f} > max_jump {bound['max_jump']}",
+                    f"{name} jumps {inside - ref:+.4g} > max_jump {bound['max_jump']}",
                 )
             step = bound["max_speed"] * dt
             limited = min(ref + step, max(ref - step, inside))
@@ -308,11 +313,12 @@ class FollowerSafety:
         self.last_tick_ns = now
         state = self.state or JointState(self.hold_target or [0.0] * self.dim)
         state_msg = self.publisher.make(
-            "robot_state",
+            "follower_state",
             {
                 "positions": state.positions,
                 "velocities": state.velocities,
                 "currents_mA": state.currents_mA,
+                "efforts_Nm": state.efforts_Nm,
                 "mode": self.mode,
                 "reason": self.reason,
                 "tick_interval_ms": interval,

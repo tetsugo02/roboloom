@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from ...core.checks import identity
-from ...robots.base import RobotBus
+from ...core.traits import SafetyTraits
+from ...robots.base import JointBus
 from ...robots.rakuda2.spec import (
     JOINTS,
     MOTOR_IDS,
@@ -17,6 +18,9 @@ from ..base import JointInput
 
 
 class RakudaMini(JointInput):
+    # the arms fall without torque; closing the reader releases every joint
+    safety_traits = SafetyTraits(torque_off="falls", unattended="torque_off")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg, JOINTS, UNIT)
         check_motor_ids(cfg, name)
@@ -35,5 +39,5 @@ class RakudaMini(JointInput):
     def device_ids(self) -> tuple[str, ...]:
         return (self.port,)
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         return open_rakuda_bus(self.port, mock, RAKUDA_MINI_MODELS, self.cfg, self.name)

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from conftest import rakuda2_tree
 
-from roboloom.config import parse_experiment
+from roboloom.config import parse_config
 from roboloom.control.device import (
     WATCHDOG_CHECK_MS,
     JointDevice,
@@ -130,7 +130,13 @@ def test_follower_safety_drives_a_device_like_a_bus():
     dev, bus = device(groups, [3, 3, 5])
     limit = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
     safety = FollowerSafety(
-        {"robot_id": "r", "limits": [limit] * 3, "control_hz": 30}, dev
+        {
+            "name": "r",
+            "unit": "dynamixel_count",
+            "limits": [limit] * 3,
+            "control_hz": 30,
+        },
+        dev,
     )
     safety.start()
     assert bus.torque == [True, True, True] and bus.goal_current[2] == 300
@@ -165,7 +171,7 @@ def hardware_tree():
 
 def test_hardware_refuses_unvalidated_and_unprotected_current_laws():
     tree = hardware_tree()
-    joints = [x["name"] for x in tree["robots"]["robot"]["limits"]]
+    joints = [x["name"] for x in tree["followers"]["follower"]["limits"]]
     impedance = {
         "group": "all",
         "law": "impedance",
@@ -175,25 +181,25 @@ def test_hardware_refuses_unvalidated_and_unprotected_current_laws():
         "max_velocity": 2000,
         "range": [[1000, 3000]] * 17,
     }
-    tree["robots"]["robot"]["control"] = [impedance]
-    del tree["robots"]["robot"]["registers"]["operating_mode"]
+    tree["followers"]["follower"]["control"] = [impedance]
+    del tree["followers"]["follower"]["registers"]["operating_mode"]
     with pytest.raises(ValueError, match="not validated"):
-        parse_experiment(deepcopy(tree))
+        parse_config(deepcopy(tree))
     impedance["allow_unvalidated"] = True
     with pytest.raises(ValueError, match="bus_watchdog_ms"):
-        parse_experiment(deepcopy(tree))
-    tree["robots"]["robot"]["bus_watchdog_ms"] = 200
+        parse_config(deepcopy(tree))
+    tree["followers"]["follower"]["bus_watchdog_ms"] = 200
     with pytest.raises(ValueError, match="current_limit"):
-        parse_experiment(deepcopy(tree))
+        parse_config(deepcopy(tree))
     tree["mode"] = "mock"
-    tree["experiment"]["mode"] = "mock"
-    assert parse_experiment(tree).robot.control is not None
+    tree["settings"]["mode"] = "mock"
+    assert parse_config(tree).followers["follower"].control is not None
 
 
 def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
     tree = hardware_tree()
-    tree["experiment"]["mode"] = "mock"
-    joints = [x["name"] for x in tree["robots"]["robot"]["limits"]]
+    tree["settings"]["mode"] = "mock"
+    joints = [x["name"] for x in tree["followers"]["follower"]["limits"]]
     arms = [j for j in joints if not j.endswith("grip")]
     tree["inputs"]["leader"]["control"] = [
         {"group": "hand", "law": "free", "joints": arms},
@@ -205,7 +211,7 @@ def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
             "target": 2400,
         },
     ]
-    cfg = parse_experiment(tree)
+    cfg = parse_config(tree)
     leader = cfg.inputs["leader"]
     assert isinstance(leader, JointInput)
     assert leader.actuated

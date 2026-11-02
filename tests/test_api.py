@@ -1,14 +1,15 @@
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
 
 def create(output):
-    return Experiment.from_components(
-        robot_id="toy",
-        robot=MockBus(dimension=2),
+    return InProcessSession.from_components(
+        robot="toy",
+        bus=MockBus(dimension=2),
         joint_names=["a", "b"],
+        unit="count",
         limits=[
             {"name": name, "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
             for name in ("a", "b")

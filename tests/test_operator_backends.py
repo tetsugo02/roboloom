@@ -15,7 +15,7 @@ import yaml
 from test_control_laws import GRAVITY, FlatGravity, device
 from test_homing import home_tree
 
-from roboloom.config import load_experiment, parse_experiment
+from roboloom.config import load_config, parse_config
 from roboloom.control.laws import GravityComp
 from roboloom.control.tuning import TuningSave, TuningSession
 from roboloom.errors import Cancelled
@@ -70,9 +70,9 @@ class FakeClient(SessionClient):
 class FakeSession(Session):
     def __init__(self, tmp_path: Path, *, home: bool = False):
         self.cfg = (
-            parse_experiment(home_tree(tmp_path))
+            parse_config(home_tree(tmp_path))
             if home
-            else load_experiment("examples/mock/experiment.yaml")
+            else load_config("examples/mock/config.yaml")
         )
         self.cfg.mode = "mock"
         self.client = FakeClient()
@@ -102,7 +102,7 @@ class FakeSession(Session):
         now = time.monotonic_ns()
         status: dict = {}
         for role, owners in [
-            ("robot", self.cfg.robots),
+            ("follower", self.cfg.followers),
             ("input", self.cfg.inputs),
             ("controller", self.cfg.controllers),
         ]:
@@ -113,7 +113,7 @@ class FakeSession(Session):
                     if not self.home_gate.is_set()
                     else "reached",
                 }
-                if role == "robot":
+                if role == "follower":
                     fields["mode"] = (
                         "ESTOP" if self.client.sent and self.client.confirm else "HOLD"
                     )
@@ -267,7 +267,7 @@ def test_poll_listener_cannot_steal_operation_response(tmp_path):
     process.poll.return_value = None
     with tempfile.TemporaryDirectory() as work:
         session = Session(
-            load_experiment("examples/mock/experiment.yaml"),
+            load_config("examples/mock/config.yaml"),
             process,
             SessionClient(tmp_path / "fifo", report, tmp_path / "status.json"),
             tmp_path,
@@ -463,7 +463,7 @@ def test_tuning_save_failure_preserves_dirty_values_and_allows_retry(
 
 def test_no_home_or_follower_torque_is_a_capability_not_a_kind_check(tmp_path):
     session = FakeSession(tmp_path)
-    for robot in session.cfg.robots.values():
+    for robot in session.cfg.followers.values():
         robot.torque = False
     backend = SessionBackend(lambda: session)
     notices = Notices()

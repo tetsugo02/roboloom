@@ -49,22 +49,23 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commi
 基本構成だけで，次を自分の `main.py` に保存して実行できます．`MockBus` を使い，データセットは保存しません．
 
 ```python
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
-with Experiment.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+with InProcessSession.from_components(
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
+    unit="count",
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
         {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
     ],
     controller=lambda obs: [2048, 2048],
-) as experiment:
-    experiment.start_inference()
-    print(experiment.step())
-    experiment.stop_inference()
+) as session:
+    session.start_inference()
+    print(session.step())
+    session.stop_inference()
 ```
 
 ```bash

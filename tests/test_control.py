@@ -3,7 +3,8 @@ import time
 import numpy as np
 import pytest
 
-from roboloom.config import load_experiment
+from roboloom.config import load_config
+from roboloom.controllers.joint import JointController
 from roboloom.core.protocol import Envelope
 from roboloom.drivers.base import Health
 from roboloom.drivers.mock import MockBus
@@ -21,7 +22,7 @@ def command(seq, target, now, deadline=None):
         now,
         now,
         {
-            "robot_id": "r",
+            "follower": "r",
             "unit": "dynamixel_count",
             "positions": target,
             "deadline_ns": deadline or now + 100_000_000,
@@ -32,7 +33,14 @@ def command(seq, target, now, deadline=None):
 def safety(**cfg):
     bus = MockBus(dimension=1)
     ctl = FollowerSafety(
-        {"robot_id": "r", "limits": [LIMIT], "control_hz": 30, **cfg}, bus
+        {
+            "name": "r",
+            "unit": "dynamixel_count",
+            "limits": [LIMIT],
+            "control_hz": 30,
+            **cfg,
+        },
+        bus,
     )
     ctl.start()
     ctl.arm()
@@ -146,17 +154,18 @@ def test_torque_false_records_state_only():
 
 
 def test_controller_alignment_and_input_age():
-    ctl = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
+    ctl = load_config("examples/mock/config.yaml").controllers["controller"]
+    assert isinstance(ctl, JointController)
     now = time.monotonic_ns()
     bad = Envelope(
         "joint_intent", "leader", "boot", 0, now, now, {"positions": [3000] * 17}
     )
-    assert ctl.update(bad, [2048] * 17, now) is None
+    assert ctl.step(bad, [2048] * 17, now) is None
     aligned = Envelope(
         "joint_intent", "leader", "boot", 1, now, now, {"positions": [2048] * 17}
     )
-    assert ctl.update(aligned, [2048] * 17, now) is not None
-    assert ctl.update(aligned, [2048] * 17, now) is None
+    assert ctl.step(aligned, [2048] * 17, now) is not None
+    assert ctl.step(aligned, [2048] * 17, now) is None
     old = Envelope(
         "joint_intent",
         "leader",
@@ -166,7 +175,7 @@ def test_controller_alignment_and_input_age():
         now - 1_000_000_000,
         {"positions": [2048] * 17},
     )
-    assert ctl.update(old, [2048] * 17, now) is None
+    assert ctl.step(old, [2048] * 17, now) is None
 
 
 def test_envelope_binary_round_trip():
@@ -213,7 +222,8 @@ def test_out_of_range_is_clipped_and_rejects_say_why():
 
 
 def test_controller_steps_from_the_follower_target_not_its_own_output():
-    ctl = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
+    ctl = load_config("examples/mock/config.yaml").controllers["controller"]
+    assert isinstance(ctl, JointController)
     now = (
         time.monotonic_ns() - 5_000_000_000
     )  # message times must not lie in the future
@@ -221,12 +231,12 @@ def test_controller_steps_from_the_follower_target_not_its_own_output():
     intent = lambda seq, value, t: Envelope(
         "joint_intent", "leader", "boot", seq, t, t, {"positions": [value] * 17}
     )
-    assert ctl.update(intent(0, 2048, now), hold, now, follower_target=hold) is not None
+    assert ctl.step(intent(0, 2048, now), hold, now, follower_target=hold) is not None
     # robot not armed yet: it keeps holding 2048 while the leader moves far away over 2 s
     cmd = None
     for k in range(1, 61):
         t = now + k * 33_000_000
-        cmd = ctl.update(intent(k, 2048 + 20 * k, t), hold, t, follower_target=hold)
+        cmd = ctl.step(intent(k, 2048 + 20 * k, t), hold, t, follower_target=hold)
     assert cmd is not None
-    step = 500 * 0.033  # max_speed_counts_per_s in the mock controller
+    step = 500 * 0.033  # max_speed of the mock controller (counts/s)
     assert max(abs(x - 2048) for x in cmd.payload["positions"]) <= step + 1e-6

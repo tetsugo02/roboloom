@@ -14,13 +14,13 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import ExperimentConfig
+from ..config import RobotConfig
 from ..control.tuning import TuningSession
 from ..drivers.dynamixel_table import MODELS, OPERATING_MODES
 from ..errors import Cancelled, ConfigError, HardwareError, SetupError
 from ..operator import Operator
 from .calibration import Calibration
-from .common import experiment_node, require_hardware
+from .common import config_node, require_hardware
 
 POSITION_MODES = {
     OPERATING_MODES[m] for m in ("position", "extended_position", "current_position")
@@ -134,14 +134,17 @@ class GravityCheck:
         return out
 
 
-def _gravity_group(experiment: str | Path | ExperimentConfig, node: str, group: str):
+def _gravity_group(config: str | Path | RobotConfig, node: str, group: str):
     from ..control.device import build_laws
     from ..inputs.base import JointInput
 
-    cfg, owner = experiment_node(experiment, node)
+    cfg, owner = config_node(config, node)
     control = owner.control if isinstance(owner, JointInput) else None
     if not isinstance(owner, JointInput) or not control:
-        raise ConfigError(f"{node}: not an actuated input in {cfg.path}")
+        raise ConfigError(
+            f"{node}: not an actuated input in {cfg.path} (gravity tools are for "
+            "Dynamixel leaders whose groups run current-mode laws)"
+        )
     spec = next((g for g in control if g.name == group), None)
     if spec is None:
         raise ConfigError(f"{group}: no such control group of {node}")
@@ -167,7 +170,7 @@ def _only(law, laws) -> None:
 
 
 def gravity_check(
-    experiment: str | Path | ExperimentConfig,
+    config: str | Path | RobotConfig,
     node: str,
     group: str,
     operator: Operator,
@@ -181,7 +184,7 @@ def gravity_check(
     from ..control.laws import CurrentLaw
     from ..control.trace import Trace
 
-    cfg, owner, _, laws, law = _gravity_group(experiment, node, group)
+    cfg, owner, _, laws, law = _gravity_group(config, node, group)
     if not isinstance(law, CurrentLaw) or law.gravity is None:
         raise ConfigError(f"{group}: not a gravity-compensated group of {node}")
     require_hardware(cfg, "gravity-check")
@@ -232,14 +235,14 @@ def gravity_check(
 
 
 def open_tuning(
-    experiment: str | Path | ExperimentConfig, node: str, group: str
+    config: str | Path | RobotConfig, node: str, group: str
 ) -> TuningSession:
     """A live tuning session for one gravity_comp group; the other groups stay limp.
     Saving writes the group's `tuning:` file. Close the session when done."""
     from ..control.device import JointDevice, tuning_path
     from ..control.laws import GravityComp
 
-    cfg, owner, spec, laws, law = _gravity_group(experiment, node, group)
+    cfg, owner, spec, laws, law = _gravity_group(config, node, group)
     if not isinstance(law, GravityComp) or not spec.cfg.get("tuning"):
         raise ConfigError(
             f"{group}: needs a gravity_comp group with `tuning:` (the file tuning writes)"

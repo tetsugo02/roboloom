@@ -3,8 +3,8 @@
 Each step returns its result as data and raises a `roboloom.errors` exception when it
 cannot proceed. Steps that need the person at the robot take an `Operator`
 (`TerminalOperator` in the CLI, `ScriptedOperator` in scripts and tests). Steps that
-take a configuration accept a path, a robot name or a loaded `ExperimentConfig` (load it
-with `load_experiment(..., options=..., mock=...)` to choose its options and mode).
+take a configuration accept a path, a robot name or a loaded `RobotConfig` (load it
+with `load_config(..., options=..., mock=...)` to choose its options and mode).
 """
 
 from ..control.tuning import TuningSession
@@ -20,6 +20,7 @@ from .gravity import (
     open_tuning,
     release_trial,
 )
+from .hold import HoldResult, check_hold, hold_trial
 from .pose import capture_pose
 from .watchdog import WatchdogResult, watchdog_test, watchdog_trial
 
@@ -28,15 +29,18 @@ __all__ = [
     "CommissionPlan",
     "GravityCheck",
     "GravityFit",
+    "HoldResult",
     "Travel",
     "TuningSession",
     "WatchdogResult",
     "apply_commission",
     "calibrate_joints",
     "capture_pose",
+    "check_hold",
     "collect_holding_currents",
     "fit_gravity",
     "gravity_check",
+    "hold_trial",
     "identify_gravity",
     "measure_travel",
     "open_tuning",

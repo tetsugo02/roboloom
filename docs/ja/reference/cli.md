@@ -4,7 +4,7 @@
 
 ## 設定とデバイスの選び方
 
-設定は機体ごとに1つ（`.roboloom/<robot>/config.yaml`）です．表の `[robot]` は省略でき，`.roboloom/` の下に機体が1台だけならそれを使います．機体名（`rakuda2`）やYAMLファイルのパスも指定できます．ほかの位置引数を取るコマンドでは，先頭の語が設定を指すときだけ設定として扱います（`roboloom commission robot` と `roboloom commission rakuda2 robot`，`roboloom session home` と `roboloom session rakuda2 home` はどちらも有効です）．
+設定は機体ごとに1つ（`.roboloom/<robot>/config.yaml`）です．表の `[robot]` は省略でき，`.roboloom/` の下に機体が1台だけならそれを使います．機体名（`rakuda2`）やYAMLファイルのパスも指定できます．ほかの位置引数を取るコマンドでは，先頭の語が設定を指すときだけ設定として扱います（`roboloom commission follower` と `roboloom commission rakuda2 follower`，`roboloom session home` と `roboloom session rakuda2 home` はどちらも有効です）．
 
 既定は実機です．デバイスを開くコマンドは次の指定を受け付けます．
 
@@ -22,20 +22,23 @@
 | --- | --- |
 | `roboloom [robot]` | ランチャーを開く（`roboloom launch [robot]` と同じ） |
 | `init rakuda2` | 機体設定を生成する |
-| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る |
+| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る．`can_left` のようなCANインターフェースを渡すと，PiPER（[開発中](../contribution/piper.md)）のファームウェア・関節角・状態・有効化・温度・異常を読む（有効化も移動もしない） |
 | `validate [robot]` | デバイスを開かず設定とdataflowを検証する（有効なオプションとデータセット名を表示） |
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |
 | `identify-gravity <calibration> --out <path> --collect` | 保持電流を測定して重力モデルを同定する（leaderの重力補償，followerの `model_residual` 推定器）．通電前に操作者へ確認する |
-| `capture-pose [robot] <name>` | followerの今の姿勢を `poses/<name>.yaml` に保存する（動かさない．`--force` で上書き） |
+| `capture-pose [robot] [follower] <name>` | フォロワの今の姿勢を `poses/<follower>/<name>.yaml` に保存する（動かさない．`--force` で上書き．フォロワが1台なら `follower` は省略可） |
 | `commission [robot] <node>` | 差分と操作者の確認を経てEEPROMを書き，読み戻す |
 | `watchdog-test [robot] <node> <joint>` | 卓上試験：Bus Watchdogが電流モードのモーターを止めるかを確かめる（通電する） |
+| `check-hold [robot] <follower> --tolerance <値>` | 卓上試験：指令が来なくなったフォロワが姿勢を保つかを測り，確認後にYAMLへ `unattended:` を書く（通電する．`--seconds` 既定10．`unattended` を `unknown` と宣言する機種だけ） |
 | `tune-gravity [robot] leader <group> --with gravity` | gainとholdを対話調整する |
 | `gravity-check [robot] leader <group> --with gravity` | 補償の有無による姿勢の変化を測る |
 | `run [robot]` | 操作画面で収集する |
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存 |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る |
+
+`calibrate-joints`，`measure-travel`，`identify-gravity`，`commission`，`watchdog-test`，`tune-gravity`，`gravity-check` はDynamixelの機体専用です（`probe` はDynamixelとPiPERを読めます）．Dynamixelでないノードを指定すると，理由を示して拒否します．
 
 例：
 
@@ -49,7 +52,7 @@ uv run roboloom validate --with digit
 uv run roboloom session home
 ```
 
-`calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．dataflowと同時に同じバスを開かないでください．`commission`，`watchdog-test`，`gravity-check` はmockの設定を拒否します．
+`calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．dataflowと同時に同じバスを開かないでください．`commission`，`watchdog-test`，`check-hold`，`gravity-check` はmockの設定を拒否します．
 
 ## ランチャー
 

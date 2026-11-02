@@ -1,7 +1,7 @@
 """In-process collection and one-step policy inference, for tests and simple robots.
 
 Everything runs in the caller's process and thread, so a slow policy or sensor delays the
-control loop. For a real robot use `roboloom.Session`, which runs the experiment's dora
+control loop. For a real robot use `roboloom.Session`, which runs the robot's dora
 dataflow (control loops, sensors and recorder in their own processes).
 Device buses and sensors are injected; importing this module never opens hardware.
 The dora runner uses the same controller, safety and recorder components.
@@ -14,39 +14,46 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Self
 
-from .config import ExperimentConfig, load_experiment
+from .config import RobotConfig, load_config
+from .controllers.base import FollowerView
 from .core.checks import positions
 from .core.protocol import Publisher
 from .core.source import Reader, Sample, Source
 from .errors import ConfigError
 from .inputs.base import InputDevice, JointInput
-from .recording import ACTION, EpisodeRecorder
-from .robots.base import Robot, RobotBus
+from .recording import ACTION, EpisodeRecorder, action_stream
+from .robots.base import Follower, JointBus
 from .robots.safety import FollowerSafety, make_command
 from .sensors.audio.base import PcmAudio
 from .sensors.vision.base import ImageSensor
 
 
-class Experiment:
+class InProcessSession:
     """Collect with a controller or run a policy using the same checked robot bus.
 
     `controller` takes the current observation dict and returns a target vector or
     None. `sensors` maps source names to callables returning Sample or None.
-    For YAML experiments, `from_yaml` supplies the configured controller by default.
+    For YAML configurations, `from_yaml` supplies the configured controller by default.
     """
 
     def __init__(
         self,
-        cfg: ExperimentConfig,
-        robot: RobotBus,
+        cfg: RobotConfig,
+        bus: JointBus,
         controller: Callable[[dict], list[float] | None] | None = None,
         sensors: dict[str, Callable[[], Sample | None]] | None = None,
         dataset=None,
     ):
+        if len(cfg.followers) != 1:
+            raise ConfigError(
+                f"{cfg.path}: InProcessSession drives one follower; this configuration "
+                f"has {len(cfg.followers)} ({', '.join(cfg.followers)}). Use "
+                "roboloom.Session, which runs the dataflow"
+            )
         self.cfg = cfg
-        self.spec = cfg.robot
-        self.robot = FollowerSafety(self.spec.safety_config(cfg.robot_id), robot)
-        self.robot.start()
+        (self.spec,) = cfg.followers.values()
+        self.safety = FollowerSafety(self.spec.safety_config(), bus)
+        self.safety.start()
         self.controller = controller
         self.sensors = sensors or {}
         self.recorder = EpisodeRecorder(cfg, dataset, **cfg.recorder)
@@ -69,11 +76,16 @@ class Experiment:
         mock: bool | None = None,
         sensors: dict[str, Callable[[], Sample | None]] | None = None,
         dataset=None,
-    ) -> Experiment:
+    ) -> InProcessSession:
         """`options`: launch options to enable (None: their defaults); `mock`: override
         the YAML's `mode` (None: as written, default hardware)."""
-        cfg = load_experiment(path, options=options, mock=mock)
-        mapper = cfg.controller_for(cfg.robot.name)
+        cfg = load_config(path, options=options, mock=mock)
+        if len(cfg.followers) != 1:
+            raise ConfigError(
+                f"{path}: InProcessSession drives one follower; use roboloom.Session"
+            )
+        (follower,) = cfg.followers.values()
+        mapper = cfg.controller_for(follower.name)
         source = mapper.source
         if source is None:
             raise ConfigError(
@@ -85,7 +97,7 @@ class Experiment:
                 f"{source.name}: a leader whose motors run control laws needs its own "
                 "process; use roboloom.Session, which runs the dataflow"
             )
-        bus = cfg.robot.open_device(cfg.mock)
+        bus = follower.open_device(cfg.mock)
         readers: dict[str, Reader] = {}
         try:
             readers[source.name] = source.open(cfg.mock, cfg.dataset_fps)
@@ -109,7 +121,8 @@ class Experiment:
             if sample is None:
                 return None
             msg = publisher.make(source.kind, source.encode(sample), sample.capture_ns)
-            command = mapper.update(msg, obs["state"])
+            view = FollowerView(list(obs["state"]), None, None, "", msg.t_ready_ns)
+            command = mapper.update(msg, {follower.name: view}).get(follower.name)
             return command.payload["positions"] if command else None
 
         instance.controller = controller
@@ -119,8 +132,8 @@ class Experiment:
     def from_components(
         cls,
         *,
-        robot_id: str,
-        robot: RobotBus,
+        robot: str,
+        bus: JointBus,
         joint_names: list[str],
         limits: list[dict],
         controller: Callable[[dict], list[float] | None] | None = None,
@@ -130,10 +143,10 @@ class Experiment:
         fps: int = 10,
         control_hz: int = 30,
         output: str | Path = "dataset",
-        repo_id: str = "local/experiment",
-        unit: str = "dynamixel_count",
+        repo_id: str = "local/in-process",
+        unit: str,
         dataset=None,
-    ) -> Experiment:
+    ) -> InProcessSession:
         if (
             len(joint_names) != len(limits)
             or len(set(joint_names)) != len(joint_names)
@@ -142,8 +155,8 @@ class Experiment:
             raise ValueError("joint_names and limits must match")
         if control_hz < fps:
             raise ValueError("control_hz must be >= fps")
-        spec = Robot(
-            "robot", {"limits": limits, "control_hz": control_hz}, joint_names, unit
+        spec = Follower(
+            "follower", {"limits": limits, "control_hz": control_hz}, joint_names, unit
         )
         inputs: dict[str, InputDevice] = {}
         if "leader" in (sensors or {}):
@@ -151,7 +164,7 @@ class Experiment:
         streams: dict[str, Source] = {}
         for name, shape in (image_shapes or {}).items():
             if (
-                name in ("robot", "leader", ACTION, "audio")
+                name in ("follower", "leader", ACTION, "audio")
                 or len(shape) != 3
                 or shape[2] != 3
             ):
@@ -159,28 +172,28 @@ class Experiment:
             streams[name] = ImageSensor(name, {"height": shape[0], "width": shape[1]})
         if audio_sample_rate is not None:
             streams["audio"] = PcmAudio("audio", {"sample_rate": audio_sample_rate})
-        cfg = ExperimentConfig(
-            robot_id=robot_id,
+        cfg = RobotConfig(
+            robot=robot,
             repo_id=repo_id,
             output=str(output),
             dataset_fps=fps,
-            robots={"robot": spec},
+            followers={"follower": spec},
             inputs=inputs,
             sensors=streams,
-            max_age_ms={name: 300 for name in (*inputs, "robot", *streams)},
+            max_age_ms={name: 300 for name in (*inputs, "follower", *streams)},
         )
-        return cls(cfg, robot, controller=controller, sensors=sensors, dataset=dataset)
+        return cls(cfg, bus, controller=controller, sensors=sensors, dataset=dataset)
 
     def start_episode(self, task: str) -> None:
         self.recorder.start(task)
-        self.robot.arm()
+        self.safety.arm()
 
     def start_inference(self) -> None:
         """Arm checked one-step control without creating an episode."""
-        self.robot.arm()
+        self.safety.arm()
 
     def stop_inference(self) -> None:
-        self.robot.stop()
+        self.safety.stop()
 
     def step(
         self, *, policy: Callable[[dict], list[float] | None] | None = None
@@ -189,10 +202,10 @@ class Experiment:
         now = time.monotonic_ns()
         try:
             state = positions(
-                self.robot.bus.read_positions(), len(self.spec.joint_names)
+                self.safety.bus.read_positions(), len(self.spec.joint_names)
             )
         except Exception:
-            self.robot.stop()
+            self.safety.stop()
             raise
         obs: dict[str, Any] = {"state": state}
         robot = self.spec.name
@@ -200,7 +213,7 @@ class Experiment:
             try:
                 sample = reader()
             except Exception:
-                self.robot.stop()
+                self.safety.stop()
                 raise
             obs[name] = sample
             spec = self.specs.get(name)
@@ -216,22 +229,22 @@ class Experiment:
         try:
             target = callback(obs) if callback else None
         except Exception:
-            self.robot.stop()
+            self.safety.stop()
             raise
         if target is not None:
             target = positions(target, len(state))
             command = make_command(
                 self.publisher,
-                robot_id=self.cfg.robot_id,
+                follower=self.spec.name,
                 unit=self.spec.unit,
                 target=target,
                 now_ns=now,
                 deadline_ms=self.deadline_ms,
             )
-            self.robot.accept(command)
-        state_msg, action_msg = self.robot.tick()
+            self.safety.accept(command)
+        state_msg, action_msg = self.safety.tick()
         self.recorder.ingest(robot, state_msg)
-        self.recorder.ingest(ACTION, action_msg)
+        self.recorder.ingest(action_stream(robot), action_msg)
         self.recorder.poll()
         return {
             "observation": obs,
@@ -255,7 +268,7 @@ class Experiment:
         return results
 
     def stop_episode(self) -> None:
-        self.robot.stop()
+        self.safety.stop()
         self.recorder.stop()
 
     def save_episode(self) -> int:
@@ -263,21 +276,23 @@ class Experiment:
         return self.recorder.save()
 
     def discard_episode(self) -> None:
-        self.robot.stop()
+        self.safety.stop()
         self.recorder.discard()
 
     def estop(self) -> None:
-        self.robot.stop(estop=True)
+        self.safety.stop(estop=True)
 
     def release(self) -> None:
         """Torque off after stop; support the arm first. Latched until the robot is reopened."""
-        self.robot.release()
+        self.safety.release()
 
     def close(self) -> None:
+        """Close the recorder and the bus without releasing torque: what the follower does
+        next is its `traits().unattended` (holds, goes limp, or not known)."""
         try:
             self.recorder.close()
         finally:
-            self.robot.bus.close()
+            self.safety.bus.close()
             for closer in self._extra_closers:
                 closer()
 

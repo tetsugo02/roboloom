@@ -1,8 +1,8 @@
 """`roboloom init`: a project directory for one robot, copied from the robot's template.
 
-Each robot package ships `template/` (experiments, node files, calibration maps, a README
+Each robot package ships `template/` (config.yaml, node files, calibration maps, a README
 with the setup steps). Values measured on one physical robot are `SET_...` placeholders
-until the operator fills them; `config.parse_experiment` refuses to run with any left.
+until the operator fills them; `config.parse_config` refuses to run with any left.
 """
 
 from __future__ import annotations

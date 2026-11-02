@@ -1,4 +1,4 @@
-"""Render the dora dataflow from a validated experiment."""
+"""Render the dora dataflow from a validated configuration."""
 
 from __future__ import annotations
 
@@ -8,13 +8,19 @@ from pathlib import Path
 
 import yaml
 
-from ..config import ExperimentConfig
-from ..recording import ACTION
+from ..config import RobotConfig
+from ..recording import ACTION, action_stream
 
 STATUS_SUFFIX = "_status"  # session input ids; runtime.node reads the same suffix
+STATE_PREFIX = "state_"  # a controller's input carrying one follower's state
 
 
-def build_flow(cfg: ExperimentConfig) -> dict:
+def command_output(follower: str) -> str:
+    """A controller's output carrying its commands for `follower`."""
+    return f"command_{follower}"
+
+
+def build_flow(cfg: RobotConfig) -> dict:
     script = str(Path(__file__).with_name("node.py").resolve())
     fps = cfg.dataset_fps
 
@@ -31,8 +37,25 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             "restart_policy": "never",
         }
 
-    control_hz = cfg.robot.control_hz
     session = {"session": "session/control"}  # every node ends on `quit`
+    # a source without a rate of its own runs at the fastest follower it drives (an
+    # input: through its controllers), or else at the fastest follower of the robot
+    fastest = max(f.control_hz for f in cfg.followers.values())
+    driven = {
+        n: max(
+            (
+                f.control_hz
+                for c in cfg.controllers.values()
+                if c.source is s
+                for f in c.followers.values()
+            ),
+            default=fastest,
+        )
+        for n, s in cfg.inputs.items()
+    }
+
+    def rate(name: str, source) -> float:
+        return source.rate_hz(fps) or driven.get(name, fastest)
 
     def latest(output: str) -> dict:
         return {"source": output, "queue_size": 1, "queue_policy": "drop_oldest"}
@@ -55,14 +78,17 @@ def build_flow(cfg: ExperimentConfig) -> dict:
                 ),
             },
             ["sample", "status"],
-            source.rate_hz(fps) or control_hz,
+            rate(name, source),
         )
         for name, source in cfg.inputs.items()
     ]
 
     for name, c in cfg.controllers.items():
-        inputs: dict[str, object] = {"robot": f"{c.robot.name}/state", **session}
-        outputs = ["command", "status"]
+        inputs: dict[str, object] = {
+            **{f"{STATE_PREFIX}{f}": f"{f}/state" for f in c.followers},
+            **session,
+        }
+        outputs = [*(command_output(f) for f in c.followers), "status"]
         if c.source is not None:
             inputs["intent"] = f"{c.source.name}/sample"
         # a policy reads the newest sample of what it observes, on its own timer
@@ -71,11 +97,11 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             inputs["estimate"] = latest(f"{c.feedback.estimator_name}/estimate")
             outputs.append("feedback")
         nodes.append(node(name, inputs, outputs, getattr(c, "rate_hz", None)))
-    # estimators run on each robot state they receive, so they need no timer
+    # estimators run on each follower state they receive, so they need no timer
     nodes += [
         node(
             name,
-            {"robot": latest(f"{e.robot}/state"), **session},
+            {"follower": latest(f"{e.follower}/state"), **session},
             ["estimate", "status"],
         )
         for name, e in cfg.estimators.items()
@@ -85,7 +111,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             name,
             {
                 "command": {
-                    "source": f"{cfg.controller_for(name).name}/command",
+                    "source": f"{cfg.controller_for(name).name}/{command_output(name)}",
                     "queue_size": 1,
                     "queue_policy": "drop_oldest",
                 },
@@ -94,10 +120,10 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             ["state", ACTION, "status"],
             robot.control_hz,
         )
-        for name, robot in cfg.robots.items()
+        for name, robot in cfg.followers.items()
     ]
     nodes += [
-        node(name, session, ["sample", "status"], sensor.rate_hz(fps) or control_hz)
+        node(name, session, ["sample", "status"], rate(name, sensor))
         for name, sensor in cfg.sensors.items()
     ]
     # Bounded recorder queues: while `save` encodes video the recorder does not read, and dora
@@ -112,22 +138,20 @@ def build_flow(cfg: ExperimentConfig) -> dict:
         }
 
     rates = {
-        **{
-            n: s.rate_hz(fps) or control_hz
-            for n, s in {**cfg.inputs, **cfg.sensors}.items()
-        },
-        **{n: r.control_hz for n, r in cfg.robots.items()},
-        **{n: cfg.robots[e.robot].control_hz for n, e in cfg.estimators.items()},
+        **{n: rate(n, s) for n, s in {**cfg.inputs, **cfg.sensors}.items()},
+        **{n: r.control_hz for n, r in cfg.followers.items()},
+        **{n: cfg.followers[e.follower].control_hz for n, e in cfg.estimators.items()},
     }
     published = {
-        **{n: "state" for n in cfg.robots},
+        **{n: "state" for n in cfg.followers},
         **{n: "estimate" for n in cfg.estimators},
     }
     recorded = {
         name: bounded(f"{name}/{published.get(name, 'sample')}", rates[name])
         for name in cfg.sources
     }
-    recorded[ACTION] = bounded(f"{cfg.robot.name}/{ACTION}", cfg.robot.control_hz)
+    for name, follower in cfg.followers.items():
+        recorded[action_stream(name)] = bounded(f"{name}/{ACTION}", follower.control_hz)
     nodes.append(node("recorder", {**recorded, **session}, ["report", "status"]))
     statuses = {
         f"{name}{STATUS_SUFFIX}": {
@@ -143,7 +167,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
     return {"nodes": nodes}
 
 
-def write_flow(cfg: ExperimentConfig, path: str | Path) -> Path:
+def write_flow(cfg: RobotConfig, path: str | Path) -> Path:
     target = Path(path)
     target.write_text(yaml.safe_dump(build_flow(cfg), sort_keys=False))
     return target

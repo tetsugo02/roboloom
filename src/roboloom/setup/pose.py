@@ -1,4 +1,4 @@
-"""Save the follower's current pose under a name, for `home` (`roboloom capture-pose`)."""
+"""Save a follower's current pose under a name, for `home` (`roboloom capture-pose`)."""
 
 from __future__ import annotations
 
@@ -8,34 +8,50 @@ from pathlib import Path
 
 import yaml
 
-from ..config import ExperimentConfig
+from ..config import RobotConfig
 from ..errors import ConfigError, SetupError
 from .common import load
 
 
-def pose_path(experiment_path: str | Path, name: str) -> Path:
-    """`poses/<name>.yaml` next to the experiment (the robot's `.roboloom/<robot>/`)."""
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
-        raise ConfigError(f"pose name {name!r}: use letters, digits, - and _")
-    return Path(experiment_path).parent / "poses" / f"{name}.yaml"
+def pose_path(config_path: str | Path, follower: str, name: str) -> Path:
+    """`poses/<follower>/<name>.yaml` next to the configuration (the robot's
+    `.roboloom/<robot>/`). Each follower keeps its own poses: a pose saved on the left
+    arm never loads on the right one."""
+    for word, what in ((follower, "follower"), (name, "pose name")):
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", word):
+            raise ConfigError(f"{what} {word!r}: use letters, digits, - and _")
+    return Path(config_path).parent / "poses" / follower / f"{name}.yaml"
 
 
 def capture_pose(
-    experiment: str | Path | ExperimentConfig,
+    config: str | Path | RobotConfig,
     name: str,
     *,
+    follower: str | None = None,
     force: bool = False,
 ) -> Path:
-    """Read the experiment's follower positions and save them as pose `name`.
+    """Read a follower's positions and save them as pose `name`.
 
-    Moves nothing: the bus opens with the robot's usual startup checks, positions are
-    read, and the bus closes. The dataflow must not be running (it owns the bus); pose
-    the follower by teleoperation (then `quit` with `hold`) or by hand after `release`.
-    Every joint must be inside the robot's limits. Returns the written file.
+    `follower`: which follower node (may be omitted when the robot has only one).
+    Moves nothing: the bus opens with the follower's usual startup checks, positions
+    are read, and the bus closes. The dataflow must not be running (it owns the bus);
+    pose the follower by teleoperation (then `quit` with `hold`) or by hand after
+    `release`. Every joint must be inside the follower's limits. Returns the written
+    file.
     """
-    cfg = load(experiment)
-    robot = cfg.robot
-    path = pose_path(cfg.path, name)
+    cfg = load(config)
+    if follower is None:
+        if len(cfg.followers) != 1:
+            raise ConfigError(
+                f"name the follower to capture: one of {', '.join(cfg.followers)}"
+            )
+        (follower,) = cfg.followers
+    if follower not in cfg.followers:
+        raise ConfigError(
+            f"no follower {follower!r}; followers: {', '.join(cfg.followers)}"
+        )
+    robot = cfg.followers[follower]
+    path = pose_path(cfg.path, follower, name)
     if path.exists() and not force:
         raise SetupError(f"{path} exists; pass force=True (--force) to replace it")
     bus = robot.open_bus(cfg.mock)
@@ -44,22 +60,24 @@ def capture_pose(
     finally:
         bus.close()
     outside = [
-        f"{joint}={value:.0f} not in [{limit['min']}, {limit['max']}]"
+        f"{joint}={value:g} not in [{limit['min']}, {limit['max']}]"
         for joint, value, limit in zip(
             robot.joint_names, values, robot.limits, strict=True
         )
         if not limit["min"] <= value <= limit["max"]
     ]
     if outside:
-        raise SetupError("pose outside the robot limits: " + "; ".join(outside))
+        raise SetupError(f"pose outside the {follower} limits: " + "; ".join(outside))
     port = getattr(robot, "port", "")
     header = (
-        f"# roboloom capture-pose {time.strftime('%Y-%m-%d %H:%M')}, robot "
+        f"# roboloom capture-pose {time.strftime('%Y-%m-%d %H:%M')}, follower "
         f"`{robot.name}`{f' ({port})' if port else ''}.\n"
-        f"# Select it in the controller YAML: home: {{pose: ../poses/{name}.yaml, ...}}\n"
+        f"# Select it in the controller YAML: "
+        f"home: {{pose: ../poses/{follower}/{name}.yaml, ...}}\n"
     )
     body = {
-        "robot_type": robot.robot_type,
+        "follower": robot.name,
+        "model": robot.model,
         "unit": robot.unit,
         "pose": {
             j: round(v) if robot.unit == "dynamixel_count" else v

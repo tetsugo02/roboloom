@@ -17,10 +17,10 @@ def summarize(values: list[float]) -> dict:
     }
 
 
-QUALITY = {  # defaults of `recorder.quality` in an experiment
+QUALITY = {  # defaults of `recorder.quality` in a configuration
     "max_missing_rate": 0.05,  # per stream: share of rows without a fresh sample
     "min_action_valid_rate": 0.9,
-    "max_interval_ms": 100.0,  # longest robot control tick (a stall jerks the data)
+    "max_interval_ms": 100.0,  # longest follower control tick (a stall jerks the data)
 }
 
 
@@ -35,13 +35,21 @@ def assess(metrics: dict, quality: dict) -> list[str]:
             )
     valid = metrics.get("action_valid_rate")
     if valid is not None and valid < limits["min_action_valid_rate"]:
+        silent = [
+            f"{name} {rate:.0%}"
+            for name, rate in (metrics.get("action_missing_rate") or {}).items()
+            if rate > 1 - limits["min_action_valid_rate"]
+        ]
         out.append(
             f"only {valid:.0%} of rows have a valid action "
             f"(limit {limits['min_action_valid_rate']:.0%})"
+            + (f"; rows without a command: {', '.join(silent)}" if silent else "")
         )
-    worst = (metrics.get("control_interval_ms") or {}).get("max")
-    if worst is not None and worst > limits["max_interval_ms"]:
-        out.append(
-            f"control tick stalled {worst:.0f} ms (limit {limits['max_interval_ms']:.0f} ms)"
-        )
+    for name, summary in (metrics.get("control_interval_ms") or {}).items():
+        worst = summary.get("max")
+        if worst is not None and worst > limits["max_interval_ms"]:
+            out.append(
+                f"{name}: control tick stalled {worst:.0f} ms "
+                f"(limit {limits['max_interval_ms']:.0f} ms)"
+            )
     return out

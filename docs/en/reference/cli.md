@@ -4,7 +4,7 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 
 ## Choosing the configuration and devices
 
-Each robot has one configuration (`.roboloom/<robot>/config.yaml`). `[robot]` in the table is optional: when `.roboloom/` holds a single robot, that one is used. A robot name (`rakuda2`) or a YAML file path also works. For commands that take other positional words, the first word is the configuration only when it names one (`roboloom commission robot` and `roboloom commission rakuda2 robot`, `roboloom session home` and `roboloom session rakuda2 home` are all valid).
+Each robot has one configuration (`.roboloom/<robot>/config.yaml`). `[robot]` in the table is optional: when `.roboloom/` holds a single robot, that one is used. A robot name (`rakuda2`) or a YAML file path also works. For commands that take other positional words, the first word is the configuration only when it names one (`roboloom commission follower` and `roboloom commission rakuda2 follower`, `roboloom session home` and `roboloom session rakuda2 home` are all valid).
 
 Real hardware is the default. Commands that open devices accept:
 
@@ -22,20 +22,23 @@ Real hardware is the default. Commands that open devices accept:
 | --- | --- |
 | `roboloom [robot]` | Open the launcher (same as `roboloom launch [robot]`) |
 | `init rakuda2` | Generate the robot configuration |
-| `probe <port>` | Read Dynamixel IDs, models, registers, and read times (a rough rate limit) |
+| `probe <port>` | Read Dynamixel IDs, models, registers, and read times (a rough rate limit). Given a CAN interface such as `can_left`, read the PiPER ([in development](../contribution/piper.md)) there: firmware, joint angles, state, enabling, temperatures and faults (enables and moves nothing) |
 | `validate [robot]` | Validate the configuration and dataflow without opening devices (prints the enabled options and the dataset name) |
 | `calibrate-joints <calibration>` | Save measured counts at the URDF zero pose to the calibration |
 | `measure-travel <calibration> --out <path>` | Save the range of motion moved by hand |
 | `identify-gravity <calibration> --out <path> --collect` | Measure holding current and identify the gravity model (leader gravity compensation, the follower `model_residual` estimator); asks the operator before energizing |
-| `capture-pose [robot] <name>` | Save the follower's current pose as `poses/<name>.yaml` (moves nothing; `--force` replaces) |
+| `capture-pose [robot] [follower] <name>` | Save a follower's current pose as `poses/<follower>/<name>.yaml` (moves nothing; `--force` replaces; `follower` may be omitted when there is one) |
 | `commission [robot] <node>` | Write EEPROM after a diff and operator confirmation, then read it back |
 | `watchdog-test [robot] <node> <joint>` | Bench test: check that the Bus Watchdog stops a current-mode motor (energizes it) |
+| `check-hold [robot] <follower> --tolerance <value>` | Bench test: measure whether a follower keeps its pose once commands stop, and after confirmation write `unattended:` to its YAML (energizes it; `--seconds` default 10; only for models that declare `unattended` unknown) |
 | `tune-gravity [robot] leader <group> --with gravity` | Interactively tune gain and hold |
 | `gravity-check [robot] leader <group> --with gravity` | Measure the change in pose with and without compensation |
 | `run [robot]` | Collect data with the operation screen |
 | `record [robot] --task <text> --seconds <n>` | Collect fixed-duration episodes (`--episodes` sets the count; `--home` moves to the initial pose before each) |
 | `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task` |
 | `session [robot] <operation> [task]` | Send an operation to a running `run` |
+
+`calibrate-joints`, `measure-travel`, `identify-gravity`, `commission`, `watchdog-test`, `tune-gravity` and `gravity-check` are for Dynamixel robots only (`probe` reads Dynamixel and PiPER); given a node that is not Dynamixel, they refuse and say why.
 
 Examples:
 
@@ -49,7 +52,7 @@ uv run roboloom validate --with digit
 uv run roboloom session home
 ```
 
-`calibrate-joints` / `measure-travel` do not write to the bus, but they save local YAML. The arm torque must be off. `identify-gravity --collect`, `tune-gravity`, and `gravity-check` energize the motors. Do not open the same bus at the same time as the dataflow. `commission`, `watchdog-test`, and `gravity-check` refuse a mock configuration.
+`calibrate-joints` / `measure-travel` do not write to the bus, but they save local YAML. The arm torque must be off. `identify-gravity --collect`, `tune-gravity`, and `gravity-check` energize the motors. Do not open the same bus at the same time as the dataflow. `commission`, `watchdog-test`, `check-hold`, and `gravity-check` refuse a mock configuration.
 
 ## Launcher
 

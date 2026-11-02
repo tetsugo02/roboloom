@@ -1,7 +1,7 @@
 """Render node statuses (see `roboloom.core.status`) as rich renderables. No terminal I/O here.
 
 Each status has a role; `RENDERERS[role]` turns its fields into (state, detail).
-Unregistered roles fall back to key=value, so a new robot or sensor shows up by
+Unregistered roles fall back to key=value, so a new follower or sensor shows up by
 publishing fields, and gets a tailored row by registering one function.
 """
 
@@ -19,7 +19,7 @@ from rich.text import Text
 
 STALE_S = 2.0
 LEVEL_STYLE = {"ok": "green", "warn": "yellow", "error": "bold red"}
-ROLE_ORDER = ("robot", "controller", "input", "sensor", "recorder")
+ROLE_ORDER = ("follower", "controller", "input", "sensor", "recorder")
 
 Renderer = Callable[[dict], tuple[str, "str | Text"]]  # fields -> (state, detail)
 RENDERERS: dict[str, Renderer] = {}
@@ -78,11 +78,31 @@ def _gc(f: dict) -> Text | None:
     return Text(f"gc pause {pause} ms", style=WATCH) if pause >= GC_SHOWN_MS else None
 
 
-@register("robot")
-def robot(f: dict) -> tuple[str, Text]:
+def _without_torque(f: dict) -> Text | None:
+    """What the operator must do about a follower roboloom no longer commands (released,
+    or latched FAULT or ESTOP, after which it is left alone), from its safety traits."""
+    mode, torque_off = f.get("mode"), f.get("torque_off")
+    todo = {
+        "falls": "support it (falls without torque)",
+        "lets_go": "take out any object (lets go without torque)",
+    }.get(str(torque_off))
+    if todo is None:
+        return None
+    if mode == "RELEASED":
+        return Text(f"torque off: {todo}", style=WATCH)
+    # FAULT and ESTOP both stop writing to the bus: the follower is left alone
+    if mode in ("FAULT", "ESTOP") and f.get("unattended") != "holds":
+        limp = "goes limp" if f.get("unattended") == "torque_off" else "may go limp"
+        return Text(f"left uncommanded it {limp}: {todo}", style=BAD)
+    return None
+
+
+@register("follower")
+def follower(f: dict) -> tuple[str, Text]:
     detail = joined(
         [
             Text(f"reason: {f['reason']}", style=BAD) if f.get("reason") else None,
+            _without_torque(f),
             Text("armed", style=GOOD) if f.get("armed") else Text("not armed", "dim"),
             f"tick {f['tick_ms']} ms (max {f.get('tick_max_ms')})"
             if f.get("tick_ms") is not None
@@ -131,7 +151,7 @@ def controller(f: dict) -> tuple[str, Text]:
         )
     elif state == "input_stale":
         detail = Text("no recent leader input", style=WATCH)
-    elif state == "robot_fault":
+    elif state == "follower_fault":
         detail = Text("robot latched FAULT/ESTOP; re-align after recovery", style=BAD)
     else:
         detail = Text(
@@ -185,6 +205,13 @@ def recorder(f: dict) -> tuple[str, Text]:
                 style=WATCH,
             )
             if f.get("missing")
+            else None,
+            Text(
+                "no command "
+                + ", ".join(f"{k}:{v}" for k, v in f["no_action"].items()),
+                style=WATCH,
+            )
+            if f.get("no_action")
             else None,
         ]
     )
@@ -273,9 +300,9 @@ def render(
     now = time.monotonic_ns() if now_ns is None else now_ns
     header = Text(title, style="bold")
     if status:
-        experiment = Path(status.get("experiment", ""))
+        config = Path(status.get("config", ""))
         header.append(
-            f"  {experiment.parent.name}/{experiment.name}  mode={status.get('mode')}",
+            f"  {config.parent.name}/{config.name}  mode={status.get('mode')}",
             style="dim",
         )
     if log_path is not None:
@@ -318,8 +345,10 @@ def describe_report(report: dict) -> Text:
         missing = {
             k: round(v * 100, 1) for k, v in m.get("missing_rate", {}).items() if v
         }
-        tick = m.get("control_interval_ms", {})
-        text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {tick.get('p99', 0):.1f} ms max {tick.get('max', 0):.1f} ms"
+        ticks = list((m.get("control_interval_ms") or {}).values())  # per follower
+        p99 = max((t.get("p99", 0) for t in ticks), default=0)
+        worst = max((t.get("max", 0) for t in ticks), default=0)
+        text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {p99:.1f} ms max {worst:.1f} ms"
         if missing:
             text += f"  missing % {missing}"
         return Text(text, style="green")
@@ -333,8 +362,9 @@ def describe_report(report: dict) -> Text:
         if command == "home":
             return Text("home: moving to the saved pose", style="magenta")
         return Text(f"{command} done", style="dim")
-    if "robot_mode" in report:
-        style = "bold red" if report["robot_mode"] in ("FAULT", "ESTOP") else "cyan"
+    if "follower_mode" in report:
+        style = "bold red" if report["follower_mode"] in ("FAULT", "ESTOP") else "cyan"
         reason = f" ({report['reason']})" if report.get("reason") else ""
-        return Text(f"robot -> {report['robot_mode']}{reason}", style=style)
+        name = report.get("follower", "follower")
+        return Text(f"{name} -> {report['follower_mode']}{reason}", style=style)
     return Text(str(report))

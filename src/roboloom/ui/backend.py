@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import cast
 
 from ..config import CONFIG_FILE
+from ..core.traits import ending_note
 from ..errors import Cancelled
 from ..runtime.node import start_warning
 from ..runtime.session import Session, _ui_launch
@@ -116,7 +117,7 @@ class SessionBackend:
             now = time.monotonic_ns()
             nodes: list[NodeSnapshot] = []
             owners = {
-                **session.cfg.robots,
+                **session.cfg.followers,
                 **session.cfg.inputs,
                 **session.cfg.controllers,
                 **session.cfg.sensors,
@@ -137,10 +138,13 @@ class SessionBackend:
                     )
                 )
             caps = Capabilities(
-                home=any(c.home is not None for c in session.cfg.controllers.values()),
-                release=bool(session.held or session.actuated),
+                home=any(c.homes for c in session.cfg.controllers.values()),
+                release=bool(session.torqued or session.actuated),
                 hold=bool(session.held),
+                torqued=bool(session.torqued),
                 reselect=self.reselect,
+                release_note=session.release_note(),
+                quit_note=ending_note(session.limp_at_end),
             )
             readiness = start_warning(session.cfg, status, now) or ""
             warning = self._warning or readiness
@@ -412,8 +416,8 @@ class SessionBackend:
                 session.poll()
                 snapshot = self._snapshot()
                 if self._estop_ns and not self._estop_confirmed:
-                    robots = [n for n in snapshot.nodes if n.role == "robot"]
-                    expected = set(session.cfg.robots)
+                    robots = [n for n in snapshot.nodes if n.role == "follower"]
+                    expected = set(session.cfg.followers)
                     if (
                         expected
                         and expected <= {n.name for n in robots}

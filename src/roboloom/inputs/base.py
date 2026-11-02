@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -22,7 +22,8 @@ from ..control.trace import Trace
 from ..core.checks import finite, names, positions, positive
 from ..core.protocol import Envelope
 from ..core.source import Features, Reader, Sample, Source
-from ..robots.base import RobotBus
+from ..core.traits import WORST_CASE, SafetyTraits
+from ..robots.base import JointBus
 
 
 class InputDevice(Source):
@@ -36,7 +37,7 @@ class InputDevice(Source):
 class BusReader:
     """Reads a position bus as timestamped joint samples."""
 
-    def __init__(self, bus: RobotBus):
+    def __init__(self, bus: JointBus):
         self.bus = bus
 
     def read(self) -> Sample:
@@ -186,6 +187,18 @@ class JointInput(InputDevice):
     """
 
     kind = "joint_intent"
+    # What its joints do when torque goes off (core.traits); an actuated leader goes limp
+    # when the session ends, so the operator is told what to support. Every model declares
+    # it; a leader nobody described gets the worst case.
+    safety_traits: ClassVar[SafetyTraits] = WORST_CASE
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "safety_traits" not in cls.__dict__:
+            raise TypeError(
+                f"{cls.__name__}: declare safety_traits: what the joints do when torque "
+                "goes off (roboloom.core.traits)"
+            )
 
     def __init__(
         self,
@@ -198,7 +211,12 @@ class JointInput(InputDevice):
         self.joint_names = names(
             cfg.get("joints") if joint_names is None else joint_names, f"{name}.joints"
         )
-        self.unit = unit or cfg.get("unit", "dynamixel_count")
+        declared = unit or cfg.get("unit")
+        if not isinstance(declared, str) or not declared:
+            raise ValueError(
+                f"{name}.unit: declare the unit of the joint positions (e.g. rad)"
+            )
+        self.unit = declared
         self.rate_hz(0)
         self.control: list[GroupSpec] | None = (
             parse_groups(cfg["control"], self.joint_names, name)
@@ -223,7 +241,7 @@ class JointInput(InputDevice):
             j: "mA" for g in self.control or [] if "feedback" in g.cfg for j in g.joints
         }
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         raise RuntimeError(f"{self.name}: no bus driver; pass a reader instead")
 
     def current_limits_mA(self) -> dict[str, float]:
@@ -263,7 +281,7 @@ class JointInput(InputDevice):
             f"observation.{self.name}": {
                 "dtype": "float32",
                 "shape": (len(self.joint_names),),
-                "names": None,
+                "names": list(self.joint_names),
             }
         }
 

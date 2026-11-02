@@ -4,7 +4,6 @@
 #         uv run roboloom run --mock                    (mock devices, no hardware)
 # Options replace, add or remove node files (`set:`). An option that changes the recorded
 # features names its own dataset (`dataset:`), appended to repo_id and output below.
-robot_id: rakuda2
 repo_id: local/rakuda2
 output: datasets/rakuda2
 dataset_fps: 15
@@ -12,8 +11,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
@@ -35,7 +34,7 @@ options:
     set:
       inputs.leader: nodes/leader_bilateral.yaml
       controllers.controller: nodes/controller_bilateral.yaml
-      robots.robot: nodes/robot_bilateral.yaml
+      followers.follower: nodes/follower_bilateral.yaml
       estimators.effort: nodes/effort.yaml
     dataset: bilateral
   policy:

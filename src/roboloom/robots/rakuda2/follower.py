@@ -1,9 +1,10 @@
-"""Rakuda2 follower: the robot node's exclusive owner of the follower bus."""
+"""Rakuda2 follower: the follower node's exclusive owner of the follower bus."""
 
 from __future__ import annotations
 
+from ...control.device import law_class
 from ...core.checks import identity
-from ..base import Robot, RobotBus
+from ..base import Follower, JointBus, SafetyTraits
 from .spec import (
     FOLLOWER_MODELS,
     JOINTS,
@@ -15,8 +16,8 @@ from .spec import (
 )
 
 
-class RakudaFollower(Robot):
-    robot_type = "rakuda2"
+class RakudaFollower(Follower):
+    model = "rakuda2"
     effort_signal = ("currents_mA", "mA")
 
     def __init__(self, name: str, cfg: dict):
@@ -24,6 +25,15 @@ class RakudaFollower(Robot):
         check_motor_ids(cfg, name)
         expected_registers(cfg, name)
         self.port = identity(cfg.get("port"), f"{name}.port")
+
+    def declared_traits(self) -> SafetyTraits:
+        # The arms and head fall without torque. Position-mode joints keep their last goal
+        # when the node stops writing; current-mode joints go limp (JointDevice.close and
+        # the bus watchdog), so a follower running current laws does not hold.
+        current = any(law_class(g.law).current_mode for g in self.control or [])
+        return SafetyTraits(
+            torque_off="falls", unattended="torque_off" if current else "holds"
+        )
 
     def expected_eeprom(
         self,
@@ -37,7 +47,7 @@ class RakudaFollower(Robot):
     def device_ids(self) -> tuple[str, ...]:
         return (self.port,)
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         return open_rakuda_bus(
             self.port, mock, FOLLOWER_MODELS, self.cfg, self.name, self.limits
         )

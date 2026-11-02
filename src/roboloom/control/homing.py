@@ -47,7 +47,7 @@ class Trajectory:
 
 @dataclass(frozen=True)
 class Pose:
-    """A saved follower pose (`roboloom capture-pose`), one value per robot joint."""
+    """A saved follower pose (`roboloom capture-pose`), one value per follower joint."""
 
     name: str
     values: dict[str, float]
@@ -55,7 +55,8 @@ class Pose:
 
 def load_pose(
     path: Path,
-    robot_type: str,
+    follower: str,
+    model: str,
     unit: str,
     joint_names: Sequence[str],
     limits: Sequence[dict],
@@ -66,11 +67,16 @@ def load_pose(
         )
     data = yaml.safe_load(path.read_text())
     if not isinstance(data, dict) or not isinstance(data.get("pose"), dict):
-        raise ConfigError(f"{path}: expected robot_type, unit and pose")
-    if data.get("robot_type") != robot_type or data.get("unit") != unit:
+        raise ConfigError(f"{path}: expected follower, model, unit and pose")
+    if data.get("follower") != follower:
         raise ConfigError(
-            f"{path}: saved for {data.get('robot_type')} in {data.get('unit')}, "
-            f"not {robot_type} in {unit}"
+            f"{path}: saved for follower {data.get('follower')!r}, not {follower!r} "
+            "(a pose belongs to the follower it was captured on)"
+        )
+    if data.get("model") != model or data.get("unit") != unit:
+        raise ConfigError(
+            f"{path}: saved for {data.get('model')} in {data.get('unit')}, "
+            f"not {model} in {unit}"
         )
     values = data["pose"]
     if set(values) != set(joint_names):
@@ -109,26 +115,32 @@ def parse_home(
     if raw is None:
         return None
     keys = {"pose", "max_speed", "tolerance", "timeout_s"}
-    if not isinstance(raw, dict) or not {"pose", "max_speed"} <= set(raw) <= keys:
+    if (
+        not isinstance(raw, dict)
+        or not {"pose", "max_speed", "tolerance"} <= set(raw) <= keys
+    ):
         raise ConfigError(
-            f"{owner}.home needs pose and max_speed (and may set tolerance, timeout_s)"
+            f"{owner}.home needs pose, max_speed and tolerance (in the follower's "
+            "unit; it may set timeout_s)"
         )
     if not isinstance(raw["pose"], str):
         raise ConfigError(f"{owner}.home.pose must be a path to a saved pose")
     try:
         max_speed = positive(raw["max_speed"], f"{owner}.home.max_speed")
-        tolerance = positive(raw.get("tolerance", 30), f"{owner}.home.tolerance")
+        tolerance = positive(raw.get("tolerance"), f"{owner}.home.tolerance")
         timeout_s = positive(raw.get("timeout_s", 30), f"{owner}.home.timeout_s")
     except ValueError as exc:
         raise ConfigError(str(exc)) from exc
     if max_speed > speed_limit:
         raise ConfigError(
-            f"{owner}.home.max_speed {max_speed} exceeds max_speed_counts_per_s {speed_limit}"
+            f"{owner}.home.max_speed {max_speed} exceeds the controller's max_speed "
+            f"{speed_limit} ({robot.unit}/s)"
         )
     path = Path(base_dir or ".") / raw["pose"]
     pose = load_pose(
         path.resolve(),
-        robot.robot_type,
+        robot.name,
+        robot.model,
         robot.unit,
         robot.joint_names,
         robot.limits,

@@ -33,6 +33,7 @@ hardware = [
     "digit-interface>=0.2,<1",
     "sounddevice>=0.4,<1",
 ]
+piper = ["piper_sdk>=0.6.2,<0.7"]
 test = [
     "pytest>=8,<9",
     "lerobot[dataset]==0.6.1",
@@ -49,7 +50,7 @@ packages = ["src/roboloom"]
 testpaths = ["tests"]
 
 [[tool.mypy.overrides]]
-module = ["dynamixel_sdk"]
+module = ["dynamixel_sdk", "piper_sdk"]
 ignore_missing_imports = true
 
 [tool.pyright]

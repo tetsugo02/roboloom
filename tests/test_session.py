@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import mock_project
 
-from roboloom.config import load_experiment
+from roboloom.config import load_config
 from roboloom.runtime.session import EpisodeInfo, Session, SessionError
 
 pytestmark = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
@@ -49,8 +49,8 @@ def test_hardware_is_the_default_and_mock_overrides_it(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = project / "config.yaml"
     path.write_text(path.read_text().replace("mode: mock\n", ""))
-    assert not load_experiment(path).mock  # no `mode:` means the hardware
-    assert load_experiment(path, mock=True).mock
+    assert not load_config(path).mock  # no `mode:` means the hardware
+    assert load_config(path, mock=True).mock
 
 
 def test_cli_records_one_episode_by_name(tmp_path):
@@ -75,11 +75,19 @@ def test_quality_limits_become_warnings():
     metrics = {
         "missing_rate": {"camera": 0.2, "leader": 0.0},
         "action_valid_rate": 0.95,
-        "control_interval_ms": {"max": 130.0},
+        "action_missing_rate": {"left": 0.0, "right": 0.05},
+        "control_interval_ms": {"left": {"max": 130.0}, "right": {"max": 9.0}},
     }
     warnings = assess(metrics, {})
-    assert len(warnings) == 2 and "camera" in warnings[0] and "130 ms" in warnings[1]
+    assert len(warnings) == 2 and "camera" in warnings[0]
+    assert warnings[1].startswith("left:") and "130 ms" in warnings[1]
     assert assess(metrics, {"max_missing_rate": 0.5, "max_interval_ms": 200}) == []
+    # a low valid-action rate names the follower that sent no commands
+    metrics.update(
+        action_valid_rate=0.5, action_missing_rate={"left": 0.0, "right": 0.5}
+    )
+    (warning,) = assess(metrics, {"max_missing_rate": 0.5, "max_interval_ms": 200})
+    assert "right 50%" in warning and "left" not in warning
 
 
 def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypatch):
@@ -151,7 +159,11 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
         messages = [m.plain for m in s.screen.messages]
     assert any("recording 'wave'" in m for m in messages), messages
     assert any("saved" in m for m in messages), messages
-    assert "Support the arms of leader" in operator.log[-1]
+    # the leader goes limp at the end either way; the follower holds unless released
+    assert (
+        "'hold' ends with follower holding (leader goes limp: support leader"
+        in (operator.log[-1])
+    )
     out = capsys.readouterr().out
     assert "from the script" in out and "nodes" in out  # printed above the screen
 
@@ -172,11 +184,11 @@ def test_closing_releases_the_follower_unless_the_operator_says_hold(
     operator = ScriptedOperator(prompts=[answer])
     sent: list[str] = []
     with Session.launch(project / "config.yaml", screen=False, operator=operator) as s:
-        assert s.held == ["robot"]
+        assert s.held == ["follower"]
         s.wait_ready(30)
         send = s.client.send
         s.client.send = lambda line: (sent.append(line), send(line))[1]  # type: ignore[method-assign]
-    assert "Enter ends with the follower torque off" in operator.log[-1]
+    assert "Enter ends with the torque off" in operator.log[-1]
     assert sent == (["release", "quit"] if released else ["quit"])
 
 
@@ -191,7 +203,7 @@ def test_release_while_following_stops_then_turns_the_torque_off(tmp_path):
         deadline = time.monotonic() + 5
         mode = None
         while time.monotonic() < deadline and mode != "RELEASED":
-            mode = s.status().get("robot", {}).get("fields", {}).get("mode")
+            mode = s.status().get("follower", {}).get("fields", {}).get("mode")
             time.sleep(0.1)
         assert mode == "RELEASED"
 
@@ -214,7 +226,7 @@ def test_live_quit_releases_the_follower_unless_hold(tmp_path):
             tmp_path / "dora.log",
             "test",
             limp_on_quit=["leader"],
-            held=["robot"],
+            held=["follower"],
         )
         live.submit("quit")
         assert "follower torque off" in live.prompt().plain

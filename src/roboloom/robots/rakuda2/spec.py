@@ -9,7 +9,7 @@ import sys
 
 from ...drivers.dynamixel_table import model_by_name
 from ...drivers.mock import MockBus
-from ..base import RobotBus
+from ..base import JointBus
 
 JOINTS = (
     "torso_yaw",
@@ -120,7 +120,7 @@ def open_rakuda_bus(
     cfg: dict,
     name: str,
     limits: list[dict] | None = None,
-) -> RobotBus:
+) -> JointBus:
     """Open the bus and refuse to continue when the motors' EEPROM differs from `cfg.registers`."""
     if mock:
         return MockBus(dimension=len(JOINTS), modes=mock_modes(cfg, name))

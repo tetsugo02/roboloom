@@ -4,7 +4,7 @@
 was sent. Written also after a runaway or watchdog stop, so the last second before the
 stop is in the file. Joints a tick did not command hold NaN.
 
-`RobotTrace`: a follower, from the state it publishes each tick, the same with or
+`FollowerTrace`: a follower, from the state it publishes each tick, the same with or
 without control laws; the data effort estimators are identified and checked on.
 """
 
@@ -72,7 +72,7 @@ class Trace:
         return self.path
 
 
-class RobotTrace:
+class FollowerTrace:
     def __init__(
         self, path: str | Path, joint_names: Sequence[str], modes: Sequence[str]
     ):
@@ -81,7 +81,7 @@ class RobotTrace:
         self.rows: list[np.ndarray] = []
 
     def add(self, t_ns: int, state: dict) -> None:
-        """One `robot_state` payload; fields the robot does not report stay NaN."""
+        """One `follower_state` payload; fields the robot does not report stay NaN."""
         n = len(self.joint_names)
         row = np.full(2 + 4 * n, np.nan)
         row[0] = t_ns

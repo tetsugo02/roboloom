@@ -10,7 +10,7 @@
 #   (recorder.yaml max_age_ms needs `effort`).
 # Change type to none to check the dataflow without models (feedback stays closed).
 type: model_residual
-robot: robot
+follower: follower
 models:
 - ../calibration/effort_gravity_right.yaml
 - ../calibration/effort_gravity_left.yaml

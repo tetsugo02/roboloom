@@ -16,9 +16,9 @@ uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
 
-checkout内の模擬dataflowは `uv run roboloom validate examples/mock/experiment_ui.yaml` と `uv run roboloom run examples/mock/experiment_ui.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
+checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
-画面確認用の設定は保存先 `datasets/rakuda-mock-ui` とsessionの識別子を分け，既存の `datasets/rakuda-mock` を維持します．古いmockデータはDIGIT画像サイズやeffort項目などが現在と異なり，再開できない場合があります．スキーマごとに保存先を分け，画面確認のために既存データを削除しないでください．
+模擬の設定の保存先は `datasets/rakuda-mock` です（オプション `bilateral` では `datasets/rakuda-mock-bilateral`）．記録の形（featureの名前や形）を変えた後は，古いデータへ追記できません．古いデータは移すか，`output` を変えてください．画面確認のために既存データを削除しないでください．
 
 変更と無関係な整形差分は含めないでください．模擬試験・実データ・実機検証は区別して報告します．
 
@@ -73,6 +73,10 @@ uv run --group docs zensical serve -f mkdocs.en.yml  # 英語だけをライブ�
 Python 3.12とuvを使い，`uv sync --locked --only-group docs` でlock済みのdocs依存だけをインストールします．続いて `uv run --no-sync python scripts/docs.py build` を実行し，成功した成果物を公開します．ロボット・センサー用の依存や実機接続は不要です．
 
 初回はリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定します（[GitHubの設定手順](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)）．workflowを `main` に反映すると公開され，URLは `github-pages` environmentとActionsのデプロイ結果に表示されます．ビルドが失敗した場合は公開しません．
+
+## 新しいフォロワを足す
+
+フォロワの機種（`Follower` のサブクラス）は，安全に関わる性質 `safety_traits`（設定で変わる場合は `declared_traits()`）を必ず宣言します．宣言のないクラスはimportの時点でTypeErrorになります．値の意味は [設定](reference/configuration.md) の「脱力したときと放置したときの性質」にあります．確かめていない性質は `unknown` にします．制御則で動く入力機器（`JointInput` のサブクラス）も `safety_traits` を宣言します．
 
 ## 操作画面の拡張
 

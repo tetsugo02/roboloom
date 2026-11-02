@@ -1,6 +1,6 @@
 max_age_ms:
   leader: 200
-  robot: 200
+  follower: 200
   camera: 200
   digit_left: 200
   digit_right: 200

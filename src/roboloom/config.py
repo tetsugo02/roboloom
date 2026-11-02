@@ -1,7 +1,7 @@
 """Robot configuration: resolve node files, build validated specs, cross-check the graph.
 
 The configuration YAML (`.roboloom/<robot>/config.yaml`) groups node files by role
-(`inputs`, `controllers`, `robots`, `sensors`, `estimators`) plus the `recorder` and
+(`inputs`, `controllers`, `followers`, `sensors`, `estimators`) plus the `recorder` and
 `session` services. Each node's `type` selects its class from that role's registry. Its
 `options:` are features chosen at launch (gravity compensation, extra sensors, ...); each
 replaces, adds or removes node files. Nothing here opens a device.
@@ -27,14 +27,23 @@ from .inputs import INPUTS
 from .inputs.base import InputDevice
 from .recording import features
 from .recording.metrics import QUALITY
-from .robots import ROBOTS
-from .robots.base import Robot
+from .robots import FOLLOWERS
+from .robots.base import Follower
 from .sensors import SENSORS
 
-ROLES = ("inputs", "controllers", "robots", "sensors", "estimators")
+ROLES = ("inputs", "controllers", "followers", "sensors", "estimators")
 SERVICES = ("recorder", "session")
 # Service node ids and fixed dora input ids; LeRobot key collisions are checked by `features`.
 RESERVED = {*SERVICES, "action", "tick"}
+RESERVED_PREFIXES = ("action_",)  # the recorder's per-follower action inputs
+RESERVED_SUFFIXES = ("_status",)  # the session's per-node status inputs
+# top-level keys of config.yaml besides the roles and services; anything else is refused
+SETTINGS = ("repo_id", "output", "dataset_fps", "mode")
+RENAMED = {
+    "robot_id": "the robot's name is its directory (.roboloom/<robot>/); remove robot_id",
+    "robot_type": "the dataset's robot type is the robot's directory name; remove it",
+    "robots": "renamed to followers",
+}
 CONFIG_FILE = "config.yaml"
 INFER_OPTION = "policy"  # `infer` turns on the option of this name when one is declared
 NO_OPTIONS = (
@@ -230,12 +239,15 @@ def dataset_suffix(options: dict[str, Option], enabled: Iterable[str]) -> str:
 
 
 @dataclass
-class ExperimentConfig:
-    robot_id: str
+class RobotConfig:
+    """A robot's validated configuration: its nodes by role and the recording settings.
+    `robot` is the robot's name (the configuration's directory, e.g. `rakuda2`)."""
+
+    robot: str
     repo_id: str
     output: str
     dataset_fps: float
-    robots: dict[str, Robot]
+    followers: dict[str, Follower]
     inputs: dict[str, InputDevice] = field(default_factory=dict)
     sensors: dict[str, Source] = field(default_factory=dict)
     controllers: dict[str, Controller] = field(default_factory=dict)
@@ -244,7 +256,6 @@ class ExperimentConfig:
     recorder: dict = field(default_factory=dict)
     quality: dict = field(default_factory=dict)  # see recording.metrics.QUALITY
     mode: str = "hardware"
-    robot_type: str = ""
     path: str = ""
     options: tuple[str, ...] = ()  # enabled launch options, in declaration order
     available_options: dict[str, Option] = field(default_factory=dict)
@@ -254,18 +265,16 @@ class ExperimentConfig:
         return self.mode == "mock"
 
     @property
-    def robot(self) -> Robot:
-        (robot,) = self.robots.values()
-        return robot
-
-    @property
     def sources(self) -> dict[str, Recordable]:
         """Recorded streams in dataset order."""
         recorded = {n: e for n, e in self.estimators.items() if e.record}
-        return {**self.inputs, **self.robots, **self.sensors, **recorded}
+        return {**self.inputs, **self.followers, **self.sensors, **recorded}
 
-    def controller_for(self, robot: str) -> Controller:
-        (controller,) = (c for c in self.controllers.values() if c.robot.name == robot)
+    def controller_for(self, follower: str) -> Controller:
+        """The controller that drives `follower` (every follower has exactly one)."""
+        (controller,) = (
+            c for c in self.controllers.values() if follower in c.followers
+        )
         return controller
 
 
@@ -276,7 +285,7 @@ def _read(path: Path) -> dict:
     return data
 
 
-def read_experiment(
+def read_config(
     path: str | Path,
     options: Iterable[str] | None = None,
     mock: bool | None = None,
@@ -318,8 +327,9 @@ def read_experiment(
         file = (path.parent / relative).resolve()
         return {
             **_read(file),
-            "__dir__": str(file.parent),
-        }  # resolves files a node names, e.g. gravity models
+            "__dir__": str(file.parent),  # resolves files a node names (gravity models)
+            "__file__": str(file),  # where setup steps record measured values
+        }
 
     for role in ROLES:
         group = raw.pop(role, None) or {}
@@ -330,7 +340,15 @@ def read_experiment(
         }
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
-    tree["experiment"] = raw
+    unknown = set(raw) - set(SETTINGS)
+    if unknown:
+        problems = [f"{k}: {RENAMED[k]}" for k in sorted(unknown) if k in RENAMED]
+        others = sorted(unknown - set(RENAMED))
+        if others:
+            allowed = ", ".join((*SETTINGS, *ROLES, *SERVICES, "options"))
+            problems.append(f"unknown keys {others} (allowed: {allowed})")
+        raise ConfigError(f"{path}: " + "; ".join(problems))
+    tree["settings"] = raw
     return tree
 
 
@@ -379,7 +397,7 @@ def is_configuration(arg: str, root: str | Path = PROJECT_ROOT) -> bool:
     )
 
 
-def resolve_experiment(
+def resolve_config(
     arg: str | Path | None = None, root: str | Path = PROJECT_ROOT
 ) -> Path:
     """A configuration file, or a robot name under the project root: `rakuda2` is
@@ -406,15 +424,15 @@ def resolve_experiment(
     )
 
 
-def parse_experiment(tree: dict) -> ExperimentConfig:
+def parse_config(tree: dict) -> RobotConfig:
     missing = placeholders({k: v for k, v in tree.items() if k != "path"})
     if missing:
         raise ConfigError(
             "template values still to fill (see the README next to the configuration):\n  "
             + "\n  ".join(missing)
         )
-    e = tree["experiment"]
-    robot_id = identity(e.get("robot_id"), "robot_id")
+    e = tree["settings"]
+    robot = Path(tree["path"]).parent.name
     repo_id = identity(e.get("repo_id"), "repo_id")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo_id):
         raise ValueError("repo_id must be namespace/name")
@@ -427,14 +445,26 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
     if len(set(names)) != len(names):
         raise ValueError("node names must be unique across roles")
     for name in names:
-        if name in RESERVED or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
-            raise ValueError(f"invalid node name {name!r}")
+        if (
+            name in RESERVED
+            or name.startswith(RESERVED_PREFIXES)
+            or name.endswith(RESERVED_SUFFIXES)
+            or not re.fullmatch(r"[A-Za-z0-9_-]+", name)
+        ):
+            raise ValueError(
+                f"invalid node name {name!r} (letters, digits, - and _; not "
+                f"{', '.join(sorted(RESERVED))}, not starting with "
+                f"{RESERVED_PREFIXES[0]} nor ending with {RESERVED_SUFFIXES[0]})"
+            )
 
-    robots = {
-        name: ROBOTS.get(c.get("type"))(name, c) for name, c in tree["robots"].items()
+    followers = {
+        name: FOLLOWERS.get(c.get("type"))(name, c)
+        for name, c in tree["followers"].items()
     }
-    if len(robots) != 1:
-        raise ValueError("exactly one robot per configuration is supported for now")
+    if not followers:
+        raise ValueError("followers: configure at least one follower")
+    for model in followers.values():
+        model.traits()  # a measured `unattended` must fill in an unknown one
     inputs = {
         name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
     }
@@ -444,21 +474,49 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
     estimators = {}
     for name, c in tree["estimators"].items():
         estimator = ESTIMATORS.get(c.get("type"))(name, c)
-        robot = robots.get(estimator.robot)
-        if robot is None:
-            raise ValueError(f"estimators.{name} must reference a configured robot")
-        estimator.bind(robot)
+        follower = followers.get(estimator.follower)
+        if follower is None:
+            raise ValueError(f"estimators.{name} must reference a configured follower")
+        estimator.bind(follower)
         estimators[name] = estimator
     controllers = {}
     for name, c in tree["controllers"].items():
         cls = CONTROLLERS.get(c.get("type"))
-        source, robot = inputs.get(c.get("input")), robots.get(c.get("robot"))
-        if robot is None or (cls.uses_input and source is None):
+        if "robot" in c:
+            raise ConfigError(
+                f"controllers.{name}.robot was renamed: use followers: [<follower>]"
+            )
+        targets = c.get("followers")
+        if (
+            not isinstance(targets, list)
+            or not targets
+            or not all(isinstance(x, str) for x in targets)
+            or len(set(targets)) != len(targets)
+        ):
+            raise ValueError(
+                f"controllers.{name}.followers: expected a list of follower names"
+            )
+        absent = [x for x in targets if x not in followers]
+        source = inputs.get(c.get("input"))
+        if absent or (cls.uses_input and source is None):
             raise ValueError(
                 f"controllers.{name} must reference a configured "
-                f"{'input and robot' if cls.uses_input else 'robot'}"
+                f"{'input and followers' if cls.uses_input else 'followers'}"
+                + (f" (unknown: {', '.join(absent)})" if absent else "")
             )
-        controller = cls(name, c, source if cls.uses_input else None, robot, robot_id)
+        if not cls.uses_input and targets != list(followers):
+            # the recorded action joins every follower in configuration order; a policy
+            # trained on it outputs that whole vector
+            raise ValueError(
+                f"controllers.{name}.followers: a policy drives every follower, in "
+                f"configuration order: [{', '.join(followers)}]"
+            )
+        controller = cls(
+            name,
+            c,
+            source if cls.uses_input else None,
+            {x: followers[x] for x in targets},
+        )
         unknown = set(controller.observes()) - {*inputs, *sensors}
         if unknown:
             raise ValueError(
@@ -466,26 +524,30 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
             )
         bind = getattr(controller, "bind", None)
         if bind is not None:
-            bind({**inputs, **sensors})
+            bind({**inputs, **sensors}, fps)
         controller.bind_feedback(estimators)
         controllers[name] = controller
-    for robot in robots.values():
-        if [c.robot.name for c in controllers.values()].count(robot.name) != 1:
-            raise ValueError(f"robot {robot.name!r} needs exactly one controller")
-        if robot.control_hz < fps:
+    for follower in followers.values():
+        drivers = [n for n, c in controllers.items() if follower.name in c.followers]
+        if len(drivers) != 1:
+            raise ValueError(
+                f"follower {follower.name!r} needs exactly one controller"
+                + (f" (has {', '.join(drivers)})" if drivers else "")
+            )
+        if follower.control_hz < fps:
             raise ValueError("control_hz must be >= dataset_fps")
     for name, controller in controllers.items():
         _check_home(name, controller)
 
     if e["mode"] == "hardware":
-        for owner in [*inputs.values(), *robots.values()]:
+        for owner in [*inputs.values(), *followers.values()]:
             check = getattr(owner, "check_hardware", None)
             if check is not None:
                 check()
 
-    owners: list[Source | Robot] = [
+    owners: list[Source | Follower] = [
         *inputs.values(),
-        *robots.values(),
+        *followers.values(),
         *sensors.values(),
     ]
     devices = [d for spec in owners for d in spec.device_ids()]
@@ -493,12 +555,12 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         raise ValueError("duplicate port or sensor ID")
 
     ages = tree["recorder"].get("max_age_ms", {})
-    cfg = ExperimentConfig(
-        robot_id=robot_id,
+    cfg = RobotConfig(
+        robot=robot,
         repo_id=repo_id,
         output=identity(e.get("output"), "output"),
         dataset_fps=fps,
-        robots=robots,
+        followers=followers,
         inputs=inputs,
         sensors=sensors,
         controllers=controllers,
@@ -507,7 +569,7 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
             name: positive(ages.get(name), f"max_age_ms.{name}")
             for name in (
                 *inputs,
-                *robots,
+                *followers,
                 *sensors,
                 *(n for n, e in estimators.items() if e.record),
             )
@@ -520,7 +582,6 @@ def parse_experiment(tree: dict) -> ExperimentConfig:
         },
         quality=_quality(tree["recorder"].get("quality") or {}),
         mode=e["mode"],
-        robot_type=e.get("robot_type", next(iter(robots.values())).robot_type),
         path=tree["path"],
         options=tuple(tree.get("options", ())),
         available_options=dict(tree.get("available", {})),
@@ -535,7 +596,7 @@ def _check_home(name: str, controller: Controller) -> None:
     """With `home`, every current-mode group of the leader needs `homing` (the spring that
     pulls it along the move); without it the move would leave those joints behind."""
     source = controller.source
-    if controller.home is None or source is None:
+    if not controller.homes or source is None:
         return
     from .control.device import law_class
 
@@ -558,20 +619,20 @@ def _quality(cfg: dict) -> dict:
     return {k: float(v) for k, v in cfg.items()}
 
 
-def load_experiment(
-    experiment: str | Path | None = None,
+def load_config(
+    config: str | Path | None = None,
     root: str | Path = PROJECT_ROOT,
     *,
     options: Iterable[str] | None = None,
     mock: bool | None = None,
-) -> ExperimentConfig:
+) -> RobotConfig:
     """Load and validate a configuration file, or one named under the project root.
 
     `options`: the launch options to enable (None: their defaults). `mock`: override the
     YAML's `mode` (True: mock devices, False: hardware)."""
-    path = resolve_experiment(experiment, root)
+    path = resolve_config(config, root)
     try:
-        cfg = parse_experiment(read_experiment(path, options, mock))
+        cfg = parse_config(read_config(path, options, mock))
         _check_datasets(path, cfg)
         return cfg
     except ConfigError:
@@ -580,7 +641,7 @@ def load_experiment(
         raise ConfigError(f"{path}: {exc}") from exc
 
 
-def _check_datasets(path: Path, cfg: ExperimentConfig) -> None:
+def _check_datasets(path: Path, cfg: RobotConfig) -> None:
     """An enabled option without `dataset` must not change the recorded features, or its
     episodes would share a dataset with differently shaped ones. Compared with the
     configuration loaded without that option and the options requiring it."""
@@ -594,7 +655,7 @@ def _check_datasets(path: Path, cfg: ExperimentConfig) -> None:
             if n != name and name not in requirements(cfg.available_options, n)
         ]
         try:
-            other = parse_experiment(read_experiment(path, rest, mock=True))
+            other = parse_config(read_config(path, rest, mock=True))
         except (ConfigError, ValueError, TypeError, KeyError, FileNotFoundError):
             continue  # not loadable without it: nothing to compare with
         if features(other) != expected:

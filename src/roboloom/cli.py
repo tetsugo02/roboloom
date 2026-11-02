@@ -17,12 +17,12 @@ import yaml
 
 from .config import (
     INFER_OPTION,
-    ExperimentConfig,
     Option,
+    RobotConfig,
     is_configuration,
-    load_experiment,
+    load_config,
     parse_options,
-    resolve_experiment,
+    resolve_config,
     select_options,
 )
 from .errors import Cancelled, ConfigError, RoboloomError
@@ -42,6 +42,7 @@ CONFIGURED = {
     "session",
     "commission",
     "watchdog-test",
+    "check-hold",
     "gravity-check",
     "tune-gravity",
     "capture-pose",
@@ -78,7 +79,7 @@ def _names(text: str) -> list[str]:
 
 def _with_config(argv: list[str]) -> list[str]:
     """Move an optional leading configuration word into `--config`, so `roboloom run`,
-    `roboloom run rakuda2` and `roboloom commission robot` all parse."""
+    `roboloom run rakuda2` and `roboloom commission follower` all parse."""
     if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
         argv = ["launch", *argv]  # `roboloom`, `roboloom --mock`: the launcher
     elif argv[0] not in CONFIGURED and is_configuration(argv[0]):
@@ -131,8 +132,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     init.add_argument("robot")
     init.add_argument("--root", default=".roboloom")
-    probe_cmd = sub.add_parser("probe", help="read-only inspection of a Dynamixel bus")
-    probe_cmd.add_argument("port")
+    probe_cmd = sub.add_parser(
+        "probe",
+        help="read-only inspection of a Dynamixel bus, or of a PiPER arm on a CAN interface",
+    )
+    probe_cmd.add_argument(
+        "port", help="serial port (Dynamixel) or CAN interface (PiPER)"
+    )
     probe_cmd.add_argument(
         "--ids", type=lambda text: [int(x) for x in text.split(",")], default=None
     )
@@ -140,21 +146,35 @@ def main(argv: list[str] | None = None) -> None:
     com = sub.add_parser(
         "commission",
         parents=[configured, devices],
-        help="write the Operating Mode / Current Limit a node expects (EEPROM)",
+        help="Dynamixel: write the Operating Mode / Current Limit a node expects (EEPROM)",
     )
     com.add_argument("node")
     wd = sub.add_parser(
         "watchdog-test",
         parents=[configured, devices],
-        help="bench test: does the Bus Watchdog stop a current-mode motor (torques it)",
+        help="Dynamixel bench test: does the Bus Watchdog stop a current-mode motor (torques it)",
     )
     wd.add_argument("node")
     wd.add_argument("joint")
     wd.add_argument("--current-mA", type=float, default=30.0)
+    hold = sub.add_parser(
+        "check-hold",
+        parents=[configured, devices],
+        help="bench test: does a follower keep its pose once roboloom stops commanding it "
+        "(torques it; measures an unknown `unattended`)",
+    )
+    hold.add_argument("follower")
+    hold.add_argument(
+        "--tolerance",
+        type=float,
+        required=True,
+        help="largest change still counted as holding, in the follower's unit",
+    )
+    hold.add_argument("--seconds", type=float, default=10.0)
     gc = sub.add_parser(
         "gravity-check",
         parents=[configured, devices],
-        help="release the arm with and without gravity compensation and compare (torques it)",
+        help="Dynamixel leader: release the arm with and without gravity compensation and compare (torques it)",
     )
     gc.add_argument("node")
     gc.add_argument("group", help="control group, e.g. right_arm")
@@ -168,30 +188,37 @@ def main(argv: list[str] | None = None) -> None:
     tune = sub.add_parser(
         "tune-gravity",
         parents=[configured, devices],
-        help="tune gravity compensation joint by joint with a live guide (torques the arm)",
+        help="Dynamixel leader: tune gravity compensation joint by joint with a live guide (torques the arm)",
     )
     tune.add_argument("node")
     tune.add_argument("group", help="gravity_comp group, e.g. right_arm")
     calib = sub.add_parser(
-        "calibrate-joints", help="record zero counts at the URDF zero pose (read-only)"
+        "calibrate-joints",
+        help="Dynamixel: record zero counts at the URDF zero pose (read-only)",
     )
     calib.add_argument("calibration")
     calib.add_argument("--joints", type=lambda text: text.split(","), default=None)
     travel = sub.add_parser(
         "measure-travel",
-        help="record each joint's travel while moving the limp arm (read-only)",
+        help="Dynamixel: record each joint's travel while moving the limp arm (read-only)",
     )
     travel.add_argument("calibration")
     travel.add_argument("--out", required=True)
     pose = sub.add_parser(
         "capture-pose",
         parents=[configured, devices],
-        help="save the follower's current pose as poses/<name>.yaml (for home)",
+        help="save a follower's current pose as poses/<follower>/<name>.yaml (for home)",
     )
-    pose.add_argument("name")
+    pose.add_argument(
+        "pose",
+        nargs="+",
+        metavar="[FOLLOWER] NAME",
+        help="the follower node (may be omitted when there is one) and the pose name",
+    )
     pose.add_argument("--force", action="store_true", help="replace an existing pose")
     ident = sub.add_parser(
-        "identify-gravity", help="collect holding currents and fit a gravity model"
+        "identify-gravity",
+        help="Dynamixel: collect holding currents and fit a gravity model",
     )
     ident.add_argument("calibration")
     ident.add_argument("--out", required=True)
@@ -294,9 +321,9 @@ def _declared(path: Path) -> dict[str, Option]:
     return parse_options((yaml.safe_load(path.read_text()) or {}).get("options"))
 
 
-def _load(args: argparse.Namespace) -> ExperimentConfig:
-    path = resolve_experiment(args.config)
-    return load_experiment(
+def _load(args: argparse.Namespace) -> RobotConfig:
+    path = resolve_config(args.config)
+    return load_config(
         path,
         options=_selection(args, path),
         mock=True if getattr(args, "mock", False) else None,
@@ -333,6 +360,12 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         print("\n".join(result.lines()))
         return
+    if args.command == "check-hold":
+        held = setup.check_hold(
+            _load(args), args.follower, operator, args.tolerance, args.seconds
+        )
+        print("\n".join(held.lines()))
+        return
     if args.command == "gravity-check":
         check = setup.gravity_check(
             _load(args), args.node, args.group, operator, args.poses, args.scales
@@ -362,8 +395,19 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         return
     if args.command == "capture-pose":
-        path = setup.capture_pose(_load(args), args.name, force=args.force)
-        print(f"saved {path}; select it with home: {{pose: ../poses/{path.name}}}")
+        if len(args.pose) > 2:
+            raise ConfigError("capture-pose takes [FOLLOWER] NAME")
+        *follower, name = args.pose
+        path = setup.capture_pose(
+            _load(args),
+            name,
+            follower=follower[0] if follower else None,
+            force=args.force,
+        )
+        print(
+            f"saved {path}; select it with "
+            f"home: {{pose: ../poses/{path.parent.name}/{path.name}}}"
+        )
         return
     if args.command == "measure-travel":
         travel = setup.measure_travel(args.calibration, args.out, operator)
@@ -385,7 +429,7 @@ def _dispatch(args: argparse.Namespace) -> None:
 
     if args.command == "session":
         # the FIFO belongs to the configuration file, whatever options the run chose
-        cfg = load_experiment(resolve_experiment(args.config), mock=True)
+        cfg = load_config(resolve_config(args.config), mock=True)
         send_session(
             fifo_for(cfg), " ".join(x for x in (args.operation, args.task) if x)
         )
@@ -431,7 +475,7 @@ def _operate_robot(
     comes back to it. Returns BACK when the operator went back to the robot list."""
     from .ui.launcher import BACK, LaunchPlan, choose, load_last
 
-    path = resolve_experiment(args.config)
+    path = resolve_config(args.config)
     plain = getattr(args, "plain", False)
     given = _selection(args, path)
     asked = bool(getattr(args, "with_", None) or getattr(args, "without", None))
@@ -466,7 +510,7 @@ def _operate_robot(
                 return None
             plan = chosen
         selected = plan.options if (show or given is not None) else None
-        cfg = load_experiment(path, options=selected, mock=True if plan.mock else None)
+        cfg = load_config(path, options=selected, mock=True if plan.mock else None)
         if terminal and not cfg.mock:
             _commission(cfg)
         outcome = _start(
@@ -477,14 +521,14 @@ def _operate_robot(
         show = True
 
 
-def _commission(cfg: ExperimentConfig) -> None:
+def _commission(cfg: RobotConfig) -> None:
     """Options can change a node's Operating Mode or Current Limit (EEPROM), which the
     nodes check at startup. Before launching, show the differences and write them after
     the operator confirms (as `roboloom commission` does)."""
     from . import setup
     from .operator import TerminalOperator
 
-    for name, owner in {**cfg.inputs, **cfg.robots}.items():
+    for name, owner in {**cfg.inputs, **cfg.followers}.items():
         if getattr(owner, "expected_eeprom", None) is None:
             continue
         plan = setup.plan_commission(cfg, name)
@@ -498,7 +542,7 @@ def _commission(cfg: ExperimentConfig) -> None:
 
 def _start(
     args: argparse.Namespace,
-    cfg: ExperimentConfig,
+    cfg: RobotConfig,
     plan: LaunchPlan,
     *,
     live: bool,
@@ -559,7 +603,7 @@ def _start(
                 keep=lambda _: bool(plan.task),
             )
         else:
-            _plain_loop(session.client, session.process)
+            _plain_loop(session.client, session.process, session.release_note())
     finally:
         session.close()
         if session.process.returncode:
@@ -584,8 +628,9 @@ def send_session(fifo: Path, line: str) -> None:
         os.close(fd)
 
 
-def _plain_loop(client, process: subprocess.Popen) -> None:
-    """Line input for pipes and non-terminal use; reports are printed as they arrive."""
+def _plain_loop(client, process: subprocess.Popen, release_note: str) -> None:
+    """Line input for pipes and non-terminal use; reports are printed as they arrive.
+    `release_note`: what to do before release (Session.release_note)."""
     from .ui.render import describe_report
 
     print("Commands: start <task>, stop, save, discard, estop, release, quit")
@@ -600,9 +645,7 @@ def _plain_loop(client, process: subprocess.Popen) -> None:
             continue
         if (
             line == "release"
-            and input(
-                "Support the arms. Type yes to turn the follower torque off: "
-            ).strip()
+            and input(f"Before release: {release_note}. Type yes to release: ").strip()
             != "yes"
         ):
             print("release cancelled")

@@ -7,7 +7,7 @@ import time
 import pytest
 from conftest import rakuda2_tree
 
-from roboloom.config import load_experiment, parse_experiment
+from roboloom.config import load_config, parse_config
 from roboloom.control.device import JointDevice, build_laws, parse_groups
 from roboloom.controllers.coupling import JointCouplings
 from roboloom.controllers.joint import JointController
@@ -20,14 +20,13 @@ LINK = {"joint": "head_yaw", "source": "torso_yaw", "scale": -1.0, "reference": 
 
 
 def controller() -> JointController:
-    base = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
+    base = load_config("examples/mock/config.yaml").controllers["controller"]
     assert isinstance(base, JointController) and base.source is not None
     return JointController(
         base.name,
         {**base.cfg, "couplings": [LINK]},
         base.source,
-        base.robot,
-        base.robot_id,
+        base.followers,
     )
 
 
@@ -43,14 +42,12 @@ def test_compensation_uses_measured_motion_after_mapping() -> None:
     ctl.cfg["joints"][1].update(sign=-1, offset=4096)
     now = time.monotonic_ns() - 10_000_000_000
     initial = [2048.0] * 17
-    assert ctl.update(intent(0, initial, now), initial, now) is not None
+    assert ctl.step(intent(0, initial, now), initial, now) is not None
     actual, leader = initial.copy(), initial.copy()
     actual[0] += 100
     leader[0] += 400  # commanded torso is ahead of its measured pose
     leader[1] -= 20  # mapped head is 2068, including the operator's own head input
-    cmd = ctl.update(
-        intent(1, leader, now + 1_000_000_000), actual, now + 1_000_000_000
-    )
+    cmd = ctl.step(intent(1, leader, now + 1_000_000_000), actual, now + 1_000_000_000)
     assert cmd is not None
     assert cmd.payload["positions"][:3] == [2448, 1968, 2048]
     assert actual[1] == 2048 and leader[1] == 2028  # input snapshots stay untouched
@@ -60,12 +57,12 @@ def test_coupling_keeps_speed_limit_and_follower_target_reference() -> None:
     ctl = controller()
     now = time.monotonic_ns() - 10_000_000_000
     hold = [2048.0] * 17
-    assert ctl.update(intent(0, hold, now), hold, now, hold) is not None
+    assert ctl.step(intent(0, hold, now), hold, now, hold) is not None
     current = hold.copy()
     current[0] += 200
     for seq in range(1, 4):
         tick = now + seq * 10_000_000
-        cmd = ctl.update(intent(seq, hold, tick), current, tick, hold)
+        cmd = ctl.step(intent(seq, hold, tick), current, tick, hold)
         assert cmd is not None
         assert cmd.payload["positions"][1] == pytest.approx(2048 - 500 * 0.01)
 
@@ -76,21 +73,21 @@ def test_reference_is_configured_not_the_pose_at_alignment() -> None:
     # The leader torso is 100 counts from the follower's, within alignment tolerance.
     leader, actual = [2048.0] * 17, [2048.0] * 17
     actual[0], actual[1] = 2148, 1948  # follower camera heading already compensated
-    cmd = ctl.update(intent(0, leader, now), actual, now)
+    cmd = ctl.step(intent(0, leader, now), actual, now)
     assert cmd is not None
     assert cmd.payload["positions"][:2] == pytest.approx([2148, 1948], abs=0.01)
     # Once the torso reaches the leader's pose, the head is the leader's head again;
     # a reference latched at alignment would leave it 100 counts off.
     actual[0] = 2048
     second = 1_000_000_000
-    cmd = ctl.update(intent(1, leader, now + second), actual, now + second)
+    cmd = ctl.step(intent(1, leader, now + second), actual, now + second)
     assert cmd is not None and cmd.payload["positions"][:2] == [2048, 2048]
     # A leader restart realigns but keeps the same reference.
     actual[1] = 2048
-    assert ctl.update(
+    assert ctl.step(
         intent(0, leader, now + 2 * second, "restart"), actual, now + 2 * second
     )
-    cmd = ctl.update(
+    cmd = ctl.step(
         intent(1, leader, now + 3 * second, "restart"), actual, now + 3 * second
     )
     assert cmd is not None and cmd.payload["positions"][:2] == [2048, 2048]
@@ -100,10 +97,10 @@ def test_following_reports_how_far_the_follower_is_from_the_leader() -> None:
     ctl = controller()
     now = time.monotonic_ns() - 10_000_000_000
     hold = [2048.0] * 17
-    assert ctl.update(intent(0, hold, now), hold, now) is not None
+    assert ctl.step(intent(0, hold, now), hold, now) is not None
     leader = hold.copy()
     leader[5] += 500  # the leader moved away; the follower has not caught up yet
-    assert ctl.update(intent(1, leader, now + 1), hold, now + 1) is not None
+    assert ctl.step(intent(1, leader, now + 1), hold, now + 1) is not None
     status = ctl.status()
     assert status["state"] == "following"
     assert (status["worst_joint"], status["worst_diff"]) == ("r_arm_sh_pitch2", 500)
@@ -138,7 +135,7 @@ def test_invalid_couplings_fail_when_loading_yaml(raw: object) -> None:
     tree = rakuda2_tree()
     tree["controllers"]["controller"]["couplings"] = raw
     with pytest.raises(ValueError, match="couplings"):
-        parse_experiment(tree)
+        parse_config(tree)
 
 
 def test_couplings_work_with_other_joint_names_and_snapshot_sources() -> None:
@@ -176,16 +173,15 @@ def test_controller_passes_the_follower_velocity_to_the_lead() -> None:
         base.name,
         {**base.cfg, "couplings": [{**LINK, "lead_ms": 100}]},
         base.source,
-        base.robot,
-        base.robot_id,
+        base.followers,
     )
     now = time.monotonic_ns() - 10_000_000_000
     hold = [2048.0] * 17
-    assert ctl.update(intent(0, hold, now), hold, now) is not None
+    assert ctl.step(intent(0, hold, now), hold, now) is not None
     velocity = [0.0] * 17
     velocity[0] = -200.0  # torso turning; position still at the reference
     second = 1_000_000_000
-    cmd = ctl.update(intent(1, hold, now + second), hold, now + second, None, velocity)
+    cmd = ctl.step(intent(1, hold, now + second), hold, now + second, None, velocity)
     assert cmd is not None and cmd.payload["positions"][1] == 2068  # -1 * (-200 * 0.1)
 
 
@@ -236,13 +232,13 @@ def test_position_locks_only_selected_leader_joints_and_seeds_before_torque() ->
 
 def test_rakuda_leader_locking_uses_the_normal_yaml_control_groups() -> None:
     tree = rakuda2_tree()
-    tree["experiment"]["mode"] = "mock"
+    tree["settings"]["mode"] = "mock"
     groups = tree["inputs"]["leader"]["control"]
     groups[0]["joints"] = ["torso_yaw"]
     groups.append(
         {"group": "fixed_head", "law": "position", "joints": ["head_yaw", "head_pitch"]}
     )
-    cfg = parse_experiment(tree)
+    cfg = parse_config(tree)
     leader = cfg.inputs["leader"]
     assert isinstance(leader, JointInput)
     reader = leader.open(True, cfg.dataset_fps)
@@ -264,7 +260,13 @@ def test_compensated_commands_still_pass_through_robot_safety_limits(
     ]
     limits[1]["min"] = 2000  # head has little travel left in this direction
     safety = FollowerSafety(
-        {"robot_id": ctl.robot_id, "limits": limits, "control_hz": 30}, bus
+        {
+            "name": ctl.follower.name,
+            "unit": ctl.follower.unit,
+            "limits": limits,
+            "control_hz": 30,
+        },
+        bus,
     )
     safety.start()
     safety.arm()
@@ -273,13 +275,13 @@ def test_compensated_commands_still_pass_through_robot_safety_limits(
     monkeypatch.setattr("roboloom.core.protocol.time.monotonic_ns", lambda: tick)
     safety.tick(now)
     initial = bus.values.copy()
-    assert ctl.update(intent(0, initial, now), initial, now) is not None
+    assert ctl.step(intent(0, initial, now), initial, now) is not None
     actual, leader = initial.copy(), initial.copy()
     actual[0] += 300
     leader[0] += 300
     bus.values = actual
     tick = now + 500_000_000
-    cmd = ctl.update(intent(1, leader, tick), actual, tick)
+    cmd = ctl.step(intent(1, leader, tick), actual, tick)
     assert cmd is not None and cmd.payload["positions"][1] == 1798
     safety.accept(cmd)
     _, action = safety.tick(tick)

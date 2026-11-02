@@ -1,0 +1,32 @@
+# Mock Rakuda devices (no hardware): leader teleoperation with camera, DIGIT and audio.
+# Start:  uv run roboloom run examples/mock/config.yaml
+#         uv run roboloom run examples/mock/config.yaml --with bilateral
+repo_id: local/rakuda-mock
+output: ../../datasets/rakuda-mock
+mode: mock
+dataset_fps: 10
+inputs:
+  leader: nodes/leader.yaml
+controllers:
+  controller: nodes/controller.yaml
+followers:
+  follower: nodes/follower.yaml
+sensors:
+  camera: nodes/camera.yaml
+  digit_left: nodes/digit_left.yaml
+  digit_right: nodes/digit_right.yaml
+  audio: nodes/audio.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml
+options:
+  bilateral:
+    help: force feedback to the leader (current-mode leader, effort estimator); no sensors
+    set:
+      inputs.leader: nodes/leader_bilateral.yaml
+      controllers.controller: nodes/controller_bilateral.yaml
+      estimators.effort: nodes/effort.yaml
+      sensors.camera: null
+      sensors.digit_left: null
+      sensors.digit_right: null
+      sensors.audio: null
+    dataset: bilateral

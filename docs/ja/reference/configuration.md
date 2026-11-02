@@ -7,7 +7,6 @@
 ## 設定YAML
 
 ```yaml
-robot_id: rakuda2
 repo_id: local/rakuda2
 output: datasets/rakuda2
 dataset_fps: 15
@@ -15,8 +14,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
@@ -27,9 +26,69 @@ options:
 
 `mode` は省略でき，既定は `hardware` です．`mode: mock` も書けます．CLIの `--mock` とPython APIの `mock=` はYAMLの `mode` より優先します．
 
-ノードYAMLのパスと `output` は設定ファイルのディレクトリが基準です．オプションを有効にしない場合，上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．ノード名はdoraのIDとデータセットのfeature名に使われます．現在は1つの設定につきrobotが1台，対応するcontrollerが1個です．
+ノードYAMLのパスと `output` は設定ファイルのディレクトリが基準です．オプションを有効にしない場合，上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．
+
+最上位に書けるキーは `repo_id`，`output`，`dataset_fps`，`mode`，役割（`inputs`，`controllers`，`followers`，`sensors`，`estimators`），`recorder`，`session`，`options` だけです．それ以外のキーは読み込み時に拒否します．ロボットの名前は設定のディレクトリ名（`.roboloom/rakuda2/` なら `rakuda2`）で，データセットの `robot_type` にも使います．
+
+`followers` には，指令を受けて動く装置（腕，グリッパなど）を並べます．1つの設定に複数のフォロワを置けます．各フォロワには，それを動かすcontrollerがちょうど1つ必要です．
+
+ノード名はdoraのIDとデータセットのfeature名に使われます．英数字，`-`，`_` だけを使います．`recorder`，`session`，`action`，`tick` と，`action_` で始まる名前，`_status` で終わる名前は，dataflowが使うので付けられません．
 
 各ノードの `type` が実装を選びます．`SET_...` は機体固有の未設定値で，参照する設定に残っていると実行が拒否されます．`validate` は設定とdataflowの整合性を調べ，デバイスは開きません．EEPROMの実機との一致，画像取得，停止挙動までは確認しません．
+
+## フォロワとcontroller
+
+各controllerは `followers:` に，動かすフォロワを並べます．1台のフォロワを動かすcontrollerはちょうど1つです．
+
+| controller | 動かすフォロワ |
+| --- | --- |
+| `joint` | ちょうど1台（leaderの関節を1台のフォロワの関節へ対応させる） |
+| `policy` | 全フォロワを設定の順に．記録した `action` と `observation.state` が全フォロワをつないだ形なので，方策の出力も同じ形です．出力を並び順に分けて各フォロワへ送ります |
+
+フォロワが複数あるcontrollerは，全フォロワの状態がそろうまで指令を送りません．どれかのフォロワが `FAULT` や `ESTOP` になるか，状態が `follower_timeout_ms` より古くなると，そのcontrollerは全フォロワへの指令を止めます．指令が途切れたフォロワは，保持している目標を保ちます．controllerは，位置を合わせ直すまで次の指令を送りません．`policy` controllerは，フォロワの状態が古くなると，その回のエピソードの方策の実行を止めます．画面のcontrollerの行に，止めた理由（`stopped_by`）と，状態を待っているフォロワ（`waiting_state`）が出ます．
+
+`feedback`（力の逆送）は，フォロワが1台のcontrollerでだけ使えます．
+
+## 単位
+
+関節の位置の単位は，フォロワとleader（`inputs`）がそれぞれ宣言します．既定値はありません．Rakuda2は `dynamixel_count` です．controllerの `unit` はleaderとフォロワの単位と一致させます．指令にも単位が入り，フォロワは自分の単位と違う指令を受け取りません．
+
+速度の上限 `max_speed` は3か所にあり，どれもフォロワの単位/sです．
+
+| 場所 | 役割 |
+| --- | --- |
+| フォロワの `limits` の `max_speed`（関節ごと） | フォロワの安全の検査．これを超える目標は削られる．最後の砦なので，controllerの値より大きくする |
+| `joint` controllerの `max_speed` | 遠隔操作の目標を1周期に動かせる幅 |
+| `policy` controllerの `max_speed` | 方策の目標を1周期に動かせる幅．フォロワごとに `{フォロワ名: 値}` で書く（単位がフォロワごとに違うため） |
+| controllerの `home.max_speed` | 保存した姿勢へ動くときの速さ．controllerの `max_speed` 以下 |
+
+`home.tolerance`（到着とみなす差）も，フォロワの単位で必ず書きます．
+
+## 脱力したときと放置したときの性質
+
+フォロワと動作する入力機器（制御則で動くleader）の機種は，安全に関わる次の2つの性質を宣言します．`release` の確認文，終了の選択肢，画面の表示はこの宣言から決まります．
+
+| 性質 | 値 | 意味 |
+| --- | --- | --- |
+| `torque_off`（トルクが切れたとき：`release`・電源断） | `falls` | 自重で落ちる．操作者が支える |
+| | `lets_go` | 本体はその場に残るが，つかんでいる物を放す（グリッパ）．物を外しておく |
+| | `stays` | 何も動かない |
+| `unattended`（roboloomが指令を書かなくなったとき：保持して終了・プロセスの異常終了・通信の切断） | `holds` | 最後の目標を保つ |
+| | `torque_off` | 脱力する（バスのwatchdog，閉じるときに脱力するドライバ） |
+| | `unknown` | 確かめていない．`torque_off` と同じに扱う |
+
+| 機種 | `torque_off` | `unattended` |
+| --- | --- | --- |
+| Rakuda2フォロワ | `falls` | `holds`．電流制御の制御則（`gravity_comp`，`impedance`，`spring`）のグループがあると `torque_off`（閉じるときとwatchdogで脱力するため）．`current_position` は位置を保つので `holds` |
+| Rakuda-mini（leader） | `falls` | `torque_off`（セッションの終了時に脱力） |
+| 外部のバス（`InProcessSession.from_components`） | `falls` | `unknown`（分からないので最悪の場合） |
+| PiPERフォロワ（[開発中](../contribution/piper.md)） | `falls` | `unknown`（確かめていない） |
+
+- 「保持したまま終了」は，`unattended: holds` のフォロワがあるときだけ選べます．保持しないフォロワは，終了の確認で名前と，脱力する（または，するかもしれない）ことを示します．トルクのあるフォロワがあれば，保持できなくても「支えてから脱力して終了」を選べます．指令のないまま有効のフォロワは，終了後にroboloomから脱力させられないためです．
+- `release` の確認では，`falls` の機器に「支える」，`lets_go` の機器に「物を外す」と表示します．`stays` の機器は名前を出しません．確認そのものは，どの機器でも必要です．
+- フォロワが `RELEASED` のときと，`FAULT` か `ESTOP` で保持しない（`unattended` が `holds` でない）ときは，画面のフォロワの行にすることを表示します．`FAULT` と `ESTOP` では，フォロワへ書くのをやめるためです．
+- `ESTOP` は性質に依らず，その場で保持してラッチします．
+- 機種が `unknown` と宣言した `unattended` だけは，フォロワのYAMLに実測した値（`unattended: holds` か `torque_off`）を書けます．値は `roboloom check-hold`（[CLI](cli.md)）が測り，確認の後に書きます．機種が宣言した値と違う値を書くと，設定の読み込みで拒否します．
 
 ## 起動オプション
 
@@ -41,7 +100,7 @@ options:
 | `default` | `true` なら，指定がないときに有効（既定 `false`） |
 | `requires` | 一緒に有効にするオプションのリスト |
 | `conflicts` | 同時に使えないオプションのリスト |
-| `set` | `<role>.<node>`（roleは `inputs`，`controllers`，`robots`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
+| `set` | `<role>.<node>`（roleは `inputs`，`controllers`，`followers`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
 | `dataset` | 有効なときにデータセット名へ付ける短い名前 |
 
 規則は次のとおりです．
@@ -72,7 +131,7 @@ options:
     set:
       inputs.leader: nodes/leader_bilateral.yaml
       controllers.controller: nodes/controller_bilateral.yaml
-      robots.robot: nodes/robot_bilateral.yaml
+      followers.follower: nodes/follower_bilateral.yaml
       estimators.effort: nodes/effort.yaml
     dataset: bilateral
   policy:
@@ -104,10 +163,10 @@ leaderノードの `control` は，`free`（脱力），`position`（leaderで�
 !!! warning "実機では未検証"
     followerが受けた外力をleaderへ返す経路です．模擬（mock）の試験だけを通しています．設計と今後の段階は [バイラテラル制御の設計](../contribution/bilateral.md) を参照してください．
 
-設定に `estimators` を足し，controllerの `feedback` で推定器を参照します．テンプレートでは，オプション `bilateral` が `estimators.effort` を追加し，leader・controller・robotを逆送用のノードファイルに置き換えます．辺は書きません．各ノードの参照から次の経路を導きます．
+設定に `estimators` を足し，controllerの `feedback` で推定器を参照します．テンプレートでは，オプション `bilateral` が `estimators.effort` を追加し，leader・controller・followerを逆送用のノードファイルに置き換えます．辺は書きません．各ノードの参照から次の経路を導きます．
 
 ```text
-leader ──sample──► controller ──command──► robot ──state──► estimator
+leader ──sample──► controller ──command──► follower ──state──► estimator
   ▲                    │  ▲                                  │
   └──── feedback ──────┘  └────────────── estimate ──────────┘
 ```
@@ -123,13 +182,13 @@ estimators:
 | --- | --- |
 | `type` | `none`（常に推定なし．経路の確認用）または `model_residual` |
 | `models` | `model_residual` の重力モデル（腕ごと）．出力関節を合わせると `joints` とちょうど一致すること |
-| `robot` | 状態を読むrobotノードの名前 |
+| `follower` | 状態を読むフォロワのノード名 |
 | `joints` | 推定するfollower関節 |
 | `smoothing_alpha` | 指数移動平均の係数（0より大きく1以下，既定1＝平滑化なし） |
 | `contact_on` / `contact_off` | 残差のL1ノルムによる接触の判定（ヒステリシス）．`contact_off` ≤ `contact_on`．既定はどちらも0で，常に接触とみなす |
 | `record` | `true` で推定をデータセットに記録する（既定 `false`）．`recorder.max_age_ms` にこの推定器の名前が必要 |
 
-推定器は，robotが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
+推定器は，フォロワが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
 
 `model_residual` は `残差 = 実測電流 − g(q)` です．`g(q)` はfollowerで同定した重力モデルで，学習は要りません．摩擦・慣性・位置の追従誤差は残差に残るので，自由に動かしているときも0になりません．推定器ノードのstatusの `residual_l1`（接触の判定と比べる値）を，自由に動かしたときと押したときで見て，`contact_on` をその間に置きます．重力モデルは，leaderと同じ `identify-gravity` で，followerのcalibration（`calibration/follower_<side>.yaml`）から作ります．
 
@@ -174,18 +233,18 @@ gate × (clip(受け取った電流, ±max_mA) − kd × 速度)
 
 逆送の電流は，重力補償と同じ `max_current_mA` とEEPROMのCurrent Limitの内側にあります．上限の近くでは削られます．Current Limitを上げると，ホストが止まったときに腕に残る力も大きくなります（XC330はBus Watchdogが作動しても電流を止めません）．
 
-`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1つの設定に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
+`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器が複数あるときは，設定の順につなげます．`names` は `observation.effort_ext` が `<フォロワ名>.<関節名>`，ほかの2つが推定器の名前です．単位の違う推定器は1本のベクトルにできないので，読み込み時に拒否します．
 
-読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`Experiment`）は推定器を扱いません．
+読み込み時に，参照先の存在，推定器とcontrollerのフォロワの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`InProcessSession`）は推定器を扱いません．
 
 ## 制御周期
 
-`robot.yaml` の `control_hz` と，leaderの `poll_hz` は，そのノードがバスを読み書きする周期です．1周期の仕事（状態の読み出し，制御則の計算，目標値の書き込み）が周期に収まる必要があります．周期を上げると，leaderの電流制御とfollowerの追従が細かくなります．
+`follower.yaml` の `control_hz` と，leaderの `poll_hz` は，そのノードがバスを読み書きする周期です．1周期の仕事（状態の読み出し，制御則の計算，目標値の書き込み）が周期に収まる必要があります．周期を上げると，leaderの電流制御とfollowerの追従が細かくなります．
 
 周期は次の手順で決めます．
 
 1. `roboloom probe <port>` を各ポートで実行します．状態の読み出し時間と，目安の周期上限（読み出しと書き込みに周期の70%を使う値）を表示します．`probe` は書き込みません．
-2. `control_hz` と `poll_hz` を設定し，`run` の画面で確かめます．robotとleaderの行の `work … ms (max …)` が1周期の仕事の時間です．最大値が周期の70%程度以下で，`tick` が周期どおりなら，その周期で動いています．
+2. `control_hz` と `poll_hz` を設定し，`run` の画面で確かめます．followerとleaderの行の `work … ms (max …)` が1周期の仕事の時間です．最大値が周期の70%程度以下で，`tick` が周期どおりなら，その周期で動いています．
 3. 超える場合は周期を下げます．
 
 Dynamixelのバスは，全モーターのファームウェアがv45以上なら，起動時にFast Sync Read（全モーターの応答を1パケットで返す読み出し）へ切り替えます．使えないときは通常の読み出しのまま動き，起動時に理由を表示します．
@@ -218,12 +277,25 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 `record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損はゼロ値と有効フラグで表します．`task` はフレームに記録されます．
 
+フォロワが複数あるとき，次のfeatureは全フォロワを設定の順につなげた1本のベクトルです．`names` が各要素の持ち主を `<フォロワ名>.<関節名>` で示します（例：`follower.r_arm_sh_pitch1`）．
+
+| feature | 中身 |
+| --- | --- |
+| `observation.state` | 各フォロワの関節の位置 |
+| `observation.effort` | `record_effort: true` のフォロワの力の量．単位の違うフォロワは混ぜられません |
+| `action` | 各フォロワがその行の区間に送った最初の指令．`observation.state` と同じ並び |
+| `action.valid` | 全フォロワが指令を送った行で1 |
+| `action.clamped` | どれかのフォロワが制限した行で1 |
+| `action.meta.<フォロワ名>.valid` / `clamped` / `seq` / `sent_ns` | フォロワごとの指令の有無，制限，指令の番号，送信時刻 |
+
+指令を送らなかったフォロワの部分は，そのフォロワが保持していた目標（状態の `target`．なければ位置）で埋めます．ゼロで埋めると，学習した方策が0への跳びを覚えるためです．LeRobotの学習は `action.valid` を見ないので，有効な行だけを使う場合は `action.valid` で選んでください．行は，全フォロワの指令がその区間を過ぎたとき，または `grace_ms`（既定500 ms）が過ぎたときに確定します．
+
 同じデータセットに次のエピソードを追記できます．再開時はFPSとfeatureの互換性を検査します．記録するfeatureを変えるオプションには `dataset` を付け，データセットを分けます（「起動オプション」の節）．
 
-`recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．
+`recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．`control_interval_ms` と `action_missing_rate`（指令のなかった行の割合）はフォロワごとで，警告にはフォロワの名前が出ます．
 
 ## ログと設定の管理
 
-ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，robotは毎周期の状態（位置・速度・電流・目標・モード）を `<robot名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．
+ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，フォロワは毎周期の状態（位置・速度・電流・目標・モード）を `<フォロワ名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/<フォロワ名>/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．

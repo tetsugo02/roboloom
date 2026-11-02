@@ -77,7 +77,7 @@ def _keys(
 ) -> list[EpisodeResult]:
     screen = session.screen
     assert screen is not None
-    has_home = any(c.home is not None for c in session.cfg.controllers.values())
+    has_home = any(c.homes for c in session.cfg.controllers.values())
     screen.keys = command_line(has_home, KEYS)
     results: list[EpisodeResult] = []
 

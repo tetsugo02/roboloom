@@ -21,9 +21,9 @@ roboloom の操作は，どれも Python の関数として使えます．CLI（
 起動オプションは `options=` で選びます．指定したオプションと，それが必要とするオプションが有効になります．`None`（既定）なら `default: true` のオプションが有効です．CLIの `--with`／`--without` と違い，`options=` は有効にするものの全体を表します（既定のオプションに足すのではありません）．`mock=True` はmockデバイス，`mock=False` は実機で動かします．`None` ならYAMLの `mode`（既定 `hardware`）に従います．
 
 ```python
-from roboloom import load_experiment
+from roboloom import load_config
 
-cfg = load_experiment("rakuda2", options=["gravity", "digit"])
+cfg = load_config("rakuda2", options=["gravity", "digit"])
 print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 ```
 
@@ -40,7 +40,7 @@ print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 roboloom も同じ構成をとります．
 
 - **dora の dataflow**：次のものが，それぞれ別のプロセスで動きます．
-  - robot ノードと leader ノード（制御のループ）
+  - フォロワのノードと leader ノード（制御のループ）
   - センサー
   - recorder
   - 方策ノード
@@ -61,13 +61,13 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 - `launch` は，すべてのノードが状態を報告し始めるまで待ちます．
 - 毎回の `start` の前に，followerがleaderから `alignment_tolerance` 以内にあるかを確かめます（最初の位置合わせだけではありません）．`record` はエピソードごとに，揃うまで待ちます（`ready_timeout`，既定 60 秒）．`start` は，ずれていると `SessionError` を出します．
 - 既定は実機です．mockデバイスで動かすときは `mock=True` を渡します．
-- `launch` の `options`・`mock` は，設定をパスか機体名で渡したときだけ使われます．読み込み済みの `ExperimentConfig` を渡す場合は，`load_experiment(..., options=..., mock=...)` で選んでおきます．
+- `launch` の `options`・`mock` は，設定をパスか機体名で渡したときだけ使われます．読み込み済みの `RobotConfig` を渡す場合は，`load_config(..., options=..., mock=...)` で選んでおきます．
 - 各ノードのプロセスには，有効なオプションが `ROBOLOOM_OPTIONS`，モードが `ROBOLOOM_MODE` で渡ります．
 - `with` を抜けると，次のことをします．
   - 途中のエピソードがあれば破棄する．
   - `operator` が設定されていれば，腕を支えるように求める．Enter で follower も脱力し，`hold` と入力すると follower は保持を続ける．
   - dataflow を止める．
-  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．
+  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．ただし，放置したときに保持しない（`unattended` が `holds` でない）follower は保持しない．性質は [設定](configuration.md) の「脱力したときと放置したときの性質」にある．
   - スクリプトから決めるときは `s.close(release=True)`（脱力）または `s.close(release=False)`（保持）を呼ぶ．
 - ログは，設定ファイルの隣の `logs/<データセット名>-<時刻>/` に残ります（例：`logs/rakuda2-digit-20261102-101500/`）．
   - `dora.log`
@@ -84,6 +84,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - 腕を支えてから Enter を押すと，follower のトルクも切って終了します．
   - `hold` と入力すると，follower は保持を続けたまま終了します．
   - follower が `torque: false` のときは，leader の確認だけを出します．
+  - 確認文は機器の性質から作ります．支える機器（`falls`）と物を外す機器（`lets_go`）を名前で示し，保持できる follower がなければ，`hold` は脱力せずに終了することを示します（その follower は保持しないかもしれません）．`s.release_note()` で，`release` の前にすることを文字列で得られます．`release(confirm=False)` は，これを添えた `HardwareError` を出します．
   - `operator=None`，または標準入力が端末でない場合は，この確認を出さず，follower は保持を続けます．`screen=False` だけでは確認は無効になりません．
   - 保持を続けた follower は，電源を切る前に腕を支えるか安全な姿勢に下ろしてください．
 
@@ -95,7 +96,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 | --- | --- |
 | `index` | データセットでのエピソード番号（保存済みのエピソード数） |
 | `number` | この Session で録った数 |
-| `experiment` | 設定ファイルの名前（拡張子なし．`.roboloom/<robot>/config.yaml` では `config`） |
+| `dataset` | データセットの名前（`repo_id` の `/` より後ろ．有効なオプションの名前が付く．例：`rakuda2-digit`） |
 | `previous` | この Session で保存した task の一覧 |
 
 ```python
@@ -218,7 +219,7 @@ with Session.launch(
   - 腕を支える，姿勢を置く，Enter を押す，など．
   - CLI は `TerminalOperator` を渡します．
   - スクリプトや試験では `ScriptedOperator` に答えを並べて渡せます．
-- 設定を取る関数は，パス，機体名，読み込み済みの `ExperimentConfig` のどれでも受け取ります．オプションやモードを選ぶときは，`load_experiment(..., options=..., mock=...)` で読み込んでから渡します．
+- 設定を取る関数は，パス，機体名，読み込み済みの `RobotConfig` のどれでも受け取ります．オプションやモードを選ぶときは，`load_config(..., options=..., mock=...)` で読み込んでから渡します．
 - `plan_commission`，`watchdog_test`，`gravity_check` は，mockの設定を拒否します．
 
 ```python
@@ -226,9 +227,9 @@ from roboloom import setup
 from roboloom.operator import TerminalOperator
 
 op = TerminalOperator()
-from roboloom import load_experiment
+from roboloom import load_config
 
-gravity = load_experiment("rakuda2", options=["gravity"])
+gravity = load_config("rakuda2", options=["gravity"])
 plan = setup.plan_commission(gravity, "leader")
 for line in plan.lines():
     print(line)
@@ -258,30 +259,32 @@ finally:
     tuning.close()
 ```
 
-## 3．1 つのプロセスで動かす：`Experiment`
+## 3．1 つのプロセスで動かす：`InProcessSession`
 
-- `Experiment` は，ロボットのバス，センサー，controller の呼び出しを，すべて呼び出し側のスレッドで行います．
+- `InProcessSession` は，ロボットのバス，センサー，controller の呼び出しを，すべて呼び出し側のスレッドで行います．
 - 使いどころ：
   - 試験
   - 模擬
   - センサーの少ない簡単な機体
+- 動かせるフォロワは1台です．フォロワが複数ある設定は `Session` で動かします．
 - 方策を `step(policy=...)` に直接渡せます．
   - ただし，方策やセンサーが遅いと，制御の周期も遅れます．
 - 実機の Rakuda-2 は，`Session` で動かします．
   - モーターを制御する leader（トリガーのばね，重力補償）を使う設定では，`from_yaml` を拒否します．
   - 方策の controller を使う設定でも，`from_yaml` を拒否します．
-- `Experiment.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)` の `options`・`mock` は `load_experiment` と同じ意味です．
+- `InProcessSession.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)` の `options`・`mock` は `load_config` と同じ意味です．
 
 デバイスやリポジトリ内のサンプルファイルを使わない模擬例です．`record` extraが必要です．この例の関節範囲・速度を実機へ流用しないでください．
 
 ```python
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
-with Experiment.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+with InProcessSession.from_components(
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
+    unit="count",
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
         {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
@@ -289,11 +292,11 @@ with Experiment.from_components(
     controller=lambda obs: [2048, 2048],
     output="datasets/my-mock",
     repo_id="local/my-mock",
-) as experiment:
-    experiment.start_episode("handover")
-    experiment.run(3.0)
-    experiment.stop_episode()
-    experiment.save_episode()
+) as session:
+    session.start_episode("handover")
+    session.run(3.0)
+    session.stop_episode()
+    session.save_episode()
 ```
 
 実機の収集手順は [Rakuda2 Quick start](../quick-start/rakuda2.md) を参照してください．

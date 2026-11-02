@@ -8,7 +8,7 @@ class RoboloomError(Exception):
 
 
 class ConfigError(RoboloomError, ValueError):
-    """An experiment or calibration file is invalid or still has SET_ values."""
+    """A configuration or calibration file is invalid or still has SET_ values."""
 
 
 class SetupError(RoboloomError):

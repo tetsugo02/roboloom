@@ -49,7 +49,7 @@ F2・F6 / Shift-F6・F12・Ctrl-Endも，入力欄・ペイン移動・非常停
 
 メニューと入力欄から `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` を使います．`run` のStartはtask入力へ移動します．開始拒否は警告になり，状態更新は続くので準備後に再操作できます．Homeはcontrollerに初期姿勢がある場合だけ有効で，到着後も準備状態を再確認します．
 
-Releaseでは支持を確認します．終了はCancel・followerの保持・支持した上での脱力（可能な場合）・オプションを選び直す（Quit and choose options again (followers hold)）から選び，初期選択はCancelです．オプションはdataflowの実行中には切り替えません（制御モードが変わるためです）．選び直す場合は，followerを保持したまま終了し，ランチャーへ戻ります．CLIから起動した対話端末の場合だけ表示します．followerを保持しても，通電している入力機器は終了時に脱力します．UI異常終了時も，脱力の選択が確認済みでなければfollowerを保持します．非常停止は送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別します．バスやdataflowが切断されている場合の到達は保証できません．
+Releaseでは，機器の性質（[設定](configuration.md) の「脱力したときと放置したときの性質」）から，支える機器と物を外す機器を示して確認します．終了はCancel・followerの保持（保持できるfollowerがある場合．ない場合は「脱力せずに終了」）・脱力して終了（トルクのあるfollowerがある場合）・オプションを選び直す（Quit and choose options again）から選び，初期選択はCancelです．確認文には，終了時に脱力する（またはするかもしれない）機器と，すべきことを示します．オプションはdataflowの実行中には切り替えません（制御モードが変わるためです）．選び直す場合は，followerを保持したまま終了し，ランチャーへ戻ります．CLIから起動した対話端末の場合だけ表示します．followerを保持しても，通電している入力機器は終了時に脱力します．UI異常終了時も，脱力の選択が確認済みでなければfollowerを保持します．非常停止は送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別します．バスやdataflowが切断されている場合の到達は保証できません．
 
 `record`・`infer` は準備状態，回数，残り時間，保存結果を表示します．毎回，準備後にStartを選びます．`record --home` は毎回homeへ移動します．`record` は保存し，`infer` は `--task` がある場合だけ保存します．Stopで時間指定の記録を早く終えた場合も，同じ保存方針を適用します．指定回数が完了すると終了確認が開きます．
 
@@ -82,7 +82,7 @@ Gainは0.1刻みで[0, 3]，holdは5 mA刻みで[0, 100]です．入力欄・確
 
 ## 表示の拡張
 
-通常の拡張は，既存のrobot・input・sensor・controller登録と状態通知を使います．`StatusReporter` で標準のrole・level・timestamp・fieldsを通知し，項目名には単位を含めます．共通画面は関節数・名前・ID・単位を固定しません．未知の役割・項目も汎用key/valueで表示します．
+通常の拡張は，既存のfollower・input・sensor・controller登録と状態通知を使います．`StatusReporter` で標準のrole・level・timestamp・fieldsを通知し，項目名には単位を含めます．共通画面は関節数・名前・ID・単位を固定しません．未知の役割・項目も汎用key/valueで表示します．
 
 専用表示が必要な場合だけ，起動前にPresenterを明示登録します．機種（ノードYAMLの `type`），役割Presenter，既存の `ui.render.RENDERERS` の役割表示，汎用表示の順に選びます．Presenterは `NodeSnapshot` を受け取り `Presentation` を返し，Widgetやデバイスを扱いません．
 

@@ -2,10 +2,10 @@
 # Uses the normal controller command speed; hardware accuracy unverified.
 type: joint
 input: leader
-robot: robot
+followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
-max_speed_counts_per_s: 2048
+max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
 joints:
@@ -86,7 +86,7 @@ couplings:
 # Saved initial pose for `home` (roboloom capture-pose, 2026-10-27). max_speed counts/s;
 # slow by design.
 home:
-  pose: ../poses/ready.yaml
+  pose: ../poses/follower/ready.yaml
   max_speed: 200
   tolerance: 30
   timeout_s: 30

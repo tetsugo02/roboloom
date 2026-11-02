@@ -1,11 +1,11 @@
-"""Launch an experiment's dora dataflow and direct it from Python.
+"""Launch a robot's dora dataflow and direct it from Python.
 
 The dataflow runs the control loops, sensors and recorder in their own processes; a
 `Session` never runs a control loop. It sends events (start an episode with a task,
 stop, save, ...) and reads the nodes' reports and status. The CLI (`run`, `record`,
 `infer`) and Python scripts use this same class.
 
-    with Session.launch("rakuda2/experiment_gravity", hardware=True) as s:
+    with Session.launch("rakuda2", options=["gravity"], mock=False) as s:
         s.wait_ready()
         for _ in range(3):
             s.record(lambda info: f"pick cube #{info.index}", seconds=20)
@@ -31,7 +31,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
-from ..config import NO_OPTIONS, ExperimentConfig, load_experiment
+from ..config import NO_OPTIONS, RobotConfig, load_config
+from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
 from ..recording.metrics import assess
@@ -71,7 +72,7 @@ class EpisodeInfo:
 
     index: int  # episode index in the dataset (episodes already saved)
     number: int  # episodes recorded by this session so far
-    experiment: str  # the dataset's name, e.g. rakuda2-digit (tells the options)
+    dataset: str  # the dataset's name, e.g. rakuda2-digit (tells the options)
     previous: list[str] = field(default_factory=list)  # tasks saved by this session
 
 
@@ -96,7 +97,7 @@ FAILED = ("exited with code", "exited with error")  # dora's node-failure lines
 ERROR_LINE = re.compile(r"^[A-Za-z_.]*(Error|Exception): ")  # a traceback's last line
 
 
-def log_dir_for(cfg: ExperimentConfig) -> Path:
+def log_dir_for(cfg: RobotConfig) -> Path:
     """Next to the configuration, so a project keeps its own logs (ignored by git).
     Named after the operation's dataset (`rakuda2-digit-...`), which tells the options."""
     name = Path(cfg.path).stem
@@ -117,8 +118,8 @@ def _dora() -> str:
     return dora
 
 
-def validate_flow(cfg: ExperimentConfig, directory: Path) -> Path:
-    """Write the experiment's dataflow into `directory` and check it with `dora validate`."""
+def validate_flow(cfg: RobotConfig, directory: Path) -> Path:
+    """Write the configuration's dataflow into `directory` and check it with `dora validate`."""
     flow = write_flow(cfg, directory / "flow.yaml")
     check = subprocess.run(
         [_dora(), "validate", "--offline", str(flow)],
@@ -131,7 +132,7 @@ def validate_flow(cfg: ExperimentConfig, directory: Path) -> Path:
     return flow
 
 
-def fifo_for(cfg: ExperimentConfig) -> Path:
+def fifo_for(cfg: RobotConfig) -> Path:
     """The command FIFO of a running dataflow; `roboloom session` writes to it. One per
     configuration file, whatever options the run enabled (they change the dataset name)."""
     return Path(cfg.path).resolve().with_suffix(".fifo")
@@ -140,7 +141,7 @@ def fifo_for(cfg: ExperimentConfig) -> Path:
 class Session:
     def __init__(
         self,
-        cfg: ExperimentConfig,
+        cfg: RobotConfig,
         process: subprocess.Popen,
         client: SessionClient,
         log_dir: Path,
@@ -169,7 +170,7 @@ class Session:
     @classmethod
     def launch(
         cls,
-        experiment: str | Path | ExperimentConfig,
+        config: str | Path | RobotConfig,
         *,
         options: Iterable[str] | None = None,
         mock: bool | None = None,
@@ -184,7 +185,7 @@ class Session:
 
         - `options`: the launch options to enable (None: their defaults); `mock`:
           True runs mock devices, False real ones (None: the YAML's `mode`, default
-          hardware). Both apply only when `experiment` is a path or name.
+          hardware). Both apply only when `config` is a path or name.
         - `policy` ("module:callable") and `policy_kwargs` replace the policy of a
           `type: policy` controller.
         - `screen`: the node-status screen, drawn on a thread ("auto": when stdout is
@@ -193,9 +194,9 @@ class Session:
           go limp ("auto": a TerminalOperator when stdin is a terminal; None: no question).
         """
         cfg = (
-            experiment
-            if isinstance(experiment, ExperimentConfig)
-            else load_experiment(experiment, options=options, mock=mock)
+            config
+            if isinstance(config, RobotConfig)
+            else load_config(config, options=options, mock=mock)
         )
         if (policy or policy_kwargs) and not any(
             not c.uses_input for c in cfg.controllers.values()
@@ -206,7 +207,7 @@ class Session:
         fifo.parent.mkdir(parents=True, exist_ok=True)
         if fifo.exists():
             raise SessionError(
-                f"session FIFO already exists: {fifo} (another run of this experiment, "
+                f"session FIFO already exists: {fifo} (another run of this robot, "
                 "or a stale file to delete)"
             )
         workdir = tempfile.TemporaryDirectory(prefix="roboloom-flow-")
@@ -286,9 +287,41 @@ class Session:
         return [n for n, i in self.cfg.inputs.items() if getattr(i, "actuated", False)]
 
     @property
+    def torqued(self) -> dict[str, SafetyTraits]:
+        """Followers that run with torque, with their safety traits."""
+        return {n: f.traits() for n, f in self.cfg.followers.items() if f.torque}
+
+    @property
     def held(self) -> list[str]:
-        """Followers with torque; they keep holding after the session unless released."""
-        return [n for n, r in self.cfg.robots.items() if r.torque]
+        """Followers that keep holding after the session unless released: torque on and
+        `unattended: holds` (core.traits)."""
+        return [n for n, t in self.torqued.items() if t.holds_unattended]
+
+    @property
+    def limp_at_end(self) -> dict[str, SafetyTraits]:
+        """What goes, or may go, limp when the session ends without release: actuated
+        inputs, and followers that do not hold unattended (or are not known to)."""
+        return {
+            **self._actuated_traits(),
+            **{n: t for n, t in self.torqued.items() if not t.holds_unattended},
+        }
+
+    def _actuated_traits(self) -> dict[str, SafetyTraits]:
+        return {
+            n: getattr(i, "safety_traits", WORST_CASE)
+            for n, i in self.cfg.inputs.items()
+            if getattr(i, "actuated", False)
+        }
+
+    def release_note(self) -> str:
+        """What the operator does before `release` turns torque off on the actuated inputs
+        and the followers."""
+        devices = {**self._actuated_traits(), **self.torqued}
+        if not devices:
+            return "nothing has torque"
+        return precautions(devices) or (
+            f"{', '.join(devices)} neither falls nor lets go without torque"
+        )
 
     def close(self, timeout: float = 15.0, *, release: bool | None = None) -> None:
         """Discard an unfinished episode, stop every node and wait for the dataflow to exit.
@@ -311,7 +344,7 @@ class Session:
                 if self.operator is not None and release is None:
                     release = self._ask_close()
                 try:
-                    if release and self.held:
+                    if release and (self.torqued or self.actuated):
                         self.client.send("release")
                     self.client.send("quit")
                 except OSError:
@@ -527,21 +560,24 @@ class Session:
         self._episode = None
 
     def _ask_close(self) -> bool:
-        """Ask the operator to support what goes limp; True releases the follower."""
+        """Tell the operator what goes limp and what to do about it (core.traits); True
+        releases the followers."""
         assert self.operator is not None
-        if not (self.actuated or self.held):
+        limp, held = self.limp_at_end, self.held
+        if not (limp or self.torqued):
             return False
         try:
-            if not self.held:
+            if not self.torqued:  # only actuated inputs, which go limp anyway
                 self.operator.prompt(
-                    f"Support the arms of {', '.join(self.actuated)}: it goes limp "
-                    "when the session ends. Press Enter to end: "
+                    f"When the session ends, {ending_note(limp)}. Press Enter to end: "
                 )
                 return False
+            # followers that do not hold are offered the release too: left enabled
+            # without commands, nothing could turn them off safely afterwards
+            keep = f"with {', '.join(held)} holding" if held else "without releasing"
             answer = self.operator.prompt(
-                f"Support the arms of {', '.join(self.actuated + self.held)}: Enter ends "
-                f"with the follower torque off; 'hold' ends with {', '.join(self.held)} "
-                "holding: "
+                f"Enter ends with the torque off ({self.release_note()}); 'hold' ends "
+                f"{keep}" + (f" ({ending_note(limp)})" if limp else "") + ": "
             )
         except (KeyboardInterrupt, EOFError):
             return False  # nobody confirmed supporting the arms
@@ -564,12 +600,12 @@ class Session:
 
     def begin_home(self) -> tuple[int, float]:
         """Send `home`; returns (send time in monotonic ns, the YAML's timeout in s)."""
-        pairs = [c for c in self.cfg.controllers.values() if c.home is not None]
-        if not pairs:
+        homes = [h for c in self.cfg.controllers.values() for h in c.homes.values()]
+        if not homes:
             raise SessionError("no controller has a home pose (home: in its YAML)")
         sent_ns = time.monotonic_ns()
         self.wait_report(self.send("home"))
-        return sent_ns, max(c.home.timeout_s for c in pairs if c.home is not None)
+        return sent_ns, max(h.timeout_s for h in homes)
 
     def home_waiting(self, sent_ns: int) -> list[str]:
         """Nodes still moving home since `sent_ns` (empty: arrived); raises SessionError
@@ -578,14 +614,14 @@ class Session:
         status = self.status()
         waiting = []
         for c in self.cfg.controllers.values():
-            if c.home is None:
+            if not c.homes:
                 continue
-            for name in (c.robot.name, *([c.source.name] if c.source else [])):
+            for name in (*c.homes, *([c.source.name] if c.source else [])):
                 item = status.get(name, {})
                 fields = item.get("fields", {})
                 fresh = item.get("t_ns", 0) > sent_ns
                 problem = fields.get("home_error") or (
-                    fields.get("error") if name in self.cfg.robots else ""
+                    fields.get("error") if name in self.cfg.followers else ""
                 )
                 if fresh and problem:
                     raise SessionError(f"{name}: home: {problem}")
@@ -606,10 +642,11 @@ class Session:
         self.send("estop")
 
     def release(self, *, confirm: bool = False) -> None:
-        """Torque off the follower after stopping; support the arms first."""
+        """Torque off the actuated inputs and the followers after stopping; first do what
+        `release_note()` says (support what falls, empty what lets go)."""
         if not confirm:
             raise HardwareError(
-                "release drops the arms; support them and pass confirm=True"
+                f"release turns torque off: {self.release_note()}; then pass confirm=True"
             )
         self.send("release")
 
@@ -670,7 +707,7 @@ class Session:
         return self.save()
 
 
-def _node_ids(cfg: ExperimentConfig) -> list[dict]:
+def _node_ids(cfg: RobotConfig) -> list[dict]:
     from .flow import build_flow
 
     return build_flow(cfg)["nodes"]

@@ -16,10 +16,15 @@ import numpy as np
 
 from ..core.checks import finite, identity, names
 from ..core.protocol import Envelope
-from ..core.source import Features
-from ..robots.base import Robot
+from ..core.source import Features, Joined
+from ..errors import ConfigError
+from ..robots.base import Follower
 
-STATE_FIELDS = ("positions", "velocities", "target")  # every robot_state carries these
+STATE_FIELDS = (
+    "positions",
+    "velocities",
+    "target",
+)  # every follower_state carries these
 
 
 @dataclass
@@ -31,12 +36,14 @@ class Estimate:
 
 class Estimator(ABC):
     kind: ClassVar[str] = "effort_estimate"
-    # robot_state fields `residual` reads besides the robot's effort signal
+    # follower_state fields `residual` reads besides the follower's effort signal
     needs: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, name: str, cfg: dict):
         self.name, self.cfg = name, cfg
-        self.robot = identity(cfg.get("robot"), f"{name}.robot")
+        if "robot" in cfg:
+            raise ConfigError(f"{name}.robot was renamed: use follower: <follower>")
+        self.follower = identity(cfg.get("follower"), f"{name}.follower")
         self.joint_names = names(cfg.get("joints"), f"{name}.joints")
         alpha = cfg.get("smoothing_alpha", 1.0)
         if not finite(alpha) or not 0 < alpha <= 1:
@@ -54,20 +61,20 @@ class Estimator(ABC):
         self.indices: list[int] = []
         self.reset()
 
-    def bind(self, robot: Robot) -> None:
-        """Check the robot this estimator reads and take its effort signal and unit."""
+    def bind(self, robot: Follower) -> None:
+        """Check the follower this estimator reads and take its effort signal and unit."""
         if robot.effort_signal is None:
             raise ValueError(
-                f"{self.name}: robot {robot.name!r} reports no effort to estimate from"
+                f"{self.name}: follower {robot.name!r} reports no effort to estimate from"
             )
         missing = set(self.joint_names) - set(robot.joint_names)
         if missing:
             raise ValueError(
-                f"{self.name}: joints {sorted(missing)} are not joints of robot {robot.name!r}"
+                f"{self.name}: joints {sorted(missing)} are not joints of follower {robot.name!r}"
             )
         unknown = set(self.needs) - set(STATE_FIELDS)
         if unknown:
-            raise ValueError(f"{self.name}: robot state has no {sorted(unknown)}")
+            raise ValueError(f"{self.name}: follower state has no {sorted(unknown)}")
         self.effort_field, self.unit = robot.effort_signal
         self.indices = [robot.joint_names.index(j) for j in self.joint_names]
 
@@ -77,7 +84,7 @@ class Estimator(ABC):
 
     @abstractmethod
     def residual(self, state: dict) -> list[float] | None:
-        """Residual per joint from a `robot_state` payload, or None when it cannot be told."""
+        """Residual per joint from a `follower_state` payload, or None when it cannot be told."""
 
     def update(self, state: dict) -> Estimate:
         raw = self.residual(state)
@@ -97,7 +104,7 @@ class Estimator(ABC):
 
     def encode(self, estimate: Estimate, robot_t_ns: int) -> dict:
         return {
-            "robot": self.robot,
+            "follower": self.follower,
             "joints": list(self.joint_names),
             "unit": self.unit,
             "residual": estimate.residual,
@@ -107,19 +114,24 @@ class Estimator(ABC):
         }
 
     def features(self, dataset_fps: float) -> Features:
-        """External effort (`-residual`, estimator unit), its validity and contact."""
-        one = {"dtype": "float32", "shape": (1,), "names": None}
-        return {
-            "observation.effort_ext": {
-                "dtype": "float32",
-                "shape": (len(self.joint_names),),
-                "names": None,
-            },
-            "observation.effort_ext.valid": one,
-            "observation.contact": one,
-        }
+        return {}  # joined with the other recorded estimators (see `joined`)
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
+        return {}
+
+    def joined(self, dataset_fps: float) -> dict[str, Joined]:
+        """External effort (`-residual`, estimator unit) per follower joint, and this
+        estimator's validity and contact."""
+        joints = tuple(f"{self.follower}.{j}" for j in self.joint_names)
+        return {
+            "observation.effort_ext": Joined(joints, unit=self.unit),
+            "observation.effort_ext.valid": Joined((self.name,)),
+            "observation.contact": Joined((self.name,)),
+        }
+
+    def joined_frame(
+        self, msg: Envelope | None, dataset_fps: float
+    ) -> dict[str, np.ndarray]:
         valid = msg is not None and bool(msg.payload.get("valid"))
         effort = (
             [-float(r) for r in msg.payload["residual"]]

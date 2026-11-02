@@ -49,22 +49,23 @@ Updating the package does not overwrite existing configuration under `.roboloom/
 With only the base dependencies, save the following as your own `main.py` and run it. It uses `MockBus` and does not save a dataset.
 
 ```python
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
-with Experiment.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+with InProcessSession.from_components(
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
+    unit="count",
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
         {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
     ],
     controller=lambda obs: [2048, 2048],
-) as experiment:
-    experiment.start_inference()
-    print(experiment.step())
-    experiment.stop_inference()
+) as session:
+    session.start_inference()
+    print(session.step())
+    session.stop_inference()
 ```
 
 ```bash

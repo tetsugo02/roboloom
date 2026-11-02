@@ -7,7 +7,6 @@
 ## Configuration YAML
 
 ```yaml
-robot_id: rakuda2
 repo_id: local/rakuda2
 output: datasets/rakuda2
 dataset_fps: 15
@@ -15,8 +14,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
@@ -27,9 +26,69 @@ options:
 
 `mode` is optional and defaults to `hardware`; `mode: mock` is also valid. The CLI's `--mock` and the Python API's `mock=` take precedence over the YAML's `mode`.
 
-Node YAML paths and `output` are relative to the configuration file's directory. With no option enabled, the output location above is `.roboloom/rakuda2/datasets/rakuda2`. Node names are used as dora IDs and as dataset feature names. Currently, each configuration has one robot and one corresponding controller.
+Node YAML paths and `output` are relative to the configuration file's directory. With no option enabled, the output location above is `.roboloom/rakuda2/datasets/rakuda2`.
+
+The only top-level keys are `repo_id`, `output`, `dataset_fps`, `mode`, the roles (`inputs`, `controllers`, `followers`, `sensors`, `estimators`), `recorder`, `session` and `options`; any other key is refused at load. The robot's name is the configuration's directory name (`rakuda2` for `.roboloom/rakuda2/`) and is also the dataset's `robot_type`.
+
+`followers` lists the devices that move on command (arms, grippers, ...). One configuration may hold several followers. Each follower needs exactly one controller that drives it.
+
+Node names are used as dora IDs and as dataset feature names. Use letters, digits, `-` and `_` only. `recorder`, `session`, `action` and `tick`, names starting with `action_` and names ending in `_status` are used by the dataflow and cannot be node names.
 
 Each node's `type` selects the implementation. `SET_...` are robot-specific unset values; execution is refused if any remain in a referenced configuration. `validate` checks the consistency of the configuration and dataflow without opening devices. It does not check that EEPROM matches the hardware, image capture, or stopping behavior.
+
+## Followers and controllers
+
+Each controller lists the followers it drives under `followers:`. Each follower is driven by exactly one controller.
+
+| Controller | Followers it drives |
+| --- | --- |
+| `joint` | Exactly one (maps the leader's joints onto one follower's joints) |
+| `policy` | Every follower, in configuration order. The recorded `action` and `observation.state` join all followers, so the policy's output has the same layout; it is split in that order and sent to each follower |
+
+A controller of several followers sends nothing until every one of them has reported its state. When any of its followers latches `FAULT` or `ESTOP`, or its state gets older than `follower_timeout_ms`, the controller stops commanding all of them. A follower without commands keeps holding its target. The controller sends no further command until it has re-aligned. A `policy` controller stops running the policy for the current episode when a follower's state gets stale. The controller's row on the screen shows why it stopped (`stopped_by`) and the followers it waits for (`waiting_state`).
+
+`feedback` (force feedback) is available only on a controller of one follower.
+
+## Units
+
+Followers and leaders (`inputs`) each declare the unit of their joint positions; there is no default. Rakuda2 uses `dynamixel_count`. A controller's `unit` must equal its leader's and follower's. Commands carry the unit too, and a follower refuses a command in another unit.
+
+The speed limit `max_speed` appears in several places, always in the follower's unit/s:
+
+| Where | What it limits |
+| --- | --- |
+| `max_speed` in the follower's `limits` (per joint) | The follower's safety check: targets beyond it are clipped. It is the last line of defence, so keep it above the controller's value |
+| A `joint` controller's `max_speed` | How far a teleoperation target may move per period |
+| A `policy` controller's `max_speed` | How far a policy target may move per period, one value per follower as `{follower: value}` (followers differ in unit) |
+| A controller's `home.max_speed` | The speed of the move to a saved pose; at most the controller's `max_speed` |
+
+`home.tolerance` (how close counts as arrived) is required, also in the follower's unit.
+
+## Behaviour without torque and when left alone
+
+Each follower model and each actuated input model (a leader that runs control laws) declares two safety-relevant traits. The `release` confirmation, the exit choices and the screen hints follow them.
+
+| Trait | Value | Meaning |
+| --- | --- | --- |
+| `torque_off` (when torque goes off: `release`, power loss) | `falls` | Gravity pulls it down; the operator supports it |
+| | `lets_go` | It stays put but lets go of what it grips (a gripper); take the object out first |
+| | `stays` | Nothing moves |
+| `unattended` (when roboloom stops writing to it: quit with holding, a crashed process, a lost cable) | `holds` | It keeps its last target |
+| | `torque_off` | It goes limp (a bus watchdog, a driver that releases on close) |
+| | `unknown` | Not established; treated like `torque_off` |
+
+| Model | `torque_off` | `unattended` |
+| --- | --- | --- |
+| Rakuda2 follower | `falls` | `holds`; `torque_off` when a group runs a current-mode law (`gravity_comp`, `impedance`, `spring`), which goes limp on close and on the watchdog. `current_position` keeps its goal position, so it holds |
+| Rakuda-mini (leader) | `falls` | `torque_off` (limp when the session ends) |
+| External bus (`InProcessSession.from_components`) | `falls` | `unknown` (the worst case, since nothing is known) |
+| PiPER follower ([in development](../contribution/piper.md)) | `falls` | `unknown` (not checked) |
+
+- "Quit with followers holding" is offered only when some follower has `unattended: holds`. The exit confirmation names the followers that do not hold and says that they go (or may go) limp. When any follower has torque, "support, release and quit" is offered even if nothing holds: a follower left enabled without commands cannot be released by roboloom after the session.
+- The `release` confirmation tells you to support the `falls` devices and to take objects out of the `lets_go` devices; `stays` devices are not named. Release is confirmed for every device.
+- When a follower is `RELEASED`, or latched `FAULT` or `ESTOP` and does not hold unattended, its screen row says what to do; `FAULT` and `ESTOP` stop writing to the follower.
+- `ESTOP` holds in place and latches, whatever the traits.
+- Only an `unattended` that the model declares `unknown` may be set in the follower YAML, to a measured value (`unattended: holds` or `torque_off`); `roboloom check-hold` ([CLI](cli.md)) measures it and writes it after confirmation. A value that contradicts the model's declaration is refused when the configuration loads.
 
 ## Launch options
 
@@ -41,7 +100,7 @@ Each node's `type` selects the implementation. `SET_...` are robot-specific unse
 | `default` | `true` enables it when nothing is specified (default `false`) |
 | `requires` | List of options enabled together with it |
 | `conflicts` | List of options that cannot be used at the same time |
-| `set` | Maps `<role>.<node>` (role one of `inputs`, `controllers`, `robots`, `sensors`, `estimators`) to a node file; `null` removes that node |
+| `set` | Maps `<role>.<node>` (role one of `inputs`, `controllers`, `followers`, `sensors`, `estimators`) to a node file; `null` removes that node |
 | `dataset` | Short name appended to the dataset name while the option is enabled |
 
 The rules are:
@@ -72,7 +131,7 @@ options:
     set:
       inputs.leader: nodes/leader_bilateral.yaml
       controllers.controller: nodes/controller_bilateral.yaml
-      robots.robot: nodes/robot_bilateral.yaml
+      followers.follower: nodes/follower_bilateral.yaml
       estimators.effort: nodes/effort.yaml
     dataset: bilateral
   policy:
@@ -104,10 +163,10 @@ The leader node's `control` selects a law per joint group, such as `free` (torqu
 !!! warning "Not verified on hardware"
     This is the path that returns the external force on the follower to the leader. Only the mock tests pass. See [Bilateral control design](../contribution/bilateral.md) for the design and the remaining stages.
 
-Add `estimators` to the configuration and reference the estimator from the controller's `feedback`. In the template, the option `bilateral` adds `estimators.effort` and replaces the leader, controller, and robot with the node files for feedback. You do not write edges; the path below follows from each node's references.
+Add `estimators` to the configuration and reference the estimator from the controller's `feedback`. In the template, the option `bilateral` adds `estimators.effort` and replaces the leader, controller, and follower with the node files for feedback. You do not write edges; the path below follows from each node's references.
 
 ```text
-leader ──sample──► controller ──command──► robot ──state──► estimator
+leader ──sample──► controller ──command──► follower ──state──► estimator
   ▲                    │  ▲                                  │
   └──── feedback ──────┘  └────────────── estimate ──────────┘
 ```
@@ -123,13 +182,13 @@ Estimator (`nodes/effort.yaml`):
 | --- | --- |
 | `type` | `none` (never estimates; for checking the path) or `model_residual` |
 | `models` | Gravity models for `model_residual` (one per arm). Their output joints together must equal `joints` exactly |
-| `robot` | Name of the robot node whose state it reads |
+| `follower` | Name of the follower node whose state it reads |
 | `joints` | Follower joints to estimate |
 | `smoothing_alpha` | Exponential moving average factor (greater than 0, at most 1; default 1 = no smoothing) |
 | `contact_on` / `contact_off` | Contact detection with hysteresis on the L1 norm of the residual. `contact_off` ≤ `contact_on`. Both default to 0, which means always in contact |
 | `record` | `true` records the estimate in the dataset (default `false`). `recorder.max_age_ms` needs an entry for this estimator |
 
-An estimator computes a per-joint residual (measured − predicted for free motion) from the effort signal the robot declares (Rakuda2: `currents_mA`, in mA). External force acts opposite to the residual.
+An estimator computes a per-joint residual (measured − predicted for free motion) from the effort signal the follower declares (Rakuda2: `currents_mA`, in mA). External force acts opposite to the residual.
 
 `model_residual` is `residual = measured current − g(q)`, where `g(q)` is a gravity model identified on the follower; no training is needed. Friction, inertia and position tracking error stay in the residual, so it is not 0 while the arm moves freely. Watch `residual_l1` (the value the contact thresholds compare) in the estimator node's status while moving the follower freely and while pushing it, and put `contact_on` between the two. Build the gravity model with the same `identify-gravity` as the leader, from a follower calibration (`calibration/follower_<side>.yaml`).
 
@@ -174,18 +233,18 @@ gate × (clip(received current, ±max_mA) − kd × velocity)
 
 The feedback current stays inside the same `max_current_mA` and EEPROM Current Limit as gravity compensation, so near the limit it is clipped. Raising the Current Limit also raises the force left on the arm if the host stops (an XC330 does not stop its current when the Bus Watchdog fires).
 
-An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One configuration records at most one estimator (a second one collides on the feature names and is refused).
+An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. Several recorded estimators are joined in configuration order; the `names` of `observation.effort_ext` are `<follower>.<joint>`, those of the other two the estimator names. Estimators with different units cannot share one vector and are refused at load.
 
-At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`Experiment`) does not handle estimators.
+At load time, roboloom checks that references exist, that the estimator and the controller use the same follower, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`InProcessSession`) does not handle estimators.
 
 ## Control rate
 
-`control_hz` in `robot.yaml` and the leader's `poll_hz` are the rates at which those nodes read and write their bus. The work of one period (reading the state, computing control laws, writing goals) must fit in the period. A higher rate makes the leader's current control and the follower's tracking finer.
+`control_hz` in `follower.yaml` and the leader's `poll_hz` are the rates at which those nodes read and write their bus. The work of one period (reading the state, computing control laws, writing goals) must fit in the period. A higher rate makes the leader's current control and the follower's tracking finer.
 
 Choose the rate as follows.
 
 1. Run `roboloom probe <port>` on each port. It shows the state read time and a rough rate limit (reading and writing take 70% of the period). `probe` never writes.
-2. Set `control_hz` and `poll_hz` and check on the `run` screen. `work … ms (max …)` on the robot and leader rows is the time one period's work takes. If the maximum stays around 70% of the period or less and `tick` matches the period, the node keeps up.
+2. Set `control_hz` and `poll_hz` and check on the `run` screen. `work … ms (max …)` on the follower and leader rows is the time one period's work takes. If the maximum stays around 70% of the period or less and `tick` matches the period, the node keeps up.
 3. If not, lower the rate.
 
 A Dynamixel bus switches to Fast Sync Read (one reply packet for all motors) at startup when every motor's firmware is v45 or later. Otherwise it keeps the plain read and prints why at startup.
@@ -218,12 +277,25 @@ There was one stall of about 120 ms during the run. Stalls of the same size also
 
 With the `record` extra, data is saved as LeRobotDataset 0.6.1. Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by zero values and validity flags. `task` is recorded in each frame.
 
+With several followers, the following features are one vector joining all followers in configuration order. Their `names` tell which follower each entry belongs to, as `<follower>.<joint>` (for example `follower.r_arm_sh_pitch1`).
+
+| Feature | Content |
+| --- | --- |
+| `observation.state` | Each follower's joint positions |
+| `observation.effort` | The effort of the followers with `record_effort: true`; followers with different units cannot be mixed |
+| `action` | The first command each follower sent in the row's interval, in the order of `observation.state` |
+| `action.valid` | 1 in rows where every follower sent a command |
+| `action.clamped` | 1 in rows where any follower limited its command |
+| `action.meta.<follower>.valid` / `clamped` / `seq` / `sent_ns` | Each follower's own: command present, limited, command number, send time |
+
+A follower that sent no command fills its part with the target it held (its state's `target`, else its position); filling with zeros would teach a policy a jump to 0. LeRobot training does not read `action.valid`, so select rows by `action.valid` when you only want valid ones. A row is final once every follower's commands have passed its interval, or after `grace_ms` (default 500 ms).
+
 You can append further episodes to the same dataset. On resume, FPS and feature compatibility are checked. Give an option that changes the recorded features a `dataset`, so it gets a dataset of its own (see "Launch options").
 
-Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_valid_rate`, and `max_interval_ms` in `recorder.quality`. Check the metrics and warnings in the save result.
+Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_valid_rate`, and `max_interval_ms` in `recorder.quality`. Check the metrics and warnings in the save result. `control_interval_ms` and `action_missing_rate` (the share of rows without a command) are per follower, and warnings name the follower.
 
 ## Managing logs and configuration
 
-Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`); the dataset name tells which options were enabled. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and the robot's per-tick state (positions, velocities, currents, target, mode) to `<robot name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs (`config.fifo`) are excluded by the generated `.roboloom/.gitignore`.
+Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`); the dataset name tells which options were enabled. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and each follower's per-tick state (positions, velocities, currents, target, mode) to `<follower name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/<follower>/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs (`config.fifo`) are excluded by the generated `.roboloom/.gitignore`.
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).
