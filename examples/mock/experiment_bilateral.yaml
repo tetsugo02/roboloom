@@ -1,0 +1,15 @@
+robot_id: rakuda-mock
+repo_id: local/rakuda-mock-bilateral
+output: ../../datasets/rakuda-mock-bilateral
+mode: mock
+dataset_fps: 10
+inputs:
+  leader: nodes/leader_bilateral.yaml
+controllers:
+  controller: nodes/controller_bilateral.yaml
+robots:
+  robot: nodes/robot.yaml
+estimators:
+  effort: nodes/effort.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml

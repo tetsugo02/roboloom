@@ -29,6 +29,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `rakuda2` / `rakuda2/experiment` | 通常 | RealSense + 左右DIGIT |
 | `rakuda2/experiment_camera` | 通常 | RealSense |
 | `rakuda2/experiment_gravity` | 重力補償付き | RealSense |
+| `rakuda2/experiment_bilateral` | 重力補償付き＋力の逆送（実機未検証） | なし |
 
 重力補償とDIGITを併用するときは，生成した `experiment_gravity.yaml` の `sensors` に次を追加します．
 
@@ -40,6 +41,24 @@ sensors:
 ```
 
 追加時には `repo_id` と `output` も，例として `local/rakuda2-gravity-digit` と `datasets/rakuda2-gravity-digit` に変更してください．画像featureが変わるため，RealSenseだけの既存データセットへは追記できません．
+
+## バイラテラル（実機未検証）
+
+`experiment_bilateral` は，followerが受けた外力をleaderへ返す組み合わせです．実機では確かめていません．模擬の試験だけを通しています．
+
+| ノード | 設定 | 内容 |
+| --- | --- | --- |
+| robot | `nodes/robot_bilateral.yaml` | 腕を電流制限つき位置制御（Operating Mode 5，`current_position`）にする．`goal_current_mA` が接触時の力の上限．`SET_FOLLOWER_ARM_GOAL_CURRENT_mA` を決め，`roboloom commission` でModeとCurrent Limitを書く |
+| leader | `nodes/leader_bilateral.yaml` | 重力補償付きleaderの腕グループに `feedback:` を足したもの |
+| controller | `nodes/controller_bilateral.yaml` | `feedback:` で推定器と返す関節（初期値は右肘1関節，小さいゲイン）を指定 |
+| estimator | `nodes/effort.yaml` | followerの外力の推定器（`model_residual`）．followerで同定した重力モデル `calibration/effort_gravity_<side>.yaml` を使う．接触の閾値は実測前の仮の値 |
+
+制約：
+
+- `goal_current_mA` は，EEPROMの `current_limit` 以下でなければ起動を拒否します．
+- Mode 5へ書き換えた後のモーターでは，通常の `nodes/robot.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission` で書き戻します．
+- `experiment_bilateral` を使うコマンドは，`commission` も含めて実験全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
+- 設定キーは [設定](../reference/configuration.md) の「力の逆送」にあります．
 
 ## 起動前の確認
 

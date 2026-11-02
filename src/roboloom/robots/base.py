@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -82,6 +82,9 @@ class Robot:
     """
 
     robot_type = "external"
+    # (robot_state field, unit) of the effort the robot measures, for effort estimators;
+    # None when it measures none
+    effort_signal: ClassVar[tuple[str, str] | None] = None
 
     def __init__(
         self,

@@ -4,6 +4,7 @@ max_age_ms:
   camera: 200
   digit_left: 200
   digit_right: 200
+  effort: 200  # experiment_bilateral: estimator with record: true
 grace_ms: 500
 image_writer_threads: 4
 streaming_encoding: false

@@ -129,3 +129,19 @@ home:
 - 移動中は腕から手を離してください．`estop`・`release`・`quit` では今までどおりleaderが脱力します．
 
 模擬のバスとdataflowで動作を確かめています．実機での動きは未検証です．
+
+## 力の逆送を受ける（実機未検証）
+
+電流制御のグループ（`gravity_comp`，`impedance`）に `feedback:` を書くと，そのグループの関節は，controllerが返すfollowerの外力を電流として受け取ります．実機では確かめていません．
+
+```yaml
+- group: right_arm
+  law: gravity_comp
+  # ... 既存の gravity_model, tuning, range など
+  feedback:
+    max_mA: 20
+    ramp_s: 0.3
+    kd: 0.0
+```
+
+どの関節に返すかは，controllerの `feedback.gain` で選びます．逆送は重力補償などの出力に足してから `max_current_mA` で制限し，gateは `ramp_s` かけて開閉します．estop・release・quitでは即座に0になります．キーの意味と安全の仕組みは [設定](../reference/configuration.md) の「力の逆送」，Rakuda2での組み合わせは [Rakuda2](../robots/rakuda2.md) の「バイラテラル」を参照してください．

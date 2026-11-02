@@ -17,6 +17,7 @@ from .spec import (
 
 class RakudaFollower(Robot):
     robot_type = "rakuda2"
+    effort_signal = ("currents_mA", "mA")
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg, JOINTS, UNIT)

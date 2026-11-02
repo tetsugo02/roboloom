@@ -1,0 +1,33 @@
+# Follower effort estimator for experiment_bilateral.yaml. NOT verified on hardware.
+# model_residual: measured current - g(q), with g identified on the follower
+#   (calibration/follower_<side>.yaml -> roboloom identify-gravity -> effort_gravity_<side>.yaml).
+#   Friction and inertia stay in the residual, so it is non-zero while the arm moves freely.
+# contact_on / contact_off (mA, L1 norm over `joints`): feedback opens above contact_on and
+#   closes below contact_off. The values below are a first guess, NOT measured: watch
+#   residual_l1 in this node's status while moving the follower freely and while pushing it,
+#   and set contact_on between the two (contact_off about half).
+# record: true writes observation.effort_ext and observation.contact into the dataset
+#   (recorder.yaml max_age_ms needs `effort`).
+# Change type to none to check the dataflow without models (feedback stays closed).
+type: model_residual
+robot: robot
+models:
+- ../calibration/effort_gravity_right.yaml
+- ../calibration/effort_gravity_left.yaml
+joints:
+- r_arm_sh_pitch1
+- r_arm_sh_roll
+- r_arm_sh_pitch2
+- r_arm_el_yaw
+- r_arm_wr_roll
+- r_arm_wr_yaw
+- l_arm_sh_pitch1
+- l_arm_sh_roll
+- l_arm_sh_pitch2
+- l_arm_el_yaw
+- l_arm_wr_roll
+- l_arm_wr_yaw
+smoothing_alpha: 0.2
+contact_on: 300
+contact_off: 150
+record: true

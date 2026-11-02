@@ -9,7 +9,7 @@ Below, commands are abbreviated as `roboloom`. In a uv environment, prefix them 
 | `validate <experiment>` | Validate the configuration and dataflow without opening devices |
 | `calibrate-joints <calibration>` | Save measured counts at the URDF zero pose to the calibration |
 | `measure-travel <calibration> --out <path>` | Save the range of motion moved by hand |
-| `identify-gravity <calibration> --out <path> --collect --hardware` | Measure holding current and identify the gravity model |
+| `identify-gravity <calibration> --out <path> --collect --hardware` | Measure holding current and identify the gravity model (leader gravity compensation, the follower `model_residual` estimator) |
 | `capture-pose <experiment> <name> --hardware` | Save the follower's current pose as `poses/<name>.yaml` (moves nothing; `--force` replaces) |
 | `commission <experiment> <node> --hardware` | Write EEPROM after a diff and operator confirmation, then read it back |
 | `tune-gravity <experiment> leader <group> --hardware` | Interactively tune gain and hold |

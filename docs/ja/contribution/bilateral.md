@@ -1,7 +1,7 @@
 # バイラテラル制御の設計（FACTR 2）
 
-!!! warning "未実装の設計案"
-    このページは実装の手順をまとめた設計案です．roboloomはまだ力のフィードバックを実装していません．ここにある設定キー・コマンド・ノード名は提案で，現行のroboloomでは使えません．実機での動作も確かめていません．
+!!! warning "一部だけ実装した設計案"
+    このページは実装の手順をまとめた設計案です．§7の段階1〜5を実装し，模擬の試験を通しました．実機での動作は確かめていません．使える設定は [設定](../reference/configuration.md) の「力の逆送」にあります．段階6以降の設定キー・コマンド・ノード名（`sensor`，`next`，グリッパーの逆送など）は提案で，現行のroboloomでは使えません．
 
 作成日：2026-10-27．調査対象は次のとおりです．コードは読んだだけで，実行していません．
 
@@ -164,7 +164,7 @@ leader ──sample──► controller ──command──► robot ──state
 
 - 関節の対応と符号は，controllerの `joints` だけに書きます．逆送用に別の対応表を作りません．
 - 逆送の指令は，robotへの指令と同じく，絶対時刻の期限を持ちます（`make_command` と同じ形）．
-- 経路は循環します（leader → controller → robot → estimator → controller → leader）．dora-rsのdataflowで循環する辺が使えるかは，段階1で模擬で確かめます．
+- 経路は循環します（leader → controller → robot → estimator → controller → leader）．dora-rsのdataflowで循環する辺が使えることは，段階1で模擬で確かめました（controllerとrobotの間にも，以前から循環があります）．
 
 ### 実験の書き方
 
@@ -250,19 +250,22 @@ feedback:
   feedback:
     max_mA: 40                    # 逆送分だけの上限．合計は従来どおり max_current_mA で制限
     ramp_s: 0.3                   # gateの開閉にかける時間
-    contact_on: 30                # |residual| のL1ノルム．ヒステリシス
-    contact_off: 15
     kd: 0.0                       # 接触中の追加の減衰
 ```
+
+実装では，接触の判定（`contact_on` / `contact_off`）をleaderではなく推定器に置きました．記録する `observation.contact` とgateに使う判定を同じ値にし，leaderを機体に依存させないためです．controllerは「推定が有効，接触中，followerが `ACTIVE`，`following`」のときだけgateを希望し，leaderは期限・単位・関節を確かめてgateを `ramp_s` で追従させます．
 
 `nodes/effort.yaml`：
 
 ```yaml
-type: model_residual              # none | sensor | model_residual | next
+type: model_residual              # none | sensor | model_residual | next（実装済みは none と model_residual）
 robot: robot
 joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
-model: ../calibration/effort_gravity_right.yaml
+models: [../calibration/effort_gravity_right.yaml]   # 実装では腕ごとのモデルのリスト
 smoothing_alpha: 0.2
+contact_on: 30                    # |residual| のL1ノルム．ヒステリシス（実装では推定器に置く）
+contact_off: 15
+record: true                      # observation.effort_ext / observation.contact を記録
 ```
 
 ### 推定器の契約
@@ -271,18 +274,22 @@ smoothing_alpha: 0.2
 
 ```python
 class EffortEstimator(Protocol):
-    robot: str                        # 参照するrobotノード
-    joint_names: tuple[str, ...]      # follower関節
-    unit: str                         # "mA" や "Nm"
-    needs: tuple[str, ...]            # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
+    robot: str  # 参照するrobotノード
+    joint_names: tuple[str, ...]  # follower関節
+    unit: str  # "mA" や "Nm"
+    needs: tuple[
+        str, ...
+    ]  # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
+
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...   # robot_state の payload
+    def update(self, state: dict, t_ns: int) -> Estimate: ...  # robot_state の payload
+
 
 @dataclass
 class Estimate:
-    residual: list[float]             # 実測 − 自由運動の予測
+    residual: list[float]  # 実測 − 自由運動の予測
     contact: bool
-    valid: bool                       # 履歴が足りない，状態が古い，などで False
+    valid: bool  # 履歴が足りない，状態が古い，などで False
 ```
 
 | `type` | 中身 | 用途 |
@@ -343,6 +350,8 @@ manifest（`model.yaml`）に書く内容：
 ## 7．実装の手順
 
 各段階でコミットし，模擬の試験を通してから実機に移ります．実機での確認は利用者が行います．
+
+実装の状況（2026-11-02）：段階1〜5は実装し，模擬の試験（`tests/test_bilateral.py`．dora上で，推定 → gate → leaderの電流までの全経路を含む）を通しました．段階3〜5の実機の確認は未実施です．段階2のトレースは `<robot名>_trace.npz`，段階4の同定は既存の `identify-gravity` をfollowerのcalibration（`calibration/follower_<side>.yaml`）で使います．
 
 | 段階 | 内容 | 完了の条件 |
 | --- | --- | --- |

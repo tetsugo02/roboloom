@@ -29,6 +29,7 @@ from ..drivers.base import Health, JointState, read_health, read_state
 from ..drivers.dynamixel_table import OPERATING_MODES
 from ..dynamics.base import GravityModel, load_gravity_model
 from . import LAWS
+from .feedback import FeedbackCommand, FeedbackTerm
 from .homing import Trajectory
 from .laws import ControlLaw, CurrentLaw, CurrentPosition, Position, _per_joint
 from .trace import Trace
@@ -175,6 +176,17 @@ def check_hardware(
             raise ValueError(
                 f"{owner}.control.{g.name}: {g.law} is not validated on hardware; set allow_unvalidated: true to override"
             )
+        if issubclass(cls, CurrentPosition):
+            # Goal Current above the EEPROM Current Limit is refused by the motor at run time
+            goals = _per_joint(
+                g.cfg.get("goal_current_mA"), len(g.joints), f"{g.name}.goal_current_mA"
+            )
+            for joint, goal in zip(g.joints, goals, strict=True):
+                eeprom = current_limits_mA.get(joint)
+                if eeprom is not None and goal > eeprom:
+                    raise ValueError(
+                        f"{owner}: {joint} goal_current_mA {goal} exceeds registers.current_limit {eeprom}"
+                    )
         if cls.current_mode:
             if not cfg.get("bus_watchdog_ms"):
                 raise ValueError(
@@ -183,6 +195,16 @@ def check_hardware(
             per_joint = _per_joint(
                 g.cfg.get("max_current_mA"), len(g.joints), f"{g.name}.max_current_mA"
             )
+            feedback = g.cfg.get("feedback")
+            if isinstance(feedback, dict) and feedback.get("max_mA") is not None:
+                fed = _per_joint(
+                    feedback["max_mA"], len(g.joints), f"{g.name}.feedback.max_mA"
+                )
+                for joint, extra, allowed in zip(g.joints, fed, per_joint, strict=True):
+                    if extra > allowed:
+                        raise ValueError(
+                            f"{owner}: {joint} feedback.max_mA {extra} exceeds max_current_mA {allowed}"
+                        )
             for joint, allowed in zip(g.joints, per_joint, strict=True):
                 eeprom = current_limits_mA.get(joint)
                 if eeprom is None or eeprom > allowed:
@@ -263,6 +285,35 @@ class JointDevice:
         self.last_watchdog_ns: int | None = None
         self.home: HomeRun | None = None
         self.home_result: dict = {}  # how the last move ended, shown until start or home
+        self.feedback = (
+            FeedbackCommand()
+        )  # latest from the controller (actuated leader)
+
+    def set_feedback(self, effort_mA: dict[int, float], gate: bool, deadline_ns: int):
+        """The controller's latest force feedback (device joint index -> mA), handed to the
+        laws that take it; they apply it on the next control ticks."""
+        self.feedback = FeedbackCommand(dict(effort_mA), gate, deadline_ns)
+        for term in self._feedback_terms():
+            term.set(self.feedback)
+
+    def _feedback_terms(self) -> list[FeedbackTerm]:
+        return [
+            term
+            for law in self.laws
+            if (term := getattr(law, "feedback", None)) is not None
+        ]
+
+    def feedback_status(self) -> dict:
+        """Gate (0..1) and the current each feedback joint received last tick (mA)."""
+        terms = self._feedback_terms()
+        return {
+            "gate": round(max((t.gate for t in terms), default=0.0), 2),
+            "mA": {
+                self.joint_names[i]: round(v, 1)
+                for t in terms
+                for i, v in sorted(t.last_mA.items())
+            },
+        }
 
     def _indices(self, predicate) -> list[int]:
         return sorted(i for law in self.laws if predicate(law) for i in law.joints)
@@ -302,6 +353,8 @@ class JointDevice:
                 )
         for law in self.laws:
             law.reset(state)
+        for term in self._feedback_terms():
+            term.reset()
         self.enabled = True
         self.last_ns = None
         try:
@@ -403,6 +456,8 @@ class JointDevice:
                     anchor = getattr(law, "anchor", None)
                     if anchor is not None:
                         anchor.update({i: self.state.positions[i] for i in law.joints})
+            for term in self._feedback_terms():
+                term.advance(now, dt)
             for law in self.laws:
                 goals = law.compute(self.state, target, dt)
                 positions.update(goals.positions)
@@ -420,7 +475,10 @@ class JointDevice:
                     for law in self.laws
                     for i, v in getattr(law, "model_mA", {}).items()
                 }
-                self.trace.add(now, self.state, model, currents)
+                fed = {
+                    i: v for t in self._feedback_terms() for i, v in t.last_mA.items()
+                }
+                self.trace.add(now, self.state, model, currents, fed)
             if currents:
                 self.check_watchdog(now)
                 keys = sorted(currents)
@@ -521,7 +579,12 @@ class JointDevice:
             return dict(self.home_result)
         now = time.monotonic_ns() if now_ns is None else now_ns
         progress = run.trajectory.progress((now - run.since_ns) / 1e9)
-        out: dict = {"home": run.name, "home_state": "moving"}
+        # home_since_ns: when this move began, so a waiter tells it from an earlier one
+        out: dict = {
+            "home": run.name,
+            "home_state": "moving",
+            "home_since_ns": run.since_ns,
+        }
         out["home_progress"] = round(progress, 2)
         if run.skipped:
             out["home_skipped"] = run.skipped
@@ -539,7 +602,11 @@ class JointDevice:
             for i, g in zip(run.joints, run.trajectory.goal, strict=True)
             if abs(self.state.positions[i] - g) > run.tolerance
         }
-        result: dict = {"home": run.name, "home_state": "short" if far else "reached"}
+        result: dict = {
+            "home": run.name,
+            "home_state": "short" if far else "reached",
+            "home_since_ns": run.since_ns,
+        }
         if far:
             result["home_far"] = far
         if run.skipped:
@@ -569,6 +636,8 @@ class JointDevice:
         """Zero current and torque off on current-mode joints; other joints keep their goals."""
         current = self._indices(lambda law: law.current_mode)
         self.home = None
+        for term in self._feedback_terms():
+            term.reset()
         if not current:
             return
         self.enabled = False

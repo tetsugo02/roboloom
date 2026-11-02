@@ -52,6 +52,7 @@ def make_command(
 class FollowerSafety:
     """Checks every write at the bus boundary."""
 
+    MODES = ("IDLE", "HOLD", "ACTIVE", "HOMING", "FAULT", "ESTOP", "RELEASED")
     LATCHED = ("FAULT", "ESTOP", "RELEASED")
 
     def __init__(self, cfg: dict, bus):

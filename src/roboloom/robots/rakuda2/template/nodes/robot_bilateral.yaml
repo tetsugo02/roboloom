@@ -1,0 +1,196 @@
+# Follower for bilateral teleoperation (experiment_bilateral.yaml): the same as robot.yaml,
+# but the arms run current-based position control (Operating Mode 5), so a push or a
+# collision meets at most goal_current_mA. NOT verified on hardware.
+# Before the first run: choose SET_FOLLOWER_ARM_GOAL_CURRENT_mA (mA, the force limit of every
+#   arm joint; replace with per-joint values under registers.current_limit and goal_current_mA
+#   to differ), then `roboloom commission rakuda2/experiment_bilateral robot --hardware`
+#   writes Operating Mode and Current Limit. Goal current may not exceed the Current Limit.
+# Operating Mode follows from `control` (registers.operating_mode is not listed).
+# Fill from `roboloom probe <port>` (see ../README.md). Re-run probe after any motor change.
+# registers: EEPROM values the node verifies at startup and refuses to run on mismatch.
+# Fill them from `roboloom probe`; current_limit in mA, return_delay in microseconds.
+# limits: min/max are only the EEPROM bounds for now (no extra protection); narrow them to the
+#   measured safe travel of each joint before unattended use.
+# limits: software range in counts (inside the EEPROM limits), max_speed counts/s (soft clamp;
+#   keep it above the controller's max_speed_counts_per_s so it only catches real overspeed),
+# max_jump counts (hard reject). Measure the range on this robot; do not copy the mock values.
+# health.max_current_mA: FAULT before the motor's own overload shutdown; validate on hardware.
+# torque: set false for the first run to record states and sensors without moving the follower.
+# bus_watchdog_ms: leave null until the watchdog behaviour is bench-tested on these motors.
+type: rakuda2_follower
+port: SET_FOLLOWER_PORT  # /dev/serial/by-id/... of the follower U2D2
+motor_ids:
+- 27
+- 28
+- 29
+- 1
+- 3
+- 5
+- 7
+- 9
+- 11
+- 31
+- 2
+- 4
+- 6
+- 8
+- 10
+- 12
+- 30
+# control_hz: 120 Hz verified on Rakuda2 (2026-10-27: work max 6.1 ms of 8.3 ms). Needs the FTDI
+#   latency_timer at 1 ms and firmware v45+ (Fast Sync Read); if `roboloom probe` shows a lower
+#   limit, lower it (e.g. 60) together with the leader poll_hz. Docs: Reference > Configuration.
+control_hz: 120
+torque: true
+record_effort: true
+bus_watchdog_ms: null
+registers:
+  drive_mode:
+    default: 0
+    r_arm_grip: 5
+    l_arm_grip: 5
+  homing_offset:
+    default: 0  # add per-joint offsets from `roboloom probe`
+  current_limit:
+    r_arm_sh_pitch1: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    r_arm_sh_roll: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    r_arm_sh_pitch2: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    r_arm_el_yaw: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    r_arm_wr_roll: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    r_arm_wr_yaw: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    l_arm_sh_pitch1: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    l_arm_sh_roll: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    l_arm_sh_pitch2: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    l_arm_el_yaw: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    l_arm_wr_roll: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    l_arm_wr_yaw: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+    r_arm_grip: 54
+    l_arm_grip: 54
+  return_delay:
+    default: 0
+  shutdown:
+    default: 52
+health:
+  every_ticks: 10
+  max_temperature_c: 70
+  over_current_s: 2.0
+  max_current_mA:
+  - 3500
+  - 2000
+  - 2000
+  - 3500
+  - 3500
+  - 2000
+  - 2000
+  - 2000
+  - 2000
+  - 400
+  - 3500
+  - 3500
+  - 2000
+  - 2000
+  - 2000
+  - 2000
+  - 400
+limits:
+- name: torso_yaw
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: head_yaw
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: head_pitch
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_sh_pitch1
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_sh_roll
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_sh_pitch2
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_el_yaw
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_wr_roll
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_wr_yaw
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: r_arm_grip
+  min: 0
+  max: 2600
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_sh_pitch1
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_sh_roll
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_sh_pitch2
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_el_yaw
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_wr_roll
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_wr_yaw
+  min: 0
+  max: 4095
+  max_speed: 3072
+  max_jump: 300
+- name: l_arm_grip
+  min: 0
+  max: 2600
+  max_speed: 3072
+  max_jump: 300
+control:
+- group: body
+  law: position
+  joints: [torso_yaw, head_yaw, head_pitch]
+- group: right_arm
+  law: current_position
+  joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
+  goal_current_mA: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+- group: left_arm
+  law: current_position
+  joints: [l_arm_sh_pitch1, l_arm_sh_roll, l_arm_sh_pitch2, l_arm_el_yaw, l_arm_wr_roll, l_arm_wr_yaw]
+  goal_current_mA: SET_FOLLOWER_ARM_GOAL_CURRENT_mA
+- group: grippers
+  law: current_position
+  joints: [r_arm_grip, l_arm_grip]
+  goal_current_mA: 54

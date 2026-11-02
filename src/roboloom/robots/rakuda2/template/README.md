@@ -140,6 +140,40 @@ dataset features change. To finish an operator-screen run: `stop`, `save` or `di
 support the leader and follower arms, `quit`, then select Hold or supported Release.
 Cancel is initially selected, so Enter alone cancels.
 
+## Bilateral teleoperation (not verified)
+
+`experiment_bilateral.yaml` returns the external force on the follower to the leader. It
+is **not verified on hardware**; check every step with the arms supported. Files:
+
+| file | what |
+| --- | --- |
+| `nodes/robot_bilateral.yaml` | follower arms in current-based position control (Mode 5): set `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` |
+| `nodes/leader_bilateral.yaml` | `leader_gravity.yaml` with `feedback:` on the arm groups (needs the gravity steps above) |
+| `nodes/controller_bilateral.yaml` | `controller.yaml` with `feedback:` (one joint, small gain) |
+| `nodes/effort.yaml` | the follower effort estimator (`model_residual`: measured current - g(q)) |
+| `calibration/follower_<side>.yaml` | joint map for identifying the follower's g(q) |
+
+1. Identify the follower's gravity model per arm (follower node stopped, arm supported):
+   `uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml`, set
+   `confirmed: true` after checking the map, then
+   `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware`
+   (same for left). This works on the motors as `nodes/robot.yaml` commissioned them
+   (position mode). Do it first: every command on `experiment_bilateral`, `commission`
+   included, loads `nodes/effort.yaml` and stops while `effort_gravity_<side>.yaml` is missing.
+2. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/robot_bilateral.yaml`, then write
+   Operating Mode 5 and the Current Limit: `uv run roboloom commission rakuda2/experiment_bilateral robot --hardware`.
+   `nodes/robot.yaml` (Mode 3) refuses to start on these motors until you commission it back.
+3. `uv run roboloom run rakuda2/experiment_bilateral --hardware`: the follower should track and
+   hold as before, and stop pushing at the goal current when it meets an obstacle. Watch
+   `residual_l1` of the `effort` node while moving freely and while pushing, then set
+   `contact_on` / `contact_off` in `nodes/effort.yaml` between the two.
+4. Check the feedback on one joint: `nodes/controller_bilateral.yaml` returns only
+   `r_arm_el_yaw` with gain 0.05. Push the follower's right elbow while following: the
+   leader's `feedback` status should show `gate` rising to 1 and a small `mA` on the elbow,
+   and the leader elbow should be pushed the same way as the follower. If it pushes the
+   other way, stop (`estop`) and report it; do not raise the gain or add joints before the
+   direction is right. `feedback.max_mA` in `nodes/leader_bilateral.yaml` caps it.
+
 ## Inference
 
 8. `uv run roboloom infer rakuda2/experiment_policy --seconds 20 --hardware` first runs the

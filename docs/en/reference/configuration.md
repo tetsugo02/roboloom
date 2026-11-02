@@ -34,6 +34,85 @@ Each node's `type` selects the implementation. `SET_...` are robot-specific unse
 
 The leader node's `control` selects a law per joint group, such as `free` (torque off), `position` (holds the torque-enable pose on a leader), `spring`, or `gravity_comp`. Specify every joint exactly once. The `joint` controller's `couplings` (default `[]`) is a list of `{joint, source, scale, reference}` (optionally `lead_ms`) entries that add another follower joint's measured displacement from `reference` to a target. These settings are independent. See the [Leader configuration examples](../controllers/leader.md).
 
+## Force feedback (not verified on hardware)
+
+!!! warning "Not verified on hardware"
+    This is the path that returns the external force on the follower to the leader. Only the mock tests pass. See [Bilateral control design](../contribution/bilateral.md) for the design and the remaining stages.
+
+Add `estimators` to the experiment YAML and reference the estimator from the controller's `feedback`. You do not write edges; the path below follows from each node's references.
+
+```text
+leader ──sample──► controller ──command──► robot ──state──► estimator
+  ▲                    │  ▲                                  │
+  └──── feedback ──────┘  └────────────── estimate ──────────┘
+```
+
+```yaml
+estimators:
+  effort: nodes/effort.yaml
+```
+
+Estimator (`nodes/effort.yaml`):
+
+| Key | Meaning |
+| --- | --- |
+| `type` | `none` (never estimates; for checking the path) or `model_residual` |
+| `models` | Gravity models for `model_residual` (one per arm). Their output joints together must equal `joints` exactly |
+| `robot` | Name of the robot node whose state it reads |
+| `joints` | Follower joints to estimate |
+| `smoothing_alpha` | Exponential moving average factor (greater than 0, at most 1; default 1 = no smoothing) |
+| `contact_on` / `contact_off` | Contact detection with hysteresis on the L1 norm of the residual. `contact_off` ≤ `contact_on`. Both default to 0, which means always in contact |
+| `record` | `true` records the estimate in the dataset (default `false`). `recorder.max_age_ms` needs an entry for this estimator |
+
+An estimator computes a per-joint residual (measured − predicted for free motion) from the effort signal the robot declares (Rakuda2: `currents_mA`, in mA). External force acts opposite to the residual.
+
+`model_residual` is `residual = measured current − g(q)`, where `g(q)` is a gravity model identified on the follower; no training is needed. Friction, inertia and position tracking error stay in the residual, so it is not 0 while the arm moves freely. Watch `residual_l1` (the value the contact thresholds compare) in the estimator node's status while moving the follower freely and while pushing it, and put `contact_on` between the two. Build the gravity model with the same `identify-gravity` as the leader, from a follower calibration (`calibration/follower_<side>.yaml`).
+
+```bash
+uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml
+uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml \
+    --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect --hardware
+```
+
+Because the follower arm mixes XM540 and XM430 motors, each joint is identified separately (`shared_parameters: false`), which needs more poses than the leader. Stop the follower node during identification.
+
+The controller's `feedback`:
+
+```yaml
+feedback:
+  estimator: effort
+  deadline_ms: 100
+  unit: mA/mA          # leader unit / estimator unit
+  gain:                # follower joint name -> gain (0 or more)
+    r_arm_el_yaw: 0.1
+```
+
+The current sent to the leader is `−gain × sign × residual` (`sign` is the sign of the `joints` mapping). The controller asks for the feedback to be applied (gate) only while the estimate is valid and in contact, the follower is `ACTIVE`, and the controller is `following`. The deadline is `deadline_ms` after the follower state the estimate came from. An estimate that arrives after that deadline is not sent, and the controller status shows the reason in `feedback_error`. The leader accepts it only on joints of current-mode groups (`gravity_comp`, `impedance`) that have `feedback:`. Position-mode groups and `free` cannot have it.
+
+```yaml
+- group: right_arm
+  law: gravity_comp
+  # ...
+  feedback:
+    max_mA: 20     # limit of the feedback alone (a per-joint list also works)
+    ramp_s: 0.3    # time the gate takes to open or close (default 0.3)
+    kd: 0.0        # damping added while the feedback is on, mA/(count/s) (default 0)
+```
+
+Every tick, the leader adds the following to the law's output, then clips the sum at `max_current_mA`.
+
+```text
+gate × (clip(received current, ±max_mA) − kd × velocity)
+```
+
+`gate` is a value from 0 to 1. It moves toward 1 over `ramp_s` while the controller asks for the feedback and the message is within its deadline (`deadline_ms`), and toward 0 otherwise. It never jumps. Estop, release, quit, going limp, and a detected runaway set it to 0 at once. Joints that take feedback are checked for runaway (`max_velocity`, out of range) even with gravity gain 0. `tune-gravity` and `gravity-check` run without feedback. On hardware, roboloom checks `max_mA` ≤ `max_current_mA`. The leader status shows `gate`, the feedback current per joint (`mA`) and the number received under `feedback`; the trace (`<leader name>_trace.npz`) keeps it as `feedback_mA`.
+
+The feedback current stays inside the same `max_current_mA` and EEPROM Current Limit as gravity compensation, so near the limit it is clipped. Raising the Current Limit also raises the force left on the arm if the host stops (an XC330 does not stop its current when the Bus Watchdog fires).
+
+An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One experiment records at most one estimator (a second one collides on the feature names and is refused).
+
+At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`Experiment`) does not handle estimators.
+
 ## Control rate
 
 `control_hz` in `robot.yaml` and the leader's `poll_hz` are the rates at which those nodes read and write their bus. The work of one period (reading the state, computing control laws, writing goals) must fit in the period. A higher rate makes the leader's current control and the follower's tracking finer.
@@ -80,6 +159,6 @@ Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_
 
 ## Managing logs and configuration
 
-Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
+Logs are placed in `logs/<experiment name>-<time>/` next to the experiment file. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and the robot's per-tick state (positions, velocities, currents, target, mode) to `<robot name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs are excluded by the generated `.roboloom/.gitignore`.
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).

@@ -12,6 +12,7 @@ from ..inputs.base import InputDevice, JointInput
 from ..robots.base import Robot
 from .base import Controller
 from .coupling import JointCouplings
+from .feedback import FeedbackMap
 
 
 class JointController(Controller):
@@ -67,6 +68,8 @@ class JointController(Controller):
             robot,
             cfg["max_speed_counts_per_s"],
         )
+        if "feedback" in cfg:
+            self.feedback = FeedbackMap(cfg["feedback"], name, mapping)
         self.last_seq = -1
         self.last_boot: str | None = None
         self.last_target: list[float] | None = None
@@ -99,6 +102,10 @@ class JointController(Controller):
                 self.worst[0],
                 round(self.worst[1], 1),
             )
+        if self.feedback is not None:
+            out["feedback_gate"] = self.feedback.gate
+            if self.feedback.error:
+                out["feedback_error"] = self.feedback.error
         return out
 
     def update(

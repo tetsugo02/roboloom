@@ -14,11 +14,12 @@ from ..control.device import (
     JointDevice,
     build_laws,
     check_hardware,
+    law_class,
     parse_groups,
 )
 from ..control.homing import HomeSpec
 from ..control.trace import Trace
-from ..core.checks import names, positions, positive
+from ..core.checks import finite, names, positions, positive
 from ..core.protocol import Envelope
 from ..core.source import Features, Reader, Sample, Source
 from ..robots.base import RobotBus
@@ -56,11 +57,17 @@ class ActuatedReader:
     expires into HOLD.
     """
 
-    def __init__(self, device: JointDevice):
+    def __init__(
+        self, device: JointDevice, feedback_units: dict[str, str] | None = None
+    ):
         self.device = device
         self.home_goal: dict[str, float] | None = None  # leader pose of the pair's home
         self.home_spec: HomeSpec | None = None
         self.home_error = ""
+        # joints that take force feedback -> unit (see JointInput.feedback_units)
+        self.feedback_units = dict(feedback_units or {})
+        self.feedback_received = 0
+        self.feedback_rejected = ""
         device.read_state()
         device.enable_torque()
 
@@ -96,6 +103,33 @@ class ActuatedReader:
                 except (RuntimeError, ValueError, ConnectionError) as exc:
                     self.home_error = str(exc)
 
+    def on_feedback(self, msg: Envelope) -> None:
+        """The controller's force feedback (`roboloom.controllers.feedback`). A message
+        naming joints or a unit this leader does not take is dropped, and the status says why."""
+        payload = msg.payload
+        joints, effort = payload.get("joints"), payload.get("effort")
+        problem = ""
+        if msg.kind != "feedback":
+            problem = f"unexpected message kind {msg.kind!r}"
+        elif not isinstance(joints, list) or not isinstance(effort, list):
+            problem = "feedback needs joints and effort lists"
+        elif len(joints) != len(effort) or not all(finite(e) for e in effort):
+            problem = "feedback effort must be one finite value per joint"
+        elif not set(joints) <= set(self.feedback_units):
+            problem = f"no feedback configured for {sorted(set(joints) - set(self.feedback_units))}"
+        elif any(payload.get("unit") != self.feedback_units[j] for j in joints):
+            problem = f"feedback unit {payload.get('unit')!r} does not match"
+        if problem or joints is None or effort is None:
+            self.feedback_rejected = problem
+            return
+        index = {name: i for i, name in enumerate(self.device.joint_names)}
+        self.device.set_feedback(
+            {index[j]: float(e) for j, e in zip(joints, effort, strict=True)},
+            bool(payload.get("gate")),
+            int(payload.get("deadline_ns", 0)),
+        )
+        self.feedback_received += 1
+
     def start_trace(self, path: str | Path) -> None:
         """Record every control tick; written on close (see `roboloom.control.trace`)."""
         self.device.trace = Trace(path, self.device.joint_names)
@@ -104,9 +138,26 @@ class ActuatedReader:
         """Sent and measured current (mA) of the joints a law is pushing, for the screen."""
         state = self.device.state
         measured = (state.currents_mA if state else None) or []
+        feedback = (
+            {
+                "feedback": {
+                    "wanted": self.device.feedback.gate,
+                    "received": self.feedback_received,
+                    **self.device.feedback_status(),
+                },
+                **(
+                    {"feedback_rejected": self.feedback_rejected}
+                    if self.feedback_rejected
+                    else {}
+                ),
+            }
+            if self.feedback_units
+            else {}
+        )
         return {
             **self.device.home_status(),
             **({"home_error": self.home_error} if self.home_error else {}),
+            **feedback,
             "current_mA": {
                 self.device.joint_names[i]: [
                     round(v),
@@ -156,10 +207,21 @@ class JointInput(InputDevice):
         )
         if self.control:
             build_laws(self.control, self.joint_names, cfg.get("__dir__"))
+            for g in self.control:
+                if "feedback" in g.cfg and not law_class(g.law).current_mode:
+                    raise ValueError(
+                        f"{name}.control.{g.name}: feedback needs a current-mode law, not {g.law}"
+                    )
 
     @property
     def actuated(self) -> bool:
         return bool(self.control) and any(g.law != "free" for g in self.control or [])
+
+    def feedback_units(self) -> dict[str, str]:
+        """Joints that take force feedback (current-mode groups with `feedback:`) -> unit."""
+        return {
+            j: "mA" for g in self.control or [] if "feedback" in g.cfg for j in g.joints
+        }
 
     def open_bus(self, mock: bool) -> RobotBus:
         raise RuntimeError(f"{self.name}: no bus driver; pass a reader instead")
@@ -183,7 +245,7 @@ class JointInput(InputDevice):
                 self.name,
                 self.cfg.get("bus_watchdog_ms"),
             )
-            return ActuatedReader(device)
+            return ActuatedReader(device, self.feedback_units())
         except BaseException:
             bus.close()
             raise

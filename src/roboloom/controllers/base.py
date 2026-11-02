@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import ClassVar
 
 from ..control.homing import HomeSpec
 from ..core.checks import positive
 from ..core.protocol import Envelope, Publisher
+from ..estimators.base import Estimator
 from ..inputs.base import InputDevice
 from ..robots.base import Robot
 from ..robots.safety import make_command
+from .feedback import FeedbackMap
 
 
 class Controller(ABC):
@@ -39,6 +42,25 @@ class Controller(ABC):
         self.publisher = Publisher(name)
         # the saved pose `home` moves this pair to (leader and robot), if configured
         self.home: HomeSpec | None = None
+        # force feedback to the input (`feedback:`), for controllers that support it
+        self.feedback: FeedbackMap | None = None
+
+    def bind_feedback(self, estimators: Mapping[str, Estimator]) -> None:
+        """Connect `feedback:` to its estimator and check the input takes it."""
+        if self.feedback is None:
+            if "feedback" in self.cfg:
+                raise ValueError(
+                    f"{self.name}: {type(self).__name__} cannot send feedback"
+                )
+            return
+        estimator = estimators.get(self.feedback.estimator_name)
+        if estimator is None:
+            raise ValueError(
+                f"{self.name}.feedback.estimator: no estimator "
+                f"{self.feedback.estimator_name!r} in the experiment"
+            )
+        units = getattr(self.source, "feedback_units", None)
+        self.feedback.bind(estimator, self.robot, units() if units is not None else {})
 
     def command(self, target: list[float], now_ns: int, **extra: object) -> Envelope:
         return make_command(

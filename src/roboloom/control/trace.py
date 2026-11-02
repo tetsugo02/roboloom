@@ -1,8 +1,11 @@
-"""Per-tick record of a JointDevice: what was measured, what the model said, what was sent.
+"""Per-tick records, kept in memory and written as one npz when the node closes.
 
-Kept in memory and written as one npz when the device closes (also after a runaway
-or watchdog stop, so the last second before the stop is in the file). Joints a tick
-did not command hold NaN.
+`Trace`: a JointDevice (actuated leader): what was measured, what the model said, what
+was sent. Written also after a runaway or watchdog stop, so the last second before the
+stop is in the file. Joints a tick did not command hold NaN.
+
+`RobotTrace`: a follower, from the state it publishes each tick, the same with or
+without control laws; the data effort estimators are identified and checked on.
 """
 
 from __future__ import annotations
@@ -28,9 +31,10 @@ class Trace:
         state: JointState,
         model_mA: dict[int, float],
         commanded_mA: dict[int, float],
+        feedback_mA: dict[int, float] | None = None,
     ) -> None:
         n = len(self.joint_names)
-        row = np.full(1 + 5 * n, np.nan)
+        row = np.full(1 + 6 * n, np.nan)
         row[0] = t_ns
         row[1 : 1 + n] = state.positions
         if state.velocities is not None:
@@ -41,6 +45,8 @@ class Trace:
             row[1 + 3 * n + i] = v
         for i, v in commanded_mA.items():
             row[1 + 4 * n + i] = v
+        for i, v in (feedback_mA or {}).items():
+            row[1 + 5 * n + i] = v
         self.rows.append(row)
         if len(self.rows) > MAX_ROWS:
             del self.rows[: len(self.rows) - MAX_ROWS]
@@ -59,7 +65,51 @@ class Trace:
             velocities=a[:, 1 + n : 1 + 2 * n],
             measured_mA=a[:, 1 + 2 * n : 1 + 3 * n],
             model_mA=a[:, 1 + 3 * n : 1 + 4 * n],  # g(q) at gain 1
-            # sent Goal Current: model after ramp, gain, damping, range barrier and clip
-            commanded_mA=a[:, 1 + 4 * n :],
+            # sent Goal Current: model after ramp, gain, damping, range barrier, feedback, clip
+            commanded_mA=a[:, 1 + 4 * n : 1 + 5 * n],
+            feedback_mA=a[:, 1 + 5 * n :],  # force feedback added before the clip
+        )
+        return self.path
+
+
+class RobotTrace:
+    def __init__(
+        self, path: str | Path, joint_names: Sequence[str], modes: Sequence[str]
+    ):
+        self.path, self.joint_names = Path(path), list(joint_names)
+        self.modes = list(modes)
+        self.rows: list[np.ndarray] = []
+
+    def add(self, t_ns: int, state: dict) -> None:
+        """One `robot_state` payload; fields the robot does not report stay NaN."""
+        n = len(self.joint_names)
+        row = np.full(2 + 4 * n, np.nan)
+        row[0] = t_ns
+        row[1] = (
+            self.modes.index(state["mode"]) if state.get("mode") in self.modes else -1
+        )
+        for k, key in enumerate(("positions", "velocities", "currents_mA", "target")):
+            if state.get(key) is not None:
+                row[2 + k * n : 2 + (k + 1) * n] = state[key]
+        self.rows.append(row)
+        if len(self.rows) > MAX_ROWS:
+            del self.rows[: len(self.rows) - MAX_ROWS]
+
+    def save(self) -> Path | None:
+        if not self.rows:
+            return None
+        n = len(self.joint_names)
+        a = np.array(self.rows)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(
+            self.path,
+            joints=np.array(self.joint_names),
+            modes=np.array(self.modes),
+            t_ns=a[:, 0].astype(np.int64),
+            mode=a[:, 1].astype(np.int64),  # index into `modes`, -1 unknown
+            positions=a[:, 2 : 2 + n],
+            velocities=a[:, 2 + n : 2 + 2 * n],
+            measured_mA=a[:, 2 + 2 * n : 2 + 3 * n],
+            target=a[:, 2 + 3 * n :],  # goal the robot held or tracked
         )
         return self.path
