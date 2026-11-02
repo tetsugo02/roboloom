@@ -270,7 +270,7 @@ record: true                      # records observation.effort_ext / observation
 
 ### Estimator contract
 
-Like robots, inputs and sensors, estimators live in a registry `ESTIMATORS` (`roboloom/estimators/`) that selects the class by `type`. Robot-independent estimators are implemented in `roboloom/estimators/`; those for one robot only live in `roboloom/robots/<model>/` and register in the same registry.
+Like followers, inputs and sensors, estimators live in a registry `ESTIMATORS` (`roboloom/estimators/`) that selects the class by `type`. Robot-independent estimators are implemented in `roboloom/estimators/`; those for one robot only live in `roboloom/robots/<model>/` and register in the same registry.
 
 ```python
 class EffortEstimator(Protocol):
