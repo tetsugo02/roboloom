@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from .config import RobotConfig, load_config
+from .controllers.base import FollowerView
 from .core.checks import positions
 from .core.protocol import Publisher
 from .core.source import Reader, Sample, Source
@@ -120,7 +121,8 @@ class InProcessSession:
             if sample is None:
                 return None
             msg = publisher.make(source.kind, source.encode(sample), sample.capture_ns)
-            command = mapper.update(msg, obs["state"])
+            view = FollowerView(list(obs["state"]), None, None, "", msg.t_ready_ns)
+            command = mapper.update(msg, {follower.name: view}).get(follower.name)
             return command.payload["positions"] if command else None
 
         instance.controller = controller

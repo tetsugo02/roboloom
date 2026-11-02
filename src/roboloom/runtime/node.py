@@ -14,7 +14,7 @@ from pathlib import Path
 
 from roboloom.config import RobotConfig, env_options, load_config
 from roboloom.control.trace import FollowerTrace
-from roboloom.controllers.base import Controller
+from roboloom.controllers.base import Controller, FollowerView
 from roboloom.controllers.policy import PolicyController
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
@@ -25,7 +25,7 @@ from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
 COMMANDS = ("start", "stop", "save", "discard", "estop", "release", "home", "quit")
-from roboloom.runtime.flow import STATUS_SUFFIX
+from roboloom.runtime.flow import STATE_PREFIX, STATUS_SUFFIX, command_output
 
 
 def _send(node, output: str, msg: Envelope) -> None:
@@ -66,7 +66,7 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
             return f"{name}: controller is {state}; wait until ready, then retry start"
         controller = cfg.controllers[name]
         pair = [
-            controller.follower.name,
+            *controller.followers,
             *([controller.source.name] if controller.source else []),
         ]
         for node in pair:
@@ -90,7 +90,7 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
 
 def home_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
     """Why `home` may not run now (the robot would move during an episode), or None."""
-    if not any(c.home is not None for c in cfg.controllers.values()):
+    if not any(c.homes for c in cfg.controllers.values()):
         return "no controller has a home pose (home: in the controller YAML)"
     recorder = latest.get("recorder", {}).get("fields", {})
     if recorder.get("state") == "recording":
@@ -203,12 +203,10 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
     reader = source.open(cfg.mock, cfg.dataset_fps)
     set_home = getattr(reader, "set_home", None)
     for pair in cfg.controllers.values():  # the pair this input leads, if it has a home
-        if set_home is not None and pair.source is source and pair.home is not None:
-            leader_pose = getattr(pair, "leader_pose", None)
-            if leader_pose is not None:
-                set_home(
-                    leader_pose(pair.home.target(pair.follower.joint_names)), pair.home
-                )
+        home = getattr(pair, "home", None)  # a leader moves home with its follower
+        leader_pose = getattr(pair, "leader_pose", None)
+        if set_home is not None and pair.source is source and home and leader_pose:
+            set_home(leader_pose(home.target(pair.follower.joint_names)), home)
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     start_trace = getattr(reader, "start_trace", None)
     if log_dir and start_trace is not None:
@@ -280,7 +278,7 @@ def _work_fields(work: deque[float]) -> dict:
 
 def _home_follower(safety: FollowerSafety, robot: Follower, cfg: RobotConfig) -> str:
     """Start the move to the controller's saved pose; the error text, or ""."""
-    spec = cfg.controller_for(robot.name).home
+    spec = cfg.controller_for(robot.name).homes.get(robot.name)
     if spec is None:
         return "home: no home pose configured for this follower's controller"
     try:
@@ -392,52 +390,75 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
 
 
 def _controller(node, controller: Controller):
-    follower = follower_target = follower_velocity = None
-    follower_mode: str | None = None
+    """Step the controller on every intent once every follower it drives has reported.
+
+    A follower that latched FAULT or ESTOP, or whose state is older than
+    `follower_timeout_ms`, resets the controller: no follower of the group gets a command
+    until it has re-aligned (the controller contract)."""
+    views: dict[str, FollowerView] = {}
     status = StatusReporter(Publisher(controller.name), "controller")
     last_intent_ns = 0
     commands: deque[int] = deque(
         maxlen=1000
     )  # send times; command_hz counts the last second
     timeout_ns = int(controller.cfg.get("input_timeout_ms", 150) * 1e6)
+    stale_ns = int(controller.cfg.get("follower_timeout_ms", 150) * 1e6)
+    stopped = ""  # why the group is reset: a latched or silent follower
     while True:
         event_id, msg = _event(node)
         if _quit(event_id, msg):
             return
-        if event_id == "follower" and msg is not None:
-            follower, follower_target, follower_velocity = (
-                msg.payload["positions"],
-                msg.payload.get("target"),
-                msg.payload.get("velocities"),
-            )
-            follower_mode = msg.payload["mode"]
-            if follower_mode in ("FAULT", "ESTOP"):
+        now = time.monotonic_ns()
+        follower = (
+            event_id.removeprefix(STATE_PREFIX)
+            if event_id is not None and event_id.startswith(STATE_PREFIX)
+            else None
+        )
+        if follower in controller.followers and msg is not None:
+            views[follower] = FollowerView.of(msg, now)
+            if views[follower].mode in ("FAULT", "ESTOP"):
                 controller.reset()
+                stopped = f"{follower} {views[follower].mode}"
+            elif stopped.startswith(f"{follower} "):
+                stopped = ""
         elif (
             event_id == "estimate"
             and msg is not None
             and controller.feedback is not None
         ):
             following = controller.status().get("state") == "following"
-            feedback = controller.feedback.make(msg, follower_mode, following)
+            mode = views.get(controller.follower.name)
+            feedback = controller.feedback.make(
+                msg, mode.mode if mode else None, following
+            )
             if feedback is not None:
                 _send(node, "feedback", feedback)
-        elif event_id == "intent" and msg is not None and follower is not None:
-            last_intent_ns = time.monotonic_ns()
-            command = controller.update(
-                msg,
-                follower,
-                follower_target=follower_target,
-                follower_velocity=follower_velocity,
-            )
-            if command:
-                _send(node, "command", command)
-                commands.append(time.monotonic_ns())
-        now = time.monotonic_ns()
+        elif event_id == "intent" and msg is not None:
+            last_intent_ns = now
+            missing = [n for n in controller.followers if n not in views]
+            silent = [n for n, v in views.items() if now - v.t_ns > stale_ns]
+            if silent and not stopped:
+                controller.reset()
+                stopped = f"{silent[0]} silent"
+            elif not silent and stopped.endswith(" silent"):
+                stopped = ""
+            if not missing and not silent:
+                for name, command in controller.update(msg, views).items():
+                    _send(node, command_output(name), command)
+                    commands.append(time.monotonic_ns())
         if status.due(now):
             fields = controller.status()
             if now - last_intent_ns > timeout_ns:
                 fields["state"] = "input_stale" if last_intent_ns else "waiting_input"
+            waiting = [
+                n
+                for n in controller.followers
+                if n not in views or now - views[n].t_ns > stale_ns
+            ]
+            if waiting:
+                fields["waiting_state"] = ", ".join(waiting)
+            if stopped:
+                fields["stopped_by"] = stopped
             recent = [t for t in commands if now - t < 1e9]
             fields["command_hz"] = len(recent)
             level = "ok" if fields.get("state") == "following" else "warn"
@@ -445,7 +466,7 @@ def _controller(node, controller: Controller):
 
 
 def _estimator(node, estimator: Estimator):
-    """Estimate the follower's external effort from each robot state it publishes."""
+    """Estimate the follower's external effort from each state it publishes."""
     p = Publisher(estimator.name)
     status = StatusReporter(Publisher(estimator.name), "estimator")
     states: deque[int] = deque(maxlen=60)
@@ -511,25 +532,30 @@ def _policy(node, controller: PolicyController):
     commands: deque[int] = deque(
         maxlen=1000
     )  # send times; command_hz counts the last second
-    warmed = False
+    warmed: set[str] = set()
     while True:
         event_id, msg = _event(node)
         if _quit(event_id, msg):
             return
-        if event_id == "follower" and msg is not None:
-            controller.observe(controller.follower.name, msg)
-            if not warmed:
-                # The first message on a dora connection stalls the receiving robot loop
-                # about 130 ms (measured in mock). Send it now, while the robot is not
-                # armed and ignores commands, instead of at the start of the first episode.
+        follower = (
+            event_id.removeprefix(STATE_PREFIX)
+            if event_id is not None and event_id.startswith(STATE_PREFIX)
+            else None
+        )
+        if follower in controller.followers and msg is not None:
+            controller.observe(follower, msg)
+            if follower not in warmed:
+                # The first message on a dora connection stalls the receiving follower
+                # loop about 130 ms (measured in mock). Send it now, while the follower
+                # is not armed and ignores commands, not at the first episode's start.
                 _send(
                     node,
-                    "command",
+                    command_output(follower),
                     controller.command(
-                        list(msg.payload["positions"]), time.monotonic_ns()
+                        follower, list(msg.payload["positions"]), time.monotonic_ns()
                     ),
                 )
-                warmed = True
+                warmed.add(follower)
         elif (
             event_id is not None and event_id.startswith("observe_") and msg is not None
         ):
@@ -542,13 +568,14 @@ def _policy(node, controller: PolicyController):
                 controller.stop()
         elif event_id == "tick":
             try:
-                command = controller.tick()
+                sent = controller.tick()
             except Exception as exc:  # noqa: BLE001 - a bad policy output stops the episode
                 controller.stop()
                 controller.state, controller.error = "failed", str(exc)
-                command = None
-            if command is not None:
-                _send(node, "command", command)
+                sent = {}
+            for name, command in sent.items():
+                _send(node, command_output(name), command)
+            if sent:
                 commands.append(time.monotonic_ns())
         now = time.monotonic_ns()
         if status.due(now):

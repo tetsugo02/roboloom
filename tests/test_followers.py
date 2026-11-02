@@ -40,12 +40,17 @@ def test_two_followers_join_state_and_action_in_configuration_order(tmp_path):
 def test_flow_wires_each_follower_to_its_own_controller_and_recorder_input(tmp_path):
     cfg = load_config(dual_mock(tmp_path))
     nodes = {n["id"]: n for n in build_flow(cfg)["nodes"]}
-    assert nodes["left"]["inputs"]["command"]["source"] == "left_controller/command"
-    assert nodes["follower"]["inputs"]["command"]["source"] == "controller/command"
+    left = nodes["left"]["inputs"]["command"]["source"]
+    assert left == "left_controller/command_left"
+    assert (
+        nodes["follower"]["inputs"]["command"]["source"]
+        == "controller/command_follower"
+    )
     recorder = nodes["recorder"]["inputs"]
     assert recorder["action_left"]["source"] == "left/action"
     assert recorder["action_follower"]["source"] == "follower/action"
-    assert nodes["left_controller"]["inputs"]["follower"] == "left/state"
+    assert nodes["left_controller"]["inputs"]["state_left"] == "left/state"
+    assert nodes["left_controller"]["outputs"][0] == "command_left"
     # an input without a rate of its own runs at its follower's control rate
     assert nodes["left_leader"]["inputs"]["tick"].endswith(
         f"/{int(cfg.followers['left'].control_hz)}"
@@ -198,3 +203,239 @@ def test_two_followers_record_one_episode_in_mock(tmp_path):
     assert action["shape"] == [34] and action["names"][17] == "left.torso_yaw"
     assert info["robot_type"] == "dual"
     assert np.isfinite(result.metrics["action_valid_rate"])
+
+
+# -- one controller, several followers ------------------------------------------
+
+
+def policy_tree(tmp_path: Path) -> dict:
+    """The dual mock driven by one policy controller for both followers (no leaders)."""
+    tree = read_config(dual_mock(tmp_path))
+    tree["inputs"] = {}
+    tree["controllers"] = {
+        "policy": {
+            "type": "policy",
+            "followers": ["follower", "left"],
+            "factory": "policies:creep",
+            "observe": ["camera"],
+            "rate_hz": 10,
+            "action_horizon": 2,
+            "max_speed_counts_per_s": 50,
+            "command_deadline_ms": 300,
+        }
+    }
+    for name in ("leader", "left_leader"):
+        del tree["recorder"]["max_age_ms"][name]
+    return tree
+
+
+def follower_state(name: str, positions: list[float], mode: str = "HOLD") -> Envelope:
+    t = time.monotonic_ns()
+    payload = {"positions": positions, "target": positions, "mode": mode}
+    return Envelope("follower_state", name, "boot", 0, t, t, payload)
+
+
+def test_a_policy_splits_its_action_over_the_followers_in_order(tmp_path):
+    from roboloom.controllers.policy import PolicyController
+
+    cfg = parse_config(policy_tree(tmp_path))
+    policy = cfg.controllers["policy"]
+    assert isinstance(policy, PolicyController)
+    policy.load("policies:creep", {"step": 1000.0, "horizon": 1})
+    policy.observe("follower", follower_state("follower", [2000.0] * 17))
+    policy.observe("left", follower_state("left", [1000.0] * 17))
+    t = time.monotonic_ns()
+    camera = cfg.sensors["camera"]
+    policy.observe(
+        "camera",
+        Envelope(
+            "image",
+            "camera",
+            "boot",
+            0,
+            t,
+            t,
+            camera.encode(camera.open(True, 10).read()),
+        ),
+    )
+    policy.start("creep")
+    commands = policy.tick()
+    assert set(commands) == {"follower", "left"}
+    first, left = commands["follower"].payload, commands["left"].payload
+    assert first["follower"] == "follower" and left["follower"] == "left"
+    # the first entry moved +1000; the speed limit (50/s at 10 Hz) keeps it to +5
+    assert first["positions"][0] == pytest.approx(2005.0)
+    assert left["positions"] == [1000.0] * 17  # left's part of the action: unchanged
+
+
+def test_a_latched_follower_stops_the_whole_policy(tmp_path):
+    cfg = parse_config(policy_tree(tmp_path))
+    policy = cfg.controllers["policy"]
+    policy.load("policies:creep", {})
+    policy.observe("follower", follower_state("follower", [2000.0] * 17))
+    policy.observe("left", follower_state("left", [1000.0] * 17, mode="FAULT"))
+    policy.start("creep")
+    assert policy.tick() == {}
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (
+            lambda t: t["controllers"]["policy"].update(followers=["left", "follower"]),
+            "in configuration order",
+        ),
+        (
+            lambda t: t["controllers"]["policy"].update(followers=["follower"]),
+            "a policy drives every follower",
+        ),
+        (
+            lambda t: t["controllers"]["policy"].update(followers=["follower", "x"]),
+            "unknown: x",
+        ),
+    ],
+)
+def test_policy_followers_are_checked(tmp_path, change, message):
+    tree = policy_tree(tmp_path)
+    change(tree)
+    with pytest.raises(ValueError, match=message):
+        parse_config(tree)
+
+
+def test_each_follower_has_exactly_one_controller_and_joint_controllers_one_follower(
+    tmp_path,
+):
+    tree = read_config(dual_mock(tmp_path))
+    tree["controllers"]["controller"]["followers"] = ["follower", "left"]
+    with pytest.raises(ValueError, match="drives 1 follower"):
+        parse_config(tree)
+    tree = read_config(dual_mock(tmp_path / "b"))
+    tree["controllers"]["left_controller"]["followers"] = ["follower"]
+    with pytest.raises(ValueError, match="'follower' needs exactly one controller"):
+        parse_config(tree)
+
+
+class Recorder:
+    """A two-follower controller that records what the node loop asks of it."""
+
+    def __init__(self, controller):
+        self.inner = controller
+        self.updates = 0
+        self.resets = 0
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def update(self, intent, views, now_ns=None):
+        self.updates += 1
+        return {
+            name: self.inner.command(name, v.positions, time.monotonic_ns())
+            for name, v in views.items()
+        }
+
+    def reset(self):
+        self.resets += 1
+
+    def status(self):
+        return {"state": "following"}
+
+
+def run_controller(monkeypatch, controller, events) -> list[str]:
+    """Feed `events` (event id, message or None) to the controller node; the outputs sent."""
+    from roboloom.runtime import node as runtime
+
+    quit = Envelope("session", "session", "b", 0, 0, 0, {"command": "quit"})
+    queue = iter([*events, ("session", quit)])
+
+    def event(node):
+        item = next(queue)
+        return item() if callable(item) else item  # a callable: evaluated when due
+
+    monkeypatch.setattr(runtime, "_event", event)
+    sent: list[str] = []
+
+    class Node:
+        def send_output(self, output, value):
+            sent.append(output)
+
+    runtime._controller(Node(), controller)
+    return [s for s in sent if s != "status"]
+
+
+def test_one_latched_follower_stops_commands_to_the_whole_group(tmp_path, monkeypatch):
+    cfg = parse_config(policy_tree(tmp_path))
+    controller = Recorder(cfg.controllers["policy"])
+    intent = Envelope("joint_intent", "leader", "b", 0, 0, 0, {})
+    ok = follower_state("follower", [2000.0] * 17)
+    sent = run_controller(
+        monkeypatch,
+        controller,
+        [
+            ("intent", intent),  # no follower state yet: nothing moves
+            ("state_follower", ok),
+            ("intent", intent),  # left has not reported: nothing moves
+            ("state_left", follower_state("left", [1000.0] * 17, mode="FAULT")),
+            ("intent", intent),
+        ],
+    )
+    assert controller.resets == 1
+    # update ran once both had reported; the controller (not the loop) then decides; a
+    # real controller sends nothing after reset until it has re-aligned
+    assert sent == ["command_follower", "command_left"] and controller.updates == 1
+
+
+def test_a_silent_follower_resets_the_group(tmp_path, monkeypatch):
+    cfg = parse_config(policy_tree(tmp_path))
+    cfg.controllers["policy"].cfg["follower_timeout_ms"] = 1
+    controller = Recorder(cfg.controllers["policy"])
+    intent = Envelope("joint_intent", "leader", "b", 0, 0, 0, {})
+
+    events = [
+        ("state_follower", follower_state("follower", [1000.0] * 17)),
+        ("state_left", follower_state("left", [1000.0] * 17)),
+    ]
+    from roboloom.runtime import node as runtime
+
+    real = runtime.time.monotonic_ns
+    offset = {"ns": 0}
+    monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: real() + offset["ns"])
+
+    def later():
+        offset["ns"] = 10_000_000  # 10 ms later: both states older than 1 ms
+        return ("intent", intent)
+
+    sent = run_controller(monkeypatch, controller, [*events, later])
+    assert controller.resets == 1 and controller.updates == 0 and sent == []
+
+
+@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
+def test_one_policy_drives_two_followers_in_mock(tmp_path, monkeypatch):
+    import os
+
+    from roboloom.runtime.session import Session
+
+    tests = str(Path(__file__).parent.resolve())
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
+    )
+    path = dual_mock(tmp_path)
+    tree = policy_tree(tmp_path / "unused")
+    (path.parent / "nodes" / "policy.yaml").write_text(
+        yaml.safe_dump(tree["controllers"]["policy"])
+    )
+    recorder = yaml.safe_load((path.parent / "nodes" / "recorder.yaml").read_text())
+    for name in ("leader", "left_leader"):
+        del recorder["max_age_ms"][name]
+    (path.parent / "nodes" / "recorder.yaml").write_text(yaml.safe_dump(recorder))
+    config = yaml.safe_load(path.read_text())
+    config["inputs"] = {}
+    config["controllers"] = {"policy": "nodes/policy.yaml"}
+    path.write_text(yaml.safe_dump(config, sort_keys=False))
+    with Session.launch(
+        path, policy_kwargs={"step": 5.0}, log_dir=tmp_path / "logs"
+    ) as s:
+        s.wait_ready(30)
+        result = s.record("creep", 1.5)
+    assert result.saved, result
+    assert result.metrics["action_valid_rate"] > 0.5, result.metrics
+    assert max(result.metrics["action_missing_rate"].values()) < 0.5, result.metrics

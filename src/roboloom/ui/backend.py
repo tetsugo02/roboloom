@@ -137,7 +137,7 @@ class SessionBackend:
                     )
                 )
             caps = Capabilities(
-                home=any(c.home is not None for c in session.cfg.controllers.values()),
+                home=any(c.homes for c in session.cfg.controllers.values()),
                 release=bool(session.held or session.actuated),
                 hold=bool(session.held),
                 reselect=self.reselect,

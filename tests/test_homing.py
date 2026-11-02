@@ -129,7 +129,7 @@ def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
         now,
         {"positions": [leader[j] for j in cfg.inputs["leader"].joint_names]},
     )
-    controller.update(intent, follower, now)
+    controller.step(intent, follower, now)
     assert controller.status()["worst_diff"] == pytest.approx(0, abs=1e-6)
     assert controller.status()["home"] == "ready"
 

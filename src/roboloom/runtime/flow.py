@@ -12,6 +12,12 @@ from ..config import RobotConfig
 from ..recording import ACTION, action_stream
 
 STATUS_SUFFIX = "_status"  # session input ids; runtime.node reads the same suffix
+STATE_PREFIX = "state_"  # a controller's input carrying one follower's state
+
+
+def command_output(follower: str) -> str:
+    """A controller's output carrying its commands for `follower`."""
+    return f"command_{follower}"
 
 
 def build_flow(cfg: RobotConfig) -> dict:
@@ -37,7 +43,12 @@ def build_flow(cfg: RobotConfig) -> dict:
     fastest = max(f.control_hz for f in cfg.followers.values())
     driven = {
         n: max(
-            (c.follower.control_hz for c in cfg.controllers.values() if c.source is s),
+            (
+                f.control_hz
+                for c in cfg.controllers.values()
+                if c.source is s
+                for f in c.followers.values()
+            ),
             default=fastest,
         )
         for n, s in cfg.inputs.items()
@@ -73,8 +84,11 @@ def build_flow(cfg: RobotConfig) -> dict:
     ]
 
     for name, c in cfg.controllers.items():
-        inputs: dict[str, object] = {"follower": f"{c.follower.name}/state", **session}
-        outputs = ["command", "status"]
+        inputs: dict[str, object] = {
+            **{f"{STATE_PREFIX}{f}": f"{f}/state" for f in c.followers},
+            **session,
+        }
+        outputs = [*(command_output(f) for f in c.followers), "status"]
         if c.source is not None:
             inputs["intent"] = f"{c.source.name}/sample"
         # a policy reads the newest sample of what it observes, on its own timer
@@ -97,7 +111,7 @@ def build_flow(cfg: RobotConfig) -> dict:
             name,
             {
                 "command": {
-                    "source": f"{cfg.controller_for(name).name}/command",
+                    "source": f"{cfg.controller_for(name).name}/{command_output(name)}",
                     "queue_size": 1,
                     "queue_policy": "drop_oldest",
                 },

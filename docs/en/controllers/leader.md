@@ -22,8 +22,10 @@ These are the values from the distributed template. Set them after checking the 
 | --- | --- |
 | `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
 | `max_speed_counts_per_s` | Upper limit on the rate of change of the target |
-| `command_deadline_ms` | Validity period of commands sent to the robot |
+| `followers` | The followers it drives; a `joint` controller drives exactly one |
+| `command_deadline_ms` | Validity period of commands sent to the follower |
 | `input_timeout_ms` | Time until leader input is judged stale |
+| `follower_timeout_ms` | Time until the follower's state is judged stale (default 150). It then stops following and sends no command until it has re-aligned |
 
 When `aligning` appears on screen, align the leader with the follower while watching the displayed joint differences. Run `start <task>` once it is `following`. If the input is stale, the state becomes `input_stale`, and following does not continue without new input.
 

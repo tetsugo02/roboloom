@@ -271,8 +271,9 @@ class RobotConfig:
         return {**self.inputs, **self.followers, **self.sensors, **recorded}
 
     def controller_for(self, follower: str) -> Controller:
+        """The controller that drives `follower` (every follower has exactly one)."""
         (controller,) = (
-            c for c in self.controllers.values() if c.follower.name == follower
+            c for c in self.controllers.values() if follower in c.followers
         )
         return controller
 
@@ -483,22 +484,36 @@ def parse_config(tree: dict) -> RobotConfig:
                 f"controllers.{name}.robot was renamed: use followers: [<follower>]"
             )
         targets = c.get("followers")
-        if not isinstance(targets, list) or len(targets) != 1:
+        if (
+            not isinstance(targets, list)
+            or not targets
+            or not all(isinstance(x, str) for x in targets)
+            or len(set(targets)) != len(targets)
+        ):
             raise ValueError(
-                f"controllers.{name}.followers: expected a list with one follower name"
+                f"controllers.{name}.followers: expected a list of follower names"
             )
-        source, follower = inputs.get(c.get("input")), followers.get(targets[0])
-        if follower is None or (cls.uses_input and source is None):
+        absent = [x for x in targets if x not in followers]
+        source = inputs.get(c.get("input"))
+        if absent or (cls.uses_input and source is None):
             raise ValueError(
                 f"controllers.{name} must reference a configured "
-                f"{'input and follower' if cls.uses_input else 'follower'}"
+                f"{'input and followers' if cls.uses_input else 'followers'}"
+                + (f" (unknown: {', '.join(absent)})" if absent else "")
             )
-        controller = cls(name, c, source if cls.uses_input else None, follower)
-        if not cls.uses_input and list(followers) != [follower.name]:
+        if not cls.uses_input and targets != list(followers):
+            # the recorded action joins every follower in configuration order; a policy
+            # trained on it outputs that whole vector
             raise ValueError(
-                f"controllers.{name}: a policy drives every follower; one policy "
-                "for several followers is not supported yet"
+                f"controllers.{name}.followers: a policy drives every follower, in "
+                f"configuration order: [{', '.join(followers)}]"
             )
+        controller = cls(
+            name,
+            c,
+            source if cls.uses_input else None,
+            {x: followers[x] for x in targets},
+        )
         unknown = set(controller.observes()) - {*inputs, *sensors}
         if unknown:
             raise ValueError(
@@ -510,8 +525,12 @@ def parse_config(tree: dict) -> RobotConfig:
         controller.bind_feedback(estimators)
         controllers[name] = controller
     for follower in followers.values():
-        if [c.follower.name for c in controllers.values()].count(follower.name) != 1:
-            raise ValueError(f"follower {follower.name!r} needs exactly one controller")
+        drivers = [n for n, c in controllers.items() if follower.name in c.followers]
+        if len(drivers) != 1:
+            raise ValueError(
+                f"follower {follower.name!r} needs exactly one controller"
+                + (f" (has {', '.join(drivers)})" if drivers else "")
+            )
         if follower.control_hz < fps:
             raise ValueError("control_hz must be >= dataset_fps")
     for name, controller in controllers.items():
@@ -574,7 +593,7 @@ def _check_home(name: str, controller: Controller) -> None:
     """With `home`, every current-mode group of the leader needs `homing` (the spring that
     pulls it along the move); without it the move would leave those joints behind."""
     source = controller.source
-    if controller.home is None or source is None:
+    if not controller.homes or source is None:
         return
     from .control.device import law_class
 

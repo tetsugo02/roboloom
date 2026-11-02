@@ -564,12 +564,12 @@ class Session:
 
     def begin_home(self) -> tuple[int, float]:
         """Send `home`; returns (send time in monotonic ns, the YAML's timeout in s)."""
-        pairs = [c for c in self.cfg.controllers.values() if c.home is not None]
-        if not pairs:
+        homes = [h for c in self.cfg.controllers.values() for h in c.homes.values()]
+        if not homes:
             raise SessionError("no controller has a home pose (home: in its YAML)")
         sent_ns = time.monotonic_ns()
         self.wait_report(self.send("home"))
-        return sent_ns, max(c.home.timeout_s for c in pairs if c.home is not None)
+        return sent_ns, max(h.timeout_s for h in homes)
 
     def home_waiting(self, sent_ns: int) -> list[str]:
         """Nodes still moving home since `sent_ns` (empty: arrived); raises SessionError
@@ -578,9 +578,9 @@ class Session:
         status = self.status()
         waiting = []
         for c in self.cfg.controllers.values():
-            if c.home is None:
+            if not c.homes:
                 continue
-            for name in (c.follower.name, *([c.source.name] if c.source else [])):
+            for name in (*c.homes, *([c.source.name] if c.source else [])):
                 item = status.get(name, {})
                 fields = item.get("fields", {})
                 fresh = item.get("t_ns", 0) > sent_ns

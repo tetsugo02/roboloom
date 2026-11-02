@@ -37,7 +37,7 @@ def test_controller_reports_why_it_is_not_following():
     now = time.monotonic_ns()
     far = [2048] * 17
     far[2] = 2400  # head_pitch 352 counts away
-    ctl.update(
+    ctl.step(
         Envelope("joint_intent", "leader", "boot", 0, now, now, {"positions": far}),
         [2048] * 17,
         now,
@@ -48,7 +48,7 @@ def test_controller_reports_why_it_is_not_following():
         and status["worst_joint"] == "head_pitch"
         and status["worst_diff"] == 352
     )
-    ctl.update(
+    ctl.step(
         Envelope(
             "joint_intent", "leader", "boot", 1, now, now, {"positions": [2048] * 17}
         ),
@@ -57,7 +57,7 @@ def test_controller_reports_why_it_is_not_following():
     )
     assert ctl.status()["state"] == "following"
     old = now - 2 * S
-    ctl.update(
+    ctl.step(
         Envelope(
             "joint_intent", "leader", "boot", 2, old, old, {"positions": [2048] * 17}
         ),

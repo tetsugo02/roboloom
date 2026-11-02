@@ -22,8 +22,10 @@ input_timeout_ms: 150
 | --- | --- |
 | `alignment_tolerance` | 追従を始める前と，毎回のエピソード開始（`start`）の前に許すleaderとfollowerの関節差（counts）．超えていると `start` を拒否します |
 | `max_speed_counts_per_s` | 目標値の変化速度の上限 |
-| `command_deadline_ms` | robotへ送る指令の有効期限 |
+| `followers` | 動かすフォロワ．`joint` controllerはちょうど1台です |
+| `command_deadline_ms` | followerへ送る指令の有効期限 |
 | `input_timeout_ms` | leader入力が古いと判定するまでの時間 |
+| `follower_timeout_ms` | followerの状態が古いと判定するまでの時間（既定150）．古くなると追従をやめ，位置を合わせ直すまで指令を送りません |
 
 画面で `aligning` が出たら，表示された関節差を見ながらleaderをfollowerに揃えます．`following` になってから `start <task>` します．入力が古いと `input_stale` となり，新しい入力なしに追従を続けません．
 

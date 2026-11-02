@@ -1,17 +1,20 @@
 """A learned policy as the robot's controller (`type: policy`).
 
+The policy drives every follower of the robot (`followers:` lists them all, in
+configuration order): its observation and action have the recorded layout, so
+`observation.state` and the action join the followers in that order (`recording.schema`).
 The policy node keeps the latest sample of every observed source and, on its own timer
-(`rate_hz`), sends the next joint target. When no action is queued it calls
-`policy.infer` and queues the first `action_horizon` steps of the returned chunk
-(synchronous chunking: while `infer` runs no command is sent and the follower's command
-deadline turns into HOLD). Targets are speed-limited from what the follower holds, and
+(`rate_hz`), sends each follower its part of the next action. When no action is queued
+it calls `policy.infer` and queues the first `action_horizon` steps of the returned chunk
+(synchronous chunking: while `infer` runs no command is sent and the followers' command
+deadlines turn into HOLD). Targets are speed-limited from what each follower holds, and
 FollowerSafety checks them like any teleoperation command.
 
     type: policy
-    followers: [follower]
+    followers: [follower]               # every follower, in configuration order
     factory: my_lab.policies:load_act   # "module:callable" returning a Policy
     kwargs: {checkpoint: ...}
-    observe: [camera, digit_left]      # inputs or sensors; the robot state is always seen
+    observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
     action_horizon: 8
     max_speed_counts_per_s: 1024
@@ -22,6 +25,7 @@ from __future__ import annotations
 
 import time
 from collections import deque
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -29,7 +33,7 @@ import numpy as np
 from ..core.checks import positive
 from ..core.protocol import Envelope
 from ..robots.base import Follower
-from .base import Controller
+from .base import Controller, FollowerView
 
 if TYPE_CHECKING:
     from ..core.source import Recordable
@@ -45,9 +49,9 @@ class PolicyController(Controller):
         name: str,
         cfg: dict,
         source: InputDevice | None,
-        follower: Follower,
+        followers: Mapping[str, Follower],
     ):
-        super().__init__(name, cfg, source, follower)
+        super().__init__(name, cfg, source, followers)
         factory = cfg.get("factory")
         if not isinstance(factory, str) or ":" not in factory:
             raise ValueError(f"{name}.factory must be 'module:callable'")
@@ -75,7 +79,6 @@ class PolicyController(Controller):
         self.state = "loading"
         self.error = ""
         self.infer_ms: deque[float] = deque(maxlen=20)
-        self.last_target: list[float] | None = None
         self.last_ns = 0
 
     def observes(self) -> list[str]:
@@ -105,7 +108,7 @@ class PolicyController(Controller):
         self.policy.reset()
         self.task, self.running = task, True
         self.queue.clear()
-        self.last_target = None
+        self.last_ns = 0
         self.state = "running"
 
     def stop(self) -> None:
@@ -126,30 +129,34 @@ class PolicyController(Controller):
         """Dataset-keyed observation, or None until every observed source has a sample."""
         from ..recording.schema import observation_frame
 
-        sources = {self.follower.name: self.follower, **self.sources}
+        sources = {**self.followers, **self.sources}
         if any(n not in self.latest for n in sources):
             return None
         out = observation_frame(sources, self.latest, self.dataset_fps)
         out["task"] = self.task
         return out
 
-    def tick(self, now_ns: int | None = None) -> Envelope | None:
-        """The next command while an episode runs; infers when no action is queued."""
+    def tick(self, now_ns: int | None = None) -> dict[str, Envelope]:
+        """The next command per follower while an episode runs; infers when no action
+        is queued. Nothing while a follower has no state yet or latched FAULT/ESTOP."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         if not self.running or self.policy is None:
-            return None
-        robot = self.latest.get(self.follower.name)
-        if robot is None or robot.payload.get("mode") in ("FAULT", "ESTOP"):
-            return None
+            return {}
+        states = {name: self.latest.get(name) for name in self.followers}
+        if any(
+            s is None or s.payload.get("mode") in ("FAULT", "ESTOP")
+            for s in states.values()
+        ):
+            return {}
         if not self.queue:
             observation = self.observation()
             if observation is None:
                 self.state = "waiting_observation"
-                return None
+                return {}
             t0 = time.perf_counter()
             actions = np.asarray(self.policy.infer(observation), dtype=np.float64)
             self.infer_ms.append((time.perf_counter() - t0) * 1000)
-            n = len(self.follower.joint_names)
+            n = sum(len(f.joint_names) for f in self.followers.values())
             if actions.ndim == 1:
                 actions = actions[None, :]
             if (
@@ -163,26 +170,31 @@ class PolicyController(Controller):
             self.queue.extend(actions[: self.horizon])
             self.state = "running"
             now = time.monotonic_ns()
-        target = self.queue.popleft()
-        # step from what the follower holds, as the joint controller does
-        previous = list(robot.payload.get("target") or robot.payload["positions"])
+        action = self.queue.popleft()
         dt = max((now - self.last_ns) / 1e9, 1e-6) if self.last_ns else 1 / self.rate_hz
         step = self.max_speed * min(dt, 2 / self.rate_hz)
-        limited = [
-            max(p - step, min(p + step, float(t)))
-            for p, t in zip(previous, target, strict=True)
-        ]
-        self.last_target, self.last_ns = limited, now
-        return self.command(limited, now)
+        out: dict[str, Envelope] = {}
+        start = 0
+        for name, follower in self.followers.items():
+            part = action[start : start + len(follower.joint_names)]
+            start += len(follower.joint_names)
+            payload = states[name].payload  # type: ignore[union-attr]  # checked above
+            # step from what the follower holds, as the joint controller does
+            previous = list(payload.get("target") or payload["positions"])
+            limited = [
+                max(p - step, min(p + step, float(x)))
+                for p, x in zip(previous, part, strict=True)
+            ]
+            out[name] = self.command(name, limited, now)
+        self.last_ns = now
+        return out
 
     def update(
         self,
         intent: Envelope,
-        follower: list[float],
+        views: Mapping[str, FollowerView],
         now_ns: int | None = None,
-        follower_target: list[float] | None = None,
-        follower_velocity: list[float] | None = None,
-    ) -> Envelope | None:
+    ) -> dict[str, Envelope]:
         raise TypeError(f"{self.name}: a policy controller is stepped by `tick`")
 
     def status(self) -> dict:

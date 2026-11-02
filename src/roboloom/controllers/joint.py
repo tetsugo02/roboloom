@@ -4,20 +4,33 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Mapping
+from typing import ClassVar
 
-from ..control.homing import parse_home
+from ..control.homing import HomeSpec, parse_home
 from ..core.checks import positions, positive
 from ..core.protocol import Envelope
 from ..inputs.base import InputDevice, JointInput
 from ..robots.base import Follower
-from .base import Controller
+from .base import Controller, FollowerView
 from .coupling import JointCouplings
 from .feedback import FeedbackMap
 
 
 class JointController(Controller):
-    def __init__(self, name: str, cfg: dict, source: InputDevice, robot: Follower):
-        super().__init__(name, cfg, source, robot)
+    """One leader's joints onto one follower's joints."""
+
+    max_followers: ClassVar[int | None] = 1
+
+    def __init__(
+        self,
+        name: str,
+        cfg: dict,
+        source: InputDevice,
+        followers: Mapping[str, Follower],
+    ):
+        super().__init__(name, cfg, source, followers)
+        robot = self.follower
         if not isinstance(source, JointInput):
             raise TypeError(
                 f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}"
@@ -59,13 +72,15 @@ class JointController(Controller):
         self.couplings = JointCouplings(
             cfg.get("couplings", []), robot.joint_names, name
         )
-        self.home = parse_home(
+        home = parse_home(
             cfg.get("home"),
             name,
             cfg.get("__dir__"),
             robot,
             cfg["max_speed_counts_per_s"],
         )
+        if home is not None:
+            self.homes[robot.name] = home
         if "feedback" in cfg:
             self.feedback = FeedbackMap(cfg["feedback"], name, mapping)
         self.last_seq = -1
@@ -91,6 +106,11 @@ class JointController(Controller):
             for j, f, extra in zip(self.cfg["joints"], follower, added, strict=True)
         }
 
+    @property
+    def home(self) -> HomeSpec | None:
+        """The follower's saved pose `home` moves to (with the leader), if configured."""
+        return self.homes.get(self.follower.name)
+
     def status(self) -> dict:
         out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
         if self.home is not None:
@@ -109,11 +129,29 @@ class JointController(Controller):
     def update(
         self,
         intent: Envelope,
+        views: Mapping[str, FollowerView],
+        now_ns: int | None = None,
+    ) -> dict[str, Envelope]:
+        view = views[self.follower.name]
+        command = self.step(
+            intent,
+            view.positions,
+            now_ns,
+            follower_target=view.target,
+            follower_velocity=view.velocities,
+        )
+        return {} if command is None else {self.follower.name: command}
+
+    def step(
+        self,
+        intent: Envelope,
         follower: list[float],
         now_ns: int | None = None,
         follower_target: list[float] | None = None,
         follower_velocity: list[float] | None = None,
     ) -> Envelope | None:
+        """The next command for the follower at `follower`, or None while it must not
+        move (input stale, not aligned yet)."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         if (
             intent.kind != JointInput.kind
@@ -148,7 +186,7 @@ class JointController(Controller):
             self.last_target_ns = now
         dt = max((now - self.last_target_ns) / 1e9, 1e-6)
         step = self.cfg["max_speed_counts_per_s"] * dt
-        # Step from what the follower holds, not from our own last output: while the robot is
+        # Step from what the follower holds, not from our own last output: while it is
         # not armed (or refuses a command) our targets would otherwise run ahead of it.
         previous = (
             list(follower_target) if follower_target is not None else self.last_target
@@ -161,4 +199,4 @@ class JointController(Controller):
         ]
         self.last_target, self.last_target_ns = limited, now
         self.state = "following"
-        return self.command(limited, now, input_seq=intent.seq)
+        return self.command(self.follower.name, limited, now, input_seq=intent.seq)

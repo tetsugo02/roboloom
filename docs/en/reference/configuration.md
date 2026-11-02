@@ -36,6 +36,19 @@ Node names are used as dora IDs and as dataset feature names. Use letters, digit
 
 Each node's `type` selects the implementation. `SET_...` are robot-specific unset values; execution is refused if any remain in a referenced configuration. `validate` checks the consistency of the configuration and dataflow without opening devices. It does not check that EEPROM matches the hardware, image capture, or stopping behavior.
 
+## Followers and controllers
+
+Each controller lists the followers it drives under `followers:`. Each follower is driven by exactly one controller.
+
+| Controller | Followers it drives |
+| --- | --- |
+| `joint` | Exactly one (maps the leader's joints onto one follower's joints) |
+| `policy` | Every follower, in configuration order. The recorded `action` and `observation.state` join all followers, so the policy's output has the same layout; it is split in that order and sent to each follower |
+
+A controller of several followers sends nothing until every one of them has reported its state. When any of its followers latches `FAULT` or `ESTOP`, or its state gets older than `follower_timeout_ms`, the controller stops commanding all of them. A follower without commands keeps holding its target. The controller sends no further command until it has re-aligned. The controller's row on the screen shows why it stopped (`stopped_by`) and the followers it waits for (`waiting_state`).
+
+`feedback` (force feedback) is available only on a controller of one follower.
+
 ## Launch options
 
 `options:` names the features chosen at launch (gravity compensation, extra sensors, and so on). Each option replaces, adds, or removes node files. The node files under `nodes/` stay split by feature; an option only chooses which of them are used.
