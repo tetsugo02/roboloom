@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from roboloom.config import load_config
+from roboloom.controllers.joint import JointController
 from roboloom.core.protocol import Envelope
 from roboloom.drivers.base import Health
 from roboloom.drivers.mock import MockBus
@@ -154,6 +155,7 @@ def test_torque_false_records_state_only():
 
 def test_controller_alignment_and_input_age():
     ctl = load_config("examples/mock/config.yaml").controllers["controller"]
+    assert isinstance(ctl, JointController)
     now = time.monotonic_ns()
     bad = Envelope(
         "joint_intent", "leader", "boot", 0, now, now, {"positions": [3000] * 17}
@@ -221,6 +223,7 @@ def test_out_of_range_is_clipped_and_rejects_say_why():
 
 def test_controller_steps_from_the_follower_target_not_its_own_output():
     ctl = load_config("examples/mock/config.yaml").controllers["controller"]
+    assert isinstance(ctl, JointController)
     now = (
         time.monotonic_ns() - 5_000_000_000
     )  # message times must not lie in the future

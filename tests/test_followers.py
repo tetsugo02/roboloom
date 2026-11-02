@@ -172,9 +172,11 @@ def test_parts_of_one_feature_must_share_their_unit():
         def joined(self, fps):
             return {"observation.effort": Joined(("j",), unit=self.unit)}
 
-    joined_parts({"a": Part("mA"), "b": Part("mA")}, 10)
+    same: dict = {"a": Part("mA"), "b": Part("mA")}
+    joined_parts(same, 10)
+    mixed: dict = {"a": Part("mA"), "b": Part("N m")}
     with pytest.raises(ValueError, match="cannot mix units"):
-        joined_parts({"a": Part("mA"), "b": Part("N m")}, 10)
+        joined_parts(mixed, 10)
 
 
 def test_capture_pose_needs_the_follower_when_there_are_several(tmp_path):
@@ -246,6 +248,8 @@ def test_a_policy_splits_its_action_over_the_followers_in_order(tmp_path):
     policy.observe("left", follower_state("left", [1000.0] * 17))
     t = time.monotonic_ns()
     camera = cfg.sensors["camera"]
+    frame = camera.open(True, 10).read()
+    assert frame is not None
     policy.observe(
         "camera",
         Envelope(
@@ -255,7 +259,7 @@ def test_a_policy_splits_its_action_over_the_followers_in_order(tmp_path):
             0,
             t,
             t,
-            camera.encode(camera.open(True, 10).read()),
+            camera.encode(frame),
         ),
     )
     policy.start("creep")
@@ -269,8 +273,11 @@ def test_a_policy_splits_its_action_over_the_followers_in_order(tmp_path):
 
 
 def test_a_latched_follower_stops_the_whole_policy(tmp_path):
+    from roboloom.controllers.policy import PolicyController
+
     cfg = parse_config(policy_tree(tmp_path))
     policy = cfg.controllers["policy"]
+    assert isinstance(policy, PolicyController)
     policy.load("policies:creep", {})
     policy.observe("follower", follower_state("follower", [2000.0] * 17))
     policy.observe("left", follower_state("left", [1000.0] * 17, mode="FAULT"))

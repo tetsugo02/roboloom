@@ -16,6 +16,7 @@ from test_control_laws import GRAVITY, FlatGravity
 from roboloom.config import parse_config
 from roboloom.control.device import JointDevice, build_laws, parse_groups
 from roboloom.control.homing import Trajectory, load_pose
+from roboloom.controllers.joint import JointController
 from roboloom.drivers.mock import MockBus
 from roboloom.errors import ConfigError, SetupError
 from roboloom.robots.safety import FollowerSafety
@@ -112,6 +113,7 @@ def home_tree(tmp_path: Path, **home) -> dict:
 def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
     cfg = parse_config(home_tree(tmp_path))
     controller = cfg.controllers["controller"]
+    assert isinstance(controller, JointController)
     assert controller.home is not None and controller.home.pose.name == "ready"
     follower = controller.home.target(cfg.followers["follower"].joint_names)
     leader = controller.leader_pose(follower)
@@ -158,7 +160,8 @@ def test_gravity_leader_groups_need_a_homing_spring(tmp_path):
     for group in tree["inputs"]["leader"]["control"]:
         if group["law"] == "gravity_comp":
             group["homing"] = {"kp_mA_per_count": 0.5, "max_mA": 40}
-    assert parse_config(tree).controllers["controller"].home is not None
+    controller = parse_config(tree).controllers["controller"]
+    assert isinstance(controller, JointController) and controller.home is not None
 
 
 def safety() -> tuple[FollowerSafety, MockBus]:

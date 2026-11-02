@@ -4,6 +4,7 @@ import time
 from rich.console import Console
 
 from roboloom.config import load_config
+from roboloom.controllers.joint import JointController
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.status import StatusReporter
 from roboloom.ui.client import SessionClient
@@ -34,6 +35,7 @@ def test_status_reporter_is_throttled():
 
 def test_controller_reports_why_it_is_not_following():
     ctl = load_config("examples/mock/config.yaml").controllers["controller"]
+    assert isinstance(ctl, JointController)
     now = time.monotonic_ns()
     far = [2048] * 17
     far[2] = 2400  # head_pitch 352 counts away
