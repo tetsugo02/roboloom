@@ -8,33 +8,33 @@ from pathlib import Path
 
 import yaml
 
-from ..config import ExperimentConfig
+from ..config import RobotConfig
 from ..errors import ConfigError, SetupError
 from .common import load
 
 
-def pose_path(experiment_path: str | Path, name: str) -> Path:
-    """`poses/<name>.yaml` next to the experiment (the robot's `.roboloom/<robot>/`)."""
+def pose_path(config_path: str | Path, name: str) -> Path:
+    """`poses/<name>.yaml` next to the configuration (the robot's `.roboloom/<robot>/`)."""
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
         raise ConfigError(f"pose name {name!r}: use letters, digits, - and _")
-    return Path(experiment_path).parent / "poses" / f"{name}.yaml"
+    return Path(config_path).parent / "poses" / f"{name}.yaml"
 
 
 def capture_pose(
-    experiment: str | Path | ExperimentConfig,
+    config: str | Path | RobotConfig,
     name: str,
     *,
     force: bool = False,
 ) -> Path:
-    """Read the experiment's follower positions and save them as pose `name`.
+    """Read the follower positions and save them as pose `name`.
 
     Moves nothing: the bus opens with the robot's usual startup checks, positions are
     read, and the bus closes. The dataflow must not be running (it owns the bus); pose
     the follower by teleoperation (then `quit` with `hold`) or by hand after `release`.
     Every joint must be inside the robot's limits. Returns the written file.
     """
-    cfg = load(experiment)
-    robot = cfg.robot
+    cfg = load(config)
+    robot = cfg.follower
     path = pose_path(cfg.path, name)
     if path.exists() and not force:
         raise SetupError(f"{path} exists; pass force=True (--force) to replace it")
@@ -59,7 +59,7 @@ def capture_pose(
         f"# Select it in the controller YAML: home: {{pose: ../poses/{name}.yaml, ...}}\n"
     )
     body = {
-        "robot_type": robot.robot_type,
+        "model": robot.model,
         "unit": robot.unit,
         "pose": {
             j: round(v) if robot.unit == "dynamixel_count" else v

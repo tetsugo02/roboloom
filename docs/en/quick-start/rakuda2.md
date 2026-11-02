@@ -20,7 +20,7 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 
 | File (in `.roboloom/rakuda2/`) | What to set and check |
 | --- | --- |
-| `nodes/robot.yaml` | Follower `port`, IDs and models, `registers`, measured safe `limits`, velocity, current, and temperature limits |
+| `nodes/follower.yaml` | Follower `port`, IDs and models, `registers`, measured safe `limits`, velocity, current, and temperature limits |
 | `nodes/leader.yaml`, `nodes/leader_gravity.yaml` | Leader `port`, IDs and models, `registers`, control law |
 | `nodes/camera.yaml` | RealSense `serial` |
 | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | Left and right DIGIT `serial` |
@@ -32,7 +32,7 @@ Apply values such as each joint's `homing_offset` from the `probe` results to th
 
 Template values are not a safety guarantee for your robot. In particular, the follower's `limits.min/max` are wide initial values. Narrow them to the measured safe range, and verify the stop and torque-off methods on each robot unit. Even with the standard leader, the trigger is powered.
 
-For the first path check, **change `torque: true` to `torque: false` in `nodes/robot.yaml`**. Support the arms while the follower torque is off. This setting does not cut power on the leader side.
+For the first path check, **change `torque: true` to `torque: false` in `nodes/follower.yaml`**. Support the arms while the follower torque is off. This setting does not cut power on the leader side.
 
 ## 2. Check the collection path with the standard leader
 
@@ -131,7 +131,7 @@ Before collecting, optionally configure [leader joint locking and torso-yaw comp
 
 With only `gravity` enabled, the configuration records **RealSense only**. To also record DIGIT, enable the option `digit` as well (`--with gravity,digit`); the save location is separated automatically as `rakuda2-digit`. For the supported combinations and limitations, see [Rakuda2](../robots/rakuda2.md).
 
-Before moving the follower, verify the robot's safe range, low-speed following, stop, and torque off, then change `nodes/robot.yaml` to `torque: true`. Support both arms, and start after completing the EEPROM check with the dataflow stopped.
+Before moving the follower, verify the robot's safe range, low-speed following, stop, and torque off, then change `nodes/follower.yaml` to `torque: true`. Support both arms, and start after completing the EEPROM check with the dataflow stopped.
 
 ```bash
 uv run roboloom validate --with gravity

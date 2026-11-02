@@ -116,7 +116,7 @@ class SessionBackend:
             now = time.monotonic_ns()
             nodes: list[NodeSnapshot] = []
             owners = {
-                **session.cfg.robots,
+                **session.cfg.followers,
                 **session.cfg.inputs,
                 **session.cfg.controllers,
                 **session.cfg.sensors,
@@ -412,8 +412,8 @@ class SessionBackend:
                 session.poll()
                 snapshot = self._snapshot()
                 if self._estop_ns and not self._estop_confirmed:
-                    robots = [n for n in snapshot.nodes if n.role == "robot"]
-                    expected = set(session.cfg.robots)
+                    robots = [n for n in snapshot.nodes if n.role == "follower"]
+                    expected = set(session.cfg.followers)
                     if (
                         expected
                         and expected <= {n.name for n in robots}

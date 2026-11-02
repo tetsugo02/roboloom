@@ -5,7 +5,7 @@ For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_m
 ```yaml
 type: joint
 input: leader
-robot: robot
+followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
 max_speed_counts_per_s: 2048
@@ -27,7 +27,7 @@ These are the values from the distributed template. Set them after checking the 
 
 When `aligning` appears on screen, align the leader with the follower while watching the displayed joint differences. Run `start <task>` once it is `following`. If the input is stale, the state becomes `input_stale`, and following does not continue without new input.
 
-The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `Experiment.from_yaml()` does not accept a leader that executes control laws.
+The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `InProcessSession.from_yaml()` does not accept a leader that executes control laws.
 
 The concrete setup is in [Rakuda2 Quick start](../quick-start/rakuda2.md).
 

@@ -56,7 +56,7 @@ The option `bilateral` is the combination that returns the external force on the
 
 | Node | Configuration | Contents |
 | --- | --- | --- |
-| robot | `nodes/robot_bilateral.yaml` | Runs the arms in current-based position control (Operating Mode 5, `current_position`). `goal_current_mA` is the force limit on contact. Choose `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` and write the Mode and Current Limit with `roboloom commission` |
+| robot | `nodes/follower_bilateral.yaml` | Runs the arms in current-based position control (Operating Mode 5, `current_position`). `goal_current_mA` is the force limit on contact. Choose `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` and write the Mode and Current Limit with `roboloom commission` |
 | leader | `nodes/leader_bilateral.yaml` | The gravity-compensated leader with `feedback:` added to the arm groups |
 | controller | `nodes/controller_bilateral.yaml` | `feedback:` names the estimator and the joints that receive feedback (initially the right elbow only, with a small gain) |
 | estimator | `nodes/effort.yaml` | Estimator of the follower's external effort (`model_residual`). Uses gravity models identified on the follower, `calibration/effort_gravity_<side>.yaml`. The contact thresholds are provisional values, not measured |
@@ -64,13 +64,13 @@ The option `bilateral` is the combination that returns the external force on the
 Limitations:
 
 - Start is refused unless `goal_current_mA` is at most the EEPROM `current_limit`.
-- After the motors are rewritten to Mode 5, the standard `nodes/robot.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission robot`; on a hardware launch from a terminal, the CLI shows the differences before launching and writes them back after confirmation.
+- After the motors are rewritten to Mode 5, the standard `nodes/follower.yaml` (Mode 3) is refused by the startup check. To go back, write the values back with `commission robot`; on a hardware launch from a terminal, the CLI shows the differences before launching and writes them back after confirmation.
 - Every command with `bilateral` enabled (such as `roboloom commission robot --with bilateral`) loads the whole configuration, so it stops while the follower gravity models (`calibration/effort_gravity_<side>.yaml`) are missing. Identification works before the Mode is changed (still Mode 3), so identify first, then `commission`.
 - The configuration keys are under "Force feedback" in [Configuration](../reference/configuration.md).
 
 ## Checks before launch
 
-Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits on the hardware. The template has `torque` set to `true`, so if you want to check the pipeline the first time without moving the follower, **change `nodes/robot.yaml` to `torque: false` before launch**. Leader-side control is independent; the trigger and gravity compensation are energized.
+Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits on the hardware. The template has `torque` set to `true`, so if you want to check the pipeline the first time without moving the follower, **change `nodes/follower.yaml` to `torque: false` before launch**. Leader-side control is independent; the trigger and gravity compensation are energized.
 
 The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Configuration](../reference/configuration.md#control-rate).
 

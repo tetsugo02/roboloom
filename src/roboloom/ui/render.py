@@ -1,7 +1,7 @@
 """Render node statuses (see `roboloom.core.status`) as rich renderables. No terminal I/O here.
 
 Each status has a role; `RENDERERS[role]` turns its fields into (state, detail).
-Unregistered roles fall back to key=value, so a new robot or sensor shows up by
+Unregistered roles fall back to key=value, so a new follower or sensor shows up by
 publishing fields, and gets a tailored row by registering one function.
 """
 
@@ -19,7 +19,7 @@ from rich.text import Text
 
 STALE_S = 2.0
 LEVEL_STYLE = {"ok": "green", "warn": "yellow", "error": "bold red"}
-ROLE_ORDER = ("robot", "controller", "input", "sensor", "recorder")
+ROLE_ORDER = ("follower", "controller", "input", "sensor", "recorder")
 
 Renderer = Callable[[dict], tuple[str, "str | Text"]]  # fields -> (state, detail)
 RENDERERS: dict[str, Renderer] = {}
@@ -78,8 +78,8 @@ def _gc(f: dict) -> Text | None:
     return Text(f"gc pause {pause} ms", style=WATCH) if pause >= GC_SHOWN_MS else None
 
 
-@register("robot")
-def robot(f: dict) -> tuple[str, Text]:
+@register("follower")
+def follower(f: dict) -> tuple[str, Text]:
     detail = joined(
         [
             Text(f"reason: {f['reason']}", style=BAD) if f.get("reason") else None,
@@ -131,7 +131,7 @@ def controller(f: dict) -> tuple[str, Text]:
         )
     elif state == "input_stale":
         detail = Text("no recent leader input", style=WATCH)
-    elif state == "robot_fault":
+    elif state == "follower_fault":
         detail = Text("robot latched FAULT/ESTOP; re-align after recovery", style=BAD)
     else:
         detail = Text(
@@ -273,9 +273,9 @@ def render(
     now = time.monotonic_ns() if now_ns is None else now_ns
     header = Text(title, style="bold")
     if status:
-        experiment = Path(status.get("experiment", ""))
+        config = Path(status.get("config", ""))
         header.append(
-            f"  {experiment.parent.name}/{experiment.name}  mode={status.get('mode')}",
+            f"  {config.parent.name}/{config.name}  mode={status.get('mode')}",
             style="dim",
         )
     if log_path is not None:
@@ -333,8 +333,9 @@ def describe_report(report: dict) -> Text:
         if command == "home":
             return Text("home: moving to the saved pose", style="magenta")
         return Text(f"{command} done", style="dim")
-    if "robot_mode" in report:
-        style = "bold red" if report["robot_mode"] in ("FAULT", "ESTOP") else "cyan"
+    if "follower_mode" in report:
+        style = "bold red" if report["follower_mode"] in ("FAULT", "ESTOP") else "cyan"
         reason = f" ({report['reason']})" if report.get("reason") else ""
-        return Text(f"robot -> {report['robot_mode']}{reason}", style=style)
+        name = report.get("follower", "follower")
+        return Text(f"{name} -> {report['follower_mode']}{reason}", style=style)
     return Text(str(report))

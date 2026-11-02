@@ -1,9 +1,9 @@
-"""Rakuda2 follower: the robot node's exclusive owner of the follower bus."""
+"""Rakuda2 follower: the follower node's exclusive owner of the follower bus."""
 
 from __future__ import annotations
 
 from ...core.checks import identity
-from ..base import Robot, RobotBus
+from ..base import Follower, JointBus
 from .spec import (
     FOLLOWER_MODELS,
     JOINTS,
@@ -15,8 +15,8 @@ from .spec import (
 )
 
 
-class RakudaFollower(Robot):
-    robot_type = "rakuda2"
+class RakudaFollower(Follower):
+    model = "rakuda2"
     effort_signal = ("currents_mA", "mA")
 
     def __init__(self, name: str, cfg: dict):
@@ -37,7 +37,7 @@ class RakudaFollower(Robot):
     def device_ids(self) -> tuple[str, ...]:
         return (self.port,)
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         return open_rakuda_bus(
             self.port, mock, FOLLOWER_MODELS, self.cfg, self.name, self.limits
         )

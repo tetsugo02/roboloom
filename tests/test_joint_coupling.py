@@ -7,7 +7,7 @@ import time
 import pytest
 from conftest import rakuda2_tree
 
-from roboloom.config import load_experiment, parse_experiment
+from roboloom.config import load_config, parse_config
 from roboloom.control.device import JointDevice, build_laws, parse_groups
 from roboloom.controllers.coupling import JointCouplings
 from roboloom.controllers.joint import JointController
@@ -20,13 +20,13 @@ LINK = {"joint": "head_yaw", "source": "torso_yaw", "scale": -1.0, "reference": 
 
 
 def controller() -> JointController:
-    base = load_experiment("examples/mock/experiment.yaml").controllers["controller"]
+    base = load_config("examples/mock/config.yaml").controllers["controller"]
     assert isinstance(base, JointController) and base.source is not None
     return JointController(
         base.name,
         {**base.cfg, "couplings": [LINK]},
         base.source,
-        base.robot,
+        base.follower,
         base.robot_id,
     )
 
@@ -138,7 +138,7 @@ def test_invalid_couplings_fail_when_loading_yaml(raw: object) -> None:
     tree = rakuda2_tree()
     tree["controllers"]["controller"]["couplings"] = raw
     with pytest.raises(ValueError, match="couplings"):
-        parse_experiment(tree)
+        parse_config(tree)
 
 
 def test_couplings_work_with_other_joint_names_and_snapshot_sources() -> None:
@@ -176,7 +176,7 @@ def test_controller_passes_the_follower_velocity_to_the_lead() -> None:
         base.name,
         {**base.cfg, "couplings": [{**LINK, "lead_ms": 100}]},
         base.source,
-        base.robot,
+        base.follower,
         base.robot_id,
     )
     now = time.monotonic_ns() - 10_000_000_000
@@ -236,13 +236,13 @@ def test_position_locks_only_selected_leader_joints_and_seeds_before_torque() ->
 
 def test_rakuda_leader_locking_uses_the_normal_yaml_control_groups() -> None:
     tree = rakuda2_tree()
-    tree["experiment"]["mode"] = "mock"
+    tree["robot"]["mode"] = "mock"
     groups = tree["inputs"]["leader"]["control"]
     groups[0]["joints"] = ["torso_yaw"]
     groups.append(
         {"group": "fixed_head", "law": "position", "joints": ["head_yaw", "head_pitch"]}
     )
-    cfg = parse_experiment(tree)
+    cfg = parse_config(tree)
     leader = cfg.inputs["leader"]
     assert isinstance(leader, JointInput)
     reader = leader.open(True, cfg.dataset_fps)

@@ -5,7 +5,7 @@
 # action_horizon: steps of a chunk sent before inferring again (synchronous chunking).
 # While infer runs no command is sent; past command_deadline_ms the follower holds.
 type: policy
-robot: robot
+followers: [follower]
 factory: roboloom.policy:hold
 kwargs: {}
 observe: [camera, digit_left, digit_right]

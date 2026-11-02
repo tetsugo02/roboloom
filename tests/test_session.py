@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import mock_project
 
-from roboloom.config import load_experiment
+from roboloom.config import load_config
 from roboloom.runtime.session import EpisodeInfo, Session, SessionError
 
 pytestmark = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
@@ -49,8 +49,8 @@ def test_hardware_is_the_default_and_mock_overrides_it(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = project / "config.yaml"
     path.write_text(path.read_text().replace("mode: mock\n", ""))
-    assert not load_experiment(path).mock  # no `mode:` means the hardware
-    assert load_experiment(path, mock=True).mock
+    assert not load_config(path).mock  # no `mode:` means the hardware
+    assert load_config(path, mock=True).mock
 
 
 def test_cli_records_one_episode_by_name(tmp_path):
@@ -172,7 +172,7 @@ def test_closing_releases_the_follower_unless_the_operator_says_hold(
     operator = ScriptedOperator(prompts=[answer])
     sent: list[str] = []
     with Session.launch(project / "config.yaml", screen=False, operator=operator) as s:
-        assert s.held == ["robot"]
+        assert s.held == ["follower"]
         s.wait_ready(30)
         send = s.client.send
         s.client.send = lambda line: (sent.append(line), send(line))[1]  # type: ignore[method-assign]
@@ -191,7 +191,7 @@ def test_release_while_following_stops_then_turns_the_torque_off(tmp_path):
         deadline = time.monotonic() + 5
         mode = None
         while time.monotonic() < deadline and mode != "RELEASED":
-            mode = s.status().get("robot", {}).get("fields", {}).get("mode")
+            mode = s.status().get("follower", {}).get("fields", {}).get("mode")
             time.sleep(0.1)
         assert mode == "RELEASED"
 
@@ -214,7 +214,7 @@ def test_live_quit_releases_the_follower_unless_hold(tmp_path):
             tmp_path / "dora.log",
             "test",
             limp_on_quit=["leader"],
-            held=["robot"],
+            held=["follower"],
         )
         live.submit("quit")
         assert "follower torque off" in live.prompt().plain

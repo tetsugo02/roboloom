@@ -1,10 +1,10 @@
-"""Minimal Python entry point; see README for the full Experiment API."""
+"""Minimal Python entry point; see README for the full InProcessSession API."""
 
-from roboloom import Experiment
+from roboloom import InProcessSession
 
 
 def main():
-    with Experiment.from_yaml("examples/mock/experiment.yaml") as experiment:
+    with InProcessSession.from_yaml("examples/mock/config.yaml") as experiment:
         experiment.start_episode("mock handover")
         experiment.run(1.0)
         experiment.stop_episode()

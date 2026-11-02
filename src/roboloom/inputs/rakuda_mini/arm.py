@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ...core.checks import identity
-from ...robots.base import RobotBus
+from ...robots.base import JointBus
 from ...robots.rakuda2.spec import (
     JOINTS,
     MOTOR_IDS,
@@ -35,5 +35,5 @@ class RakudaMini(JointInput):
     def device_ids(self) -> tuple[str, ...]:
         return (self.port,)
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         return open_rakuda_bus(self.port, mock, RAKUDA_MINI_MODELS, self.cfg, self.name)

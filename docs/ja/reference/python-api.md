@@ -21,9 +21,9 @@ roboloom の操作は，どれも Python の関数として使えます．CLI（
 起動オプションは `options=` で選びます．指定したオプションと，それが必要とするオプションが有効になります．`None`（既定）なら `default: true` のオプションが有効です．CLIの `--with`／`--without` と違い，`options=` は有効にするものの全体を表します（既定のオプションに足すのではありません）．`mock=True` はmockデバイス，`mock=False` は実機で動かします．`None` ならYAMLの `mode`（既定 `hardware`）に従います．
 
 ```python
-from roboloom import load_experiment
+from roboloom import load_config
 
-cfg = load_experiment("rakuda2", options=["gravity", "digit"])
+cfg = load_config("rakuda2", options=["gravity", "digit"])
 print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 ```
 
@@ -61,7 +61,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 - `launch` は，すべてのノードが状態を報告し始めるまで待ちます．
 - 毎回の `start` の前に，followerがleaderから `alignment_tolerance` 以内にあるかを確かめます（最初の位置合わせだけではありません）．`record` はエピソードごとに，揃うまで待ちます（`ready_timeout`，既定 60 秒）．`start` は，ずれていると `SessionError` を出します．
 - 既定は実機です．mockデバイスで動かすときは `mock=True` を渡します．
-- `launch` の `options`・`mock` は，設定をパスか機体名で渡したときだけ使われます．読み込み済みの `ExperimentConfig` を渡す場合は，`load_experiment(..., options=..., mock=...)` で選んでおきます．
+- `launch` の `options`・`mock` は，設定をパスか機体名で渡したときだけ使われます．読み込み済みの `RobotConfig` を渡す場合は，`load_config(..., options=..., mock=...)` で選んでおきます．
 - 各ノードのプロセスには，有効なオプションが `ROBOLOOM_OPTIONS`，モードが `ROBOLOOM_MODE` で渡ります．
 - `with` を抜けると，次のことをします．
   - 途中のエピソードがあれば破棄する．
@@ -218,7 +218,7 @@ with Session.launch(
   - 腕を支える，姿勢を置く，Enter を押す，など．
   - CLI は `TerminalOperator` を渡します．
   - スクリプトや試験では `ScriptedOperator` に答えを並べて渡せます．
-- 設定を取る関数は，パス，機体名，読み込み済みの `ExperimentConfig` のどれでも受け取ります．オプションやモードを選ぶときは，`load_experiment(..., options=..., mock=...)` で読み込んでから渡します．
+- 設定を取る関数は，パス，機体名，読み込み済みの `RobotConfig` のどれでも受け取ります．オプションやモードを選ぶときは，`load_config(..., options=..., mock=...)` で読み込んでから渡します．
 - `plan_commission`，`watchdog_test`，`gravity_check` は，mockの設定を拒否します．
 
 ```python
@@ -226,9 +226,9 @@ from roboloom import setup
 from roboloom.operator import TerminalOperator
 
 op = TerminalOperator()
-from roboloom import load_experiment
+from roboloom import load_config
 
-gravity = load_experiment("rakuda2", options=["gravity"])
+gravity = load_config("rakuda2", options=["gravity"])
 plan = setup.plan_commission(gravity, "leader")
 for line in plan.lines():
     print(line)
@@ -258,9 +258,9 @@ finally:
     tuning.close()
 ```
 
-## 3．1 つのプロセスで動かす：`Experiment`
+## 3．1 つのプロセスで動かす：`InProcessSession`
 
-- `Experiment` は，ロボットのバス，センサー，controller の呼び出しを，すべて呼び出し側のスレッドで行います．
+- `InProcessSession` は，ロボットのバス，センサー，controller の呼び出しを，すべて呼び出し側のスレッドで行います．
 - 使いどころ：
   - 試験
   - 模擬
@@ -270,15 +270,15 @@ finally:
 - 実機の Rakuda-2 は，`Session` で動かします．
   - モーターを制御する leader（トリガーのばね，重力補償）を使う設定では，`from_yaml` を拒否します．
   - 方策の controller を使う設定でも，`from_yaml` を拒否します．
-- `Experiment.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)` の `options`・`mock` は `load_experiment` と同じ意味です．
+- `InProcessSession.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)` の `options`・`mock` は `load_config` と同じ意味です．
 
 デバイスやリポジトリ内のサンプルファイルを使わない模擬例です．`record` extraが必要です．この例の関節範囲・速度を実機へ流用しないでください．
 
 ```python
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
-with Experiment.from_components(
+with InProcessSession.from_components(
     robot_id="my-mock",
     robot=MockBus(dimension=2),
     joint_names=["j1", "j2"],

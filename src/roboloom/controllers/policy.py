@@ -28,7 +28,7 @@ import numpy as np
 
 from ..core.checks import positive
 from ..core.protocol import Envelope
-from ..robots.base import Robot
+from ..robots.base import Follower
 from .base import Controller
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ class PolicyController(Controller):
         name: str,
         cfg: dict,
         source: InputDevice | None,
-        robot: Robot,
+        robot: Follower,
         robot_id: str,
     ):
         super().__init__(name, cfg, source, robot, robot_id)
@@ -122,10 +122,10 @@ class PolicyController(Controller):
 
     def observation(self) -> dict[str, Any] | None:
         """Dataset-keyed observation, or None until every observed source has a sample."""
-        robot = self.latest.get(self.robot.name)
+        robot = self.latest.get(self.follower.name)
         if robot is None or any(n not in self.latest for n in self.sources):
             return None
-        out: dict[str, Any] = dict(self.robot.frame(robot, self.rate_hz))
+        out: dict[str, Any] = dict(self.follower.frame(robot, self.rate_hz))
         for name, spec in self.sources.items():
             out.update(spec.frame(self.latest[name], self.rate_hz))
         out["task"] = self.task
@@ -136,7 +136,7 @@ class PolicyController(Controller):
         now = time.monotonic_ns() if now_ns is None else now_ns
         if not self.running or self.policy is None:
             return None
-        robot = self.latest.get(self.robot.name)
+        robot = self.latest.get(self.follower.name)
         if robot is None or robot.payload.get("mode") in ("FAULT", "ESTOP"):
             return None
         if not self.queue:
@@ -147,7 +147,7 @@ class PolicyController(Controller):
             t0 = time.perf_counter()
             actions = np.asarray(self.policy.infer(observation), dtype=np.float64)
             self.infer_ms.append((time.perf_counter() - t0) * 1000)
-            n = len(self.robot.joint_names)
+            n = len(self.follower.joint_names)
             if actions.ndim == 1:
                 actions = actions[None, :]
             if (

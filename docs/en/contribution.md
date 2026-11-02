@@ -16,7 +16,7 @@ uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
 
-Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/experiment_ui.yaml` and `uv run roboloom run examples/mock/experiment_ui.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
+Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/config.yaml` and `uv run roboloom run examples/mock/config.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
 
 The UI preview uses a separate `datasets/rakuda-mock-ui` output and session identity. Existing `datasets/rakuda-mock` data is preserved. Older mock datasets can have a different schema (for example, DIGIT image sizes or missing effort fields) and cannot be resumed with the current configuration. Use a separate output for each schema; do not delete existing data to preview the screen.
 

@@ -1,6 +1,6 @@
 type: joint
 input: leader
-robot: robot
+followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 100
 max_speed_counts_per_s: 500

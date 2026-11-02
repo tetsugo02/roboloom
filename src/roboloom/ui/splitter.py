@@ -1,4 +1,4 @@
-"""Mouse and keyboard splitter handles; no experiment operations live here."""
+"""Mouse and keyboard splitter handles; no robot operations live here."""
 
 from __future__ import annotations
 

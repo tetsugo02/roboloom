@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from roboloom.config import load_experiment
+from roboloom.config import load_config
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.runtime import node as runtime
 
@@ -18,18 +18,18 @@ S = 1_000_000_000
         ("following", -1),
         ("waiting_input", 0),
         ("input_stale", 0),
-        ("robot_fault", 0),
+        ("follower_fault", 0),
     ],
 )
 def test_start_requires_recent_following_status(state: str, age_ns: int) -> None:
-    cfg = load_experiment("examples/mock/experiment.yaml")
+    cfg = load_config("examples/mock/config.yaml")
     latest = {"controller": {"t_ns": S - age_ns, "fields": {"state": state}}}
     assert runtime.start_warning(cfg, latest, S) is not None
     assert runtime.start_warning(cfg, {}, S) is not None
 
 
 def test_every_start_checks_the_follower_is_at_the_leader() -> None:
-    cfg = load_experiment("examples/mock/experiment.yaml")
+    cfg = load_config("examples/mock/config.yaml")
     fields = {"state": "following", "tolerance": 100, "worst_joint": "head_yaw"}
     latest = {"controller": {"t_ns": S, "fields": {**fields, "worst_diff": 140.0}}}
     warning = runtime.start_warning(cfg, latest, S)
@@ -41,7 +41,7 @@ def test_every_start_checks_the_follower_is_at_the_leader() -> None:
 def test_session_warns_without_starting_then_accepts_aligned_retry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cfg = load_experiment("examples/mock/experiment.yaml")
+    cfg = load_config("examples/mock/config.yaml")
     fifo = tmp_path / "session.fifo"
     report = tmp_path / "report.jsonl"
     status = tmp_path / "status.json"
@@ -71,7 +71,7 @@ def test_session_warns_without_starting_then_accepts_aligned_retry(
                     "tolerance": 150,
                 },
             ),
-            ("robot_status", {"mode": "HOLD", "armed": False}),
+            ("follower_status", {"mode": "HOLD", "armed": False}),
             ("controller_status", {"state": "following"}),
             (None, None),
         ]
@@ -107,4 +107,4 @@ def test_session_warns_without_starting_then_accepts_aligned_retry(
     assert "retry start" in reports[0]["warning"]
     latest = json.loads(status.read_text())["nodes"]
     assert latest["controller"]["fields"]["state"] == "following"
-    assert latest["robot"]["fields"] == {"mode": "HOLD", "armed": False}
+    assert latest["follower"]["fields"] == {"mode": "HOLD", "armed": False}

@@ -13,7 +13,7 @@ import yaml
 from conftest import mock_project, rakuda2_tree
 from test_control_laws import GRAVITY, FlatGravity
 
-from roboloom.config import parse_experiment
+from roboloom.config import parse_config
 from roboloom.control.device import JointDevice, build_laws, parse_groups
 from roboloom.control.homing import Trajectory, load_pose
 from roboloom.drivers.mock import MockBus
@@ -38,7 +38,7 @@ def test_trajectory_moves_every_joint_together_within_the_speed() -> None:
 
 
 def write_pose(path: Path, values: dict, **extra) -> Path:
-    body = {"robot_type": "rakuda2", "unit": "dynamixel_count", "pose": values, **extra}
+    body = {"model": "rakuda2", "unit": "dynamixel_count", "pose": values, **extra}
     path.write_text(yaml.safe_dump(body))
     return path
 
@@ -54,7 +54,7 @@ LIMITS = [{"min": 0, "max": 4095}] * 2
         ({"a": 1, "b": 2, "c": 3}, {}, "joints differ"),
         ({"a": 1, "b": 5000}, {}, "outside"),
         ({"a": 1, "b": float("nan")}, {}, "outside"),
-        ({"a": 1, "b": 2}, {"robot_type": "other"}, "saved for other"),
+        ({"a": 1, "b": 2}, {"model": "other"}, "saved for other"),
     ],
 )
 def test_pose_files_are_checked_against_the_robot(tmp_path, values, extra, match):
@@ -72,7 +72,7 @@ def test_capture_pose_saves_the_follower_pose_by_name(tmp_path):
     path = capture_pose(project / "config.yaml", "ready")
     assert path == project / "poses" / "ready.yaml"
     saved = yaml.safe_load(path.read_text())
-    assert saved["robot_type"] == "rakuda2" and saved["pose"]["torso_yaw"] == 2048
+    assert saved["model"] == "rakuda2" and saved["pose"]["torso_yaw"] == 2048
     assert len(saved["pose"]) == 17
     with pytest.raises(SetupError, match="exists"):
         capture_pose(project / "config.yaml", "ready")
@@ -83,8 +83,8 @@ def test_capture_pose_saves_the_follower_pose_by_name(tmp_path):
 
 def home_tree(tmp_path: Path, **home) -> dict:
     tree = rakuda2_tree()
-    pose = {j: 2048 for j in tree["robots"]["robot"]["limits"][0:0] or []}
-    names = [limit["name"] for limit in tree["robots"]["robot"]["limits"]]
+    pose = {j: 2048 for j in tree["followers"]["follower"]["limits"][0:0] or []}
+    names = [limit["name"] for limit in tree["followers"]["follower"]["limits"]]
     pose = {j: 2048 for j in names}
     pose["torso_yaw"], pose["head_yaw"] = 2148, 2000
     path = write_pose(tmp_path / "ready.yaml", pose)
@@ -97,10 +97,10 @@ def home_tree(tmp_path: Path, **home) -> dict:
 
 
 def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
-    cfg = parse_experiment(home_tree(tmp_path))
+    cfg = parse_config(home_tree(tmp_path))
     controller = cfg.controllers["controller"]
     assert controller.home is not None and controller.home.pose.name == "ready"
-    follower = controller.home.target(cfg.robot.joint_names)
+    follower = controller.home.target(cfg.follower.joint_names)
     leader = controller.leader_pose(follower)
     # the head target gets -(torso - reference) = -100 added: the leader neck sits 100 higher
     assert leader["head_yaw"] == 2100 and leader["torso_yaw"] == 2148
@@ -123,11 +123,11 @@ def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
 
 def test_home_settings_are_checked(tmp_path):
     with pytest.raises(ConfigError, match="max_speed_counts_per_s"):
-        parse_experiment(home_tree(tmp_path, max_speed=10_000))
+        parse_config(home_tree(tmp_path, max_speed=10_000))
     tree = home_tree(tmp_path)
     tree["controllers"]["controller"]["home"].pop("max_speed")
     with pytest.raises(ConfigError, match="needs pose and max_speed"):
-        parse_experiment(tree)
+        parse_config(tree)
 
 
 def test_gravity_leader_groups_need_a_homing_spring(tmp_path):
@@ -137,15 +137,15 @@ def test_gravity_leader_groups_need_a_homing_spring(tmp_path):
     tree["controllers"]["controller"]["home"] = home_tree(tmp_path)["controllers"][
         "controller"
     ]["home"]
-    tree["experiment"]["mode"] = "mock"
+    tree["robot"]["mode"] = "mock"
     for group in tree["inputs"]["leader"]["control"]:
         group.pop("homing", None)  # the template ships one; take it away
     with pytest.raises(ConfigError, match="need homing"):
-        parse_experiment(deepcopy(tree))
+        parse_config(deepcopy(tree))
     for group in tree["inputs"]["leader"]["control"]:
         if group["law"] == "gravity_comp":
             group["homing"] = {"kp_mA_per_count": 0.5, "max_mA": 40}
-    assert parse_experiment(tree).controllers["controller"].home is not None
+    assert parse_config(tree).controllers["controller"].home is not None
 
 
 def safety() -> tuple[FollowerSafety, MockBus]:
@@ -255,21 +255,24 @@ def status(t_ns: int, **fields) -> dict:
 
 
 def test_session_refuses_home_while_recording_and_start_while_moving(tmp_path):
-    cfg = parse_experiment(home_tree(tmp_path))
+    cfg = parse_config(home_tree(tmp_path))
     now = time.monotonic_ns()
     latest = {"recorder": status(now, state="recording")}
     assert "stop the episode" in home_warning(cfg, latest, now)
-    latest = {"recorder": status(now, state="idle"), "robot": status(now, armed=True)}
+    latest = {
+        "recorder": status(now, state="idle"),
+        "follower": status(now, armed=True),
+    }
     assert "following" in home_warning(cfg, latest, now)
-    latest = {"robot": status(now, armed=False)}
+    latest = {"follower": status(now, armed=False)}
     assert home_warning(cfg, latest, now) is None
     ready = status(now, state="following", worst_diff=0, tolerance=300)
     moving = {
         "controller": ready,
-        "robot": status(now, home="ready", home_state="moving"),
+        "follower": status(now, home="ready", home_state="moving"),
     }
     assert "moving home" in start_warning(cfg, moving, now)
-    moving["robot"] = status(now, home="ready", home_state="reached")
+    moving["follower"] = status(now, home="ready", home_state="reached")
     assert start_warning(cfg, moving, now) is None
 
 
@@ -291,7 +294,7 @@ def test_session_moves_home_then_records_from_there(tmp_path):
     with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)
         s.home()
-        robot = s.status()["robot"]["fields"]
+        robot = s.status()["follower"]["fields"]
         assert robot["home"] == "ready" and robot["home_state"] == "reached"
         result = s.record("from home", 1.0, home=True)
     assert result.saved and result.frames > 5

@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..dynamics.base import GravityModel, load_gravity_model
-from ..robots.base import Robot
+from ..robots.base import Follower
 from .base import Estimator
 
 
@@ -43,7 +43,7 @@ class ModelResidual(Estimator):
         self.inputs: list[list[int]] = []
         self.outputs: list[list[int]] = []
 
-    def bind(self, robot: Robot) -> None:
+    def bind(self, robot: Follower) -> None:
         super().bind(robot)
         for model in self.models:
             missing = set(model.joint_names) - set(robot.joint_names)

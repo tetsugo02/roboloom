@@ -176,8 +176,8 @@ inputs:
   leader: nodes/leader_bilateral.yaml        # type: rakuda_mini
 controllers:
   controller: nodes/controller_bilateral.yaml
-robots:
-  robot: nodes/robot.yaml                     # type: rakuda2_follower
+followers:
+  follower: nodes/follower.yaml                     # type: rakuda2_follower
 estimators:
   effort: nodes/effort.yaml                   # robot: robot
 ```
@@ -197,8 +197,8 @@ inputs:
   leader: nodes/leader.yaml                   # type: gello_dynamixel（例）
 controllers:
   controller: nodes/controller.yaml           # type: joint, feedback.estimator: effort
-robots:
-  robot: nodes/robot.yaml                     # type: piper_follower（例）
+followers:
+  follower: nodes/follower.yaml                     # type: piper_follower（例）
 estimators:
   effort: nodes/effort.yaml                   # type: next, robot: robot
 ```
@@ -259,7 +259,7 @@ feedback:
 
 ```yaml
 type: model_residual              # none | sensor | model_residual | next（実装済みは none と model_residual）
-robot: robot
+follower: follower
 joints: [r_arm_sh_pitch1, r_arm_sh_roll, r_arm_sh_pitch2, r_arm_el_yaw, r_arm_wr_roll, r_arm_wr_yaw]
 models: [../calibration/effort_gravity_right.yaml]   # 実装では腕ごとのモデルのリスト
 smoothing_alpha: 0.2
@@ -282,7 +282,7 @@ class EffortEstimator(Protocol):
     ]  # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
 
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...  # robot_state の payload
+    def update(self, state: dict, t_ns: int) -> Estimate: ...  # follower_state の payload
 
 
 @dataclass

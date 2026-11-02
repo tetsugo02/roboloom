@@ -6,11 +6,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..config import ExperimentConfig
+from ..config import RobotConfig
 from ..drivers.dynamixel_table import OPERATING_MODES
 from ..errors import Cancelled, ConfigError, HardwareError
 from ..operator import Operator
-from .common import experiment_node, require_hardware
+from .common import config_node, require_hardware
 
 
 @dataclass
@@ -93,7 +93,7 @@ def watchdog_trial(
 
 
 def watchdog_test(
-    experiment: str | Path | ExperimentConfig,
+    config: str | Path | RobotConfig,
     node: str,
     joint: str,
     operator: Operator,
@@ -101,7 +101,7 @@ def watchdog_test(
 ) -> WatchdogResult:
     from ..drivers.dynamixel import DynamixelBus
 
-    cfg, owner = experiment_node(experiment, node)
+    cfg, owner = config_node(config, node)
     expected = getattr(owner, "expected_eeprom", None)
     if expected is None:
         raise ConfigError(f"{node}: not a Dynamixel node")

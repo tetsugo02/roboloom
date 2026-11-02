@@ -1,11 +1,11 @@
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
 
 def create(output):
-    return Experiment.from_components(
+    return InProcessSession.from_components(
         robot_id="toy",
         robot=MockBus(dimension=2),
         joint_names=["a", "b"],

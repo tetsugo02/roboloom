@@ -15,8 +15,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
@@ -72,7 +72,7 @@ options:
     set:
       inputs.leader: nodes/leader_bilateral.yaml
       controllers.controller: nodes/controller_bilateral.yaml
-      robots.robot: nodes/robot_bilateral.yaml
+      followers.follower: nodes/follower_bilateral.yaml
       estimators.effort: nodes/effort.yaml
     dataset: bilateral
   policy:
@@ -176,7 +176,7 @@ The feedback current stays inside the same `max_current_mA` and EEPROM Current L
 
 An estimator with `record: true` records `observation.effort_ext` (external effort = −residual, in the estimator's unit), `observation.effort_ext.valid` and `observation.contact`. Frames without an estimate hold 0. One configuration records at most one estimator (a second one collides on the feature names and is refused).
 
-At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`Experiment`) does not handle estimators.
+At load time, roboloom checks that references exist, that the estimator and the controller use the same robot, the units, and that the leader accepts the feedback. Mismatched settings are refused before start. Joints that are targets of `couplings` also receive feedback through the `joints` mapping. The Python API (`InProcessSession`) does not handle estimators.
 
 ## Control rate
 

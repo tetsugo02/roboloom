@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executable dora node. The node id selects its role from the experiment config."""
+"""Executable dora node. The node id selects its role from the robot's configuration."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ import time
 from collections import deque
 from pathlib import Path
 
-from roboloom.config import ExperimentConfig, env_options, load_experiment
-from roboloom.control.trace import RobotTrace
+from roboloom.config import RobotConfig, env_options, load_config
+from roboloom.control.trace import FollowerTrace
 from roboloom.controllers.base import Controller
 from roboloom.controllers.policy import PolicyController
 from roboloom.core.protocol import Envelope, Publisher
@@ -21,7 +21,7 @@ from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.estimators.base import Estimate, Estimator
 from roboloom.recording import ACTION, EpisodeRecorder
-from roboloom.robots.base import Robot
+from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
 COMMANDS = ("start", "stop", "save", "discard", "estop", "release", "home", "quit")
@@ -46,9 +46,7 @@ def _event(node):
 READY = ("following", "ready", "running")  # controller states that may start an episode
 
 
-def start_warning(
-    cfg: ExperimentConfig, latest: dict[str, dict], now_ns: int
-) -> str | None:
+def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
     """Why an episode may not start yet (checked before start reaches the robot and
     recorder), or None. `latest` maps node names to their last status."""
     for name in cfg.controllers:
@@ -68,7 +66,7 @@ def start_warning(
             return f"{name}: controller is {state}; wait until ready, then retry start"
         controller = cfg.controllers[name]
         pair = [
-            controller.robot.name,
+            controller.follower.name,
             *([controller.source.name] if controller.source else []),
         ]
         for node in pair:
@@ -90,16 +88,14 @@ def start_warning(
     return None
 
 
-def home_warning(
-    cfg: ExperimentConfig, latest: dict[str, dict], now_ns: int
-) -> str | None:
+def home_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
     """Why `home` may not run now (the robot would move during an episode), or None."""
     if not any(c.home is not None for c in cfg.controllers.values()):
         return "no controller has a home pose (home: in the controller YAML)"
     recorder = latest.get("recorder", {}).get("fields", {})
     if recorder.get("state") == "recording":
         return "stop the episode before moving home"
-    for name in cfg.robots:
+    for name in cfg.followers:
         fields = latest.get(name, {}).get("fields", {})
         if fields.get("armed"):
             return f"{name} is following; stop it before moving home"
@@ -124,7 +120,7 @@ def parse_command(line: str) -> dict:
     return {"command": command, "task": task.strip()}
 
 
-def _session(node, cfg: ExperimentConfig):
+def _session(node, cfg: RobotConfig):
     """Forward terminal commands; collect reports and the latest status of every node for the CLI."""
     p = Publisher("session")
     fifo = os.environ["ROBOLOOM_SESSION_FIFO"]
@@ -184,7 +180,7 @@ def _session(node, cfg: ExperimentConfig):
                     json.dump(
                         {
                             "t_ns": now,
-                            "experiment": cfg.path,
+                            "config": cfg.path,
                             "mode": cfg.mode,
                             "nodes": latest,
                         },
@@ -202,7 +198,7 @@ def _quit(event_id, msg) -> bool:
     )
 
 
-def _source(node, source: Source, cfg: ExperimentConfig, role: str):
+def _source(node, source: Source, cfg: RobotConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
     set_home = getattr(reader, "set_home", None)
@@ -211,7 +207,7 @@ def _source(node, source: Source, cfg: ExperimentConfig, role: str):
             leader_pose = getattr(pair, "leader_pose", None)
             if leader_pose is not None:
                 set_home(
-                    leader_pose(pair.home.target(pair.robot.joint_names)), pair.home
+                    leader_pose(pair.home.target(pair.follower.joint_names)), pair.home
                 )
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     start_trace = getattr(reader, "start_trace", None)
@@ -282,11 +278,11 @@ def _work_fields(work: deque[float]) -> dict:
     return {"work_ms": round(work[-1], 1), "work_max_ms": round(max(work), 1)}
 
 
-def _home_robot(safety: FollowerSafety, robot: Robot, cfg: ExperimentConfig) -> str:
+def _home_follower(safety: FollowerSafety, robot: Follower, cfg: RobotConfig) -> str:
     """Start the move to the controller's saved pose; the error text, or ""."""
     spec = cfg.controller_for(robot.name).home
     if spec is None:
-        return "home: no home pose configured for this robot's controller"
+        return "home: no home pose configured for this follower's controller"
     try:
         safety.home(spec.target(robot.joint_names), spec.max_speed, spec.pose.name)
     except (RuntimeError, ValueError) as exc:
@@ -312,10 +308,10 @@ def _home_fields(safety: FollowerSafety) -> dict:
     return {}
 
 
-def _robot(node, robot: Robot, cfg: ExperimentConfig):
+def _follower(node, robot: Follower, cfg: RobotConfig):
     bus = robot.open_device(cfg.mock)
     safety = FollowerSafety(robot.safety_config(cfg.robot_id), bus)
-    status = StatusReporter(Publisher(robot.name), "robot")
+    status = StatusReporter(Publisher(robot.name), "follower")
     intervals: deque[float] = deque(maxlen=int(robot.control_hz * 2))
     clamped: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
     rejected: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
@@ -324,7 +320,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
     error = ""
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     trace = (
-        RobotTrace(
+        FollowerTrace(
             Path(log_dir) / f"{robot.name}_trace.npz",
             robot.joint_names,
             FollowerSafety.MODES,
@@ -353,7 +349,7 @@ def _robot(node, robot: Robot, cfg: ExperimentConfig):
                     except RuntimeError as exc:
                         error = str(exc)
                 elif command == "home":
-                    error = _home_robot(safety, robot, cfg)
+                    error = _home_follower(safety, robot, cfg)
                 if command == "quit":
                     return
             elif event_id == "tick":
@@ -408,7 +404,7 @@ def _controller(node, controller: Controller):
         event_id, msg = _event(node)
         if _quit(event_id, msg):
             return
-        if event_id == "robot" and msg is not None:
+        if event_id == "follower" and msg is not None:
             follower, follower_target, follower_velocity = (
                 msg.payload["positions"],
                 msg.payload.get("target"),
@@ -459,7 +455,7 @@ def _estimator(node, estimator: Estimator):
         event_id, msg = _event(node)
         if _quit(event_id, msg):
             return
-        if event_id == "robot" and msg is not None:
+        if event_id == "follower" and msg is not None:
             began = time.perf_counter()
             last = estimator.update(msg.payload)
             work.append((time.perf_counter() - began) * 1e3)
@@ -520,8 +516,8 @@ def _policy(node, controller: PolicyController):
         event_id, msg = _event(node)
         if _quit(event_id, msg):
             return
-        if event_id == "robot" and msg is not None:
-            controller.observe(controller.robot.name, msg)
+        if event_id == "follower" and msg is not None:
+            controller.observe(controller.follower.name, msg)
             if not warmed:
                 # The first message on a dora connection stalls the receiving robot loop
                 # about 130 ms (measured in mock). Send it now, while the robot is not
@@ -568,13 +564,13 @@ def _policy(node, controller: PolicyController):
             _send(node, "status", status.make(fields, level, now))
 
 
-def _recorder(node, cfg: ExperimentConfig):
+def _recorder(node, cfg: RobotConfig):
     """Records episodes. `save` (video encoding) runs on a worker thread so this loop keeps
     draining dora events; otherwise queued frames exceed dora's per-reply size limit and are lost."""
     p = Publisher("recorder")
     writer = EpisodeRecorder(cfg, **cfg.recorder)
     writer.open_dataset()  # creating/resuming takes ~1 s; never inside an episode
-    robot_mode = None
+    follower_modes: dict[str, str | None] = {}
     saving: threading.Thread | None = None
     done: queue.Queue[dict] = queue.Queue()
     status = StatusReporter(Publisher("recorder"), "recorder")
@@ -628,15 +624,18 @@ def _recorder(node, cfg: ExperimentConfig):
                 _send(node, "status", status.make(fields, level, now))
             if event_id in writer.samples and msg is not None:
                 writer.ingest(event_id, msg)
-                if event_id == cfg.robot.name and msg.payload.get("mode") != robot_mode:
-                    robot_mode = msg.payload.get("mode")
+                if event_id in cfg.followers and msg.payload.get(
+                    "mode"
+                ) != follower_modes.get(event_id):
+                    follower_modes[event_id] = msg.payload.get("mode")
                     _send(
                         node,
                         "report",
                         p.make(
                             "report",
                             {
-                                "robot_mode": robot_mode,
+                                "follower": event_id,
+                                "follower_mode": follower_modes[event_id],
                                 "reason": msg.payload.get("reason", ""),
                             },
                         ),
@@ -704,7 +703,7 @@ def main() -> None:
 
     name, path = sys.argv[1:3]
     mode = os.environ.get("ROBOLOOM_MODE")
-    cfg = load_experiment(
+    cfg = load_config(
         path,
         options=env_options(os.environ.get("ROBOLOOM_OPTIONS")),
         mock=None if mode is None else mode == "mock",
@@ -714,8 +713,8 @@ def main() -> None:
         _session(node, cfg)
     elif name == "recorder":
         _recorder(node, cfg)
-    elif name in cfg.robots:
-        _robot(node, cfg.robots[name], cfg)
+    elif name in cfg.followers:
+        _follower(node, cfg.followers[name], cfg)
     elif name in cfg.controllers:
         controller = cfg.controllers[name]
         if isinstance(controller, PolicyController):

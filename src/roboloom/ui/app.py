@@ -128,7 +128,7 @@ class OperatorApp(App[str]):
     def on_mount(self) -> None:
         self.query_one("#nodes").border_title = "Nodes (display selection only)"
         self.query_one("#details").border_title = "Selected node"
-        self.query_one("#menu").border_title = "Operations (entire experiment)"
+        self.query_one("#menu").border_title = "Operations (whole robot)"
         self.query_one("#logs").border_title = "Events / dora log · Ctrl-O: latest"
         self.query_one("#menu", OptionList).focus()
         self.query_one("#completion").display = False

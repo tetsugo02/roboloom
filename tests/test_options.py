@@ -15,9 +15,9 @@ from textual.widgets import Button, Checkbox
 
 from roboloom.cli import _with_config
 from roboloom.config import (
-    load_experiment,
+    load_config,
     option_changes,
-    parse_experiment,
+    parse_config,
     parse_options,
     select_options,
 )
@@ -65,10 +65,10 @@ def test_bad_options_are_rejected(bad):
 
 
 def test_template_options_replace_nodes_and_name_datasets():
-    cfg = parse_experiment(rakuda2_tree())
+    cfg = parse_config(rakuda2_tree())
     assert cfg.options == () and set(cfg.sensors) == {"camera"}
     assert cfg.repo_id == "local/rakuda2"
-    cfg = parse_experiment(rakuda2_tree(["digit"]))
+    cfg = parse_config(rakuda2_tree(["digit"]))
     assert set(cfg.sensors) == {"camera", "digit_left", "digit_right"}
     assert cfg.repo_id == "local/rakuda2-digit"
     assert cfg.output.endswith("datasets/rakuda2-digit")
@@ -83,8 +83,8 @@ def test_option_changing_features_needs_its_own_dataset(tmp_path):
     text = path.read_text()
     path.write_text(text.replace("    dataset: digit\n", ""))
     with pytest.raises(ConfigError, match="options.digit changes the recorded"):
-        load_experiment(path, options=["digit"])
-    assert load_experiment(path).options == ()  # off: nothing to compare
+        load_config(path, options=["digit"])
+    assert load_config(path).options == ()  # off: nothing to compare
 
 
 def test_configuration_words_move_into_config(tmp_path, monkeypatch):
@@ -98,12 +98,12 @@ def test_configuration_words_move_into_config(tmp_path, monkeypatch):
         "--config",
         "rakuda2",
     ]
-    assert _with_config(["commission", "robot"]) == ["commission", "robot"]
-    assert _with_config(["commission", "rakuda2", "robot"]) == [
+    assert _with_config(["commission", "follower"]) == ["commission", "follower"]
+    assert _with_config(["commission", "rakuda2", "follower"]) == [
         "commission",
         "--config",
         "rakuda2",
-        "robot",
+        "follower",
     ]
     assert _with_config(["session", "home"]) == ["session", "home"]
     assert _with_config(["session", "rakuda2", "home"])[:3] == [

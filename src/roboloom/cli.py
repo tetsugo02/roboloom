@@ -17,12 +17,12 @@ import yaml
 
 from .config import (
     INFER_OPTION,
-    ExperimentConfig,
     Option,
+    RobotConfig,
     is_configuration,
-    load_experiment,
+    load_config,
     parse_options,
-    resolve_experiment,
+    resolve_config,
     select_options,
 )
 from .errors import Cancelled, ConfigError, RoboloomError
@@ -294,9 +294,9 @@ def _declared(path: Path) -> dict[str, Option]:
     return parse_options((yaml.safe_load(path.read_text()) or {}).get("options"))
 
 
-def _load(args: argparse.Namespace) -> ExperimentConfig:
-    path = resolve_experiment(args.config)
-    return load_experiment(
+def _load(args: argparse.Namespace) -> RobotConfig:
+    path = resolve_config(args.config)
+    return load_config(
         path,
         options=_selection(args, path),
         mock=True if getattr(args, "mock", False) else None,
@@ -385,7 +385,7 @@ def _dispatch(args: argparse.Namespace) -> None:
 
     if args.command == "session":
         # the FIFO belongs to the configuration file, whatever options the run chose
-        cfg = load_experiment(resolve_experiment(args.config), mock=True)
+        cfg = load_config(resolve_config(args.config), mock=True)
         send_session(
             fifo_for(cfg), " ".join(x for x in (args.operation, args.task) if x)
         )
@@ -431,7 +431,7 @@ def _operate_robot(
     comes back to it. Returns BACK when the operator went back to the robot list."""
     from .ui.launcher import BACK, LaunchPlan, choose, load_last
 
-    path = resolve_experiment(args.config)
+    path = resolve_config(args.config)
     plain = getattr(args, "plain", False)
     given = _selection(args, path)
     asked = bool(getattr(args, "with_", None) or getattr(args, "without", None))
@@ -466,7 +466,7 @@ def _operate_robot(
                 return None
             plan = chosen
         selected = plan.options if (show or given is not None) else None
-        cfg = load_experiment(path, options=selected, mock=True if plan.mock else None)
+        cfg = load_config(path, options=selected, mock=True if plan.mock else None)
         if terminal and not cfg.mock:
             _commission(cfg)
         outcome = _start(
@@ -477,14 +477,14 @@ def _operate_robot(
         show = True
 
 
-def _commission(cfg: ExperimentConfig) -> None:
+def _commission(cfg: RobotConfig) -> None:
     """Options can change a node's Operating Mode or Current Limit (EEPROM), which the
     nodes check at startup. Before launching, show the differences and write them after
     the operator confirms (as `roboloom commission` does)."""
     from . import setup
     from .operator import TerminalOperator
 
-    for name, owner in {**cfg.inputs, **cfg.robots}.items():
+    for name, owner in {**cfg.inputs, **cfg.followers}.items():
         if getattr(owner, "expected_eeprom", None) is None:
             continue
         plan = setup.plan_commission(cfg, name)
@@ -498,7 +498,7 @@ def _commission(cfg: ExperimentConfig) -> None:
 
 def _start(
     args: argparse.Namespace,
-    cfg: ExperimentConfig,
+    cfg: RobotConfig,
     plan: LaunchPlan,
     *,
     live: bool,

@@ -16,7 +16,7 @@ uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
 
-checkout内の模擬dataflowは `uv run roboloom validate examples/mock/experiment_ui.yaml` と `uv run roboloom run examples/mock/experiment_ui.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
+checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
 画面確認用の設定は保存先 `datasets/rakuda-mock-ui` とsessionの識別子を分け，既存の `datasets/rakuda-mock` を維持します．古いmockデータはDIGIT画像サイズやeffort項目などが現在と異なり，再開できない場合があります．スキーマごとに保存先を分け，画面確認のために既存データを削除しないでください．
 

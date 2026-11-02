@@ -1,4 +1,4 @@
-"""In-memory bus for tests and mock experiments.
+"""In-memory bus for tests and mock configurations.
 
 Position modes move instantly to the goal while torque is on. Current mode keeps
 the position and records the goal current, so control laws can be tested.

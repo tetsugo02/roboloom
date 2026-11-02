@@ -17,7 +17,7 @@ def summarize(values: list[float]) -> dict:
     }
 
 
-QUALITY = {  # defaults of `recorder.quality` in an experiment
+QUALITY = {  # defaults of `recorder.quality` in a configuration
     "max_missing_rate": 0.05,  # per stream: share of rows without a fresh sample
     "min_action_valid_rate": 0.9,
     "max_interval_ms": 100.0,  # longest robot control tick (a stall jerks the data)

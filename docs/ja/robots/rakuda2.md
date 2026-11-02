@@ -56,7 +56,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 | ノード | 設定 | 内容 |
 | --- | --- | --- |
-| robot | `nodes/robot_bilateral.yaml` | 腕を電流制限つき位置制御（Operating Mode 5，`current_position`）にする．`goal_current_mA` が接触時の力の上限．`SET_FOLLOWER_ARM_GOAL_CURRENT_mA` を決め，`roboloom commission` でModeとCurrent Limitを書く |
+| robot | `nodes/follower_bilateral.yaml` | 腕を電流制限つき位置制御（Operating Mode 5，`current_position`）にする．`goal_current_mA` が接触時の力の上限．`SET_FOLLOWER_ARM_GOAL_CURRENT_mA` を決め，`roboloom commission` でModeとCurrent Limitを書く |
 | leader | `nodes/leader_bilateral.yaml` | 重力補償付きleaderの腕グループに `feedback:` を足したもの |
 | controller | `nodes/controller_bilateral.yaml` | `feedback:` で推定器と返す関節（初期値は右肘1関節，小さいゲイン）を指定 |
 | estimator | `nodes/effort.yaml` | followerの外力の推定器（`model_residual`）．followerで同定した重力モデル `calibration/effort_gravity_<side>.yaml` を使う．接触の閾値は実測前の仮の値 |
@@ -64,13 +64,13 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 制約：
 
 - `goal_current_mA` は，EEPROMの `current_limit` 以下でなければ起動を拒否します．
-- Mode 5へ書き換えた後のモーターでは，通常の `nodes/robot.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission robot` で書き戻します．端末から実機で起動する場合は，CLIが起動前に差分を表示し，確認してから書き戻します．
+- Mode 5へ書き換えた後のモーターでは，通常の `nodes/follower.yaml`（Mode 3）は起動時の検査で拒否されます．戻すときは `commission robot` で書き戻します．端末から実機で起動する場合は，CLIが起動前に差分を表示し，確認してから書き戻します．
 - `bilateral` を有効にしたコマンド（`roboloom commission robot --with bilateral` など）は，設定全体を読み込みます．そのため，followerの重力モデル（`calibration/effort_gravity_<side>.yaml`）が無いと止まります．重力の同定はModeを書き換える前（Mode 3のまま）にできるので，先に同定してから `commission` します．
 - 設定キーは [設定](../reference/configuration.md) の「力の逆送」にあります．
 
 ## 起動前の確認
 
-ポート，モーターID，モデル，EEPROM，関節範囲，速度・電流上限を実機で確認します．テンプレートの `torque` は `true` なので，初回にfollowerを動かさず経路を確かめる場合は **起動前に `nodes/robot.yaml` を `torque: false` に変更** してください．leader側の制御は独立しており，トリガーや重力補償は通電します．
+ポート，モーターID，モデル，EEPROM，関節範囲，速度・電流上限を実機で確認します．テンプレートの `torque` は `true` なので，初回にfollowerを動かさず経路を確かめる場合は **起動前に `nodes/follower.yaml` を `torque: false` に変更** してください．leader側の制御は独立しており，トリガーや重力補償は通電します．
 
 制御周期はテンプレートで120 Hzです．前提条件と下げ方は [設定](../reference/configuration.md) の「制御周期」を参照してください．
 

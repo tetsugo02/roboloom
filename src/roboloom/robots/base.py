@@ -1,4 +1,4 @@
-"""Follower contract: joint space, limits, and the bus the robot node owns exclusively."""
+"""Follower contract: joint space, limits, and the bus the follower node owns exclusively."""
 
 from __future__ import annotations
 
@@ -17,9 +17,9 @@ from ..control.device import (
 from ..core.checks import finite, names, positive
 from ..core.protocol import Envelope
 from ..core.source import Features
-from ..drivers.base import RobotBus
+from ..drivers.base import JointBus
 
-__all__ = ["Robot", "RobotBus", "check_limits"]
+__all__ = ["Follower", "JointBus", "check_limits"]
 
 
 LIMIT_KEYS = ("min", "max", "max_speed", "max_jump")
@@ -75,14 +75,14 @@ def check_health(cfg: object, dimension: int, name: str) -> dict:
     return out
 
 
-class Robot:
+class Follower:
     """Joint-position follower. Used directly when the caller supplies the bus.
 
     Models subclass this with fixed joint names and unit and implement `open_bus`.
     """
 
-    robot_type = "external"
-    # (robot_state field, unit) of the effort the robot measures, for effort estimators;
+    model = "external"
+    # (follower_state field, unit) of the effort the robot measures, for effort estimators;
     # None when it measures none
     effort_signal: ClassVar[tuple[str, str] | None] = None
 
@@ -118,10 +118,10 @@ class Robot:
     def device_ids(self) -> tuple[str, ...]:
         return ()
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         raise RuntimeError(f"{self.name}: no bus driver; pass an opened bus instead")
 
-    def open_device(self, mock: bool) -> RobotBus:
+    def open_device(self, mock: bool) -> JointBus:
         """The bus, wrapped in its control-law groups when `control` is configured."""
         bus = self.open_bus(mock)
         if self.control is None:

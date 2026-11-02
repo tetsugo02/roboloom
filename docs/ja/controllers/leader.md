@@ -5,7 +5,7 @@ Rakuda2の遠隔操作では，`inputs` の `leader` ノード（機器は `type
 ```yaml
 type: joint
 input: leader
-robot: robot
+followers: [follower]
 unit: dynamixel_count
 alignment_tolerance: 300
 max_speed_counts_per_s: 2048
@@ -27,7 +27,7 @@ input_timeout_ms: 150
 
 画面で `aligning` が出たら，表示された関節差を見ながらleaderをfollowerに揃えます．`following` になってから `start <task>` します．入力が古いと `input_stale` となり，新しい入力なしに追従を続けません．
 
-leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`Experiment.from_yaml()` は制御則を実行するleaderを受け付けません．
+leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`InProcessSession.from_yaml()` は制御則を実行するleaderを受け付けません．
 
 具体的なセットアップは [Rakuda2 Quick start](../quick-start/rakuda2.md) にあります．
 

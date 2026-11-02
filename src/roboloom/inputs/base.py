@@ -22,7 +22,7 @@ from ..control.trace import Trace
 from ..core.checks import finite, names, positions, positive
 from ..core.protocol import Envelope
 from ..core.source import Features, Reader, Sample, Source
-from ..robots.base import RobotBus
+from ..robots.base import JointBus
 
 
 class InputDevice(Source):
@@ -36,7 +36,7 @@ class InputDevice(Source):
 class BusReader:
     """Reads a position bus as timestamped joint samples."""
 
-    def __init__(self, bus: RobotBus):
+    def __init__(self, bus: JointBus):
         self.bus = bus
 
     def read(self) -> Sample:
@@ -223,7 +223,7 @@ class JointInput(InputDevice):
             j: "mA" for g in self.control or [] if "feedback" in g.cfg for j in g.joints
         }
 
-    def open_bus(self, mock: bool) -> RobotBus:
+    def open_bus(self, mock: bool) -> JointBus:
         raise RuntimeError(f"{self.name}: no bus driver; pass a reader instead")
 
     def current_limits_mA(self) -> dict[str, float]:

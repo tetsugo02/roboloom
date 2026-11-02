@@ -39,7 +39,7 @@ roboloom の操作は，どれも Python の関数として使えます．CLI �
 - **`roboloom.setup`**（セットアップと計測）
   - commission，可動域，重力の同定・確認・調整を行います．
   - 結果をデータで返します．操作者とのやりとりは `Operator` に任せます．
-- **`Experiment`**（1 プロセス）：試験と簡単な機体のためのもので，下で説明します．
+- **`InProcessSession`**（1 プロセス）：試験と簡単な機体のためのもので，下で説明します．
 
 ```python
 from roboloom import Session
@@ -52,7 +52,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:  # 実機（mock=True 
 
 `options` は設定の `options:` から有効にするものです（`None` で各オプションの既定）．`mock=True` で模擬デバイス，省略時は YAML の `mode`（既定は hardware）に従います．
 
-`Experiment` は，バス，センサー，controller を呼び出し側のスレッドで動かします．以下はデバイスもリポジトリ内のサンプルファイルも使わない模擬例です．記録用extraを追加し，Python例を自分の `main.py` に保存して実行します．
+`InProcessSession` は，バス，センサー，controller を呼び出し側のスレッドで動かします．以下はデバイスもリポジトリ内のサンプルファイルも使わない模擬例です．記録用extraを追加し，Python例を自分の `main.py` に保存して実行します．
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record
@@ -60,10 +60,10 @@ uv run python main.py
 ```
 
 ```python
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
-with Experiment.from_components(
+with InProcessSession.from_components(
     robot_id="my-mock",
     robot=MockBus(dimension=2),
     joint_names=["j1", "j2"],
@@ -89,7 +89,7 @@ with Experiment.from_components(
     experiment.stop_inference()
 ```
 
-`Experiment.from_components(...)` では，任意の関節数と名前，ロボットバス，controller 関数，センサー読み取り関数を渡せます．controller または `step(policy=...)` は `obs` を受け取り，次の関節目標値を返します．センサー関数は `Sample(value, capture_ns)` または `None` を返します．ロボットバスは `read_positions`，`write_positions`，`enable_torque`，`close` を実装します．観測は `obs["state"]` と各センサー名で渡されます．`step()` の指令は必ず robot 側の期限・次元・有限値・関節範囲・変化量検査を通ります．
+`InProcessSession.from_components(...)` では，任意の関節数と名前，ロボットバス，controller 関数，センサー読み取り関数を渡せます．controller または `step(policy=...)` は `obs` を受け取り，次の関節目標値を返します．センサー関数は `Sample(value, capture_ns)` または `None` を返します．ロボットバスは `read_positions`，`write_positions`，`enable_torque`，`close` を実装します．観測は `obs["state"]` と各センサー名で渡されます．`step()` の指令は必ず robot 側の期限・次元・有限値・関節範囲・変化量検査を通ります．
 
 この模擬例の関節範囲や速度を実機の安全値として使わないでください．
 
@@ -219,7 +219,7 @@ uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所�
 - 自分のプロジェクトの `.roboloom/rakuda2/` に，使用する機体の設定を管理します．
 
 実機を動かす手順は，腕を支えられる状態で行ってください．
-- テンプレートの `nodes/robot.yaml` は `torque: true` です．初回の収集前に `torque: false` へ変更し，followerを動かさずデータの経路を確かめます（leaderの制御は独立して通電します）．
+- テンプレートの `nodes/follower.yaml` は `torque: true` です．初回の収集前に `torque: false` へ変更し，followerを動かさずデータの経路を確かめます（leaderの制御は独立して通電します）．
 - 終了するときは `stop` → 腕を支えて `quit` → 確認で保持または支持後の脱力を明示選択します．初期選択はキャンセルです．
 
 leader の重力補償の調整（gain と hold の意味，`tune-gravity` の使い方）は，[docs/ja/reference/gravity-tuning.md](docs/ja/reference/gravity-tuning.md) を参照してください．
@@ -252,7 +252,7 @@ src/roboloom/
   operator.py   Operator（CLI は TerminalOperator，スクリプトと試験は ScriptedOperator）
   errors.py     利用者が対処できるエラー（ConfigError，SetupError，HardwareError，Cancelled）
   project.py    roboloom init（robots/<robot>/template から .roboloom/<robot>/ を作る）
-  api.py        1 プロセスの Experiment（試験・簡単な機体）
+  api.py        1 プロセスの InProcessSession（試験・簡単な機体）
   policy.py     方策の契約（reset，infer）と読み込み．hold（その場に留まる）
 ```
 

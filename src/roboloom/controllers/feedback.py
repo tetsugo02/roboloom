@@ -14,7 +14,7 @@ import time
 from ..core.checks import finite, positive
 from ..core.protocol import Envelope, Publisher
 from ..estimators.base import Estimator
-from ..robots.base import Robot
+from ..robots.base import Follower
 
 
 class FeedbackMap:
@@ -57,14 +57,14 @@ class FeedbackMap:
         self.error = ""
 
     def bind(
-        self, estimator: Estimator, robot: Robot, leader_units: dict[str, str]
+        self, estimator: Estimator, robot: Follower, leader_units: dict[str, str]
     ) -> None:
         """Check the estimator, robot and leader this feedback connects."""
         where = f"{self.owner}.feedback"
-        if estimator.robot != robot.name:
+        if estimator.follower != robot.name:
             raise ValueError(
-                f"{where}: estimator {estimator.name!r} reads robot {estimator.robot!r}, "
-                f"not this controller's robot {robot.name!r}"
+                f"{where}: estimator {estimator.name!r} reads follower {estimator.follower!r}, "
+                f"not this controller's follower {robot.name!r}"
             )
         missing = set(self.follower_joints) - set(estimator.joint_names)
         if missing:

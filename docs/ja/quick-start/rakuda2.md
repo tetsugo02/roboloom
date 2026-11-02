@@ -20,7 +20,7 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 
 | ファイル（`.roboloom/rakuda2/` 内） | 設定・照合する内容 |
 | --- | --- |
-| `nodes/robot.yaml` | followerの `port`，ID・モデル，`registers`，実測した安全な `limits`，速度・電流・温度上限 |
+| `nodes/follower.yaml` | followerの `port`，ID・モデル，`registers`，実測した安全な `limits`，速度・電流・温度上限 |
 | `nodes/leader.yaml`, `nodes/leader_gravity.yaml` | leaderの `port`，ID・モデル，`registers`，制御則 |
 | `nodes/camera.yaml` | RealSenseの `serial` |
 | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | 左右DIGITの `serial` |
@@ -32,7 +32,7 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 
 テンプレートの値は機体に対する安全保証ではありません．とくにfollowerの `limits.min/max` は広い初期値です．実測した安全な範囲へ狭め，停止・脱力方法も機体ごとに確かめます．通常leaderでもトリガーには通電します．
 
-初回の経路確認では **`nodes/robot.yaml` の `torque: true` を `torque: false` に変更** します．followerのトルクを切った状態で腕を支持してください．この設定はleader側の通電を止めません．
+初回の経路確認では **`nodes/follower.yaml` の `torque: true` を `torque: false` に変更** します．followerのトルクを切った状態で腕を支持してください．この設定はleader側の通電を止めません．
 
 ## 2. 通常leaderで収集経路を確認
 
@@ -131,7 +131,7 @@ uv run roboloom tune-gravity leader left_arm --with gravity
 
 `gravity` だけを有効にした構成は **RealSenseのみ** を記録します．DIGITも記録するときはオプション `digit` も有効にします（`--with gravity,digit`）．保存先は自動で `rakuda2-digit` に分かれます．使える組み合わせと制約は [Rakuda2](../robots/rakuda2.md) を参照してください．
 
-followerを動かす前に，機体の安全範囲・低速での追従・停止・脱力を確認し，`nodes/robot.yaml` を `torque: true` に変更します．両腕を支え，dataflow停止状態でEEPROMの確認を済ませてから起動します．
+followerを動かす前に，機体の安全範囲・低速での追従・停止・脱力を確認し，`nodes/follower.yaml` を `torque: true` に変更します．両腕を支え，dataflow停止状態でEEPROMの確認を済ませてから起動します．
 
 ```bash
 uv run roboloom validate --with gravity

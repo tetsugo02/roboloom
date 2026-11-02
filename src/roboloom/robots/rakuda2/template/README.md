@@ -22,7 +22,7 @@ The [Rakuda2 Quick start](https://tetsugo02.github.io/roboloom/en/quick-start/ra
 ([日本語](https://tetsugo02.github.io/roboloom/ja/quick-start/rakuda2/)) walks through setup,
 gravity compensation, and teleoperation recording. Sensor/controller combinations are in
 [Rakuda2](https://tetsugo02.github.io/roboloom/en/robots/rakuda2/).
-Before the first run, change `nodes/robot.yaml` from its default `torque: true` to
+Before the first run, change `nodes/follower.yaml` from its default `torque: true` to
 `torque: false` to check the recording path without moving the follower. This does not
 disable the leader's trigger or gravity-compensation motors. Support both arms at startup
 and shutdown. Set `torque: true` only after validating the follower's limits and stop behavior.
@@ -31,7 +31,7 @@ and shutdown. Set `torque: true` only after validating the follower's limits and
 | --- | --- | --- |
 | `config.yaml` | the one configuration: leader teleop + RealSense, and the launch `options:` below | — |
 | `nodes/policy.yaml` | the policy that drives the follower (option `policy`) | your policy |
-| `nodes/robot.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
+| `nodes/follower.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
 | `nodes/camera.yaml`, `nodes/digit_*.yaml` | sensor serials | step 1 |
 | `calibration/leader_<side>.yaml` | joint map for gravity identification | step 4 |
 | `calibration/gravity_<side>.yaml` | identified gravity model | step 4 |
@@ -172,7 +172,7 @@ is **not verified on hardware**; check every step with the arms supported. Files
 
 | file | what |
 | --- | --- |
-| `nodes/robot_bilateral.yaml` | follower arms in current-based position control (Mode 5): set `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` |
+| `nodes/follower_bilateral.yaml` | follower arms in current-based position control (Mode 5): set `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` |
 | `nodes/leader_bilateral.yaml` | `leader_gravity.yaml` with `feedback:` on the arm groups (needs the gravity steps above) |
 | `nodes/controller_bilateral.yaml` | `controller.yaml` with `feedback:` (one joint, small gain) |
 | `nodes/effort.yaml` | the follower effort estimator (`model_residual`: measured current - g(q)) |
@@ -182,13 +182,13 @@ is **not verified on hardware**; check every step with the arms supported. Files
    `uv run roboloom calibrate-joints .roboloom/rakuda2/calibration/follower_right.yaml`, set
    `confirmed: true` after checking the map, then
    `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/follower_right.yaml --out .roboloom/rakuda2/calibration/effort_gravity_right.yaml --collect`
-   (same for left). This works on the motors as `nodes/robot.yaml` commissioned them
+   (same for left). This works on the motors as `nodes/follower.yaml` commissioned them
    (position mode). Do it first: every command with `--with bilateral`, `commission`
    included, loads `nodes/effort.yaml` and stops while `effort_gravity_<side>.yaml` is missing.
-2. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/robot_bilateral.yaml`, then write
+2. Fill `SET_FOLLOWER_ARM_GOAL_CURRENT_mA` (mA) in `nodes/follower_bilateral.yaml`, then write
    Operating Mode 5 and the Current Limit: `uv run roboloom commission robot --with bilateral`
    (or confirm the EEPROM write when launching with `bilateral`). Launching without
-   `bilateral` offers to write Mode 3 back; `nodes/robot.yaml` refuses to start on Mode 5 motors.
+   `bilateral` offers to write Mode 3 back; `nodes/follower.yaml` refuses to start on Mode 5 motors.
 3. `uv run roboloom run --with bilateral`: the follower should track and
    hold as before, and stop pushing at the goal current when it meets an obstacle. Watch
    `residual_l1` of the `effort` node while moving freely and while pushing, then set

@@ -15,8 +15,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
@@ -72,7 +72,7 @@ options:
     set:
       inputs.leader: nodes/leader_bilateral.yaml
       controllers.controller: nodes/controller_bilateral.yaml
-      robots.robot: nodes/robot_bilateral.yaml
+      followers.follower: nodes/follower_bilateral.yaml
       estimators.effort: nodes/effort.yaml
     dataset: bilateral
   policy:
@@ -176,7 +176,7 @@ gate × (clip(受け取った電流, ±max_mA) − kd × 速度)
 
 `record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1つの設定に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
 
-読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`Experiment`）は推定器を扱いません．
+読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`InProcessSession`）は推定器を扱いません．
 
 ## 制御周期
 

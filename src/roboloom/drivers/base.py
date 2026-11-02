@@ -1,8 +1,8 @@
 """Bus contract shared by robots and actuated inputs.
 
-`RobotBus` is the minimum every bus implements. Richer buses add `read_state`,
+`JointBus` is the minimum every bus implements. Richer buses add `read_state`,
 `read_health` (and `read_health_field`, one register at a time) and `disable_torque`; callers use the helpers below so a minimal
-bus (e.g. one passed to `Experiment.from_components`) keeps working.
+bus (e.g. one passed to `InProcessSession.from_components`) keeps working.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 
-class RobotBus(Protocol):
+class JointBus(Protocol):
     def read_positions(self) -> list[float]: ...
     def write_positions(self, values: list[float]) -> None: ...
     def enable_torque(self) -> None: ...
@@ -32,12 +32,12 @@ class Health:
     watchdog_fired: bool = False
 
 
-def read_state(bus: RobotBus) -> JointState:
+def read_state(bus: JointBus) -> JointState:
     reader = getattr(bus, "read_state", None)
     return reader() if reader else JointState(bus.read_positions())
 
 
-def read_health(bus: RobotBus) -> Health | None:
+def read_health(bus: JointBus) -> Health | None:
     reader = getattr(bus, "read_health", None)
     return reader() if reader else None
 
@@ -55,7 +55,7 @@ def health_from(values: dict[str, list[int]]) -> Health:
     )
 
 
-def disable_torque(bus: RobotBus) -> None:
+def disable_torque(bus: JointBus) -> None:
     off = getattr(bus, "disable_torque", None)
     if off is None:
         raise RuntimeError(f"{type(bus).__name__} cannot release torque")

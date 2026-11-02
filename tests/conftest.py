@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from roboloom.config import read_experiment
+from roboloom.config import read_config
 
 TEMPLATE = Path("src/roboloom/robots/rakuda2/template")
 
@@ -8,11 +8,11 @@ TEMPLATE = Path("src/roboloom/robots/rakuda2/template")
 def rakuda2_tree(options: list[str] | None = None) -> dict:
     """The shipped Rakuda-2 template with these launch options (None: the defaults) and its
     device placeholders filled, as `init` users do."""
-    tree = read_experiment(TEMPLATE / "config.yaml", options)
+    tree = read_config(TEMPLATE / "config.yaml", options)
     if "leader" in tree["inputs"]:
         tree["inputs"]["leader"]["port"] = "/dev/serial/by-id/leader"
-    tree["robots"]["robot"]["port"] = "/dev/serial/by-id/follower"
-    for limit in tree["robots"]["robot"]["limits"]:
+    tree["followers"]["follower"]["port"] = "/dev/serial/by-id/follower"
+    for limit in tree["followers"]["follower"]["limits"]:
         limit["min"], limit["max"] = 1000, 3000
     serials = {"camera": "142122070848", "digit_left": "D1", "digit_right": "D2"}
     for sensor, serial in serials.items():

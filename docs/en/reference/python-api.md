@@ -21,9 +21,9 @@ A configuration can be specified either by file path or by its robot name under 
 Launch options are chosen with `options=`: the listed options and the options they require are enabled. With `None` (the default), the options with `default: true` are enabled. Unlike the CLI's `--with` / `--without`, `options=` is the whole set to enable (it is not added to the default options). `mock=True` runs mock devices and `mock=False` real ones; `None` follows the YAML's `mode` (default `hardware`).
 
 ```python
-from roboloom import load_experiment
+from roboloom import load_config
 
-cfg = load_experiment("rakuda2", options=["gravity", "digit"])
+cfg = load_config("rakuda2", options=["gravity", "digit"])
 print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 ```
 
@@ -61,7 +61,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 - `launch` waits until every node has started reporting its status.
 - Every `start` is checked: the follower must be within `alignment_tolerance` of the leader, not only at the first alignment. `record` waits for this (`ready_timeout`, default 60 s) before each episode; `start` raises `SessionError` when the arms differ.
 - Real hardware is the default. Pass `mock=True` to run mock devices.
-- `launch` uses `options` and `mock` only when the configuration is given as a path or robot name. When passing a loaded `ExperimentConfig`, choose them with `load_experiment(..., options=..., mock=...)` first.
+- `launch` uses `options` and `mock` only when the configuration is given as a path or robot name. When passing a loaded `RobotConfig`, choose them with `load_config(..., options=..., mock=...)` first.
 - Each node process receives the enabled options in `ROBOLOOM_OPTIONS` and the mode in `ROBOLOOM_MODE`.
 - Leaving the `with` block does the following:
   - Discards any in-progress episode.
@@ -218,7 +218,7 @@ with Session.launch(
   - Supporting the arm, placing a pose, pressing Enter, etc.
   - The CLI passes a `TerminalOperator`.
   - In scripts and tests, you can pass a `ScriptedOperator` with a list of answers.
-- Functions that take a configuration accept a path, a robot name, or a loaded `ExperimentConfig`. To choose options or the mode, load it with `load_experiment(..., options=..., mock=...)` and pass that.
+- Functions that take a configuration accept a path, a robot name, or a loaded `RobotConfig`. To choose options or the mode, load it with `load_config(..., options=..., mock=...)` and pass that.
 - `plan_commission`, `watchdog_test`, and `gravity_check` refuse a mock configuration.
 
 ```python
@@ -226,9 +226,9 @@ from roboloom import setup
 from roboloom.operator import TerminalOperator
 
 op = TerminalOperator()
-from roboloom import load_experiment
+from roboloom import load_config
 
-gravity = load_experiment("rakuda2", options=["gravity"])
+gravity = load_config("rakuda2", options=["gravity"])
 plan = setup.plan_commission(gravity, "leader")
 for line in plan.lines():
     print(line)
@@ -258,9 +258,9 @@ finally:
     tuning.close()
 ```
 
-## 3. Run in a single process: `Experiment`
+## 3. Run in a single process: `InProcessSession`
 
-- `Experiment` performs robot bus access, sensor reads, and controller calls all on the caller's thread.
+- `InProcessSession` performs robot bus access, sensor reads, and controller calls all on the caller's thread.
 - Use cases:
   - Tests
   - Simulation
@@ -270,15 +270,15 @@ finally:
 - Run the real Rakuda-2 with `Session`.
   - `from_yaml` rejects configurations that use a motor-controlling leader (trigger spring, gravity compensation).
   - `from_yaml` also rejects configurations that use a policy controller.
-- In `Experiment.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)`, `options` and `mock` mean the same as in `load_experiment`.
+- In `InProcessSession.from_yaml(path, *, options=None, mock=None, sensors=None, dataset=None)`, `options` and `mock` mean the same as in `load_config`.
 
 This mock example uses no devices or sample files from the repository. The `record` extra is required. Do not reuse its joint ranges or speeds on hardware.
 
 ```python
-from roboloom import Experiment
+from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
-with Experiment.from_components(
+with InProcessSession.from_components(
     robot_id="my-mock",
     robot=MockBus(dimension=2),
     joint_names=["j1", "j2"],

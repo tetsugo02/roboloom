@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from ..core.source import Features
 
 if TYPE_CHECKING:
-    from ..config import ExperimentConfig
+    from ..config import RobotConfig
 
 META_FIELDS = (
     ("valid", "float32"),
@@ -20,8 +20,8 @@ META_FIELDS = (
 )
 
 
-def features(cfg: ExperimentConfig) -> Features:
-    dim = len(cfg.robot.joint_names)
+def features(cfg: RobotConfig) -> Features:
+    dim = len(cfg.follower.joint_names)
     out: Features = {
         "action": {"dtype": "float32", "shape": (dim,), "names": None},
         "action.valid": {"dtype": "float32", "shape": (1,), "names": None},

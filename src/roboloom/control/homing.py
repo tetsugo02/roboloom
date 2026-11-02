@@ -55,7 +55,7 @@ class Pose:
 
 def load_pose(
     path: Path,
-    robot_type: str,
+    model: str,
     unit: str,
     joint_names: Sequence[str],
     limits: Sequence[dict],
@@ -66,11 +66,11 @@ def load_pose(
         )
     data = yaml.safe_load(path.read_text())
     if not isinstance(data, dict) or not isinstance(data.get("pose"), dict):
-        raise ConfigError(f"{path}: expected robot_type, unit and pose")
-    if data.get("robot_type") != robot_type or data.get("unit") != unit:
+        raise ConfigError(f"{path}: expected model, unit and pose")
+    if data.get("model") != model or data.get("unit") != unit:
         raise ConfigError(
-            f"{path}: saved for {data.get('robot_type')} in {data.get('unit')}, "
-            f"not {robot_type} in {unit}"
+            f"{path}: saved for {data.get('model')} in {data.get('unit')}, "
+            f"not {model} in {unit}"
         )
     values = data["pose"]
     if set(values) != set(joint_names):
@@ -128,7 +128,7 @@ def parse_home(
     path = Path(base_dir or ".") / raw["pose"]
     pose = load_pose(
         path.resolve(),
-        robot.robot_type,
+        robot.model,
         robot.unit,
         robot.joint_names,
         robot.limits,

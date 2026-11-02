@@ -1,12 +1,12 @@
 """Robot data collection and policy inference on dora-rs, saved as LeRobotDataset.
 
-- `Session`: run an experiment's dataflow and direct it (episodes, tasks, inference).
+- `Session`: run a robot's dataflow and direct it (episodes, tasks, inference).
 - `roboloom.setup`: setup and measurement steps (commission, gravity, travel, ...).
-- `Experiment`: everything in this process, for tests and simple robots.
+- `InProcessSession`: everything in this process, for tests and simple robots.
 """
 
-from .api import Experiment
-from .config import load_experiment, resolve_experiment
+from .api import InProcessSession
+from .config import load_config, resolve_config
 from .core.source import Sample
 from .errors import ConfigError, HardwareError, RoboloomError, SetupError
 from .policy import Policy
@@ -17,8 +17,8 @@ __all__ = [
     "ConfigError",
     "EpisodeInfo",
     "EpisodeResult",
-    "Experiment",
     "HardwareError",
+    "InProcessSession",
     "Policy",
     "RoboloomError",
     "Sample",
@@ -26,6 +26,6 @@ __all__ = [
     "SessionError",
     "SetupError",
     "init_project",
-    "load_experiment",
-    "resolve_experiment",
+    "load_config",
+    "resolve_config",
 ]

@@ -5,12 +5,13 @@ from copy import deepcopy
 import pytest
 import yaml
 
-from roboloom.config import parse_experiment, read_experiment
+from roboloom.config import parse_config, read_config
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.estimators.base import Estimator
 from roboloom.runtime.flow import build_flow
 
-PATH = "examples/mock/experiment_bilateral.yaml"
+PATH = "examples/mock/config.yaml"
+BILATERAL = ["bilateral"]
 ARM = [
     "r_arm_sh_pitch1",
     "r_arm_sh_roll",
@@ -26,7 +27,7 @@ def estimate(
 ):
     est = cfg.estimators["effort"]
     payload = {
-        "robot": "robot",
+        "follower": "follower",
         "joints": list(joints or est.joint_names),
         "unit": unit,
         "residual": residual,
@@ -39,10 +40,14 @@ def estimate(
 
 def test_feedback_edges_are_derived_from_node_references():
     nodes = {
-        n["id"]: n for n in build_flow(parse_experiment(read_experiment(PATH)))["nodes"]
+        n["id"]: n
+        for n in build_flow(parse_config(read_config(PATH, BILATERAL)))["nodes"]
     }
     latest = {"queue_size": 1, "queue_policy": "drop_oldest"}
-    assert nodes["effort"]["inputs"]["robot"] == {"source": "robot/state", **latest}
+    assert nodes["effort"]["inputs"]["follower"] == {
+        "source": "follower/state",
+        **latest,
+    }
     assert nodes["effort"]["outputs"] == ["estimate", "status"]
     assert "tick" not in nodes["effort"]["inputs"]
     assert nodes["controller"]["inputs"]["estimate"] == {
@@ -57,10 +62,8 @@ def test_feedback_edges_are_derived_from_node_references():
     assert "effort_status" in nodes["session"]["inputs"]
 
 
-def test_experiment_without_feedback_has_no_feedback_edges():
-    nodes = build_flow(
-        parse_experiment(read_experiment("examples/mock/experiment.yaml"))
-    )
+def test_config_without_feedback_has_no_feedback_edges():
+    nodes = build_flow(parse_config(read_config("examples/mock/config.yaml")))
     for n in nodes["nodes"]:
         assert "feedback" not in n["inputs"] and "estimate" not in n["inputs"]
 
@@ -75,8 +78,8 @@ def test_experiment_without_feedback_has_no_feedback_edges():
             "no estimator 'missing'",
         ),
         (
-            lambda t: t["estimators"]["effort"].update(robot="other"),
-            "must reference a configured robot",
+            lambda t: t["estimators"]["effort"].update(follower="other"),
+            "must reference a configured follower",
         ),
         (
             lambda t: t["controllers"]["controller"]["feedback"].update(unit="mA/Nm"),
@@ -88,7 +91,7 @@ def test_experiment_without_feedback_has_no_feedback_edges():
         ),
         (
             lambda t: t["estimators"]["effort"].update(joints=["r_arm_el_yaw", "tail"]),
-            "not joints of robot",
+            "not joints of follower",
         ),
         (
             lambda t: t["estimators"]["effort"].update(joints=["l_arm_el_yaw"]),
@@ -111,18 +114,18 @@ def test_experiment_without_feedback_has_no_feedback_edges():
     ],
 )
 def test_feedback_configuration_errors_fail_at_load(change, message):
-    tree = deepcopy(read_experiment(PATH))
+    tree = deepcopy(read_config(PATH, BILATERAL))
     change(tree)
     with pytest.raises(ValueError, match=message):
-        parse_experiment(tree)
+        parse_config(tree)
 
 
 def test_feedback_maps_residuals_to_leader_joints_with_sign_and_gain():
-    tree = read_experiment(PATH)
+    tree = read_config(PATH, BILATERAL)
     for j in tree["controllers"]["controller"]["joints"]:
         if j["follower"] == "l_arm_el_yaw":
             j["sign"] = -1
-    cfg = parse_experiment(tree)
+    cfg = parse_config(tree)
     feedback = cfg.controllers["controller"].feedback
     est = cfg.estimators["effort"]
     residual = [0.0] * len(est.joint_names)
@@ -141,7 +144,7 @@ def test_feedback_maps_residuals_to_leader_joints_with_sign_and_gain():
 
 
 def test_feedback_refuses_an_estimate_older_than_its_deadline():
-    cfg = parse_experiment(read_experiment(PATH))
+    cfg = parse_config(read_config(PATH, BILATERAL))
     controller = cfg.controllers["controller"]
     zeros = [0.0] * len(cfg.estimators["effort"].joint_names)
     now = time.monotonic_ns()
@@ -165,7 +168,7 @@ def test_feedback_refuses_an_estimate_older_than_its_deadline():
 def test_feedback_gate_closes_unless_following_an_active_robot_in_contact(
     mode, following, valid, contact
 ):
-    cfg = parse_experiment(read_experiment(PATH))
+    cfg = parse_config(read_config(PATH, BILATERAL))
     feedback = cfg.controllers["controller"].feedback
     zeros = [0.0] * len(cfg.estimators["effort"].joint_names)
     msg = feedback.make(
@@ -175,7 +178,7 @@ def test_feedback_gate_closes_unless_following_an_active_robot_in_contact(
 
 
 def test_feedback_refuses_an_estimate_that_does_not_match():
-    cfg = parse_experiment(read_experiment(PATH))
+    cfg = parse_config(read_config(PATH, BILATERAL))
     controller = cfg.controllers["controller"]
     zeros = [0.0] * len(cfg.estimators["effort"].joint_names)
     assert (
@@ -199,7 +202,7 @@ def test_estimator_smooths_and_detects_contact_with_hysteresis():
     est = Fixed(
         "e",
         {
-            "robot": "robot",
+            "follower": "follower",
             "joints": ["a", "b"],
             "smoothing_alpha": 0.5,
             "contact_on": 10,
@@ -220,7 +223,7 @@ def test_estimator_smooths_and_detects_contact_with_hysteresis():
 
 
 def test_no_estimator_is_never_valid():
-    cfg = parse_experiment(read_experiment(PATH))
+    cfg = parse_config(read_config(PATH, BILATERAL))
     est = cfg.estimators["effort"]
     assert est.unit == "mA"
     out = est.update({"positions": [2048.0] * 17, "currents_mA": [0.0] * 17})
@@ -228,7 +231,7 @@ def test_no_estimator_is_never_valid():
 
 
 def test_leader_takes_matching_feedback_and_drops_the_rest():
-    cfg = parse_experiment(read_experiment(PATH))
+    cfg = parse_config(read_config(PATH, BILATERAL))
     reader = cfg.inputs["leader"].open(True, cfg.dataset_fps)
     try:
         controller = cfg.controllers["controller"]
@@ -267,10 +270,10 @@ def test_leader_takes_matching_feedback_and_drops_the_rest():
 
 
 def test_estimator_needs_a_robot_that_reports_effort():
-    tree = read_experiment(PATH)
-    cfg = parse_experiment(tree)
-    robot = cfg.robots["robot"]
-    est = Fixed("e", {"robot": "robot", "joints": ARM})
+    tree = read_config(PATH, BILATERAL)
+    cfg = parse_config(tree)
+    robot = cfg.followers["follower"]
+    est = Fixed("e", {"follower": "follower", "joints": ARM})
     type(robot).effort_signal, saved = None, type(robot).effort_signal
     try:
         with pytest.raises(ValueError, match="reports no effort"):
@@ -285,13 +288,13 @@ def test_feedback_path_runs_end_to_end_in_mock(tmp_path):
 
     root = tmp_path / "mock"
     shutil.copytree("examples/mock", root)
-    path = root / "experiment_bilateral.yaml"
+    path = root / "config.yaml"
     path.write_text(
         path.read_text().replace(
-            "output: ../../datasets/rakuda-mock-bilateral", "output: datasets/bilateral"
+            "output: ../../datasets/rakuda-mock", "output: datasets/mock"
         )
     )
-    with Session.launch(path, log_dir=tmp_path / "logs") as s:
+    with Session.launch(path, options=BILATERAL, log_dir=tmp_path / "logs") as s:
         s.wait_ready(30)
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
@@ -308,7 +311,7 @@ def test_feedback_path_runs_end_to_end_in_mock(tmp_path):
                 break
             time.sleep(0.2)
         nodes = s.status()
-    assert (tmp_path / "logs" / "robot_trace.npz").is_file()
+    assert (tmp_path / "logs" / "follower_trace.npz").is_file()
     assert nodes["effort"]["fields"]["valid"] is False  # `none` never estimates
     assert nodes["controller"]["fields"]["feedback_gate"] is False
     leader = nodes["leader"]["fields"]
@@ -318,7 +321,7 @@ def test_feedback_path_runs_end_to_end_in_mock(tmp_path):
 
 
 def recorded_tree():
-    tree = read_experiment(PATH)
+    tree = read_config(PATH, BILATERAL)
     tree["estimators"]["effort"]["record"] = True
     tree["recorder"]["max_age_ms"]["effort"] = 300
     return tree
@@ -327,7 +330,7 @@ def recorded_tree():
 def test_recorded_estimator_adds_features_and_a_recorder_input():
     from roboloom.recording import features
 
-    cfg = parse_experiment(recorded_tree())
+    cfg = parse_config(recorded_tree())
     schema = features(cfg)
     assert schema["observation.effort_ext"]["shape"] == (12,)
     assert schema["observation.contact"]["shape"] == (1,)
@@ -335,7 +338,7 @@ def test_recorded_estimator_adds_features_and_a_recorder_input():
     recorder = next(x for x in build_flow(cfg)["nodes"] if x["id"] == "recorder")
     assert recorder["inputs"]["effort"]["source"] == "effort/estimate"
     assert recorder["inputs"]["effort"]["queue_size"] == 15  # robot 30 Hz x 0.5 s
-    unrecorded = parse_experiment(read_experiment(PATH))
+    unrecorded = parse_config(read_config(PATH, BILATERAL))
     assert "observation.effort_ext" not in features(unrecorded)
 
 
@@ -343,13 +346,13 @@ def test_recorded_estimator_needs_a_max_age():
     tree = recorded_tree()
     del tree["recorder"]["max_age_ms"]["effort"]
     with pytest.raises(ValueError, match="max_age_ms.effort"):
-        parse_experiment(tree)
+        parse_config(tree)
 
 
 def test_recorder_writes_external_effort_and_contact():
     from roboloom.recording import EpisodeRecorder
 
-    cfg = parse_experiment(recorded_tree())
+    cfg = parse_config(recorded_tree())
     recorder = EpisodeRecorder(cfg)
     t = time.monotonic_ns()
     ms = 1_000_000
@@ -377,7 +380,7 @@ def test_recorder_writes_external_effort_and_contact():
         "action",
         Envelope(
             "action",
-            "robot",
+            "follower",
             "boot",
             1,
             t + 20 * ms,
@@ -396,13 +399,15 @@ def test_recorder_writes_external_effort_and_contact():
     assert row["observation.meta.effort.valid"][0] == 1
 
 
-def test_robot_trace_keeps_published_state_per_tick(tmp_path):
+def test_follower_trace_keeps_published_state_per_tick(tmp_path):
     import numpy as np
 
-    from roboloom.control.trace import RobotTrace
+    from roboloom.control.trace import FollowerTrace
     from roboloom.robots.safety import FollowerSafety
 
-    trace = RobotTrace(tmp_path / "robot_trace.npz", ["a", "b"], FollowerSafety.MODES)
+    trace = FollowerTrace(
+        tmp_path / "follower_trace.npz", ["a", "b"], FollowerSafety.MODES
+    )
     trace.add(
         1,
         {
@@ -472,7 +477,7 @@ def bilateral_tree(tmp_path, goal_mA=1000):
     tree["estimators"]["effort"]["models"] = [
         str(p) for p in follower_models(tmp_path).values()
     ]
-    robot = tree["robots"]["robot"]
+    robot = tree["followers"]["follower"]
     limits = robot["registers"]["current_limit"]
     for joint, value in limits.items():
         if value == "SET_FOLLOWER_ARM_GOAL_CURRENT_mA":
@@ -484,10 +489,10 @@ def bilateral_tree(tmp_path, goal_mA=1000):
 
 
 def test_bilateral_template_parses_with_hardware_checks(tmp_path):
-    cfg = parse_experiment(bilateral_tree(tmp_path))
+    cfg = parse_config(bilateral_tree(tmp_path))
     assert not cfg.mock and set(cfg.estimators) == {"effort"}
     assert cfg.controllers["controller"].feedback.leader_joints == ["r_arm_el_yaw"]
-    robot = cfg.robots["robot"]
+    robot = cfg.followers["follower"]
     modes = robot.expected_eeprom()[2]["operating_mode"]
     assert modes["r_arm_el_yaw"] == 5 and modes["torso_yaw"] == 3
     assert modes["r_arm_grip"] == 5
@@ -497,18 +502,18 @@ def test_template_refuses_unfilled_or_too_high_goal_current(tmp_path):
     from conftest import rakuda2_tree
 
     with pytest.raises(ValueError, match="SET_FOLLOWER_ARM_GOAL_CURRENT_mA"):
-        parse_experiment(rakuda2_tree(["gravity", "bilateral"]))
+        parse_config(rakuda2_tree(["gravity", "bilateral"]))
     with pytest.raises(ValueError, match="exceeds registers.current_limit"):
-        parse_experiment(bilateral_tree(tmp_path, goal_mA=1200))
+        parse_config(bilateral_tree(tmp_path, goal_mA=1200))
 
 
 def test_mock_follower_runs_arms_in_current_position_mode(tmp_path):
     from roboloom.robots.safety import FollowerSafety
 
     tree = bilateral_tree(tmp_path)
-    tree["experiment"]["mode"] = "mock"
-    cfg = parse_experiment(tree)
-    robot = cfg.robots["robot"]
+    tree["robot"]["mode"] = "mock"
+    cfg = parse_config(tree)
+    robot = cfg.followers["follower"]
     bus = robot.open_device(True)
     safety = FollowerSafety(robot.safety_config(cfg.robot_id), bus)
     safety.start()
@@ -533,9 +538,9 @@ def test_model_residual_subtracts_the_follower_gravity_model(tmp_path):
         contact_on=100,
         contact_off=50,
     )
-    cfg = parse_experiment(tree)
+    cfg = parse_config(tree)
     est = cfg.estimators["effort"]
-    robot = cfg.robots["robot"]
+    robot = cfg.followers["follower"]
     currents = [0.0] * 17
     currents[robot.joint_names.index("r_arm_el_yaw")] = 100.0
     currents[robot.joint_names.index("torso_yaw")] = 999.0  # not estimated
@@ -552,10 +557,10 @@ def test_model_residual_needs_models_covering_its_joints(tmp_path):
     tree = bilateral_tree(tmp_path)
     tree["estimators"]["effort"]["models"] = tree["estimators"]["effort"]["models"][:1]
     with pytest.raises(ValueError, match="must be exactly joints"):
-        parse_experiment(tree)
+        parse_config(tree)
     del tree["estimators"]["effort"]["models"]
     with pytest.raises(ValueError, match="models must list"):
-        parse_experiment(tree)
+        parse_config(tree)
 
 
 MS = 1_000_000
@@ -736,13 +741,13 @@ def test_feedback_reaches_the_leader_current_while_following_in_mock(tmp_path):
         contact_off=50,
     )
     (root / "nodes/effort.yaml").write_text(yaml.safe_dump(effort))
-    path = root / "experiment_bilateral.yaml"
+    path = root / "config.yaml"
     path.write_text(
         path.read_text().replace(
-            "output: ../../datasets/rakuda-mock-bilateral", "output: datasets/bilateral"
+            "output: ../../datasets/rakuda-mock", "output: datasets/mock"
         )
     )
-    with Session.launch(path, log_dir=tmp_path / "logs") as s:
+    with Session.launch(path, options=BILATERAL, log_dir=tmp_path / "logs") as s:
         s.wait_ready(30)
         s.start("push")
         deadline = time.monotonic() + 10

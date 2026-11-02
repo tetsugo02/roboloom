@@ -66,7 +66,7 @@ class FollowerSafety:
         )
         self.health = cfg.get("health") or {}
         self.period_s = 1 / cfg.get("control_hz", 30)
-        self.publisher = Publisher(cfg.get("name", "robot"))
+        self.publisher = Publisher(cfg.get("name", "follower"))
         self.mode = "IDLE"
         self.reason = ""
         self.pending: Envelope | None = None
@@ -308,7 +308,7 @@ class FollowerSafety:
         self.last_tick_ns = now
         state = self.state or JointState(self.hold_target or [0.0] * self.dim)
         state_msg = self.publisher.make(
-            "robot_state",
+            "follower_state",
             {
                 "positions": state.positions,
                 "velocities": state.velocities,

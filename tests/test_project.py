@@ -1,7 +1,7 @@
 import pytest
 import yaml
 
-from roboloom.config import placeholders, resolve_experiment
+from roboloom.config import placeholders, resolve_config
 from roboloom.control.device import build_laws, parse_groups
 from roboloom.control.laws import GravityComp
 from roboloom.core.resources import resolve
@@ -23,26 +23,26 @@ def test_init_copies_the_template_once_and_ignores_raw_data(tmp_path):
         init_project("nope", root)
 
 
-def test_experiments_resolve_by_name_under_the_project_root(tmp_path):
+def test_configs_resolve_by_name_under_the_project_root(tmp_path):
     root = tmp_path / ".roboloom"
     init_project("rakuda2", root)
-    assert resolve_experiment("rakuda2", root) == root / "rakuda2" / "config.yaml"
+    assert resolve_config("rakuda2", root) == root / "rakuda2" / "config.yaml"
     # the only robot under the root needs no name
-    assert resolve_experiment(None, root) == root / "rakuda2" / "config.yaml"
+    assert resolve_config(None, root) == root / "rakuda2" / "config.yaml"
     (root / "two").mkdir()
     (root / "two" / "config.yaml").write_text("{}")
     with pytest.raises(ConfigError, match="several robots"):
-        resolve_experiment(None, root)
+        resolve_config(None, root)
     with pytest.raises(ConfigError, match="roboloom init"):
-        resolve_experiment("missing", root)
+        resolve_config("missing", root)
 
 
 def test_placeholders_are_listed_with_their_location():
     tree = {
-        "robots": {"robot": {"port": "SET_PORT", "__dir__": "SET_x"}},
+        "followers": {"follower": {"port": "SET_PORT", "__dir__": "SET_x"}},
         "a": [1, "SET_B"],
     }
-    assert placeholders(tree) == ["robots.robot.port: SET_PORT", "a[1]: SET_B"]
+    assert placeholders(tree) == ["followers.follower.port: SET_PORT", "a[1]: SET_B"]
 
 
 def test_package_references_resolve_to_shipped_files(tmp_path):

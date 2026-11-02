@@ -27,7 +27,7 @@ from .metrics import summarize
 from .schema import META_FIELDS, features
 
 if TYPE_CHECKING:
-    from ..config import ExperimentConfig
+    from ..config import RobotConfig
 
 ACTION = "action"  # stream of commands the robot actually sent
 
@@ -35,7 +35,7 @@ ACTION = "action"  # stream of commands the robot actually sent
 class EpisodeRecorder:
     def __init__(
         self,
-        cfg: ExperimentConfig,
+        cfg: RobotConfig,
         dataset=None,
         grace_ms: float = 500,
         image_writer_threads: int = 4,
@@ -101,8 +101,8 @@ class EpisodeRecorder:
                 for name, spec in expected.items()
             ):
                 raise ValueError(
-                    f"existing dataset schema or FPS differs from experiment: {root} "
-                    "(set another `output` in the experiment, or move the old dataset)"
+                    f"existing dataset schema or FPS differs from the configuration: {root} "
+                    "(set another `output` in the configuration, or move the old dataset)"
                 )
         else:
             self.dataset = LeRobotDataset.create(
@@ -147,7 +147,10 @@ class EpisodeRecorder:
         self.samples[source].append(msg)
         self.stats["latency_ms"].append((msg.t_receive_ns - msg.t_capture_ns) / 1e6)
         self.stats["queue_ms"].append((msg.t_receive_ns - msg.t_ready_ns) / 1e6)
-        if source == self.cfg.robot.name and msg.payload.get("tick_interval_ms", 0) > 0:
+        if (
+            source == self.cfg.follower.name
+            and msg.payload.get("tick_interval_ms", 0) > 0
+        ):
             self.stats["control_interval_ms"].append(msg.payload["tick_interval_ms"])
 
     def poll(self, now_ns: int | None = None) -> int:
@@ -260,7 +263,7 @@ class EpisodeRecorder:
                     [values[key]], dtype=dtype
                 )
             frame.update(source.frame(msg, fps))
-        dim = len(self.cfg.robot.joint_names)
+        dim = len(self.cfg.follower.joint_names)
         actions = [
             x
             for x in self.samples[ACTION]

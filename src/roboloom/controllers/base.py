@@ -11,7 +11,7 @@ from ..core.checks import positive
 from ..core.protocol import Envelope, Publisher
 from ..estimators.base import Estimator
 from ..inputs.base import InputDevice
-from ..robots.base import Robot
+from ..robots.base import Follower
 from ..robots.safety import make_command
 from .feedback import FeedbackMap
 
@@ -26,10 +26,10 @@ class Controller(ABC):
         name: str,
         cfg: dict,
         source: InputDevice | None,
-        robot: Robot,
+        robot: Follower,
         robot_id: str,
     ):
-        self.name, self.cfg, self.source, self.robot, self.robot_id = (
+        self.name, self.cfg, self.source, self.follower, self.robot_id = (
             name,
             cfg,
             source,
@@ -57,16 +57,18 @@ class Controller(ABC):
         if estimator is None:
             raise ValueError(
                 f"{self.name}.feedback.estimator: no estimator "
-                f"{self.feedback.estimator_name!r} in the experiment"
+                f"{self.feedback.estimator_name!r} in the configuration"
             )
         units = getattr(self.source, "feedback_units", None)
-        self.feedback.bind(estimator, self.robot, units() if units is not None else {})
+        self.feedback.bind(
+            estimator, self.follower, units() if units is not None else {}
+        )
 
     def command(self, target: list[float], now_ns: int, **extra: object) -> Envelope:
         return make_command(
             self.publisher,
             robot_id=self.robot_id,
-            unit=self.robot.unit,
+            unit=self.follower.unit,
             target=target,
             now_ns=now_ns,
             deadline_ms=self.deadline_ms,

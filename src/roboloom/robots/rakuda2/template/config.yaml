@@ -12,8 +12,8 @@ inputs:
   leader: nodes/leader.yaml
 controllers:
   controller: nodes/controller.yaml
-robots:
-  robot: nodes/robot.yaml
+followers:
+  follower: nodes/follower.yaml
 sensors:
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
@@ -35,7 +35,7 @@ options:
     set:
       inputs.leader: nodes/leader_bilateral.yaml
       controllers.controller: nodes/controller_bilateral.yaml
-      robots.robot: nodes/robot_bilateral.yaml
+      followers.follower: nodes/follower_bilateral.yaml
       estimators.effort: nodes/effort.yaml
     dataset: bilateral
   policy:

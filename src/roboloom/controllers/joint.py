@@ -9,7 +9,7 @@ from ..control.homing import parse_home
 from ..core.checks import positions, positive
 from ..core.protocol import Envelope
 from ..inputs.base import InputDevice, JointInput
-from ..robots.base import Robot
+from ..robots.base import Follower
 from .base import Controller
 from .coupling import JointCouplings
 from .feedback import FeedbackMap
@@ -17,7 +17,7 @@ from .feedback import FeedbackMap
 
 class JointController(Controller):
     def __init__(
-        self, name: str, cfg: dict, source: InputDevice, robot: Robot, robot_id: str
+        self, name: str, cfg: dict, source: InputDevice, robot: Follower, robot_id: str
     ):
         super().__init__(name, cfg, source, robot, robot_id)
         if not isinstance(source, JointInput):
@@ -82,7 +82,7 @@ class JointController(Controller):
 
     def reset(self) -> None:
         self.aligned = False
-        self.state = "robot_fault"
+        self.state = "follower_fault"
 
     def leader_pose(self, follower: list[float]) -> dict[str, float]:
         """Leader joint values that map onto `follower` (a pose at rest): the inverse of
@@ -136,11 +136,11 @@ class JointController(Controller):
         target = [
             by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
         ]
-        current = positions(follower, len(self.robot.joint_names))
+        current = positions(follower, len(self.follower.joint_names))
         target = self.couplings.apply(target, current, follower_velocity)
         diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
         worst = max(range(len(diffs)), key=diffs.__getitem__)
-        self.worst = (self.robot.joint_names[worst], diffs[worst])
+        self.worst = (self.follower.joint_names[worst], diffs[worst])
         if not self.aligned:
             if diffs[worst] > self.cfg["alignment_tolerance"]:
                 self.state = "aligning"

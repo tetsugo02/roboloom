@@ -1,4 +1,4 @@
-"""Render the dora dataflow from a validated experiment."""
+"""Render the dora dataflow from a validated configuration."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from pathlib import Path
 
 import yaml
 
-from ..config import ExperimentConfig
+from ..config import RobotConfig
 from ..recording import ACTION
 
 STATUS_SUFFIX = "_status"  # session input ids; runtime.node reads the same suffix
 
 
-def build_flow(cfg: ExperimentConfig) -> dict:
+def build_flow(cfg: RobotConfig) -> dict:
     script = str(Path(__file__).with_name("node.py").resolve())
     fps = cfg.dataset_fps
 
@@ -31,7 +31,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             "restart_policy": "never",
         }
 
-    control_hz = cfg.robot.control_hz
+    control_hz = cfg.follower.control_hz
     session = {"session": "session/control"}  # every node ends on `quit`
 
     def latest(output: str) -> dict:
@@ -61,7 +61,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
     ]
 
     for name, c in cfg.controllers.items():
-        inputs: dict[str, object] = {"robot": f"{c.robot.name}/state", **session}
+        inputs: dict[str, object] = {"follower": f"{c.follower.name}/state", **session}
         outputs = ["command", "status"]
         if c.source is not None:
             inputs["intent"] = f"{c.source.name}/sample"
@@ -75,7 +75,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
     nodes += [
         node(
             name,
-            {"robot": latest(f"{e.robot}/state"), **session},
+            {"follower": latest(f"{e.follower}/state"), **session},
             ["estimate", "status"],
         )
         for name, e in cfg.estimators.items()
@@ -94,7 +94,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             ["state", ACTION, "status"],
             robot.control_hz,
         )
-        for name, robot in cfg.robots.items()
+        for name, robot in cfg.followers.items()
     ]
     nodes += [
         node(name, session, ["sample", "status"], sensor.rate_hz(fps) or control_hz)
@@ -116,18 +116,18 @@ def build_flow(cfg: ExperimentConfig) -> dict:
             n: s.rate_hz(fps) or control_hz
             for n, s in {**cfg.inputs, **cfg.sensors}.items()
         },
-        **{n: r.control_hz for n, r in cfg.robots.items()},
-        **{n: cfg.robots[e.robot].control_hz for n, e in cfg.estimators.items()},
+        **{n: r.control_hz for n, r in cfg.followers.items()},
+        **{n: cfg.followers[e.follower].control_hz for n, e in cfg.estimators.items()},
     }
     published = {
-        **{n: "state" for n in cfg.robots},
+        **{n: "state" for n in cfg.followers},
         **{n: "estimate" for n in cfg.estimators},
     }
     recorded = {
         name: bounded(f"{name}/{published.get(name, 'sample')}", rates[name])
         for name in cfg.sources
     }
-    recorded[ACTION] = bounded(f"{cfg.robot.name}/{ACTION}", cfg.robot.control_hz)
+    recorded[ACTION] = bounded(f"{cfg.follower.name}/{ACTION}", cfg.follower.control_hz)
     nodes.append(node("recorder", {**recorded, **session}, ["report", "status"]))
     statuses = {
         f"{name}{STATUS_SUFFIX}": {
@@ -143,7 +143,7 @@ def build_flow(cfg: ExperimentConfig) -> dict:
     return {"nodes": nodes}
 
 
-def write_flow(cfg: ExperimentConfig, path: str | Path) -> Path:
+def write_flow(cfg: RobotConfig, path: str | Path) -> Path:
     target = Path(path)
     target.write_text(yaml.safe_dump(build_flow(cfg), sort_keys=False))
     return target
