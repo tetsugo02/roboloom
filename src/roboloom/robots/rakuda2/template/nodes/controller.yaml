@@ -18,10 +18,10 @@ input_timeout_ms: 150
 couplings: []
 # Optional saved initial pose: the `home` command moves leader and follower there slowly,
 # and the leader returns to its normal laws one second after arriving. Save poses with `roboloom capture-pose <name>`
-# (several names can coexist under ../poses/); choose one here. max_speed: counts/s.
+# (several names can coexist under ../poses/follower/); choose one here. max_speed: counts/s.
 # A gravity leader needs `homing:` on its arm groups (leader_gravity.yaml).
 # home:
-#   pose: ../poses/ready.yaml
+#   pose: ../poses/follower/ready.yaml
 #   max_speed: 200
 #   tolerance: 30
 #   timeout_s: 30

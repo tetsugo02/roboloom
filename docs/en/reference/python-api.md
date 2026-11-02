@@ -40,7 +40,7 @@ The robot learning systems we examined (franka_ros2, DROID, deoxys, diffusion_po
 roboloom takes the same structure.
 
 - **dora dataflow**: each of the following runs in its own process.
-  - The robot node and the leader node (control loops)
+  - The follower nodes and the leader node (control loops)
   - Sensors
   - The recorder
   - The policy node
@@ -95,7 +95,7 @@ For `task`, you can pass either a string or a function that takes an `EpisodeInf
 | --- | --- |
 | `index` | Episode number in the dataset (number of saved episodes) |
 | `number` | Number recorded in this Session |
-| `experiment` | Name of the configuration file without extension (`config` for `.roboloom/<robot>/config.yaml`) |
+| `dataset` | The dataset's name (the part of `repo_id` after `/`, with the enabled options' names; e.g. `rakuda2-digit`) |
 | `previous` | List of tasks saved in this Session |
 
 ```python
@@ -265,6 +265,7 @@ finally:
   - Tests
   - Simulation
   - Simple robots with few sensors
+- It drives one follower. Run configurations with several followers with `Session`.
 - A policy can be passed directly to `step(policy=...)`.
   - However, if the policy or sensors are slow, the control period is delayed too.
 - Run the real Rakuda-2 with `Session`.
@@ -279,8 +280,8 @@ from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
 with InProcessSession.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
@@ -289,11 +290,11 @@ with InProcessSession.from_components(
     controller=lambda obs: [2048, 2048],
     output="datasets/my-mock",
     repo_id="local/my-mock",
-) as experiment:
-    experiment.start_episode("handover")
-    experiment.run(3.0)
-    experiment.stop_episode()
-    experiment.save_episode()
+) as session:
+    session.start_episode("handover")
+    session.run(3.0)
+    session.stop_episode()
+    session.save_episode()
 ```
 
 For the data collection procedure on real hardware, see [Rakuda2 Quick start](../quick-start/rakuda2.md).

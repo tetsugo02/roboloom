@@ -186,6 +186,13 @@ def recorder(f: dict) -> tuple[str, Text]:
             )
             if f.get("missing")
             else None,
+            Text(
+                "no command "
+                + ", ".join(f"{k}:{v}" for k, v in f["no_action"].items()),
+                style=WATCH,
+            )
+            if f.get("no_action")
+            else None,
         ]
     )
     return str(f.get("state", "")), detail

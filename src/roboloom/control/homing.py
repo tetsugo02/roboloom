@@ -47,7 +47,7 @@ class Trajectory:
 
 @dataclass(frozen=True)
 class Pose:
-    """A saved follower pose (`roboloom capture-pose`), one value per robot joint."""
+    """A saved follower pose (`roboloom capture-pose`), one value per follower joint."""
 
     name: str
     values: dict[str, float]
@@ -55,6 +55,7 @@ class Pose:
 
 def load_pose(
     path: Path,
+    follower: str,
     model: str,
     unit: str,
     joint_names: Sequence[str],
@@ -66,7 +67,12 @@ def load_pose(
         )
     data = yaml.safe_load(path.read_text())
     if not isinstance(data, dict) or not isinstance(data.get("pose"), dict):
-        raise ConfigError(f"{path}: expected model, unit and pose")
+        raise ConfigError(f"{path}: expected follower, model, unit and pose")
+    if data.get("follower") != follower:
+        raise ConfigError(
+            f"{path}: saved for follower {data.get('follower')!r}, not {follower!r} "
+            "(a pose belongs to the follower it was captured on)"
+        )
     if data.get("model") != model or data.get("unit") != unit:
         raise ConfigError(
             f"{path}: saved for {data.get('model')} in {data.get('unit')}, "
@@ -128,6 +134,7 @@ def parse_home(
     path = Path(base_dir or ".") / raw["pose"]
     pose = load_pose(
         path.resolve(),
+        robot.name,
         robot.model,
         robot.unit,
         robot.joint_names,

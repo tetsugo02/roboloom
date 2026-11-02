@@ -40,7 +40,7 @@ print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 roboloom も同じ構成をとります．
 
 - **dora の dataflow**：次のものが，それぞれ別のプロセスで動きます．
-  - robot ノードと leader ノード（制御のループ）
+  - フォロワのノードと leader ノード（制御のループ）
   - センサー
   - recorder
   - 方策ノード
@@ -95,7 +95,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 | --- | --- |
 | `index` | データセットでのエピソード番号（保存済みのエピソード数） |
 | `number` | この Session で録った数 |
-| `experiment` | 設定ファイルの名前（拡張子なし．`.roboloom/<robot>/config.yaml` では `config`） |
+| `dataset` | データセットの名前（`repo_id` の `/` より後ろ．有効なオプションの名前が付く．例：`rakuda2-digit`） |
 | `previous` | この Session で保存した task の一覧 |
 
 ```python
@@ -265,6 +265,7 @@ finally:
   - 試験
   - 模擬
   - センサーの少ない簡単な機体
+- 動かせるフォロワは1台です．フォロワが複数ある設定は `Session` で動かします．
 - 方策を `step(policy=...)` に直接渡せます．
   - ただし，方策やセンサーが遅いと，制御の周期も遅れます．
 - 実機の Rakuda-2 は，`Session` で動かします．
@@ -279,8 +280,8 @@ from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
 with InProcessSession.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
@@ -289,11 +290,11 @@ with InProcessSession.from_components(
     controller=lambda obs: [2048, 2048],
     output="datasets/my-mock",
     repo_id="local/my-mock",
-) as experiment:
-    experiment.start_episode("handover")
-    experiment.run(3.0)
-    experiment.stop_episode()
-    experiment.save_episode()
+) as session:
+    session.start_episode("handover")
+    session.run(3.0)
+    session.stop_episode()
+    session.save_episode()
 ```
 
 実機の収集手順は [Rakuda2 Quick start](../quick-start/rakuda2.md) を参照してください．

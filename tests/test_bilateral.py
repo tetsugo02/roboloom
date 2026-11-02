@@ -511,11 +511,11 @@ def test_mock_follower_runs_arms_in_current_position_mode(tmp_path):
     from roboloom.robots.safety import FollowerSafety
 
     tree = bilateral_tree(tmp_path)
-    tree["robot"]["mode"] = "mock"
+    tree["settings"]["mode"] = "mock"
     cfg = parse_config(tree)
     robot = cfg.followers["follower"]
     bus = robot.open_device(True)
-    safety = FollowerSafety(robot.safety_config(cfg.robot_id), bus)
+    safety = FollowerSafety(robot.safety_config(), bus)
     safety.start()
     try:
         raw = bus.bus

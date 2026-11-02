@@ -4,9 +4,12 @@ Rows are finalized while the episode runs, so memory stays bounded:
 
 - Row k covers [t_k, t_{k+1}) with t_k = t0 + k / dataset_fps.
 - Observations for row k are those the recorder had received by t_k.
-- `action[k]` is the first command the robot sent in [t_k, t_{k+1}).
-- A row is final once the robot's action stream has passed t_{k+1} (watermark),
-  or `grace_ms` after t_{k+1} if the robot is silent.
+- `action[k]` joins, per follower, the first command it sent in [t_k, t_{k+1}). A
+  follower that sent none fills its part with the target it held (its last state's
+  `target`), so a policy never learns a jump to zero; `action.meta.<follower>.valid`
+  is 0 and `action.valid` (every follower sent one) is 0 for that row.
+- A row is final once every follower's action stream has passed t_{k+1} (watermark),
+  or `grace_ms` after t_{k+1} if a follower is silent.
 
 Samples no later row can select are dropped. The newest sample received before
 `start` is kept as pre-roll so row 0 is not empty.
@@ -24,12 +27,17 @@ import numpy as np
 
 from ..core.protocol import Envelope
 from .metrics import summarize
-from .schema import META_FIELDS, features
+from .schema import META_FIELDS, features, observation_frame
 
 if TYPE_CHECKING:
     from ..config import RobotConfig
 
-ACTION = "action"  # stream of commands the robot actually sent
+ACTION = "action"  # a follower node's output: the commands it actually sent
+
+
+def action_stream(follower: str) -> str:
+    """The recorder's input carrying `follower`'s ACTION output."""
+    return f"{ACTION}_{follower}"
 
 
 class EpisodeRecorder:
@@ -44,6 +52,8 @@ class EpisodeRecorder:
     ):  # queue_s: dora input queues, see runtime.flow
         self.cfg = cfg
         self.sources = cfg.sources
+        self.followers = cfg.followers
+        self.streams = {action_stream(name): name for name in self.followers}
         self.dataset: Any = dataset  # LeRobotDataset 0.6.1 has no py.typed marker.
         self.grace_ns = int(grace_ms * 1e6)
         self.writer_options = {
@@ -59,21 +69,20 @@ class EpisodeRecorder:
         self.end_ns = 0
         self.task = ""
         self.next_row = 0
-        self.watermark_ns = 0
+        self.watermarks = {name: 0 for name in self.followers}
         self.write = True
         self._reset_stats()
 
     def _empty(self) -> dict[str, list[Envelope]]:
-        return {s: [] for s in (*self.sources, ACTION)}
+        return {s: [] for s in (*self.sources, *self.streams)}
 
     def _reset_stats(self) -> None:
         self.written = 0
-        self.stats: dict[str, list[float]] = {
-            "control_interval_ms": [],
-            "latency_ms": [],
-            "queue_ms": [],
-        }
+        self.stats: dict[str, list[float]] = {"latency_ms": [], "queue_ms": []}
+        self.intervals: dict[str, list[float]] = {name: [] for name in self.followers}
         self.missing = {key: 0 for key in self.sources}
+        # rows where a follower sent no command (per follower), and where all did
+        self.action_missing = {name: 0 for name in self.followers}
         self.action_rows = self.clamped = 0
 
     # -- episode lifecycle -------------------------------------------------
@@ -110,7 +119,7 @@ class EpisodeRecorder:
                 fps=cfg.dataset_fps,
                 features=expected,
                 root=root,
-                robot_type=cfg.robot_type or cfg.robot_id,
+                robot_type=cfg.robot,
                 use_videos=True,
                 **self.writer_options,
             )
@@ -138,20 +147,18 @@ class EpisodeRecorder:
             return
         if not msg.t_receive_ns:
             msg.t_receive_ns = time.monotonic_ns()
-        if source == ACTION:
-            self.watermark_ns = max(self.watermark_ns, msg.t_ready_ns)
+        follower = self.streams.get(source)
+        if follower is not None:
+            self.watermarks[follower] = max(self.watermarks[follower], msg.t_ready_ns)
         if not self.active:
-            if source != ACTION:
+            if follower is None:
                 self.preroll[source] = msg
             return
         self.samples[source].append(msg)
         self.stats["latency_ms"].append((msg.t_receive_ns - msg.t_capture_ns) / 1e6)
         self.stats["queue_ms"].append((msg.t_receive_ns - msg.t_ready_ns) / 1e6)
-        if (
-            source == self.cfg.follower.name
-            and msg.payload.get("tick_interval_ms", 0) > 0
-        ):
-            self.stats["control_interval_ms"].append(msg.payload["tick_interval_ms"])
+        if source in self.intervals and msg.payload.get("tick_interval_ms", 0) > 0:
+            self.intervals[source].append(msg.payload["tick_interval_ms"])
 
     def poll(self, now_ns: int | None = None) -> int:
         """Finalize every row whose interval has closed; return how many were written."""
@@ -161,7 +168,8 @@ class EpisodeRecorder:
         count = 0
         while True:
             end = self.t0_ns + (self.next_row + 1) * self.period_ns
-            if self.watermark_ns < end and now < end + self.grace_ns:
+            watermark = min(self.watermarks.values(), default=end)
+            if watermark < end and now < end + self.grace_ns:
                 return count
             self._emit(self.next_row)
             count += 1
@@ -209,6 +217,8 @@ class EpisodeRecorder:
             # int(): numpy bools would make the counters numpy ints, which JSON rejects
             self.missing[key] += int(row[f"observation.meta.{key}.valid"][0] == 0)
         self.action_rows += int(row["action.valid"][0] == 1)
+        for name in self.followers:
+            self.action_missing[name] += int(row[f"action.meta.{name}.valid"][0] == 0)
         self.clamped += int(row["action.clamped"][0] == 1)
         if self.write:
             self.dataset.add_frame(row)
@@ -219,7 +229,7 @@ class EpisodeRecorder:
     def _prune(self, next_ns: int) -> None:
         """Drop samples no row at or after `next_ns` can select."""
         for source, items in self.samples.items():
-            if source == ACTION:
+            if source in self.streams:
                 self.samples[source] = [
                     x
                     for x in items
@@ -246,9 +256,8 @@ class EpisodeRecorder:
 
     def _frame(self, t_ns: int, next_ns: int) -> dict:
         frame: dict[str, Any] = {"task": self.task}
-        fps = self.cfg.dataset_fps
-        for name, source in self.sources.items():
-            msg = self._selected(name, t_ns)
+        selected = {name: self._selected(name, t_ns) for name in self.sources}
+        for name, msg in selected.items():
             values = {
                 "valid": float(msg is not None),
                 "capture_age_ms": (t_ns - msg.t_capture_ns) / 1e6 if msg else 0.0,
@@ -262,30 +271,41 @@ class EpisodeRecorder:
                 frame[f"observation.meta.{name}.{key}"] = np.asarray(
                     [values[key]], dtype=dtype
                 )
-            frame.update(source.frame(msg, fps))
-        dim = len(self.cfg.follower.joint_names)
-        actions = [
-            x
-            for x in self.samples[ACTION]
-            if x.payload.get("valid")
-            and t_ns <= x.payload.get("t_sent_ns", 0) < next_ns
-        ]
-        action = min(actions, key=lambda x: x.payload["t_sent_ns"]) if actions else None
+        frame.update(observation_frame(self.sources, selected, self.cfg.dataset_fps))
+        parts, all_valid, any_clamped = [], True, False
+        for name, follower in self.followers.items():
+            actions = [
+                x
+                for x in self.samples[action_stream(name)]
+                if x.payload.get("valid")
+                and t_ns <= x.payload.get("t_sent_ns", 0) < next_ns
+            ]
+            action = (
+                min(actions, key=lambda x: x.payload["t_sent_ns"]) if actions else None
+            )
+            if action is not None:
+                parts.append(action.payload["positions"])
+            else:  # the target it held: what the follower actually did
+                state = selected.get(name)
+                held = state.payload.get("target") if state is not None else None
+                parts.append(held or [0.0] * len(follower.joint_names))
+            clamped = bool(action and action.payload.get("clamped"))
+            all_valid &= action is not None
+            any_clamped |= clamped
+            meta = {
+                "valid": float(action is not None),
+                "clamped": float(clamped),
+                "seq": action.payload["command_seq"] if action else -1,
+                "sent_ns": action.payload["t_sent_ns"] if action else 0,
+            }
+            for key, value in meta.items():
+                kind = np.float32 if key in ("valid", "clamped") else np.int64
+                frame[f"action.meta.{name}.{key}"] = np.asarray([value], dtype=kind)
         frame["action"] = np.asarray(
-            action.payload["positions"] if action else [0] * dim, dtype=np.float32
+            [x for part in parts for x in part], dtype=np.float32
         )
-        frame["action.valid"] = np.asarray(
-            [float(action is not None)], dtype=np.float32
-        )
-        frame["action.clamped"] = np.asarray(
-            [float(bool(action and action.payload.get("clamped")))], dtype=np.float32
-        )
-        frame["action.seq"] = np.asarray(
-            [action.payload["command_seq"] if action else -1], dtype=np.int64
-        )
-        frame["action.sent_ns"] = np.asarray(
-            [action.payload["t_sent_ns"] if action else 0], dtype=np.int64
-        )
+        frame["action.valid"] = np.asarray([float(all_valid)], dtype=np.float32)
+        frame["action.clamped"] = np.asarray([float(any_clamped)], dtype=np.float32)
         return frame
 
     def frames(self) -> list[dict]:
@@ -303,10 +323,15 @@ class EpisodeRecorder:
         rows = max(self.written, 1)
         return {
             "rows": self.written,
-            "control_interval_ms": summarize(self.stats["control_interval_ms"]),
+            "control_interval_ms": {
+                name: summarize(values) for name, values in self.intervals.items()
+            },
             "latency_ms": summarize(self.stats["latency_ms"]),
             "queue_ms": summarize(self.stats["queue_ms"]),
             "missing_rate": {key: value / rows for key, value in self.missing.items()},
             "action_valid_rate": self.action_rows / rows,
+            "action_missing_rate": {
+                name: value / rows for name, value in self.action_missing.items()
+            },
             "clamped_rate": self.clamped / rows,
         }

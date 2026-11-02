@@ -73,7 +73,7 @@ head target = head target mapped from the leader
 - `joint` and `source` name follower joints. Self-coupling, unknown joints, repeated `joint` entries, and nonfinite `scale` values are rejected when loading the configuration.
 - The reference is a configured constant, not the pose at alignment. Alignment accepts differences within `alignment_tolerance`, so a reference taken at that moment would offset the head by that difference for the whole session. Re-alignment and leader restarts keep the same reference.
 - Alignment compares the compensated head target with the follower's head. If the follower camera starts far from forward, `head_yaw` exceeds the tolerance and the controller stays `aligning`. Align the follower camera heading with the leader's neck before launch.
-- Using measured torso position rather than its target avoids commanding the neck ahead of a torso that has not caught up. Existing speed limits and robot-side range, deadline, and jump checks still apply after compensation.
+- Using measured torso position rather than its target avoids commanding the neck ahead of a torso that has not caught up. Existing speed limits and follower-side range, deadline, and jump checks still apply after compensation.
 - `joint`, `source`, `scale`, and `reference` are all required.
 - `lead_ms` (optional, default 0, 0–500) is how far ahead the target looks along the measured torso velocity. The neck motor trails its target under position control, so the camera lags while the torso moves. On Rakuda2, the camera error while turning the torso at up to 69°/s (up to 4.6°) was almost fully explained by torso velocity × about 70 ms (correlation 0.99, recording of 2026-10-27), so the example uses 70. Too large a value makes the neck overshoot. Without velocity from the robot, no lead is added.
 - This is linear compensation between specified joints. It does not stabilize the full camera orientation, use IMU feedback, or compensate for base rotation. It assumes parallel axes and correct signs and unit ratios. On another robot, set `scale` to account for axis signs and unit ratios. Speed limits, travel limits, and tracking lag leave errors in camera direction.
@@ -85,7 +85,7 @@ Joint locking and compensation have been verified with mock buses and controller
 
 The `home` command moves the leader and the follower slowly to a saved initial pose, so that every episode starts from the same pose. One second after arriving, the leader returns to its normal laws (gravity compensation and breakaway hold), so you can take it and start operating.
 
-**1. Save a pose.** Put the follower in the pose you want, then run this with the dataflow stopped. Each name becomes `poses/<name>.yaml`, and any number of poses can be saved. An existing name is not overwritten without `--force`.
+**1. Save a pose.** Put the follower in the pose you want, then run this with the dataflow stopped. Each name becomes `poses/<follower>/<name>.yaml`, and any number of poses can be saved. An existing name is not overwritten without `--force`. The file records the follower it was saved on and does not load on another one (so a left-arm pose is never used on the right arm). With several followers, name the follower: `capture-pose left ready`.
 
 ```bash
 uv run roboloom capture-pose ready
@@ -97,7 +97,7 @@ To put the follower in the pose, teleoperate it and `quit` with `hold` (exit wit
 
 ```yaml
 home:
-  pose: ../poses/ready.yaml   # one of the saved poses
+  pose: ../poses/follower/ready.yaml   # one of the saved poses
   max_speed: 200              # counts/s (about 18°/s); a limit that keeps the move slow
   tolerance: 30               # reached when every joint is this close
   timeout_s: 30

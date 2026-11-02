@@ -29,10 +29,26 @@ class Reader(Protocol):
 
 
 class Recordable(Protocol):
-    """Anything the recorder stores: its LeRobot features and one frame's values."""
+    """Anything the recorder stores: its LeRobot features and one frame's values.
+
+    A source may also contribute parts of features that several sources share
+    (`observation.state` of every follower) through `joined` and `joined_frame`; see
+    `recording.schema`."""
 
     def features(self, dataset_fps: float) -> Features: ...
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]: ...
+
+
+@dataclass(frozen=True)
+class Joined:
+    """This source's part of a feature that several sources share. The recorder joins
+    the parts in configuration order; `names` label the entries (e.g.
+    `follower.r_arm_sh_pitch1`). Parts of one feature must agree on `dtype`, and on
+    `unit` when it is set (one effort vector never mixes mA and N m)."""
+
+    names: tuple[str, ...]
+    dtype: str = "float32"
+    unit: str | None = None
 
 
 class ConstantReader:

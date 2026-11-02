@@ -27,7 +27,7 @@
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |
 | `identify-gravity <calibration> --out <path> --collect` | 保持電流を測定して重力モデルを同定する（leaderの重力補償，followerの `model_residual` 推定器）．通電前に操作者へ確認する |
-| `capture-pose [robot] <name>` | followerの今の姿勢を `poses/<name>.yaml` に保存する（動かさない．`--force` で上書き） |
+| `capture-pose [robot] [follower] <name>` | フォロワの今の姿勢を `poses/<follower>/<name>.yaml` に保存する（動かさない．`--force` で上書き．フォロワが1台なら `follower` は省略可） |
 | `commission [robot] <node>` | 差分と操作者の確認を経てEEPROMを書き，読み戻す |
 | `watchdog-test [robot] <node> <joint>` | 卓上試験：Bus Watchdogが電流モードのモーターを止めるかを確かめる（通電する） |
 | `tune-gravity [robot] leader <group> --with gravity` | gainとholdを対話調整する |

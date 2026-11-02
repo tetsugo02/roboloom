@@ -51,7 +51,7 @@ def test_sensors_are_selected_by_name_and_type():
     recorder = next(x for x in build_flow(cfg)["nodes"] if x["id"] == "recorder")
     assert recorder["inputs"]["wrist"]["source"] == "wrist/sample"
     assert recorder["inputs"]["wrist"]["queue_size"] == 5  # 10 fps x 0.5 s
-    assert recorder["inputs"]["action"]["queue_policy"] == "drop_oldest"
+    assert recorder["inputs"]["action_follower"]["queue_policy"] == "drop_oldest"
 
 
 def filled_hardware_tree():

@@ -26,16 +26,9 @@ class Controller(ABC):
         name: str,
         cfg: dict,
         source: InputDevice | None,
-        robot: Follower,
-        robot_id: str,
+        follower: Follower,
     ):
-        self.name, self.cfg, self.source, self.follower, self.robot_id = (
-            name,
-            cfg,
-            source,
-            robot,
-            robot_id,
-        )
+        self.name, self.cfg, self.source, self.follower = name, cfg, source, follower
         self.deadline_ms = positive(
             cfg.get("command_deadline_ms"), f"{name}.command_deadline_ms"
         )
@@ -67,7 +60,7 @@ class Controller(ABC):
     def command(self, target: list[float], now_ns: int, **extra: object) -> Envelope:
         return make_command(
             self.publisher,
-            robot_id=self.robot_id,
+            follower=self.follower.name,
             unit=self.follower.unit,
             target=target,
             now_ns=now_ns,

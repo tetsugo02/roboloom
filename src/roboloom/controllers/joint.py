@@ -16,10 +16,8 @@ from .feedback import FeedbackMap
 
 
 class JointController(Controller):
-    def __init__(
-        self, name: str, cfg: dict, source: InputDevice, robot: Follower, robot_id: str
-    ):
-        super().__init__(name, cfg, source, robot, robot_id)
+    def __init__(self, name: str, cfg: dict, source: InputDevice, robot: Follower):
+        super().__init__(name, cfg, source, robot)
         if not isinstance(source, JointInput):
             raise TypeError(
                 f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}"

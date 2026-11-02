@@ -7,7 +7,6 @@
 ## 設定YAML
 
 ```yaml
-robot_id: rakuda2
 repo_id: local/rakuda2
 output: datasets/rakuda2
 dataset_fps: 15
@@ -27,7 +26,13 @@ options:
 
 `mode` は省略でき，既定は `hardware` です．`mode: mock` も書けます．CLIの `--mock` とPython APIの `mock=` はYAMLの `mode` より優先します．
 
-ノードYAMLのパスと `output` は設定ファイルのディレクトリが基準です．オプションを有効にしない場合，上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．ノード名はdoraのIDとデータセットのfeature名に使われます．現在は1つの設定につきrobotが1台，対応するcontrollerが1個です．
+ノードYAMLのパスと `output` は設定ファイルのディレクトリが基準です．オプションを有効にしない場合，上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．
+
+最上位に書けるキーは `repo_id`，`output`，`dataset_fps`，`mode`，役割（`inputs`，`controllers`，`followers`，`sensors`，`estimators`），`recorder`，`session`，`options` だけです．それ以外のキーは読み込み時に拒否します．ロボットの名前は設定のディレクトリ名（`.roboloom/rakuda2/` なら `rakuda2`）で，データセットの `robot_type` にも使います．
+
+`followers` には，指令を受けて動く装置（腕，グリッパなど）を並べます．1つの設定に複数のフォロワを置けます．各フォロワには，それを動かすcontrollerがちょうど1つ必要です．
+
+ノード名はdoraのIDとデータセットのfeature名に使われます．英数字，`-`，`_` だけを使います．`recorder`，`session`，`action`，`tick` と，`action_` で始まる名前，`_status` で終わる名前は，dataflowが使うので付けられません．
 
 各ノードの `type` が実装を選びます．`SET_...` は機体固有の未設定値で，参照する設定に残っていると実行が拒否されます．`validate` は設定とdataflowの整合性を調べ，デバイスは開きません．EEPROMの実機との一致，画像取得，停止挙動までは確認しません．
 
@@ -41,7 +46,7 @@ options:
 | `default` | `true` なら，指定がないときに有効（既定 `false`） |
 | `requires` | 一緒に有効にするオプションのリスト |
 | `conflicts` | 同時に使えないオプションのリスト |
-| `set` | `<role>.<node>`（roleは `inputs`，`controllers`，`robots`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
+| `set` | `<role>.<node>`（roleは `inputs`，`controllers`，`followers`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
 | `dataset` | 有効なときにデータセット名へ付ける短い名前 |
 
 規則は次のとおりです．
@@ -104,10 +109,10 @@ leaderノードの `control` は，`free`（脱力），`position`（leaderで�
 !!! warning "実機では未検証"
     followerが受けた外力をleaderへ返す経路です．模擬（mock）の試験だけを通しています．設計と今後の段階は [バイラテラル制御の設計](../contribution/bilateral.md) を参照してください．
 
-設定に `estimators` を足し，controllerの `feedback` で推定器を参照します．テンプレートでは，オプション `bilateral` が `estimators.effort` を追加し，leader・controller・robotを逆送用のノードファイルに置き換えます．辺は書きません．各ノードの参照から次の経路を導きます．
+設定に `estimators` を足し，controllerの `feedback` で推定器を参照します．テンプレートでは，オプション `bilateral` が `estimators.effort` を追加し，leader・controller・followerを逆送用のノードファイルに置き換えます．辺は書きません．各ノードの参照から次の経路を導きます．
 
 ```text
-leader ──sample──► controller ──command──► robot ──state──► estimator
+leader ──sample──► controller ──command──► follower ──state──► estimator
   ▲                    │  ▲                                  │
   └──── feedback ──────┘  └────────────── estimate ──────────┘
 ```
@@ -123,13 +128,13 @@ estimators:
 | --- | --- |
 | `type` | `none`（常に推定なし．経路の確認用）または `model_residual` |
 | `models` | `model_residual` の重力モデル（腕ごと）．出力関節を合わせると `joints` とちょうど一致すること |
-| `robot` | 状態を読むrobotノードの名前 |
+| `follower` | 状態を読むフォロワのノード名 |
 | `joints` | 推定するfollower関節 |
 | `smoothing_alpha` | 指数移動平均の係数（0より大きく1以下，既定1＝平滑化なし） |
 | `contact_on` / `contact_off` | 残差のL1ノルムによる接触の判定（ヒステリシス）．`contact_off` ≤ `contact_on`．既定はどちらも0で，常に接触とみなす |
 | `record` | `true` で推定をデータセットに記録する（既定 `false`）．`recorder.max_age_ms` にこの推定器の名前が必要 |
 
-推定器は，robotが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
+推定器は，フォロワが申告する力の量（Rakuda2は `currents_mA`，単位mA）から，関節ごとの残差（実測 − 自由運動での予測）を出します．外力は残差と逆向きにかかります．
 
 `model_residual` は `残差 = 実測電流 − g(q)` です．`g(q)` はfollowerで同定した重力モデルで，学習は要りません．摩擦・慣性・位置の追従誤差は残差に残るので，自由に動かしているときも0になりません．推定器ノードのstatusの `residual_l1`（接触の判定と比べる値）を，自由に動かしたときと押したときで見て，`contact_on` をその間に置きます．重力モデルは，leaderと同じ `identify-gravity` で，followerのcalibration（`calibration/follower_<side>.yaml`）から作ります．
 
@@ -174,18 +179,18 @@ gate × (clip(受け取った電流, ±max_mA) − kd × 速度)
 
 逆送の電流は，重力補償と同じ `max_current_mA` とEEPROMのCurrent Limitの内側にあります．上限の近くでは削られます．Current Limitを上げると，ホストが止まったときに腕に残る力も大きくなります（XC330はBus Watchdogが作動しても電流を止めません）．
 
-`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器は1つの設定に1個です（2個目は特徴量の名前が衝突し，拒否されます）．
+`record: true` の推定器は，`observation.effort_ext`（外力＝−残差，推定器の単位），`observation.effort_ext.valid`，`observation.contact` を記録します．推定がないフレームは0です．記録する推定器が複数あるときは，設定の順につなげます．`names` は `observation.effort_ext` が `<フォロワ名>.<関節名>`，ほかの2つが推定器の名前です．単位の違う推定器は1本のベクトルにできないので，読み込み時に拒否します．
 
-読み込み時に，参照先の存在，推定器とcontrollerのrobotの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`InProcessSession`）は推定器を扱いません．
+読み込み時に，参照先の存在，推定器とcontrollerのフォロワの一致，単位，leader側の受け入れを確かめます．合わない設定は起動前に拒否されます．`couplings` の対象の関節にも，`joints` の対応どおりに返します．Python API（`InProcessSession`）は推定器を扱いません．
 
 ## 制御周期
 
-`robot.yaml` の `control_hz` と，leaderの `poll_hz` は，そのノードがバスを読み書きする周期です．1周期の仕事（状態の読み出し，制御則の計算，目標値の書き込み）が周期に収まる必要があります．周期を上げると，leaderの電流制御とfollowerの追従が細かくなります．
+`follower.yaml` の `control_hz` と，leaderの `poll_hz` は，そのノードがバスを読み書きする周期です．1周期の仕事（状態の読み出し，制御則の計算，目標値の書き込み）が周期に収まる必要があります．周期を上げると，leaderの電流制御とfollowerの追従が細かくなります．
 
 周期は次の手順で決めます．
 
 1. `roboloom probe <port>` を各ポートで実行します．状態の読み出し時間と，目安の周期上限（読み出しと書き込みに周期の70%を使う値）を表示します．`probe` は書き込みません．
-2. `control_hz` と `poll_hz` を設定し，`run` の画面で確かめます．robotとleaderの行の `work … ms (max …)` が1周期の仕事の時間です．最大値が周期の70%程度以下で，`tick` が周期どおりなら，その周期で動いています．
+2. `control_hz` と `poll_hz` を設定し，`run` の画面で確かめます．followerとleaderの行の `work … ms (max …)` が1周期の仕事の時間です．最大値が周期の70%程度以下で，`tick` が周期どおりなら，その周期で動いています．
 3. 超える場合は周期を下げます．
 
 Dynamixelのバスは，全モーターのファームウェアがv45以上なら，起動時にFast Sync Read（全モーターの応答を1パケットで返す読み出し）へ切り替えます．使えないときは通常の読み出しのまま動き，起動時に理由を表示します．
@@ -218,12 +223,25 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 `record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損はゼロ値と有効フラグで表します．`task` はフレームに記録されます．
 
+フォロワが複数あるとき，次のfeatureは全フォロワを設定の順につなげた1本のベクトルです．`names` が各要素の持ち主を `<フォロワ名>.<関節名>` で示します（例：`follower.r_arm_sh_pitch1`）．
+
+| feature | 中身 |
+| --- | --- |
+| `observation.state` | 各フォロワの関節の位置 |
+| `observation.effort` | `record_effort: true` のフォロワの力の量．単位の違うフォロワは混ぜられません |
+| `action` | 各フォロワがその行の区間に送った最初の指令．`observation.state` と同じ並び |
+| `action.valid` | 全フォロワが指令を送った行で1 |
+| `action.clamped` | どれかのフォロワが制限した行で1 |
+| `action.meta.<フォロワ名>.valid` / `clamped` / `seq` / `sent_ns` | フォロワごとの指令の有無，制限，指令の番号，送信時刻 |
+
+指令を送らなかったフォロワの部分は，そのフォロワが保持していた目標（状態の `target`）で埋めます．ゼロで埋めると，学習した方策が0への跳びを覚えるためです．LeRobotの学習は `action.valid` を見ないので，有効な行だけを使う場合は `action.valid` で選んでください．行は，全フォロワの指令がその区間を過ぎたとき，または `grace_ms`（既定500 ms）が過ぎたときに確定します．
+
 同じデータセットに次のエピソードを追記できます．再開時はFPSとfeatureの互換性を検査します．記録するfeatureを変えるオプションには `dataset` を付け，データセットを分けます（「起動オプション」の節）．
 
-`recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．
+`recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．`control_interval_ms` と `action_missing_rate`（指令のなかった行の割合）はフォロワごとで，警告にはフォロワの名前が出ます．
 
 ## ログと設定の管理
 
-ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，robotは毎周期の状態（位置・速度・電流・目標・モード）を `<robot名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．
+ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，フォロワは毎周期の状態（位置・速度・電流・目標・モード）を `<フォロワ名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/<フォロワ名>/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．

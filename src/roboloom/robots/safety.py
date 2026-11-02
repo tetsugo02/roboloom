@@ -31,16 +31,17 @@ MAX_CLAMP_DT_S = 0.1  # a stalled tick never widens the speed clamp beyond this
 def make_command(
     publisher: Publisher,
     *,
-    robot_id: str,
+    follower: str,
     unit: str,
     target: list[float],
     now_ns: int,
     deadline_ms: float,
     **extra: object,
 ) -> Envelope:
-    """RobotCommand: target, unit and absolute deadline, validated again by FollowerSafety."""
+    """A follower command: target, unit and absolute deadline, addressed to one follower
+    node by name and validated again by its FollowerSafety."""
     payload = {
-        "robot_id": robot_id,
+        "follower": follower,
         "unit": unit,
         "positions": target,
         "deadline_ns": now_ns + int(deadline_ms * 1e6),
@@ -116,7 +117,7 @@ class FollowerSafety:
             return
         if (
             command.kind != "command"
-            or command.payload.get("robot_id") != self.cfg["robot_id"]
+            or command.payload.get("follower") != self.cfg.get("name", "follower")
             or command.payload.get("unit") != self.cfg.get("unit", "dynamixel_count")
         ):
             return

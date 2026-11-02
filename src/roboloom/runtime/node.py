@@ -310,7 +310,7 @@ def _home_fields(safety: FollowerSafety) -> dict:
 
 def _follower(node, robot: Follower, cfg: RobotConfig):
     bus = robot.open_device(cfg.mock)
-    safety = FollowerSafety(robot.safety_config(cfg.robot_id), bus)
+    safety = FollowerSafety(robot.safety_config(), bus)
     status = StatusReporter(Publisher(robot.name), "follower")
     intervals: deque[float] = deque(maxlen=int(robot.control_hz * 2))
     clamped: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
@@ -616,6 +616,8 @@ def _recorder(node, cfg: RobotConfig):
                     if writer.active
                     else None,
                     "missing": {k: v for k, v in writer.missing.items() if v},
+                    # rows in which a follower sent no command
+                    "no_action": {k: v for k, v in writer.action_missing.items() if v},
                     "episodes": writer.dataset.num_episodes,
                 }
                 level = (

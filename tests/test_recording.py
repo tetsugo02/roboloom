@@ -39,7 +39,7 @@ def test_causal_selection_and_next_action():
         "follower",
         msg("follower_state", 1, t - MS, t + 1, t + 1, {"positions": [3000] * 17}),
     )
-    recorder.ingest("action", action(2, t + 20 * MS))
+    recorder.ingest("action_follower", action(2, t + 20 * MS))
     recorder.stop(t + 100 * MS)
     row = recorder.frames()[0]
     assert row["observation.state"][0] == 2048
@@ -96,7 +96,7 @@ def test_streaming_rows_watermark_preroll_and_pruning():
                 {"positions": [2048 + k] * 17},
             ),
         )
-        recorder.ingest("action", action(k, tick, 2048 + k))
+        recorder.ingest("action_follower", action(k, tick, 2048 + k))
         recorder.poll(tick + MS)
     assert len(dataset.frames) >= 8  # rows closed by the action watermark, not by grace
     first = dataset.frames[0]
@@ -106,7 +106,8 @@ def test_streaming_rows_watermark_preroll_and_pruning():
     )
     assert first["action"][0] == 2048
     assert (
-        len(recorder.samples["follower"]) < 10 and len(recorder.samples["action"]) < 10
+        len(recorder.samples["follower"]) < 10
+        and len(recorder.samples["action_follower"]) < 10
     )
     recorder.stop(t + 1000 * MS)
     assert recorder.written == 10
@@ -121,7 +122,7 @@ def test_discard_mid_episode_clears_written_rows():
     recorder = EpisodeRecorder(cfg, dataset=dataset)
     t = time.monotonic_ns()
     recorder.start("task", t)
-    recorder.ingest("action", action(0, t + 250 * MS))
+    recorder.ingest("action_follower", action(0, t + 250 * MS))
     recorder.poll(t + 260 * MS)
     assert dataset.frames
     recorder.discard()

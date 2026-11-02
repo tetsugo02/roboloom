@@ -1,7 +1,6 @@
 # Mock Rakuda devices (no hardware): leader teleoperation with camera, DIGIT and audio.
 # Start:  uv run roboloom run examples/mock/config.yaml
 #         uv run roboloom run examples/mock/config.yaml --with bilateral
-robot_id: rakuda-mock
 repo_id: local/rakuda-mock
 output: ../../datasets/rakuda-mock
 mode: mock

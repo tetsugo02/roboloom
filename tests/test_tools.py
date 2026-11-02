@@ -165,7 +165,7 @@ def test_gravity_leader_example_parses_and_runs_in_mock(tmp_path):
     )  # hardware checks: watchdog and current limits present
     leader = cfg.inputs["leader"]
     assert isinstance(leader, JointInput) and leader.actuated
-    tree["robot"]["mode"] = "mock"
+    tree["settings"]["mode"] = "mock"
     cfg = parse_config(tree)
     reader = cfg.inputs["leader"].open(True, cfg.dataset_fps)
     assert isinstance(reader, ActuatedReader)

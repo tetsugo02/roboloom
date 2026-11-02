@@ -38,7 +38,13 @@ def test_trajectory_moves_every_joint_together_within_the_speed() -> None:
 
 
 def write_pose(path: Path, values: dict, **extra) -> Path:
-    body = {"model": "rakuda2", "unit": "dynamixel_count", "pose": values, **extra}
+    body = {
+        "follower": "follower",
+        "model": "rakuda2",
+        "unit": "dynamixel_count",
+        "pose": values,
+        **extra,
+    }
     path.write_text(yaml.safe_dump(body))
     return path
 
@@ -55,24 +61,31 @@ LIMITS = [{"min": 0, "max": 4095}] * 2
         ({"a": 1, "b": 5000}, {}, "outside"),
         ({"a": 1, "b": float("nan")}, {}, "outside"),
         ({"a": 1, "b": 2}, {"model": "other"}, "saved for other"),
+        ({"a": 1, "b": 2}, {"follower": "left"}, "follower 'left', not 'follower'"),
     ],
 )
 def test_pose_files_are_checked_against_the_robot(tmp_path, values, extra, match):
     path = write_pose(tmp_path / "p.yaml", values, **extra)
     with pytest.raises(ConfigError, match=match):
-        load_pose(path, "rakuda2", "dynamixel_count", JOINTS, LIMITS)
+        load_pose(path, "follower", "rakuda2", "dynamixel_count", JOINTS, LIMITS)
     with pytest.raises(ConfigError, match="capture-pose"):
         load_pose(
-            tmp_path / "missing.yaml", "rakuda2", "dynamixel_count", JOINTS, LIMITS
+            tmp_path / "missing.yaml",
+            "follower",
+            "rakuda2",
+            "dynamixel_count",
+            JOINTS,
+            LIMITS,
         )
 
 
 def test_capture_pose_saves_the_follower_pose_by_name(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = capture_pose(project / "config.yaml", "ready")
-    assert path == project / "poses" / "ready.yaml"
+    assert path == project / "poses" / "follower" / "ready.yaml"
     saved = yaml.safe_load(path.read_text())
     assert saved["model"] == "rakuda2" and saved["pose"]["torso_yaw"] == 2048
+    assert saved["follower"] == "follower"
     assert len(saved["pose"]) == 17
     with pytest.raises(SetupError, match="exists"):
         capture_pose(project / "config.yaml", "ready")
@@ -100,7 +113,7 @@ def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
     cfg = parse_config(home_tree(tmp_path))
     controller = cfg.controllers["controller"]
     assert controller.home is not None and controller.home.pose.name == "ready"
-    follower = controller.home.target(cfg.follower.joint_names)
+    follower = controller.home.target(cfg.followers["follower"].joint_names)
     leader = controller.leader_pose(follower)
     # the head target gets -(torso - reference) = -100 added: the leader neck sits 100 higher
     assert leader["head_yaw"] == 2100 and leader["torso_yaw"] == 2148
@@ -137,7 +150,7 @@ def test_gravity_leader_groups_need_a_homing_spring(tmp_path):
     tree["controllers"]["controller"]["home"] = home_tree(tmp_path)["controllers"][
         "controller"
     ]["home"]
-    tree["robot"]["mode"] = "mock"
+    tree["settings"]["mode"] = "mock"
     for group in tree["inputs"]["leader"]["control"]:
         group.pop("homing", None)  # the template ships one; take it away
     with pytest.raises(ConfigError, match="need homing"):
@@ -152,7 +165,7 @@ def safety() -> tuple[FollowerSafety, MockBus]:
     bus = MockBus(dimension=2)
     limit = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
     ctl = FollowerSafety(
-        {"robot_id": "r", "limits": [limit, limit], "control_hz": 100}, bus
+        {"name": "r", "limits": [limit, limit], "control_hz": 100}, bus
     )
     ctl.start()
     return ctl, bus
@@ -282,14 +295,14 @@ def test_session_moves_home_then_records_from_there(tmp_path):
 
     project = mock_project(tmp_path / ".roboloom")
     capture_pose(project / "config.yaml", "ready")
-    pose = project / "poses" / "ready.yaml"
+    pose = project / "poses" / "follower" / "ready.yaml"
     saved = yaml.safe_load(pose.read_text())
     saved["pose"]["torso_yaw"], saved["pose"]["r_arm_sh_pitch1"] = 2100, 2000
     pose.write_text(yaml.safe_dump(saved))
     controller = project / "nodes" / "controller.yaml"
     controller.write_text(
         controller.read_text()
-        + "home:\n  pose: ../poses/ready.yaml\n  max_speed: 400\n  timeout_s: 20\n"
+        + "home:\n  pose: ../poses/follower/ready.yaml\n  max_speed: 400\n  timeout_s: 20\n"
     )
     with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)

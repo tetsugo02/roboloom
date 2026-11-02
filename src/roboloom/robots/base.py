@@ -16,7 +16,7 @@ from ..control.device import (
 )
 from ..core.checks import finite, names, positive
 from ..core.protocol import Envelope
-from ..core.source import Features
+from ..core.source import Features, Joined
 from ..drivers.base import JointBus
 
 __all__ = ["Follower", "JointBus", "check_limits"]
@@ -102,6 +102,8 @@ class Follower:
         self.limits = check_limits(self.joint_names, cfg.get("limits"), name)
         self.health = check_health(cfg.get("health"), len(self.joint_names), name)
         self.record_effort = bool(cfg.get("record_effort", False))
+        if self.record_effort and self.effort_signal is None:
+            raise ValueError(f"{name}.record_effort: {self.model} measures no effort")
         # false: never torque on; records state only (first hardware data-path check)
         self.torque = bool(cfg.get("torque", True))
         # control: per-joint law groups; without it the bus receives plain position goals
@@ -142,10 +144,9 @@ class Follower:
         if self.control:
             check_hardware(self.control, self.cfg, self.name, self.current_limits_mA())
 
-    def safety_config(self, robot_id: str) -> dict:
+    def safety_config(self) -> dict:
         return {
             "name": self.name,
-            "robot_id": robot_id,
             "limits": self.limits,
             "unit": self.unit,
             "control_hz": self.control_hz,
@@ -154,27 +155,30 @@ class Follower:
         }
 
     def features(self, dataset_fps: float) -> Features:
-        dim = (len(self.joint_names),)
-        out: Features = {
-            "observation.state": {"dtype": "float32", "shape": dim, "names": None}
-        }
-        if self.record_effort:
-            out["observation.effort"] = {
-                "dtype": "float32",
-                "shape": dim,
-                "names": None,
-            }
-        return out
+        return {}  # everything a follower records is joined with the other followers
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
+        return {}
+
+    def joined(self, dataset_fps: float) -> dict[str, Joined]:
+        """Its part of `observation.state` (and of `observation.effort`)."""
+        names = tuple(f"{self.name}.{j}" for j in self.joint_names)
+        out = {"observation.state": Joined(names)}
+        if self.record_effort and self.effort_signal is not None:
+            out["observation.effort"] = Joined(names, unit=self.effort_signal[1])
+        return out
+
+    def joined_frame(
+        self, msg: Envelope | None, dataset_fps: float
+    ) -> dict[str, np.ndarray]:
         zeros = [0.0] * len(self.joint_names)
         out = {
             "observation.state": np.asarray(
                 msg.payload["positions"] if msg else zeros, dtype=np.float32
             )
         }
-        if self.record_effort:
-            effort = msg.payload.get("currents_mA") if msg else None
+        if self.record_effort and self.effort_signal is not None:
+            effort = msg.payload.get(self.effort_signal[0]) if msg else None
             out["observation.effort"] = np.asarray(
                 effort if effort is not None else zeros, dtype=np.float32
             )

@@ -27,7 +27,6 @@ def controller() -> JointController:
         {**base.cfg, "couplings": [LINK]},
         base.source,
         base.follower,
-        base.robot_id,
     )
 
 
@@ -177,7 +176,6 @@ def test_controller_passes_the_follower_velocity_to_the_lead() -> None:
         {**base.cfg, "couplings": [{**LINK, "lead_ms": 100}]},
         base.source,
         base.follower,
-        base.robot_id,
     )
     now = time.monotonic_ns() - 10_000_000_000
     hold = [2048.0] * 17
@@ -236,7 +234,7 @@ def test_position_locks_only_selected_leader_joints_and_seeds_before_torque() ->
 
 def test_rakuda_leader_locking_uses_the_normal_yaml_control_groups() -> None:
     tree = rakuda2_tree()
-    tree["robot"]["mode"] = "mock"
+    tree["settings"]["mode"] = "mock"
     groups = tree["inputs"]["leader"]["control"]
     groups[0]["joints"] = ["torso_yaw"]
     groups.append(
@@ -264,7 +262,7 @@ def test_compensated_commands_still_pass_through_robot_safety_limits(
     ]
     limits[1]["min"] = 2000  # head has little travel left in this direction
     safety = FollowerSafety(
-        {"robot_id": ctl.robot_id, "limits": limits, "control_hz": 30}, bus
+        {"name": ctl.follower.name, "limits": limits, "control_hz": 30}, bus
     )
     safety.start()
     safety.arm()

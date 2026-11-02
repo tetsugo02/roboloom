@@ -136,7 +136,7 @@ robots can use their own joint names and scale. Details: [Leader](https://tetsug
 ## Initial pose (optional)
 
 Save poses by name while the dataflow is stopped (follower posed by teleoperation then
-`quit` then select Hold, or by hand after `release`); each becomes `poses/<name>.yaml`:
+`quit` then select Hold, or by hand after `release`); each becomes `poses/<follower>/<name>.yaml`:
 `uv run roboloom capture-pose ready`.
 Choose one with `home:` in `nodes/controller.yaml` (see the comment there) and type `home`
 on the run screen (or `record ... --home`): leader and follower move slowly

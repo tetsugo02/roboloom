@@ -6,8 +6,8 @@ from roboloom.drivers.mock import MockBus
 
 def create(output):
     return InProcessSession.from_components(
-        robot_id="toy",
-        robot=MockBus(dimension=2),
+        robot="toy",
+        bus=MockBus(dimension=2),
         joint_names=["a", "b"],
         limits=[
             {"name": name, "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}

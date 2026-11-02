@@ -53,18 +53,18 @@ from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
 with InProcessSession.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
         {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
     ],
     controller=lambda obs: [2048, 2048],
-) as experiment:
-    experiment.start_inference()
-    print(experiment.step())
-    experiment.stop_inference()
+) as session:
+    session.start_inference()
+    print(session.step())
+    session.stop_inference()
 ```
 
 ```bash

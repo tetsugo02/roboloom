@@ -27,7 +27,7 @@ Real hardware is the default. Commands that open devices accept:
 | `calibrate-joints <calibration>` | Save measured counts at the URDF zero pose to the calibration |
 | `measure-travel <calibration> --out <path>` | Save the range of motion moved by hand |
 | `identify-gravity <calibration> --out <path> --collect` | Measure holding current and identify the gravity model (leader gravity compensation, the follower `model_residual` estimator); asks the operator before energizing |
-| `capture-pose [robot] <name>` | Save the follower's current pose as `poses/<name>.yaml` (moves nothing; `--force` replaces) |
+| `capture-pose [robot] [follower] <name>` | Save a follower's current pose as `poses/<follower>/<name>.yaml` (moves nothing; `--force` replaces; `follower` may be omitted when there is one) |
 | `commission [robot] <node>` | Write EEPROM after a diff and operator confirmation, then read it back |
 | `watchdog-test [robot] <node> <joint>` | Bench test: check that the Bus Watchdog stops a current-mode motor (energizes it) |
 | `tune-gravity [robot] leader <group> --with gravity` | Interactively tune gain and hold |

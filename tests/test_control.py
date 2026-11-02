@@ -21,7 +21,7 @@ def command(seq, target, now, deadline=None):
         now,
         now,
         {
-            "robot_id": "r",
+            "follower": "r",
             "unit": "dynamixel_count",
             "positions": target,
             "deadline_ns": deadline or now + 100_000_000,
@@ -31,9 +31,7 @@ def command(seq, target, now, deadline=None):
 
 def safety(**cfg):
     bus = MockBus(dimension=1)
-    ctl = FollowerSafety(
-        {"robot_id": "r", "limits": [LIMIT], "control_hz": 30, **cfg}, bus
-    )
+    ctl = FollowerSafety({"name": "r", "limits": [LIMIT], "control_hz": 30, **cfg}, bus)
     ctl.start()
     ctl.arm()
     return ctl, bus

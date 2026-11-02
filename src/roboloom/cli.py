@@ -186,9 +186,14 @@ def main(argv: list[str] | None = None) -> None:
     pose = sub.add_parser(
         "capture-pose",
         parents=[configured, devices],
-        help="save the follower's current pose as poses/<name>.yaml (for home)",
+        help="save a follower's current pose as poses/<follower>/<name>.yaml (for home)",
     )
-    pose.add_argument("name")
+    pose.add_argument(
+        "pose",
+        nargs="+",
+        metavar="[FOLLOWER] NAME",
+        help="the follower node (may be omitted when there is one) and the pose name",
+    )
     pose.add_argument("--force", action="store_true", help="replace an existing pose")
     ident = sub.add_parser(
         "identify-gravity", help="collect holding currents and fit a gravity model"
@@ -362,8 +367,19 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         return
     if args.command == "capture-pose":
-        path = setup.capture_pose(_load(args), args.name, force=args.force)
-        print(f"saved {path}; select it with home: {{pose: ../poses/{path.name}}}")
+        if len(args.pose) > 2:
+            raise ConfigError("capture-pose takes [FOLLOWER] NAME")
+        *follower, name = args.pose
+        path = setup.capture_pose(
+            _load(args),
+            name,
+            follower=follower[0] if follower else None,
+            force=args.force,
+        )
+        print(
+            f"saved {path}; select it with "
+            f"home: {{pose: ../poses/{path.parent.name}/{path.name}}}"
+        )
         return
     if args.command == "measure-travel":
         travel = setup.measure_travel(args.calibration, args.out, operator)

@@ -35,6 +35,15 @@ ROLES = ("inputs", "controllers", "followers", "sensors", "estimators")
 SERVICES = ("recorder", "session")
 # Service node ids and fixed dora input ids; LeRobot key collisions are checked by `features`.
 RESERVED = {*SERVICES, "action", "tick"}
+RESERVED_PREFIXES = ("action_",)  # the recorder's per-follower action inputs
+RESERVED_SUFFIXES = ("_status",)  # the session's per-node status inputs
+# top-level keys of config.yaml besides the roles and services; anything else is refused
+SETTINGS = ("repo_id", "output", "dataset_fps", "mode")
+RENAMED = {
+    "robot_id": "the robot's name is its directory (.roboloom/<robot>/); remove robot_id",
+    "robot_type": "the dataset's robot type is the robot's directory name; remove it",
+    "robots": "renamed to followers",
+}
 CONFIG_FILE = "config.yaml"
 INFER_OPTION = "policy"  # `infer` turns on the option of this name when one is declared
 NO_OPTIONS = (
@@ -231,7 +240,10 @@ def dataset_suffix(options: dict[str, Option], enabled: Iterable[str]) -> str:
 
 @dataclass
 class RobotConfig:
-    robot_id: str
+    """A robot's validated configuration: its nodes by role and the recording settings.
+    `robot` is the robot's name (the configuration's directory, e.g. `rakuda2`)."""
+
+    robot: str
     repo_id: str
     output: str
     dataset_fps: float
@@ -244,7 +256,6 @@ class RobotConfig:
     recorder: dict = field(default_factory=dict)
     quality: dict = field(default_factory=dict)  # see recording.metrics.QUALITY
     mode: str = "hardware"
-    robot_type: str = ""
     path: str = ""
     options: tuple[str, ...] = ()  # enabled launch options, in declaration order
     available_options: dict[str, Option] = field(default_factory=dict)
@@ -252,11 +263,6 @@ class RobotConfig:
     @property
     def mock(self) -> bool:
         return self.mode == "mock"
-
-    @property
-    def follower(self) -> Follower:
-        (follower,) = self.followers.values()
-        return follower
 
     @property
     def sources(self) -> dict[str, Recordable]:
@@ -332,7 +338,15 @@ def read_config(
         }
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
-    tree["robot"] = raw
+    unknown = set(raw) - set(SETTINGS)
+    if unknown:
+        problems = [f"{k}: {RENAMED[k]}" for k in sorted(unknown) if k in RENAMED]
+        others = sorted(unknown - set(RENAMED))
+        if others:
+            allowed = ", ".join((*SETTINGS, *ROLES, *SERVICES, "options"))
+            problems.append(f"unknown keys {others} (allowed: {allowed})")
+        raise ConfigError(f"{path}: " + "; ".join(problems))
+    tree["settings"] = raw
     return tree
 
 
@@ -415,8 +429,8 @@ def parse_config(tree: dict) -> RobotConfig:
             "template values still to fill (see the README next to the configuration):\n  "
             + "\n  ".join(missing)
         )
-    e = tree["robot"]
-    robot_id = identity(e.get("robot_id"), "robot_id")
+    e = tree["settings"]
+    robot = Path(tree["path"]).parent.name
     repo_id = identity(e.get("repo_id"), "repo_id")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo_id):
         raise ValueError("repo_id must be namespace/name")
@@ -429,15 +443,24 @@ def parse_config(tree: dict) -> RobotConfig:
     if len(set(names)) != len(names):
         raise ValueError("node names must be unique across roles")
     for name in names:
-        if name in RESERVED or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
-            raise ValueError(f"invalid node name {name!r}")
+        if (
+            name in RESERVED
+            or name.startswith(RESERVED_PREFIXES)
+            or name.endswith(RESERVED_SUFFIXES)
+            or not re.fullmatch(r"[A-Za-z0-9_-]+", name)
+        ):
+            raise ValueError(
+                f"invalid node name {name!r} (letters, digits, - and _; not "
+                f"{', '.join(sorted(RESERVED))}, not starting with "
+                f"{RESERVED_PREFIXES[0]} nor ending with {RESERVED_SUFFIXES[0]})"
+            )
 
     followers = {
         name: FOLLOWERS.get(c.get("type"))(name, c)
         for name, c in tree["followers"].items()
     }
-    if len(followers) != 1:
-        raise ValueError("exactly one follower per configuration is supported for now")
+    if not followers:
+        raise ValueError("followers: configure at least one follower")
     inputs = {
         name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
     }
@@ -470,9 +493,12 @@ def parse_config(tree: dict) -> RobotConfig:
                 f"controllers.{name} must reference a configured "
                 f"{'input and follower' if cls.uses_input else 'follower'}"
             )
-        controller = cls(
-            name, c, source if cls.uses_input else None, follower, robot_id
-        )
+        controller = cls(name, c, source if cls.uses_input else None, follower)
+        if not cls.uses_input and list(followers) != [follower.name]:
+            raise ValueError(
+                f"controllers.{name}: a policy drives every follower; one policy "
+                "for several followers is not supported yet"
+            )
         unknown = set(controller.observes()) - {*inputs, *sensors}
         if unknown:
             raise ValueError(
@@ -480,7 +506,7 @@ def parse_config(tree: dict) -> RobotConfig:
             )
         bind = getattr(controller, "bind", None)
         if bind is not None:
-            bind({**inputs, **sensors})
+            bind({**inputs, **sensors}, fps)
         controller.bind_feedback(estimators)
         controllers[name] = controller
     for follower in followers.values():
@@ -508,7 +534,7 @@ def parse_config(tree: dict) -> RobotConfig:
 
     ages = tree["recorder"].get("max_age_ms", {})
     cfg = RobotConfig(
-        robot_id=robot_id,
+        robot=robot,
         repo_id=repo_id,
         output=identity(e.get("output"), "output"),
         dataset_fps=fps,
@@ -534,7 +560,6 @@ def parse_config(tree: dict) -> RobotConfig:
         },
         quality=_quality(tree["recorder"].get("quality") or {}),
         mode=e["mode"],
-        robot_type=e.get("robot_type", next(iter(followers.values())).model),
         path=tree["path"],
         options=tuple(tree.get("options", ())),
         available_options=dict(tree.get("available", {})),

@@ -263,7 +263,7 @@ class JointInput(InputDevice):
             f"observation.{self.name}": {
                 "dtype": "float32",
                 "shape": (len(self.joint_names),),
-                "names": None,
+                "names": list(self.joint_names),
             }
         }
 

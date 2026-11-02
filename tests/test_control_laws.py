@@ -129,9 +129,7 @@ def test_follower_safety_drives_a_device_like_a_bus():
     ]
     dev, bus = device(groups, [3, 3, 5])
     limit = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
-    safety = FollowerSafety(
-        {"robot_id": "r", "limits": [limit] * 3, "control_hz": 30}, dev
-    )
+    safety = FollowerSafety({"name": "r", "limits": [limit] * 3, "control_hz": 30}, dev)
     safety.start()
     assert bus.torque == [True, True, True] and bus.goal_current[2] == 300
     safety.stop()
@@ -186,13 +184,13 @@ def test_hardware_refuses_unvalidated_and_unprotected_current_laws():
     with pytest.raises(ValueError, match="current_limit"):
         parse_config(deepcopy(tree))
     tree["mode"] = "mock"
-    tree["robot"]["mode"] = "mock"
-    assert parse_config(tree).follower.control is not None
+    tree["settings"]["mode"] = "mock"
+    assert parse_config(tree).followers["follower"].control is not None
 
 
 def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
     tree = hardware_tree()
-    tree["robot"]["mode"] = "mock"
+    tree["settings"]["mode"] = "mock"
     joints = [x["name"] for x in tree["followers"]["follower"]["limits"]]
     arms = [j for j in joints if not j.endswith("grip")]
     tree["inputs"]["leader"]["control"] = [

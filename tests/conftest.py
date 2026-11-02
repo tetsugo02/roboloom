@@ -23,7 +23,7 @@ def rakuda2_tree(options: list[str] | None = None) -> dict:
 
 def mock_project(root: Path) -> Path:
     """`roboloom init rakuda2` under `root`, filled and switched to mock mode, as files
-    (the dora nodes read the experiment from disk). Returns the robot's project directory."""
+    (the dora nodes read the configuration from disk). Returns the robot's project directory."""
     from roboloom.project import init_project
 
     init_project("rakuda2", root)
@@ -38,9 +38,47 @@ def mock_project(root: Path) -> Path:
         # the mock follower starts at 2048; a leader trigger resting there is aligned
         "rest: 2500": "rest: 2048",
     }
+    used: set[str] = set()
     for path in (root / "rakuda2").rglob("*.yaml"):
         text = path.read_text()
         for old, new in filled.items():
-            text = text.replace(old, new)
+            if old in text:
+                used.add(old)
+                text = text.replace(old, new)
         path.write_text(text)
+    # a template edit must not silently leave a placeholder or the hardware mode in place
+    assert used == set(filled), f"template no longer contains {set(filled) - used}"
     return root / "rakuda2"
+
+
+def dual_mock(root: Path) -> Path:
+    """examples/mock with a second leader, follower and joint controller (`left`), as
+    files: two followers in one configuration. Returns the config.yaml path."""
+    import shutil
+
+    import yaml
+
+    target = root / "dual"
+    shutil.copytree("examples/mock", target, ignore=shutil.ignore_patterns("logs"))
+    nodes = target / "nodes"
+    for kind, name in (("leader", "left_leader"), ("follower", "left")):
+        data = yaml.safe_load((nodes / f"{kind}.yaml").read_text())
+        data["port"] = f"mock://{name}"
+        (nodes / f"{name}.yaml").write_text(yaml.safe_dump(data, sort_keys=False))
+    controller = yaml.safe_load((nodes / "controller.yaml").read_text())
+    controller.update(input="left_leader", followers=["left"])
+    (nodes / "left_controller.yaml").write_text(yaml.safe_dump(controller))
+    recorder = yaml.safe_load((nodes / "recorder.yaml").read_text())
+    recorder["max_age_ms"].update(left_leader=300, left=300)
+    (nodes / "recorder.yaml").write_text(yaml.safe_dump(recorder))
+    config = yaml.safe_load((target / "config.yaml").read_text())
+    config["inputs"]["left_leader"] = "nodes/left_leader.yaml"
+    config["controllers"]["left_controller"] = "nodes/left_controller.yaml"
+    config["followers"]["left"] = "nodes/left.yaml"
+    config["output"] = "datasets/dual"
+    del config["options"]
+    for sensor in ("digit_left", "digit_right", "audio"):
+        del config["sensors"][sensor]
+    path = target / "config.yaml"
+    path.write_text(yaml.safe_dump(config, sort_keys=False))
+    return path

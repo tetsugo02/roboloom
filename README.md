@@ -64,8 +64,8 @@ from roboloom import InProcessSession
 from roboloom.drivers.mock import MockBus
 
 with InProcessSession.from_components(
-    robot_id="my-mock",
-    robot=MockBus(dimension=2),
+    robot="my-mock",
+    bus=MockBus(dimension=2),
     joint_names=["j1", "j2"],
     limits=[
         {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
@@ -74,22 +74,22 @@ with InProcessSession.from_components(
     controller=lambda obs: [2048, 2048],
     output="datasets/my-mock",
     repo_id="local/my-mock",
-) as experiment:
-    experiment.start_episode("handover")
-    experiment.run(3.0)
-    experiment.stop_episode()
-    experiment.save_episode()  # LeRobotDataset に確定
+) as session:
+    session.start_episode("handover")
+    session.run(3.0)
+    session.stop_episode()
+    session.save_episode()  # LeRobotDataset に確定
 
-    experiment.start_episode("retry")
-    experiment.run(1.0)
-    experiment.discard_episode()  # このエピソードだけ破棄
+    session.start_episode("retry")
+    session.run(1.0)
+    session.discard_episode()  # このエピソードだけ破棄
 
-    experiment.start_inference()
-    result = experiment.step(policy=lambda obs: obs["state"])
-    experiment.stop_inference()
+    session.start_inference()
+    result = session.step(policy=lambda obs: obs["state"])
+    session.stop_inference()
 ```
 
-`InProcessSession.from_components(...)` では，任意の関節数と名前，ロボットバス，controller 関数，センサー読み取り関数を渡せます．controller または `step(policy=...)` は `obs` を受け取り，次の関節目標値を返します．センサー関数は `Sample(value, capture_ns)` または `None` を返します．ロボットバスは `read_positions`，`write_positions`，`enable_torque`，`close` を実装します．観測は `obs["state"]` と各センサー名で渡されます．`step()` の指令は必ず robot 側の期限・次元・有限値・関節範囲・変化量検査を通ります．
+`InProcessSession.from_components(...)` では，任意の関節数と名前，ロボットバス，controller 関数，センサー読み取り関数を渡せます．controller または `step(policy=...)` は `obs` を受け取り，次の関節目標値を返します．センサー関数は `Sample(value, capture_ns)` または `None` を返します．ロボットバスは `read_positions`，`write_positions`，`enable_torque`，`close` を実装します．観測は `obs["state"]` と各センサー名で渡されます．`step()` の指令は必ず follower 側の期限・次元・有限値・関節範囲・変化量検査を通ります．
 
 この模擬例の関節範囲や速度を実機の安全値として使わないでください．
 

@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 
 from ..config import RobotConfig
-from ..recording import ACTION
+from ..recording import ACTION, action_stream
 
 STATUS_SUFFIX = "_status"  # session input ids; runtime.node reads the same suffix
 
@@ -31,8 +31,20 @@ def build_flow(cfg: RobotConfig) -> dict:
             "restart_policy": "never",
         }
 
-    control_hz = cfg.follower.control_hz
     session = {"session": "session/control"}  # every node ends on `quit`
+    # a source without a rate of its own runs at the fastest follower it drives (an
+    # input: through its controllers), or else at the fastest follower of the robot
+    fastest = max(f.control_hz for f in cfg.followers.values())
+    driven = {
+        n: max(
+            (c.follower.control_hz for c in cfg.controllers.values() if c.source is s),
+            default=fastest,
+        )
+        for n, s in cfg.inputs.items()
+    }
+
+    def rate(name: str, source) -> float:
+        return source.rate_hz(fps) or driven.get(name, fastest)
 
     def latest(output: str) -> dict:
         return {"source": output, "queue_size": 1, "queue_policy": "drop_oldest"}
@@ -55,7 +67,7 @@ def build_flow(cfg: RobotConfig) -> dict:
                 ),
             },
             ["sample", "status"],
-            source.rate_hz(fps) or control_hz,
+            rate(name, source),
         )
         for name, source in cfg.inputs.items()
     ]
@@ -71,7 +83,7 @@ def build_flow(cfg: RobotConfig) -> dict:
             inputs["estimate"] = latest(f"{c.feedback.estimator_name}/estimate")
             outputs.append("feedback")
         nodes.append(node(name, inputs, outputs, getattr(c, "rate_hz", None)))
-    # estimators run on each robot state they receive, so they need no timer
+    # estimators run on each follower state they receive, so they need no timer
     nodes += [
         node(
             name,
@@ -97,7 +109,7 @@ def build_flow(cfg: RobotConfig) -> dict:
         for name, robot in cfg.followers.items()
     ]
     nodes += [
-        node(name, session, ["sample", "status"], sensor.rate_hz(fps) or control_hz)
+        node(name, session, ["sample", "status"], rate(name, sensor))
         for name, sensor in cfg.sensors.items()
     ]
     # Bounded recorder queues: while `save` encodes video the recorder does not read, and dora
@@ -112,10 +124,7 @@ def build_flow(cfg: RobotConfig) -> dict:
         }
 
     rates = {
-        **{
-            n: s.rate_hz(fps) or control_hz
-            for n, s in {**cfg.inputs, **cfg.sensors}.items()
-        },
+        **{n: rate(n, s) for n, s in {**cfg.inputs, **cfg.sensors}.items()},
         **{n: r.control_hz for n, r in cfg.followers.items()},
         **{n: cfg.followers[e.follower].control_hz for n, e in cfg.estimators.items()},
     }
@@ -127,7 +136,8 @@ def build_flow(cfg: RobotConfig) -> dict:
         name: bounded(f"{name}/{published.get(name, 'sample')}", rates[name])
         for name in cfg.sources
     }
-    recorded[ACTION] = bounded(f"{cfg.follower.name}/{ACTION}", cfg.follower.control_hz)
+    for name, follower in cfg.followers.items():
+        recorded[action_stream(name)] = bounded(f"{name}/{ACTION}", follower.control_hz)
     nodes.append(node("recorder", {**recorded, **session}, ["report", "status"]))
     statuses = {
         f"{name}{STATUS_SUFFIX}": {

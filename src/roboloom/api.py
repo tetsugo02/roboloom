@@ -20,7 +20,7 @@ from .core.protocol import Publisher
 from .core.source import Reader, Sample, Source
 from .errors import ConfigError
 from .inputs.base import InputDevice, JointInput
-from .recording import ACTION, EpisodeRecorder
+from .recording import ACTION, EpisodeRecorder, action_stream
 from .robots.base import Follower, JointBus
 from .robots.safety import FollowerSafety, make_command
 from .sensors.audio.base import PcmAudio
@@ -38,14 +38,20 @@ class InProcessSession:
     def __init__(
         self,
         cfg: RobotConfig,
-        robot: JointBus,
+        bus: JointBus,
         controller: Callable[[dict], list[float] | None] | None = None,
         sensors: dict[str, Callable[[], Sample | None]] | None = None,
         dataset=None,
     ):
+        if len(cfg.followers) != 1:
+            raise ConfigError(
+                f"{cfg.path}: InProcessSession drives one follower; this configuration "
+                f"has {len(cfg.followers)} ({', '.join(cfg.followers)}). Use "
+                "roboloom.Session, which runs the dataflow"
+            )
         self.cfg = cfg
-        self.spec = cfg.follower
-        self.safety = FollowerSafety(self.spec.safety_config(cfg.robot_id), robot)
+        (self.spec,) = cfg.followers.values()
+        self.safety = FollowerSafety(self.spec.safety_config(), bus)
         self.safety.start()
         self.controller = controller
         self.sensors = sensors or {}
@@ -73,7 +79,12 @@ class InProcessSession:
         """`options`: launch options to enable (None: their defaults); `mock`: override
         the YAML's `mode` (None: as written, default hardware)."""
         cfg = load_config(path, options=options, mock=mock)
-        mapper = cfg.controller_for(cfg.follower.name)
+        if len(cfg.followers) != 1:
+            raise ConfigError(
+                f"{path}: InProcessSession drives one follower; use roboloom.Session"
+            )
+        (follower,) = cfg.followers.values()
+        mapper = cfg.controller_for(follower.name)
         source = mapper.source
         if source is None:
             raise ConfigError(
@@ -85,7 +96,7 @@ class InProcessSession:
                 f"{source.name}: a leader whose motors run control laws needs its own "
                 "process; use roboloom.Session, which runs the dataflow"
             )
-        bus = cfg.follower.open_device(cfg.mock)
+        bus = follower.open_device(cfg.mock)
         readers: dict[str, Reader] = {}
         try:
             readers[source.name] = source.open(cfg.mock, cfg.dataset_fps)
@@ -119,8 +130,8 @@ class InProcessSession:
     def from_components(
         cls,
         *,
-        robot_id: str,
-        robot: JointBus,
+        robot: str,
+        bus: JointBus,
         joint_names: list[str],
         limits: list[dict],
         controller: Callable[[dict], list[float] | None] | None = None,
@@ -160,7 +171,7 @@ class InProcessSession:
         if audio_sample_rate is not None:
             streams["audio"] = PcmAudio("audio", {"sample_rate": audio_sample_rate})
         cfg = RobotConfig(
-            robot_id=robot_id,
+            robot=robot,
             repo_id=repo_id,
             output=str(output),
             dataset_fps=fps,
@@ -169,7 +180,7 @@ class InProcessSession:
             sensors=streams,
             max_age_ms={name: 300 for name in (*inputs, "follower", *streams)},
         )
-        return cls(cfg, robot, controller=controller, sensors=sensors, dataset=dataset)
+        return cls(cfg, bus, controller=controller, sensors=sensors, dataset=dataset)
 
     def start_episode(self, task: str) -> None:
         self.recorder.start(task)
@@ -222,7 +233,7 @@ class InProcessSession:
             target = positions(target, len(state))
             command = make_command(
                 self.publisher,
-                robot_id=self.cfg.robot_id,
+                follower=self.spec.name,
                 unit=self.spec.unit,
                 target=target,
                 now_ns=now,
@@ -231,7 +242,7 @@ class InProcessSession:
             self.safety.accept(command)
         state_msg, action_msg = self.safety.tick()
         self.recorder.ingest(robot, state_msg)
-        self.recorder.ingest(ACTION, action_msg)
+        self.recorder.ingest(action_stream(robot), action_msg)
         self.recorder.poll()
         return {
             "observation": obs,

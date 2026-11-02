@@ -8,7 +8,7 @@ deadline turns into HOLD). Targets are speed-limited from what the follower hold
 FollowerSafety checks them like any teleoperation command.
 
     type: policy
-    robot: robot
+    followers: [follower]
     factory: my_lab.policies:load_act   # "module:callable" returning a Policy
     kwargs: {checkpoint: ...}
     observe: [camera, digit_left]      # inputs or sensors; the robot state is always seen
@@ -45,10 +45,9 @@ class PolicyController(Controller):
         name: str,
         cfg: dict,
         source: InputDevice | None,
-        robot: Follower,
-        robot_id: str,
+        follower: Follower,
     ):
-        super().__init__(name, cfg, source, robot, robot_id)
+        super().__init__(name, cfg, source, follower)
         factory = cfg.get("factory")
         if not isinstance(factory, str) or ":" not in factory:
             raise ValueError(f"{name}.factory must be 'module:callable'")
@@ -68,6 +67,7 @@ class PolicyController(Controller):
         )
         self.policy: Policy | None = None
         self.sources: dict[str, Recordable] = {}  # set by `bind`
+        self.dataset_fps = 30.0  # set by `bind`
         self.latest: dict[str, Envelope] = {}
         self.queue: deque[np.ndarray] = deque()
         self.task = ""
@@ -81,9 +81,11 @@ class PolicyController(Controller):
     def observes(self) -> list[str]:
         return list(self.cfg.get("observe", []))
 
-    def bind(self, sources: dict[str, Recordable]) -> None:
-        """The specs of the observed sources, to build observations with dataset keys."""
+    def bind(self, sources: dict[str, Recordable], dataset_fps: float) -> None:
+        """The specs of the observed sources and the dataset rate, so observations have
+        exactly the keys and shapes of the recorded rows (`recording.schema`)."""
         self.sources = {name: sources[name] for name in self.observes()}
+        self.dataset_fps = dataset_fps
 
     # -- lifecycle (the policy node calls these) --------------------------------
 
@@ -122,12 +124,12 @@ class PolicyController(Controller):
 
     def observation(self) -> dict[str, Any] | None:
         """Dataset-keyed observation, or None until every observed source has a sample."""
-        robot = self.latest.get(self.follower.name)
-        if robot is None or any(n not in self.latest for n in self.sources):
+        from ..recording.schema import observation_frame
+
+        sources = {self.follower.name: self.follower, **self.sources}
+        if any(n not in self.latest for n in sources):
             return None
-        out: dict[str, Any] = dict(self.follower.frame(robot, self.rate_hz))
-        for name, spec in self.sources.items():
-            out.update(spec.frame(self.latest[name], self.rate_hz))
+        out = observation_frame(sources, self.latest, self.dataset_fps)
         out["task"] = self.task
         return out
 

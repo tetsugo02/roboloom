@@ -16,7 +16,7 @@ import numpy as np
 
 from ..core.checks import finite, identity, names
 from ..core.protocol import Envelope
-from ..core.source import Features
+from ..core.source import Features, Joined
 from ..errors import ConfigError
 from ..robots.base import Follower
 
@@ -114,19 +114,24 @@ class Estimator(ABC):
         }
 
     def features(self, dataset_fps: float) -> Features:
-        """External effort (`-residual`, estimator unit), its validity and contact."""
-        one = {"dtype": "float32", "shape": (1,), "names": None}
-        return {
-            "observation.effort_ext": {
-                "dtype": "float32",
-                "shape": (len(self.joint_names),),
-                "names": None,
-            },
-            "observation.effort_ext.valid": one,
-            "observation.contact": one,
-        }
+        return {}  # joined with the other recorded estimators (see `joined`)
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
+        return {}
+
+    def joined(self, dataset_fps: float) -> dict[str, Joined]:
+        """External effort (`-residual`, estimator unit) per follower joint, and this
+        estimator's validity and contact."""
+        joints = tuple(f"{self.follower}.{j}" for j in self.joint_names)
+        return {
+            "observation.effort_ext": Joined(joints, unit=self.unit),
+            "observation.effort_ext.valid": Joined((self.name,)),
+            "observation.contact": Joined((self.name,)),
+        }
+
+    def joined_frame(
+        self, msg: Envelope | None, dataset_fps: float
+    ) -> dict[str, np.ndarray]:
         valid = msg is not None and bool(msg.payload.get("valid"))
         effort = (
             [-float(r) for r in msg.payload["residual"]]

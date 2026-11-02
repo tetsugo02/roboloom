@@ -75,11 +75,19 @@ def test_quality_limits_become_warnings():
     metrics = {
         "missing_rate": {"camera": 0.2, "leader": 0.0},
         "action_valid_rate": 0.95,
-        "control_interval_ms": {"max": 130.0},
+        "action_missing_rate": {"left": 0.0, "right": 0.05},
+        "control_interval_ms": {"left": {"max": 130.0}, "right": {"max": 9.0}},
     }
     warnings = assess(metrics, {})
-    assert len(warnings) == 2 and "camera" in warnings[0] and "130 ms" in warnings[1]
+    assert len(warnings) == 2 and "camera" in warnings[0]
+    assert warnings[1].startswith("left:") and "130 ms" in warnings[1]
     assert assess(metrics, {"max_missing_rate": 0.5, "max_interval_ms": 200}) == []
+    # a low valid-action rate names the follower that sent no commands
+    metrics.update(
+        action_valid_rate=0.5, action_missing_rate={"left": 0.0, "right": 0.5}
+    )
+    (warning,) = assess(metrics, {"max_missing_rate": 0.5, "max_interval_ms": 200})
+    assert "right 50%" in warning and "left" not in warning
 
 
 def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypatch):
