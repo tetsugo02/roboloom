@@ -1,0 +1,15 @@
+# PiPER arm (mock). On hardware: the arm's CAN interface, see docs contribution/piper.md
+type: piper_follower
+can: can_right
+control_hz: 100
+speed_percent: 30
+record_effort: true  # joint torque (N·m); the grippers then record none (one unit per vector)
+health:
+  every_ticks: 10
+limits:  # rad, inside the PiPER range
+  - {name: joint1, min: -2.6, max: 2.6, max_speed: 1.0, max_jump: 0.3}
+  - {name: joint2, min: 0.0, max: 3.1, max_speed: 1.0, max_jump: 0.3}
+  - {name: joint3, min: -2.9, max: 0.0, max_speed: 1.0, max_jump: 0.3}
+  - {name: joint4, min: -1.7, max: 1.7, max_speed: 1.0, max_jump: 0.3}
+  - {name: joint5, min: -1.2, max: 1.2, max_speed: 1.0, max_jump: 0.3}
+  - {name: joint6, min: -2.0, max: 2.0, max_speed: 1.0, max_jump: 0.3}

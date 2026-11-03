@@ -81,3 +81,29 @@ def test_register_expectations_are_required():
     tree["sensors"]["digit_left"]["height"] = 240
     with pytest.raises(ValueError, match="QVGA"):
         parse_config(tree)
+
+
+def test_a_policy_is_imported_from_the_robot_directory(tmp_path, monkeypatch):
+    import sys
+
+    from roboloom.errors import ConfigError
+    from roboloom.policy import load_policy
+
+    (tmp_path / "local_policy_for_test.py").write_text(
+        "from roboloom.policy import Hold\n\ndef make():\n    return Hold()\n"
+    )
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    with pytest.raises(ConfigError, match="local_policy_for_test"):
+        load_policy("local_policy_for_test:make")
+    policy = load_policy("local_policy_for_test:make", search=[str(tmp_path)])
+    assert hasattr(policy, "infer")
+    assert sys.path[-1] == str(tmp_path)  # after the installed packages
+
+
+def test_the_node_knows_the_robot_directory():
+    from roboloom.config import load_config
+
+    cfg = load_config(".roboloom/piper-mock/config.yaml")
+    policy = cfg.controllers["policy"]
+    assert policy.cfg["__robot_dir__"].endswith(".roboloom/piper-mock")
+    assert set(cfg.followers) == {"left", "right", "left_gripper", "right_gripper"}

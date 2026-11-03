@@ -1,0 +1,10 @@
+# Pika Gripper (mock). On hardware: a /dev/serial/by-path/... port, see docs
+# contribution/pika-gripper.md
+type: pika_gripper_follower
+port: /dev/serial/by-path/mock-right
+control_hz: 100
+current_limit_A: 1.0
+health:
+  every_ticks: 10
+limits:  # rad (motor angle), 0 = closed
+  - {name: gripper, min: 0.0, max: 1.6, max_speed: 3.0, max_jump: 0.5}

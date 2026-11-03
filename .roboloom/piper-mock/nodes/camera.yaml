@@ -1,0 +1,5 @@
+type: realsense_rgb
+serial: mock-camera
+width: 64
+height: 48
+fps: 10

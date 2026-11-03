@@ -168,6 +168,7 @@ s.save() if stopped.ok else s.discard()
 
 **Node behavior**
 - The policy is loaded from a `"module:callable"` reference and run by the policy node inside the dataflow.
+  - Modules are looked up in the installed packages first, then in the robot's directory (`.roboloom/<robot>/`). A policy file kept next to the configuration is imported without `PYTHONPATH`. An installed module of the same name takes precedence.
 - The following are set in `nodes/policy.yaml`:
   - Sensors to observe (`observe`)
   - Rate (`rate_hz`)
