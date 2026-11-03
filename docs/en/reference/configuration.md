@@ -43,6 +43,7 @@ Each controller lists the followers it drives under `followers:`. Each follower 
 | Controller | Followers it drives |
 | --- | --- |
 | `joint` | Exactly one (maps the leader's joints onto one follower's joints) |
+| `pose_ik` | One arm and optionally one gripper (a hand-held device's pose onto the arm's joints through IK; [in development](../contribution/pika-sense.md)) |
 | `policy` | Every follower, in configuration order. The recorded `action` and `observation.state` join all followers, so the policy's output has the same layout; it is split in that order and sent to each follower |
 
 A controller of several followers sends nothing until every one of them has reported its state. When any of its followers latches `FAULT` or `ESTOP`, or its state gets older than `follower_timeout_ms`, the controller stops commanding all of them. A follower without commands keeps holding its target. The controller sends no further command until it has re-aligned. A `policy` controller stops running the policy for the current episode when a follower's state gets stale. The controller's row on the screen shows why it stopped (`stopped_by`) and the followers it waits for (`waiting_state`).

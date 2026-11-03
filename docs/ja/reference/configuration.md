@@ -43,6 +43,7 @@ options:
 | controller | 動かすフォロワ |
 | --- | --- |
 | `joint` | ちょうど1台（leaderの関節を1台のフォロワの関節へ対応させる） |
+| `pose_ik` | 腕1台と，任意でグリッパ1台（手に持った機器の姿勢をIKで腕の関節へ．[開発中](../contribution/pika-sense.md)） |
 | `policy` | 全フォロワを設定の順に．記録した `action` と `observation.state` が全フォロワをつないだ形なので，方策の出力も同じ形です．出力を並び順に分けて各フォロワへ送ります |
 
 フォロワが複数あるcontrollerは，全フォロワの状態がそろうまで指令を送りません．どれかのフォロワが `FAULT` や `ESTOP` になるか，状態が `follower_timeout_ms` より古くなると，そのcontrollerは全フォロワへの指令を止めます．指令が途切れたフォロワは，保持している目標を保ちます．controllerは，位置を合わせ直すまで次の指令を送りません．`policy` controllerは，フォロワの状態が古くなると，その回のエピソードの方策の実行を止めます．画面のcontrollerの行に，止めた理由（`stopped_by`）と，状態を待っているフォロワ（`waiting_state`）が出ます．

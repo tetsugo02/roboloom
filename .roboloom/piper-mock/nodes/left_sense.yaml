@@ -1,0 +1,6 @@
+# Pika Sense (mock). On hardware: the Sense's /dev/serial/by-path/... port and the
+# libsurvive name of its tracker; see docs contribution/pika-sense.md
+type: pika_sense
+port: /dev/serial/by-path/mock-sense-left
+tracker: {name: WM0}
+stale_ms: 100

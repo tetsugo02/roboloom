@@ -62,10 +62,11 @@ limits:                  # rad（モーターの角度）．0〜1.67の内側に
 
 ## 模擬で画面を確かめる
 
-`.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．Pika Senseの入力はまだないので，同じディレクトリの確認用の方策（`demo_policy.py`）が腕とグリッパを動かします．
+`.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．腕とグリッパは，模擬のPika Senseで遠隔操作します（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．Launchのあと「Move home」で腕を始める姿勢へ移すと，模擬のSenseが開始して腕が動きます．`--with demo_policy` を付けると，同じディレクトリの確認用の方策（`demo_policy.py`）が動かします．
 
 ```bash
 uv run roboloom run piper-mock
+uv run roboloom run piper-mock --with demo_policy
 ```
 
 ## 実機で最初にすること

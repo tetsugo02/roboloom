@@ -1,1 +1,8 @@
-max_age_ms: {left: 300, right: 300, left_gripper: 300, right_gripper: 300, camera: 300}
+max_age_ms:
+  left: 300
+  right: 300
+  left_gripper: 300
+  right_gripper: 300
+  left_sense: 300
+  right_sense: 300
+  camera: 300

@@ -76,7 +76,7 @@ For the initial setup, set the repository's **Settings → Pages → Build and d
 
 ## Adding a follower
 
-A follower model (a `Follower` subclass) must declare its safety traits, `safety_traits` (or `declared_traits()` when they depend on the configuration). A class without them raises TypeError on import. The values are explained in "Behaviour without torque and when left alone" in [Configuration](reference/configuration.md). Declare what has not been established as `unknown`. Input models that run control laws (`JointInput` subclasses) declare `safety_traits` too.
+A follower model (a `Follower` subclass) must declare its safety traits, `safety_traits` (or `declared_traits()` when they depend on the configuration). A class without them raises TypeError on import. The values are explained in "Behaviour without torque and when left alone" in [Configuration](reference/configuration.md). Declare what has not been established as `unknown`. Input models that run control laws (`JointInput` subclasses) declare `safety_traits` too. An arm driven by poses (`pose_ik`) returns its URDF chain from `kinematics()` (a `KinematicSpec`: the URDF, base, tip and joints).
 
 ## Operator UI extensions
 
