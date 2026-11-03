@@ -387,6 +387,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         raw = yaml.safe_load(config.read_text()) or {}
         self.options = parse_options(raw.get("options"))
         self.repo_id = str(raw.get("repo_id", ""))
+        self.yaml_mock = raw.get("mode") == "mock"  # runs mock even when not ticked
         self.plan = initial
         self.chosen = set(initial.options)
         self._syncing = False
@@ -556,9 +557,16 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             return str(exc)
         return plan.problem()
 
+    def _devices(self, plan: LaunchPlan) -> str:
+        if plan.mock:
+            return "mock"
+        return (
+            f"mock (mode: mock in {self.config.name})" if self.yaml_mock else "HARDWARE"
+        )
+
     def _summary(self, plan: LaunchPlan) -> str:
         lines = [
-            f"{plan.mode} · {'mock' if plan.mock else 'HARDWARE'} · options: "
+            f"{plan.mode} · {self._devices(plan)} · options: "
             + (", ".join(plan.options) or "none")
         ]
         problem = self._problem(plan)

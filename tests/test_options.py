@@ -169,6 +169,18 @@ async def test_launcher_follows_requirements_and_conflicts(tmp_path: Path):
     assert app.return_value == LaunchPlan("record", (), True, "pick", 3.0, 1, False)
 
 
+def test_launcher_summary_says_mock_when_the_yaml_declares_it(tmp_path: Path):
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump({"repo_id": "local/x", "mode": "mock"}))
+    app = LauncherApp(path, LaunchPlan())
+    assert app._summary(LaunchPlan()).startswith(
+        "run · mock (mode: mock in config.yaml)"
+    )
+    assert app._summary(LaunchPlan(mock=True)).startswith("run · mock ·")
+    path.write_text(yaml.safe_dump({"repo_id": "local/x"}))
+    assert "HARDWARE" in LauncherApp(path, LaunchPlan())._summary(LaunchPlan())
+
+
 def test_template_declares_no_stale_experiment_files():
     assert not list(TEMPLATE.glob("experiment*.yaml"))
 
