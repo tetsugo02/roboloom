@@ -12,6 +12,7 @@ SENSORS: Registry[Source] = Registry(
     "sensor",
     {
         "realsense_rgb": "roboloom.sensors.vision.realsense:RealSenseRGB",
+        "v4l2_rgb": "roboloom.sensors.vision.v4l2:V4l2RGB",
         "digit": "roboloom.sensors.tactile.digit:DigitSensor",
         "pcm_mono": "roboloom.sensors.audio.microphone:SoundDeviceMic",
     },

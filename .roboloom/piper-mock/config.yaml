@@ -1,5 +1,5 @@
 # Mock PiPER x2 with Pika Gripper x2, teleoperated by two mock Pika Senses (IK), and a
-# camera (no hardware). Start:  uv run roboloom run piper-mock
+# camera and the grippers' wrist cameras (no hardware). Start:  uv run roboloom run piper-mock
 #   Move home first (the arms start folded), then the Senses engage on their own.
 # With --with demo_policy, demo_policy.py moves the arms and grippers instead.
 repo_id: local/piper-mock
@@ -19,6 +19,8 @@ followers:  # the action joins them in this order (6 + 6 + 1 + 1)
   right_gripper: nodes/right_gripper.yaml
 sensors:
   camera: nodes/camera.yaml
+  left_wrist: nodes/left_wrist.yaml
+  right_wrist: nodes/right_wrist.yaml
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
 options:

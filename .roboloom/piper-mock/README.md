@@ -2,7 +2,8 @@
 
 Mock devices only: two PiPER arms (`left`, `right`) with a Pika Gripper each
 (`left_gripper`, `right_gripper`), teleoperated by two mock Pika Senses through IK
-(`pose_ik`), and a camera. The operator screen can be checked without hardware.
+(`pose_ik`), a camera, and the grippers' fisheye wrist cameras (`left_wrist`,
+`right_wrist`). The operator screen can be checked without hardware.
 
 ```bash
 uv run roboloom run piper-mock                     # Launch (Ctrl+S), Move home, then Start episode
@@ -20,6 +21,7 @@ then repeats 10 s engaged, 2 s disengaged.
 | `nodes/*_gripper.yaml` | Pika Gripper followers (a `/dev/serial/by-path/...` port on hardware) |
 | `nodes/*_sense.yaml` | Pika Sense inputs (serial port and libsurvive tracker on hardware) |
 | `nodes/*_ik.yaml` | `pose_ik` controllers: tool offset, workspace, IK and speed limits, home |
+| `nodes/*_wrist.yaml` | the grippers' fisheye cameras (`v4l2_rgb`; a `/dev/v4l/by-path/...` path on hardware) |
 | `poses/<arm>/ready.yaml` | the pose "Move home" goes to |
 | `nodes/policy.yaml`, `demo_policy.py` | the demo policy (`--with demo_policy`), imported from this directory |
 

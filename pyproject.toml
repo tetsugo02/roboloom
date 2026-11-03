@@ -32,6 +32,7 @@ record = ["lerobot[dataset]==0.6.1"]
 hardware = [
     "pyrealsense2>=2.55,<3",
     "digit-interface>=0.2,<1",
+    "opencv-python>=4.8",  # sensors.vision.v4l2 (digit-interface needs it too)
     "sounddevice>=0.4,<1",
 ]
 piper = ["piper_sdk>=0.6.2,<0.7"]
