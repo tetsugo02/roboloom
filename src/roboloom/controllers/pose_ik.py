@@ -181,7 +181,8 @@ class PoseIkController(Controller):
         self.previous: Pose | None = None  # the last input pose while engaged
         self.was_engaged = False
         self.last_boot, self.last_seq = "", -1
-        self.last_ns: dict[str, int] = {}
+        self.last_ns: dict[str, int] = {}  # when each follower's last step was taken
+        self.last_input_ns = 0  # t_ready of the last accepted input
         self.state = "waiting_input"
         self.errors: tuple[float, float] | None = None
 
@@ -208,11 +209,18 @@ class PoseIkController(Controller):
     def _held(self, view: FollowerView) -> list[float]:
         return list(view.target if view.target is not None else view.positions)
 
+    def _withhold(self, now: int) -> dict[str, Envelope]:
+        """Send nothing now; the followers hold, so no speed budget builds up meanwhile."""
+        self.last_ns = dict.fromkeys(self.followers, now)
+        return {}
+
     def _limited(
         self, follower: str, target: Sequence[float], view: FollowerView, now: int
     ) -> list[float]:
         last = self.last_ns.get(follower, now)
-        step = self.max_speed[follower] * max((now - last) / 1e9, 1e-6)
+        # never more than one input period's worth of motion in one command
+        dt = min(max((now - last) / 1e9, 1e-6), self.input_timeout_ms / 1000)
+        step = self.max_speed[follower] * dt
         self.last_ns[follower] = now
         return [
             max(p - step, min(p + step, t))
@@ -238,6 +246,12 @@ class PoseIkController(Controller):
         if intent.seq <= self.last_seq:
             return {}
         self.last_seq = intent.seq
+        # a gap in delivery longer than the timeout is a stale input too, even when the
+        # packet that ends it is fresh: the operator engages again
+        gap = intent.t_ready_ns - self.last_input_ns
+        self.last_input_ns = intent.t_ready_ns
+        if self.anchor is not None and gap > self.input_timeout_ms * 1e6:
+            return self._stop("input_stale")
         p = intent.payload
         # the device's own clutch: following starts only on its rising edge, so after
         # any stop the operator disengages and engages again
@@ -269,13 +283,13 @@ class PoseIkController(Controller):
         target = self.anchor @ sense
         if np.any(target[:3, 3] < self.low) or np.any(target[:3, 3] > self.high):
             self.state = "out_of_workspace"
-            return {}
+            return self._withhold(now)
         low, high = self.limits[arm]
         result = self.model.solve(target, self._held(views[arm]), low, high, **self.ik)
         self.errors = (result.position_error_m, result.rotation_error_rad)
         if not result.reached:
             self.state = "unreachable"
-            return {}
+            return self._withhold(now)
         out = {
             arm: self.command(
                 arm,

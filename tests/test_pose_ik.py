@@ -208,3 +208,31 @@ def test_the_screen_says_what_the_operator_does():
     assert "cannot reach" in detail.plain and "12.0 mm" in detail.plain
     _, detail = RENDERERS["controller"]({"state": "ready"})  # a policy: no pose advice
     assert "double-click" not in detail.plain
+
+
+def test_a_gap_in_input_delivery_needs_a_new_engagement():
+    rig = Rig()
+    rig.send(engaged=False)
+    assert rig.send() != {}
+    rig.c.last_input_ns -= 1_000_000_000  # the input went silent for a second
+    assert rig.send() == {} and rig.c.state == "input_stale"  # fresh, but after a gap
+    assert rig.send() == {}  # still engaged on the device: not enough
+    rig.send(engaged=False)
+    assert rig.send() != {}
+
+
+def test_held_time_gives_no_extra_speed_budget():
+    rig = Rig(max_input_jump={"position_m": 5.0, "rotation_rad": 5.0})
+    rig.send(engaged=False)
+    rig.send()
+    before = time.monotonic_ns()
+    assert rig.send(pose_xyz_rpy([0.0, 0.0, 0.0], [0, 3.0, 0])) == {}
+    assert rig.c.state == "unreachable"
+    # withholding moves the limiter's clock along: the held time is not saved up
+    assert all(v >= before for v in rig.c.last_ns.values())
+    # and one command never spends more than one input timeout of motion
+    rig.c.last_ns = {k: v - 2_000_000_000 for k, v in rig.c.last_ns.items()}
+    held = list(rig.arm)
+    rig.send(pose_xyz_rpy([0.0, 0.0, 0.03], [0, 0, 0]))
+    limit = rig.c.max_speed["left"] * rig.c.input_timeout_ms / 1000
+    assert max(abs(a - b) for a, b in zip(rig.arm, held, strict=True)) <= limit + 1e-9

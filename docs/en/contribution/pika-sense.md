@@ -56,7 +56,7 @@ input_timeout_ms: 150
 | `max_input_jump` | Teleoperation stops when the Sense's pose jumps by more than this between two samples |
 | `ik` | Iterations, damping, and the position and rotation tolerances counted as reached. Nothing is sent when the IK does not reach the target |
 | `gripper_map` | Gripper angle = `scale`·jaw angle + `offset`, kept inside the gripper's range |
-| `max_speed` | Speed limit per follower (unit/s) |
+| `max_speed` | Speed limit per follower (unit/s). Time spent without commands is not saved up: one command moves at most `input_timeout_ms` worth |
 | `home` | The saved pose "Move home" goes to, per follower |
 
 The dataset gains `observation.<name>` per Sense (`x, y, z, qx, qy, qz, qw, gripper, engaged`, in the tracker's world frame). `action` stays the followers' joint commands.
@@ -75,7 +75,7 @@ The mapping is relative, as in AgileX's teleoperation.
 - In the following cases teleoperation stops and nothing moves until the Sense disengages and engages again.
   - The pose is lost or stale (the base stations cannot see it), or the serial link stopped
   - The pose jumped by more than `max_input_jump`
-  - A follower latched `FAULT` or `ESTOP`, or the input went stale
+  - A follower latched `FAULT` or `ESTOP`, or the input went stale (including a gap between inputs longer than `input_timeout_ms`)
   - A follower is moving home ("Move home")
 - While the target is outside `workspace` or the IK cannot reach it, nothing is sent and the arm holds. Teleoperation stays engaged and continues once the target is back.
 - The PiPER's power-on pose (all joints 0, folded) is singular and the IK can hardly solve from there. Use "Move home" to go to the `home` pose before engaging.
