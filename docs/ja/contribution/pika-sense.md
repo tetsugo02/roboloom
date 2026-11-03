@@ -12,7 +12,7 @@
 | `pose_ik` controller | Senseの姿勢をPiPERの関節角に（IK），挟みの角度をPika Gripperの角度に変えます |
 | PiPERフォロワ，Pika Gripperフォロワ | [PiPERフォロワ](piper.md)，[Pika Gripperフォロワ](pika-gripper.md) |
 
-1つのSenseで，1台の腕と1台のグリッパを動かします．両腕では，Sense・controllerを2組使います．
+1つのSenseで，1台の腕と1台のグリッパを動かします．両腕では，Sense・controllerを2組使います．カメラは [Pikaの手首カメラ](pika-cameras.md) にあります．
 
 ## 必要なもの
 

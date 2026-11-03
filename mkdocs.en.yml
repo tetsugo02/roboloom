@@ -34,3 +34,4 @@ nav:
       - PiPER follower (in development): contribution/piper.md
       - Pika Gripper follower (in development): contribution/pika-gripper.md
       - Teleoperation with Pika Sense and IK (in development): contribution/pika-sense.md
+      - Pika wrist cameras (in development): contribution/pika-cameras.md

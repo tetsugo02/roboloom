@@ -8,6 +8,7 @@
 - No extra package. roboloom talks to the serial port directly through pyserial (a roboloom dependency). AgileX's SDK (`agx-pypika`) is not used, because it also requires camera and GUI packages.
 - One USB serial cable and a 24 V supply per gripper. It is a separate device from the PiPER's CAN, so it is configured as a follower of its own, apart from the PiPER.
 - Name the port with `/dev/serial/by-path/...`, which is fixed by the USB socket. Numbers such as `/dev/ttyUSB0` can swap left and right after replugging or a reboot. by-path needs no sudo (the path changes if you move the cable to another socket).
+- The gripper's cameras (fisheye and D405) are configured as sensors of their own ([Pika wrist cameras](pika-cameras.md)).
 
 ## Configuration
 

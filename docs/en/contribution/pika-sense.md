@@ -12,7 +12,7 @@
 | `pose_ik` controller | Turns the Sense's pose into PiPER joint angles (IK) and its jaw angle into the Pika Gripper's angle |
 | PiPER and Pika Gripper followers | [PiPER follower](piper.md), [Pika Gripper follower](pika-gripper.md) |
 
-One Sense drives one arm and one gripper. Two arms use two Senses and two controllers.
+One Sense drives one arm and one gripper. Two arms use two Senses and two controllers. The cameras are covered in [Pika wrist cameras](pika-cameras.md).
 
 ## Requirements
 

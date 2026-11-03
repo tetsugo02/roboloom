@@ -190,6 +190,8 @@ def test_two_senses_teleoperate_the_mock_and_the_dataset_records_them(tmp_path):
     assert features["action"]["shape"] == [14]
     assert features["observation.left_sense"]["shape"] == [9]
     assert features["observation.right_sense"]["names"][7] == "gripper"
+    wrist = features["observation.images.left_wrist"]  # the gripper's fisheye camera
+    assert wrist["dtype"] == "video" and wrist["shape"] == [48, 64, 3]
 
 
 def test_the_screen_says_what_the_operator_does():

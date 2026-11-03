@@ -34,5 +34,6 @@ nav:
       - PiPERフォロワ（開発中）: contribution/piper.md
       - Pika Gripperフォロワ（開発中）: contribution/pika-gripper.md
       - Pika SenseとIKによる遠隔操作（開発中）: contribution/pika-sense.md
+      - Pikaの手首カメラ（開発中）: contribution/pika-cameras.md
 exclude_docs: |
   yam-safety-and-smoothness.md
