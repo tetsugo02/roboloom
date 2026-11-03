@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> None:
         "probe",
         help=(
             "read-only inspection of a Dynamixel bus, a PiPER arm on a CAN interface, "
-            "or a Pika Gripper (--device pika)"
+            "or a Pika Gripper or Sense (--device pika, pika_sense)"
         ),
     )
     probe_cmd.add_argument(
@@ -144,9 +144,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     probe_cmd.add_argument(
         "--device",
-        choices=("dynamixel", "pika"),
+        choices=("dynamixel", "pika", "pika_sense"),
         default="dynamixel",
-        help="what is on a serial port (default dynamixel; a CAN interface is a PiPER)",
+        help=(
+            "what is on a serial port: dynamixel (default), pika (Gripper) or pika_sense "
+            "(a CAN interface is a PiPER)"
+        ),
     )
     probe_cmd.add_argument(
         "--ids", type=lambda text: [int(x) for x in text.split(",")], default=None

@@ -4,8 +4,9 @@ Devices get one subpackage each, named for the device, not for the role it plays
 a configuration (e.g. `rakuda_mini`, an arm used as a leader); a device built for one
 robot imports that robot's shared description from `roboloom.robots.<model>.spec`.
 Each input class fixes what its samples mean (its Envelope `kind`): `JointInput`
-publishes joint intents. Pose (VR) and twist (SpaceMouse) inputs add their own
-base classes next to it, and controllers state which of them they accept.
+publishes joint intents and `PoseInput` hand-held poses (e.g. `pika_sense`); twist
+(SpaceMouse) inputs would add their own base class next to them, and controllers state
+which of them they accept.
 """
 
 from ..core.registry import Registry
@@ -15,5 +16,6 @@ INPUTS: Registry[InputDevice] = Registry(
     "input",
     {
         "rakuda_mini": "roboloom.inputs.rakuda_mini.arm:RakudaMini",
+        "pika_sense": "roboloom.inputs.pika_sense.sense:PikaSense",
     },
 )

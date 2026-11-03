@@ -43,7 +43,8 @@ def probe(
     """Ping IDs (all 0..252 if none given), read registers, and time the state read (plain and
     Fast Sync Read) and the Bus Watchdog read. Never writes. On a CAN interface, read the
     PiPER arm there instead (`drivers.piper.probe`); with `device="pika"`, read the Pika
-    Gripper on the serial port (`drivers.pika_gripper.probe`)."""
+    Gripper on the serial port (`drivers.pika_gripper.probe`); with `"pika_sense"`, the
+    serial link of a Pika Sense (`drivers.pika_sense.probe`)."""
     if is_network_interface(port):
         from .drivers.piper import probe as probe_piper
 
@@ -52,8 +53,12 @@ def probe(
         from .drivers.pika_gripper import probe as probe_pika
 
         return probe_pika(port)
+    if device == "pika_sense":
+        from .drivers.pika_sense import probe as probe_sense
+
+        return probe_sense(port)
     if device != "dynamixel":
-        raise ValueError(f"unknown device {device!r}: dynamixel or pika")
+        raise ValueError(f"unknown device {device!r}: dynamixel, pika or pika_sense")
     import dynamixel_sdk as dxl
 
     from .drivers.dynamixel import DynamixelBus, latency_timer_ms
