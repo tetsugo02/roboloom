@@ -8,6 +8,9 @@ arm (`roboloom probe <can>`) to compare.
 from __future__ import annotations
 
 import math
+from pathlib import Path
+
+from ...kinematics.spec import KinematicSpec
 
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "joint6")
 UNIT = "rad"
@@ -21,6 +24,14 @@ RANGE = {
 }
 # The pose the arm folds into at power-off (all joints 0); the mock bus starts here.
 REST = (0.0,) * len(JOINTS)
+# The arm without the stock gripper, base_link to the flange link6 (model/README.md):
+# for firmware S-V1.6-3 and later.
+MODEL = KinematicSpec(
+    Path(__file__).with_name("model") / "piper_no_gripper_description.urdf",
+    base="base_link",
+    tip="link6",
+    joints=JOINTS,
+)
 
 
 def check_within_range(limits: list[dict], name: str) -> None:

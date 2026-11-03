@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from ...core.checks import identity, positive
 from ...drivers.mock import MockBus
+from ...kinematics.spec import KinematicSpec
 from ..base import Follower, JointBus, SafetyTraits
-from .spec import JOINTS, REST, UNIT, check_within_range
+from .spec import JOINTS, MODEL, REST, UNIT, check_within_range
 
 
 class PiperFollower(Follower):
@@ -49,6 +50,9 @@ class PiperFollower(Follower):
 
     def device_ids(self) -> tuple[str, ...]:
         return (self.can,)
+
+    def kinematics(self) -> KinematicSpec:
+        return MODEL
 
     def open_bus(self, mock: bool) -> JointBus:
         if mock:

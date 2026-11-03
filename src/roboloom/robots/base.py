@@ -20,6 +20,7 @@ from ..core.protocol import Envelope
 from ..core.source import Features, Joined
 from ..core.traits import WORST_CASE, SafetyTraits, Unattended
 from ..drivers.base import JointBus
+from ..kinematics.spec import KinematicSpec
 
 __all__ = ["Follower", "JointBus", "SafetyTraits", "check_limits"]
 
@@ -142,6 +143,10 @@ class Follower:
 
     def device_ids(self) -> tuple[str, ...]:
         return ()
+
+    def kinematics(self) -> KinematicSpec | None:
+        """The arm's URDF chain, for controllers that command poses (None: not described)."""
+        return None
 
     def declared_traits(self) -> SafetyTraits:
         """The model's safety traits for this configuration (override when they depend on it)."""
