@@ -1,0 +1,11 @@
+# A pose to start teleoperation from (the folded rest pose, all joints 0, is singular).
+follower: right
+model: piper
+unit: rad
+pose:
+  joint1: 0.0
+  joint2: 1.2
+  joint3: -0.9
+  joint4: 0.0
+  joint5: 0.3
+  joint6: 0.0

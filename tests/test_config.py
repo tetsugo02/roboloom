@@ -103,7 +103,7 @@ def test_a_policy_is_imported_from_the_robot_directory(tmp_path, monkeypatch):
 def test_the_node_knows_the_robot_directory():
     from roboloom.config import load_config
 
-    cfg = load_config(".roboloom/piper-mock/config.yaml")
+    cfg = load_config(".roboloom/piper-mock/config.yaml", options=["demo_policy"])
     policy = cfg.controllers["policy"]
     assert policy.cfg["__robot_dir__"].endswith(".roboloom/piper-mock")
     assert set(cfg.followers) == {"left", "right", "left_gripper", "right_gripper"}

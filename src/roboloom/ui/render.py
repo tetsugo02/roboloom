@@ -140,6 +140,15 @@ def _home(f: dict) -> Text:
     return text
 
 
+POSE_STATES = {
+    "ready": "engage on the hand-held device (Pika Sense: double-click) to follow",
+    "tracking_lost": "the hand-held device is not tracked (base stations, line of sight)",
+    "input_jump": "the hand-held pose jumped; engage again",
+    "out_of_workspace": "the target is outside the workspace; the arm holds",
+    "unreachable": "the IK cannot reach the target; the arm holds",
+}
+
+
 @register("controller")
 def controller(f: dict) -> tuple[str, Text]:
     state = str(f.get("state", ""))
@@ -153,6 +162,12 @@ def controller(f: dict) -> tuple[str, Text]:
         detail = Text("no recent leader input", style=WATCH)
     elif state == "follower_fault":
         detail = Text("robot latched FAULT/ESTOP; re-align after recovery", style=BAD)
+    elif state in POSE_STATES and "engaged" in f:  # pose_ik: what the operator does
+        detail = Text(POSE_STATES[state], style=WATCH)
+        if f.get("position_error_mm") is not None:
+            detail.append(
+                f"  (IK error {f['position_error_mm']} mm, {f['rotation_error_deg']} deg)"
+            )
     else:
         detail = Text(
             key_values(f, ("state", "tolerance", "worst_joint", "worst_diff", "home"))

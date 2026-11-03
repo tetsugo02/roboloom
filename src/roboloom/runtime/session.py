@@ -616,7 +616,14 @@ class Session:
         for c in self.cfg.controllers.values():
             if not c.homes:
                 continue
-            for name in (*c.homes, *([c.source.name] if c.source else [])):
+            # an actuated leader moves home with its follower (node._source); a pose
+            # input or an unpowered leader stays where the operator holds it
+            moves = (
+                c.source is not None
+                and getattr(c.source, "actuated", False)
+                and getattr(c, "leader_pose", None) is not None
+            )
+            for name in (*c.homes, *([c.source.name] if moves and c.source else [])):
                 item = status.get(name, {})
                 fields = item.get("fields", {})
                 fresh = item.get("t_ns", 0) > sent_ns

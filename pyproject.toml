@@ -35,10 +35,12 @@ hardware = [
     "sounddevice>=0.4,<1",
 ]
 piper = ["piper_sdk>=0.6.2,<0.7"]
+ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
 test = [
     "pytest>=8,<9",
     "lerobot[dataset]==0.6.1",
     "pytest-asyncio>=1,<2",
+    "pin>=4.1,<5",
 ]
 
 [project.scripts]
@@ -51,7 +53,7 @@ packages = ["src/roboloom"]
 testpaths = ["tests"]
 
 [[tool.mypy.overrides]]
-module = ["dynamixel_sdk", "piper_sdk", "serial"]
+module = ["dynamixel_sdk", "piper_sdk", "serial", "pinocchio"]
 ignore_missing_imports = true
 
 [tool.pyright]

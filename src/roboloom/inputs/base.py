@@ -288,3 +288,62 @@ class JointInput(InputDevice):
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
         values = msg.payload["positions"] if msg else [0] * len(self.joint_names)
         return {f"observation.{self.name}": np.asarray(values, dtype=np.float32)}
+
+
+POSE_FIELDS = ("x", "y", "z", "qx", "qy", "qz", "qw", "gripper", "tracking", "engaged")
+
+
+class PoseInput(InputDevice):
+    """A hand-held 6-DoF pose, e.g. a tracked controller; a pose controller (`pose_ik`)
+    turns it into joint targets.
+
+    A reader's sample is the vector `POSE_FIELDS`: position (m) and orientation
+    (quaternion xyzw) in the tracker's world frame `world_frame`, the hand-held gripper's
+    opening (rad; NaN when the device has none), whether the pose is tracked now (1/0),
+    and whether the operator has engaged teleoperation (1/0, the device's clutch). The
+    device is not actuated: it has no torque to release.
+    """
+
+    kind = "pose_intent"
+    world_frame = "world"  # the name of the tracker's world frame (subclasses set it)
+
+    def encode(self, sample: Sample) -> dict:
+        v = np.asarray(sample.value, dtype=float)
+        if v.shape != (len(POSE_FIELDS),):
+            raise ValueError(
+                f"{self.name}: a pose sample has {len(POSE_FIELDS)} values"
+            )
+        if not np.all(np.isfinite(np.delete(v, 7))):
+            raise ValueError(f"{self.name}: pose sample is not finite: {v.tolist()}")
+        gripper = float(v[7])
+        return {
+            "position": [float(x) for x in v[0:3]],
+            "quaternion": [float(x) for x in v[3:7]],
+            "frame": self.world_frame,
+            "gripper": None if np.isnan(gripper) else gripper,
+            "tracking": bool(v[8]),
+            "engaged": bool(v[9]),
+        }
+
+    def features(self, dataset_fps: float) -> Features:
+        names_ = [n for n in POSE_FIELDS if n != "tracking"]
+        return {
+            f"observation.{self.name}": {
+                "dtype": "float32",
+                "shape": (len(names_),),
+                "names": names_,
+            }
+        }
+
+    def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
+        if msg is None:
+            values = [0.0] * 9
+        else:
+            p = msg.payload
+            values = [
+                *p["position"],
+                *p["quaternion"],
+                p["gripper"] if p.get("gripper") is not None else 0.0,
+                1.0 if p["engaged"] else 0.0,
+            ]
+        return {f"observation.{self.name}": np.asarray(values, dtype=np.float32)}

@@ -76,7 +76,7 @@ Python 3.12とuvを使い，`uv sync --locked --only-group docs` でlock済み�
 
 ## 新しいフォロワを足す
 
-フォロワの機種（`Follower` のサブクラス）は，安全に関わる性質 `safety_traits`（設定で変わる場合は `declared_traits()`）を必ず宣言します．宣言のないクラスはimportの時点でTypeErrorになります．値の意味は [設定](reference/configuration.md) の「脱力したときと放置したときの性質」にあります．確かめていない性質は `unknown` にします．制御則で動く入力機器（`JointInput` のサブクラス）も `safety_traits` を宣言します．
+フォロワの機種（`Follower` のサブクラス）は，安全に関わる性質 `safety_traits`（設定で変わる場合は `declared_traits()`）を必ず宣言します．宣言のないクラスはimportの時点でTypeErrorになります．値の意味は [設定](reference/configuration.md) の「脱力したときと放置したときの性質」にあります．確かめていない性質は `unknown` にします．制御則で動く入力機器（`JointInput` のサブクラス）も `safety_traits` を宣言します．姿勢で動かす（`pose_ik`）腕は，`kinematics()` でURDFの鎖（`KinematicSpec`：URDF，base，tip，関節）を返します．
 
 ## 操作画面の拡張
 

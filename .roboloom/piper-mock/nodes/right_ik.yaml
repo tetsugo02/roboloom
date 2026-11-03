@@ -1,0 +1,17 @@
+# The right Sense onto the right PiPER (IK) and its Pika Gripper (jaw angle)
+type: pose_ik
+input: right_sense
+followers: [right, right_gripper]
+arm: right
+gripper: right_gripper
+# The tool frame on the flange (link6): AgileX's value for its own gripper (x forward,
+# 0.19 m out). Measure it for the Pika Gripper before using hardware.
+tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}
+workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}  # m, in base_link
+max_input_jump: {position_m: 0.05, rotation_rad: 0.5}
+ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}
+gripper_map: {scale: 1.0, offset: 0.0}
+max_speed: {right: 1.0, right_gripper: 3.0}
+home: {right: {pose: ../poses/right/ready.yaml, max_speed: 0.5, tolerance: 0.02}}
+command_deadline_ms: 100
+input_timeout_ms: 150
