@@ -22,7 +22,7 @@ Real hardware is the default. Commands that open devices accept:
 | --- | --- |
 | `roboloom [robot]` | Open the launcher (same as `roboloom launch [robot]`) |
 | `init rakuda2` | Generate the robot configuration |
-| `probe <port>` | Read Dynamixel IDs, models, registers, and read times (a rough rate limit). Given a CAN interface such as `can_left`, read the PiPER ([in development](../contribution/piper.md)) there: firmware, joint angles, state, enabling, temperatures and faults (enables and moves nothing) |
+| `probe <port>` | Read Dynamixel IDs, models, registers, and read times (a rough rate limit). Given a CAN interface such as `can_left`, read the PiPER ([in development](../contribution/piper.md)) there: firmware, joint angles, state, enabling, temperatures and faults (enables and moves nothing). With `--device pika`, read the Pika Gripper ([in development](../contribution/pika-gripper.md)) on a serial port: version, angle, status bits, temperatures and feedback rates |
 | `validate [robot]` | Validate the configuration and dataflow without opening devices (prints the enabled options and the dataset name) |
 | `calibrate-joints <calibration>` | Save measured counts at the URDF zero pose to the calibration |
 | `measure-travel <calibration> --out <path>` | Save the range of motion moved by hand |
@@ -38,7 +38,7 @@ Real hardware is the default. Commands that open devices accept:
 | `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task` |
 | `session [robot] <operation> [task]` | Send an operation to a running `run` |
 
-`calibrate-joints`, `measure-travel`, `identify-gravity`, `commission`, `watchdog-test`, `tune-gravity` and `gravity-check` are for Dynamixel robots only (`probe` reads Dynamixel and PiPER); given a node that is not Dynamixel, they refuse and say why.
+`calibrate-joints`, `measure-travel`, `identify-gravity`, `commission`, `watchdog-test`, `tune-gravity` and `gravity-check` are for Dynamixel robots only (`probe` reads Dynamixel, PiPER and Pika Gripper); given a node that is not Dynamixel, they refuse and say why.
 
 Examples:
 

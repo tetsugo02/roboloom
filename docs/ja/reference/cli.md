@@ -22,7 +22,7 @@
 | --- | --- |
 | `roboloom [robot]` | ランチャーを開く（`roboloom launch [robot]` と同じ） |
 | `init rakuda2` | 機体設定を生成する |
-| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る．`can_left` のようなCANインターフェースを渡すと，PiPER（[開発中](../contribution/piper.md)）のファームウェア・関節角・状態・有効化・温度・異常を読む（有効化も移動もしない） |
+| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る．`can_left` のようなCANインターフェースを渡すと，PiPER（[開発中](../contribution/piper.md)）のファームウェア・関節角・状態・有効化・温度・異常を読む（有効化も移動もしない）．`--device pika` を付けると，シリアルポートのPika Gripper（[開発中](../contribution/pika-gripper.md)）の版・角度・状態のビット・温度・フィードバックの周期を読む |
 | `validate [robot]` | デバイスを開かず設定とdataflowを検証する（有効なオプションとデータセット名を表示） |
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |
@@ -38,7 +38,7 @@
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存 |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る |
 
-`calibrate-joints`，`measure-travel`，`identify-gravity`，`commission`，`watchdog-test`，`tune-gravity`，`gravity-check` はDynamixelの機体専用です（`probe` はDynamixelとPiPERを読めます）．Dynamixelでないノードを指定すると，理由を示して拒否します．
+`calibrate-joints`，`measure-travel`，`identify-gravity`，`commission`，`watchdog-test`，`tune-gravity`，`gravity-check` はDynamixelの機体専用です（`probe` はDynamixel，PiPER，Pika Gripperを読めます）．Dynamixelでないノードを指定すると，理由を示して拒否します．
 
 例：
 

@@ -9,11 +9,15 @@ dataset's feature names, so a policy sees what it was trained on:
 `infer` returns the next joint targets in the robot's unit: one step `[n]` or a chunk
 `[H, n]`. The node runs it in its own process and loads it from a "module:callable"
 reference that returns the policy, e.g. `my_lab.policies:load_act` with `kwargs`.
+Modules are looked up in the installed packages first, then in the robot's directory
+(`.roboloom/<robot>/`), so a policy kept next to the configuration needs no PYTHONPATH.
 """
 
 from __future__ import annotations
 
-from importlib import import_module
+import sys
+from collections.abc import Sequence
+from importlib import import_module, invalidate_caches
 from typing import Any, Protocol
 
 import numpy as np
@@ -31,11 +35,20 @@ class Policy(Protocol):
         ...
 
 
-def load_policy(reference: str, kwargs: dict | None = None) -> Policy:
-    """Call the factory `module:callable` with `kwargs`; the result must be a Policy."""
+def load_policy(
+    reference: str, kwargs: dict | None = None, search: Sequence[str] = ()
+) -> Policy:
+    """Call the factory `module:callable` with `kwargs`; the result must be a Policy.
+
+    `search`: directories to import from after the installed packages (appended to
+    `sys.path`, so a local file never shadows an installed module)."""
     module, _, attribute = reference.partition(":")
     if not module or not attribute:
         raise ConfigError(f"policy {reference!r}: expected 'module:callable'")
+    added = [d for d in search if d and d not in sys.path]
+    if added:
+        sys.path.extend(added)
+        invalidate_caches()
     try:
         factory = getattr(import_module(module), attribute)
     except (ImportError, AttributeError) as exc:

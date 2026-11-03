@@ -134,10 +134,19 @@ def main(argv: list[str] | None = None) -> None:
     init.add_argument("--root", default=".roboloom")
     probe_cmd = sub.add_parser(
         "probe",
-        help="read-only inspection of a Dynamixel bus, or of a PiPER arm on a CAN interface",
+        help=(
+            "read-only inspection of a Dynamixel bus, a PiPER arm on a CAN interface, "
+            "or a Pika Gripper (--device pika)"
+        ),
     )
     probe_cmd.add_argument(
-        "port", help="serial port (Dynamixel) or CAN interface (PiPER)"
+        "port", help="serial port (Dynamixel, Pika) or CAN interface (PiPER)"
+    )
+    probe_cmd.add_argument(
+        "--device",
+        choices=("dynamixel", "pika"),
+        default="dynamixel",
+        help="what is on a serial port (default dynamixel; a CAN interface is a PiPER)",
     )
     probe_cmd.add_argument(
         "--ids", type=lambda text: [int(x) for x in text.split(",")], default=None
@@ -343,7 +352,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "probe":
         from .probe import probe
 
-        print(probe(args.port, args.ids, args.baudrate))
+        print(probe(args.port, args.ids, args.baudrate, device=args.device))
         return
     if args.command == "commission":
         plan = setup.plan_commission(_load(args), args.node)

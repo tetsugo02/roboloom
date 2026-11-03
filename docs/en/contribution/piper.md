@@ -60,6 +60,14 @@ limits:                  # rad; each joint inside the PiPER range
 
 Because of `unknown`, the exit confirmation offers no "quit with followers holding". It offers supporting the arms and quitting with the torque off, or quitting without releasing (the arms may fall). The values are explained in "Behaviour without torque and when left alone" in [Configuration](../reference/configuration.md).
 
+## Checking the screen with mock devices
+
+`.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. Pika Sense input does not exist yet, so a demo policy in the same directory (`demo_policy.py`) moves the arms and grippers.
+
+```bash
+uv run roboloom run piper-mock
+```
+
 ## First steps on hardware
 
 1. Ask an administrator to create the CAN interfaces (1 Mbps, one name per arm).

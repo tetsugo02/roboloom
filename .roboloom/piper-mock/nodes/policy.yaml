@@ -1,0 +1,9 @@
+# The demo policy in ../demo_policy.py (found in the robot's directory: no PYTHONPATH)
+type: policy
+followers: [left, right, left_gripper, right_gripper]
+factory: demo_policy:wave
+observe: [camera]
+rate_hz: 10
+action_horizon: 2
+max_speed: {left: 1.0, right: 1.0, left_gripper: 3.0, right_gripper: 3.0}
+command_deadline_ms: 300

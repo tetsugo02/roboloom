@@ -12,7 +12,8 @@ FollowerSafety checks them like any teleoperation command.
 
     type: policy
     followers: [follower]               # every follower, in configuration order
-    factory: my_lab.policies:load_act   # "module:callable" returning a Policy
+    factory: my_lab.policies:load_act   # "module:callable" returning a Policy (also
+                                        # found in the robot's directory)
     kwargs: {checkpoint: ...}
     observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
@@ -112,6 +113,7 @@ class PolicyController(Controller):
         self.policy = load_policy(
             factory or self.cfg["factory"],
             self.cfg.get("kwargs", {}) if kwargs is None else kwargs,
+            search=[str(self.cfg.get("__robot_dir__") or "")],
         )
         self.state = "ready"
 

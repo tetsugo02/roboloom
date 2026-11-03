@@ -60,6 +60,14 @@ limits:                  # rad．各関節はPiPERの範囲の内側に
 
 `unknown` のため，終了の確認に「保持したまま終了」は出ません．終了の確認では，支えてから脱力して終了するか，脱力せずに終了する（腕は落ちるかもしれない）かを選びます．値の意味は [設定](../reference/configuration.md) の「脱力したときと放置したときの性質」にあります．
 
+## 模擬で画面を確かめる
+
+`.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．Pika Senseの入力はまだないので，同じディレクトリの確認用の方策（`demo_policy.py`）が腕とグリッパを動かします．
+
+```bash
+uv run roboloom run piper-mock
+```
+
 ## 実機で最初にすること
 
 1. 管理者にCANインターフェース（1 Mbps，腕ごとの名前）を作ってもらいます．

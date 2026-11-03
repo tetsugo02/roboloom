@@ -329,6 +329,7 @@ def read_config(
             **_read(file),
             "__dir__": str(file.parent),  # resolves files a node names (gravity models)
             "__file__": str(file),  # where setup steps record measured values
+            "__robot_dir__": str(path.parent),  # where a node imports local code from
         }
 
     for role in ROLES:

@@ -33,3 +33,11 @@
 - ルール：
   - 置換の表を使うときは，検索文字列が空でないことと，各文字列がちょうど想定の回数だけ現れることを `assert` してから置き換える．
   - コミットの前に `git diff --stat` を見て，行数やファイルの大きさが想定より大きく変わったファイルがないか確かめる．
+
+## 2026-11-03：`ruff format .` はリポジトリ全体と Markdown のコード例まで整形する
+
+- 状況：Pika Gripper の作業で `ruff format .` を走らせたら，前から整形されていない2ファイル（`dynamics/identify.py`，`tests/test_dynamics.py`）と，中断中のバイラテラルの設計（`docs/ja/contribution/bilateral.md`）のコード例まで書き換わった．
+- 直し方：整形だけの差分だったので `git checkout --` で戻した．
+- ルール：
+  - 整形は，自分が変えたファイルだけに当てる（`uv run ruff format <変えたファイル>`）．
+  - コミットの前に `git status` で，触っていないはずのファイルが変わっていないか確かめる．

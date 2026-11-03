@@ -168,6 +168,7 @@ s.save() if stopped.ok else s.discard()
 
 **ノードの動き**
 - 方策は，dataflow の中の方策ノードが，`"module:callable"` の参照から読み込んで動かします．
+  - モジュールは，インストール済みのパッケージを先に探し，見つからなければロボットのディレクトリ（`.roboloom/<robot>/`）を探します．設定の隣に置いた方策のファイルは，`PYTHONPATH` なしで読み込めます．同じ名前のモジュールがインストール済みなら，そちらが使われます．
 - 次の項目は `nodes/policy.yaml` で決めます．
   - 観測するセンサー（`observe`）
   - 周期（`rate_hz`）

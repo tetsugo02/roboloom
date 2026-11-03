@@ -32,5 +32,6 @@ nav:
       - 開発: contribution.md
       - バイラテラル制御の設計: contribution/bilateral.md
       - PiPERフォロワ（開発中）: contribution/piper.md
+      - Pika Gripperフォロワ（開発中）: contribution/pika-gripper.md
 exclude_docs: |
   yam-safety-and-smoothness.md
