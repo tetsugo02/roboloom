@@ -1,7 +1,7 @@
 """Read-only bus inspection: identify a port and gather values for the node YAML.
 
-A network interface name (e.g. `can_left`) is a PiPER arm on CAN; anything else is a
-Dynamixel serial port."""
+A network interface name (e.g. `can_left`) is a PiPER arm on CAN; a serial port is a
+Dynamixel bus, or a Pika Gripper with `device="pika"`."""
 
 from __future__ import annotations
 
@@ -38,14 +38,22 @@ def probe(
     ids: list[int] | None = None,
     baudrate: int = 1_000_000,
     repeats: int = 50,
+    device: str = "dynamixel",
 ) -> str:
     """Ping IDs (all 0..252 if none given), read registers, and time the state read (plain and
     Fast Sync Read) and the Bus Watchdog read. Never writes. On a CAN interface, read the
-    PiPER arm there instead (`drivers.piper.probe`)."""
+    PiPER arm there instead (`drivers.piper.probe`); with `device="pika"`, read the Pika
+    Gripper on the serial port (`drivers.pika_gripper.probe`)."""
     if is_network_interface(port):
         from .drivers.piper import probe as probe_piper
 
         return probe_piper(port)
+    if device == "pika":
+        from .drivers.pika_gripper import probe as probe_pika
+
+        return probe_pika(port)
+    if device != "dynamixel":
+        raise ValueError(f"unknown device {device!r}: dynamixel or pika")
     import dynamixel_sdk as dxl
 
     from .drivers.dynamixel import DynamixelBus, latency_timer_ms

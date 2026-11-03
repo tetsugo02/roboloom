@@ -83,6 +83,7 @@ Each follower model and each actuated input model (a leader that runs control la
 | Rakuda-mini (leader) | `falls` | `torque_off` (limp when the session ends) |
 | External bus (`InProcessSession.from_components`) | `falls` | `unknown` (the worst case, since nothing is known) |
 | PiPER follower ([in development](../contribution/piper.md)) | `falls` | `unknown` (not checked) |
+| Pika Gripper follower ([in development](../contribution/pika-gripper.md)) | `lets_go` (assumed) | `unknown` (not checked) |
 
 - "Quit with followers holding" is offered only when some follower has `unattended: holds`. The exit confirmation names the followers that do not hold and says that they go (or may go) limp. When any follower has torque, "support, release and quit" is offered even if nothing holds: a follower left enabled without commands cannot be released by roboloom after the session.
 - The `release` confirmation tells you to support the `falls` devices and to take objects out of the `lets_go` devices; `stays` devices are not named. Release is confirmed for every device.
