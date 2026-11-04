@@ -11,18 +11,39 @@ dataset's feature names, so a policy sees what it was trained on:
 reference that returns the policy, e.g. `my_lab.policies:load_act` with `kwargs`.
 Modules are looked up in the installed packages first, then in the robot's directory
 (`.roboloom/<robot>/`), so a policy kept next to the configuration needs no PYTHONPATH.
+
+A policy may also have `bind(spec: PolicySpec)`. The node calls it once after loading,
+before any episode, with the observation's names, dtypes and shapes and the action's
+names. A policy checks there that it gets what it was trained on and raises otherwise,
+so a mismatch refuses the start instead of failing mid-episode. Policies without `bind`
+work as before. `roboloom.policy.lerobot:load` is such a policy for LeRobot checkpoints.
 """
 
 from __future__ import annotations
 
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from importlib import import_module, invalidate_caches
 from typing import Any, Protocol
 
 import numpy as np
 
-from .errors import ConfigError
+from ..errors import ConfigError
+
+
+@dataclass(frozen=True)
+class PolicySpec:
+    """What the configuration gives a policy (`bind`).
+
+    `observation`: dataset feature name -> {"dtype", "shape", "names"}, the keys and
+    shapes of the observation `infer` receives (besides `task`); images are [h, w, 3].
+    `action`: the names of the action's entries, `<follower>.<joint>` in order."""
+
+    observation: Mapping[str, Mapping[str, Any]]
+    action: tuple[str, ...]
+    rate_hz: float
+    dataset_fps: float
 
 
 class Policy(Protocol):

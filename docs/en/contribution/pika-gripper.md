@@ -63,11 +63,11 @@ Because it is `unknown`, the quit dialog does not offer "Quit with followers hol
 
 ## Checking the screen with mock devices
 
-`.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](pika-sense.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with demo_policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
+`.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](pika-sense.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
 
 ```bash
 uv run roboloom run piper-mock
-uv run roboloom run piper-mock --with demo_policy
+uv run roboloom run piper-mock --with policy
 ```
 
 ## First steps on hardware

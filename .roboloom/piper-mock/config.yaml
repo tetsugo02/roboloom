@@ -1,7 +1,7 @@
 # Mock PiPER x2 with Pika Gripper x2, teleoperated by two mock Pika Senses (IK), and a
 # camera and the grippers' wrist cameras (no hardware). Start:  uv run roboloom run piper-mock
 #   Move home first (the arms start folded), then the Senses engage on their own.
-# With --with demo_policy, demo_policy.py moves the arms and grippers instead.
+# With --with policy, demo_policy.py moves the arms and grippers instead.
 repo_id: local/piper-mock
 output: datasets/piper-mock
 mode: mock
@@ -24,12 +24,12 @@ sensors:
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
 options:
-  demo_policy:
-    help: the demo policy moves the arms and grippers instead of the Senses
+  policy:
+    help: a policy moves the arms and grippers instead of the Senses (`roboloom infer` turns this on; demo_policy.py by default)
     set:
       inputs.left_sense: null
       inputs.right_sense: null
       controllers.left_ik: null
       controllers.right_ik: null
       controllers.policy: nodes/policy.yaml
-    dataset: demo-policy
+    dataset: policy

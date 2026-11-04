@@ -22,6 +22,21 @@ The current operation guide covers the [Leader](../controllers/leader.md). Joint
 
 Set the sensor serial numbers to match the hardware. Sensor names are also used as feature names in the dataset.
 
+## Observation and action
+
+The recorded dataset and the policy's inputs and outputs share the same order and units.
+
+| Name | Entries | Unit |
+| --- | --- | --- |
+| `observation.state`, `action` | 17 (`follower.torso_yaw`, `follower.head_yaw`, `follower.head_pitch`, the right arm `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`, the left arm `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`) | Dynamixel position counts |
+| `observation.effort` | 17 (same order; `record_effort: true` in the template) | mA (current) |
+| `observation.images.camera` | 480×640×3 (RGB) | — |
+| `observation.images.digit_left`, `observation.images.digit_right` | 320×240×3 (RGB; option `digit`) | — |
+
+- The policy (option `policy`) observes `camera` and both DIGITs (`observe` in `nodes/policy.yaml`), and `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
+- `max_speed` is in counts/s (`{follower: 1024}` in the template).
+- The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../controllers/policy.md).
+
 ## Launch options and combinations
 
 There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enabled it uses the standard leader, the `joint` controller, and the RealSense. The template has the following launch options (all disabled by default). See [CLI](../reference/cli.md) for choosing them and "Launch options" in [Configuration](../reference/configuration.md) for the rules.

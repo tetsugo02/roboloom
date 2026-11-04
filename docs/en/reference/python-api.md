@@ -164,7 +164,8 @@ s.save() if stopped.ok else s.discard()
   - `observation.images.digit_left`
   - Others
 - `task` is also passed.
-- What `infer` returns: joint targets (counts). Either a single step `[17]` or an action chunk `[H, 17]`.
+- Optionally, `bind(spec)`. Right after loading it receives the observation's shapes and the action's names, and refuses when they differ from training. LeRobot checkpoints load with `roboloom.policy.lerobot:load`. See [Driving with a policy](../controllers/policy.md).
+- What `infer` returns: joint targets. Like the recorded `action`, they join every follower's joints in configuration order, each in its follower's unit. Either a single step `[n]` or an action chunk `[H, n]`. Each robot's order, size and units are on its page ([Rakuda2](../robots/rakuda2.md) and others).
 
 **Node behavior**
 - The policy is loaded from a `"module:callable"` reference and run by the policy node inside the dataflow.
@@ -183,7 +184,7 @@ class MyPolicy:
     def __init__(self, checkpoint: str): ...
     def reset(self): ...
     def infer(self, observation):
-        return self.model(observation)  # [H, 17]
+        return self.model(observation)  # [H, n]
 
 
 def load(checkpoint: str) -> MyPolicy:

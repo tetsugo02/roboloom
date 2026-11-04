@@ -22,6 +22,7 @@ nav:
   - Controllers:
       - 概要: controllers/index.md
       - Leader: controllers/leader.md
+      - 方策: controllers/policy.md
   - Reference:
       - 設定: reference/configuration.md
       - CLI: reference/cli.md

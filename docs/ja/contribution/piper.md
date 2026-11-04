@@ -60,13 +60,28 @@ limits:                  # rad．各関節はPiPERの範囲の内側に
 
 `unknown` のため，終了の確認に「保持したまま終了」は出ません．終了の確認では，支えてから脱力して終了するか，脱力せずに終了する（腕は落ちるかもしれない）かを選びます．値の意味は [設定](../reference/configuration.md) の「脱力したときと放置したときの性質」にあります．
 
+## 観測と行動（`.roboloom/piper-mock/`）
+
+PiPER 2台とPika Gripper 2台の構成で，記録するデータセットと方策の入出力は同じ並びと単位です．並びは `followers:` に書いた順です．
+
+| 名前 | 要素 | 単位 |
+| --- | --- | --- |
+| `observation.state`，`action` | 14（`left.joint1` … `left.joint6`，`right.joint1` … `right.joint6`，`left_gripper.gripper`，`right_gripper.gripper`） | rad（グリッパはモーターの角度） |
+| `observation.effort` | 12（腕の2台だけ） | N·m |
+| `observation.images.camera`，`observation.images.left_wrist`，`observation.images.right_wrist` | 模擬では48×64×3（RGB） | — |
+| `observation.left_sense`，`observation.right_sense` | 9（遠隔操作のときだけ．[Pika Sense](pika-sense.md)） | m，四元数，rad |
+
+- グリッパの電流（mA）は，腕のN·mと1つの `observation.effort` にまとめられないので，記録しません．
+- 方策（オプション `policy`）は，`camera` と手首のカメラ2台を観測し，`infer` は14要素の目標をradで返します．1手 `[14]` か，まとめた行動 `[H, 14]` です．`max_speed` はフォロワごとのrad/sです．
+- 推論の構成にはSenseがないので，方策は `observation.left_sense` などを使えません．方策の書き方とLeRobotの方策は [方策で動かす](../controllers/policy.md) にあります．
+
 ## 模擬で画面を確かめる
 
-`.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．腕とグリッパは，模擬のPika Senseで遠隔操作します（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．Launchのあと「Move home」で腕を始める姿勢へ移すと，模擬のSenseが開始して腕が動きます．`--with demo_policy` を付けると，同じディレクトリの確認用の方策（`demo_policy.py`）が動かします．
+`.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．腕とグリッパは，模擬のPika Senseで遠隔操作します（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．Launchのあと「Move home」で腕を始める姿勢へ移すと，模擬のSenseが開始して腕が動きます．`--with policy` を付けると，同じディレクトリの確認用の方策（`demo_policy.py`）が動かします．
 
 ```bash
 uv run roboloom run piper-mock
-uv run roboloom run piper-mock --with demo_policy
+uv run roboloom run piper-mock --with policy
 ```
 
 ## 実機で最初にすること

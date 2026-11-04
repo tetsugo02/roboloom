@@ -117,6 +117,18 @@ def features(cfg: RobotConfig) -> Features:
     return out
 
 
+def observation_features(
+    sources: Mapping[str, Recordable], dataset_fps: float
+) -> Features:
+    """The names, dtypes and shapes of what `observation_frame` returns for `sources`:
+    each source's own features plus the joined ones, without `observation.meta`."""
+    out: Features = {}
+    for source in sources.values():
+        out.update(source.features(dataset_fps))
+    out.update(_joined_features(sources, dataset_fps))
+    return out
+
+
 def observation_frame(
     sources: Mapping[str, Recordable],
     msgs: Mapping[str, Envelope | None],
