@@ -40,7 +40,7 @@ from .base import Controller, FollowerView
 if TYPE_CHECKING:
     from ..core.source import Recordable
     from ..inputs.base import InputDevice
-    from ..policy import Policy
+    from ..policy import Policy, PolicySpec
 
 
 class PolicyController(Controller):
@@ -110,12 +110,30 @@ class PolicyController(Controller):
         """Import and build the policy; `factory`/`kwargs` override the configuration."""
         from ..policy import load_policy
 
-        self.policy = load_policy(
+        policy = load_policy(
             factory or self.cfg["factory"],
             self.cfg.get("kwargs", {}) if kwargs is None else kwargs,
             search=[str(self.cfg.get("__robot_dir__") or "")],
         )
+        bind = getattr(policy, "bind", None)
+        if callable(bind):  # the policy checks it gets what it was trained on
+            bind(self.spec())
+        self.policy = policy
         self.state = "ready"
+
+    def spec(self) -> PolicySpec:
+        """The observation's features and the action's names this policy is given."""
+        from ..policy import PolicySpec
+        from ..recording.schema import observation_features, state_names
+
+        return PolicySpec(
+            observation=observation_features(
+                {**self.followers, **self.sources}, self.dataset_fps
+            ),
+            action=tuple(state_names(self.followers)),
+            rate_hz=self.rate_hz,
+            dataset_fps=self.dataset_fps,
+        )
 
     def start(self, task: str) -> None:
         if self.policy is None:

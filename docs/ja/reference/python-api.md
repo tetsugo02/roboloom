@@ -164,7 +164,8 @@ s.save() if stopped.ok else s.discard()
   - `observation.images.digit_left`
   - その他
 - `task` も渡されます．
-- `infer` が返すもの：関節の目標値（カウント）．1 手 `[17]` か，まとめた行動 `[H, 17]`．
+- 任意で `bind(spec)` を持てます．読み込みの直後に，観測の形と行動の名前を受け取り，学習したときと違えば断ります．LeRobotのチェックポイントは `roboloom.policy.lerobot:load` で読み込めます．詳しくは [方策で動かす](../controllers/policy.md) を参照してください．
+- `infer` が返すもの：関節の目標値．記録した `action` と同じく，全フォロワの関節を設定の順につないだ並びで，単位は各フォロワの単位です．1 手 `[n]` か，まとめた行動 `[H, n]`．ロボットごとの並び・要素数・単位は，各ロボットのページ（[Rakuda2](../robots/rakuda2.md) など）にあります．
 
 **ノードの動き**
 - 方策は，dataflow の中の方策ノードが，`"module:callable"` の参照から読み込んで動かします．
@@ -183,7 +184,7 @@ class MyPolicy:
     def __init__(self, checkpoint: str): ...
     def reset(self): ...
     def infer(self, observation):
-        return self.model(observation)  # [H, 17]
+        return self.model(observation)  # [H, n]
 
 
 def load(checkpoint: str) -> MyPolicy:

@@ -22,6 +22,21 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 センサーのシリアル番号は実機に合わせて設定します．センサー名はデータセットのfeature名にも使われます．
 
+## 観測と行動
+
+記録するデータセットと方策の入出力は，同じ並びと単位です．
+
+| 名前 | 要素 | 単位 |
+| --- | --- | --- |
+| `observation.state`，`action` | 17（`follower.torso_yaw`，`follower.head_yaw`，`follower.head_pitch`，右腕 `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`，左腕 `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`） | Dynamixelの位置カウント |
+| `observation.effort` | 17（同じ並び．テンプレートの `record_effort: true`） | mA（電流） |
+| `observation.images.camera` | 480×640×3（RGB） | — |
+| `observation.images.digit_left`，`observation.images.digit_right` | 320×240×3（RGB．オプション `digit`） | — |
+
+- 方策（オプション `policy`）は，`camera` と左右のDIGITを観測し（`nodes/policy.yaml` の `observe`），`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．
+- `max_speed` はカウント/sです（テンプレートは `{follower: 1024}`）．
+- テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．方策の書き方は [方策で動かす](../controllers/policy.md) にあります．
+
 ## 起動オプションと組み合わせ
 
 設定は `.roboloom/rakuda2/config.yaml` の1つです．オプションを何も有効にしない構成は，通常leader・`joint` controller・RealSenseです．テンプレートは次の起動オプションを持ちます（既定はすべて無効）．選び方は [CLI](../reference/cli.md)，規則は [設定](../reference/configuration.md) の「起動オプション」を参照してください．

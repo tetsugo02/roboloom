@@ -1693,6 +1693,9 @@ ik = [
 piper = [
     { name = "piper-sdk" },
 ]
+policy = [
+    { name = "lerobot" },
+]
 record = [
     { name = "lerobot", extra = ["dataset"] },
 ]
@@ -1720,6 +1723,7 @@ requires-dist = [
     { name = "dora-rs", specifier = "==1.0.1" },
     { name = "dora-rs-cli", specifier = "==1.0.1" },
     { name = "dynamixel-sdk", specifier = ">=3.7,<4" },
+    { name = "lerobot", marker = "extra == 'policy'", specifier = "==0.6.1" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'record'", specifier = "==0.6.1" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'test'", specifier = "==0.6.1" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -1736,7 +1740,7 @@ requires-dist = [
     { name = "sounddevice", marker = "extra == 'hardware'", specifier = ">=0.4,<1" },
     { name = "textual", specifier = ">=8,<9" },
 ]
-provides-extras = ["record", "hardware", "piper", "ik", "test"]
+provides-extras = ["record", "hardware", "piper", "ik", "policy", "test"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -62,6 +62,8 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
                 f"{fields.get('worst_diff')} (tolerance {fields.get('tolerance')}); "
                 "align the leader with the follower, then retry start"
             )
+        if state == "failed":  # e.g. the policy did not load: waiting does not help
+            return f"{name}: controller failed: {fields.get('error') or 'see its log'}"
         if state not in READY:
             return f"{name}: controller is {state}; wait until ready, then retry start"
         controller = cfg.controllers[name]

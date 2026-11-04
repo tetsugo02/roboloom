@@ -60,13 +60,28 @@ limits:                  # rad; each joint inside the PiPER range
 
 Because of `unknown`, the exit confirmation offers no "quit with followers holding". It offers supporting the arms and quitting with the torque off, or quitting without releasing (the arms may fall). The values are explained in "Behaviour without torque and when left alone" in [Configuration](../reference/configuration.md).
 
+## Observation and action (`.roboloom/piper-mock/`)
+
+With two PiPER arms and two Pika Grippers, the recorded dataset and the policy's inputs and outputs share the same order and units. The order is that of `followers:`.
+
+| Name | Entries | Unit |
+| --- | --- | --- |
+| `observation.state`, `action` | 14 (`left.joint1` … `left.joint6`, `right.joint1` … `right.joint6`, `left_gripper.gripper`, `right_gripper.gripper`) | rad (the gripper's motor angle) |
+| `observation.effort` | 12 (the two arms only) | N·m |
+| `observation.images.camera`, `observation.images.left_wrist`, `observation.images.right_wrist` | 48×64×3 in the mock (RGB) | — |
+| `observation.left_sense`, `observation.right_sense` | 9 (in teleoperation only; [Pika Sense](pika-sense.md)) | m, quaternion, rad |
+
+- The grippers' current (mA) cannot share one `observation.effort` with the arms' N·m, so it is not recorded.
+- The policy (option `policy`) observes `camera` and the two wrist cameras, and `infer` returns targets for the 14 entries in rad: one step `[14]` or a chunk `[H, 14]`. `max_speed` is in rad/s per follower.
+- The inference configuration has no Senses, so a policy cannot use `observation.left_sense` and the like. How to write a policy and LeRobot policies are in [Driving with a policy](../controllers/policy.md).
+
 ## Checking the screen with mock devices
 
-`.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](pika-sense.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with demo_policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
+`.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](pika-sense.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
 
 ```bash
 uv run roboloom run piper-mock
-uv run roboloom run piper-mock --with demo_policy
+uv run roboloom run piper-mock --with policy
 ```
 
 ## First steps on hardware

@@ -477,9 +477,16 @@ class Session:
         deadline = time.monotonic() + timeout
         while True:
             self._check_alive()
-            warning = start_warning(self.cfg, self.status(), time.monotonic_ns())
+            status = self.status()
+            warning = start_warning(self.cfg, status, time.monotonic_ns())
             if warning is None:
                 return
+            failed = any(
+                status.get(name, {}).get("fields", {}).get("state") == "failed"
+                for name in self.cfg.controllers
+            )
+            if failed:  # a controller that failed does not recover by waiting
+                raise SessionError(warning)
             if time.monotonic() > deadline:
                 raise SessionError(f"not ready after {timeout:g} s: {warning}")
             time.sleep(0.1)

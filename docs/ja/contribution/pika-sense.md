@@ -86,8 +86,10 @@ AgileXの遠隔操作と同じ，相対の写し方です．
 
 ```bash
 uv run roboloom run piper-mock                     # Launchのあと，Move home
-uv run roboloom run piper-mock --with demo_policy  # Senseの代わりに確認用の方策
+uv run roboloom run piper-mock --with policy       # Senseの代わりに確認用の方策
 ```
+
+記録したデータで学習した方策を動かす手順は [方策で動かす](../controllers/policy.md) にあります．
 
 ## 実機で最初にすること
 

@@ -22,6 +22,7 @@ nav:
   - Controllers:
       - Overview: controllers/index.md
       - Leader: controllers/leader.md
+      - Policy: controllers/policy.md
   - Reference:
       - Configuration: reference/configuration.md
       - CLI: reference/cli.md

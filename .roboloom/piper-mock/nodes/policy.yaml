@@ -1,8 +1,10 @@
-# The demo policy in ../demo_policy.py (found in the robot's directory: no PYTHONPATH)
+# The demo policy in ../demo_policy.py (found in the robot's directory: no PYTHONPATH).
+# A LeRobot checkpoint instead:  uv run roboloom infer piper-mock --seconds 20 \
+#   --policy roboloom.policy.lerobot:load --policy-kwargs '{"path": "<checkpoint>"}'
 type: policy
 followers: [left, right, left_gripper, right_gripper]
 factory: demo_policy:wave
-observe: [camera]
+observe: [camera, left_wrist, right_wrist]  # what a learned policy may see
 rate_hz: 10
 action_horizon: 2
 max_speed: {left: 1.0, right: 1.0, left_gripper: 3.0, right_gripper: 3.0}

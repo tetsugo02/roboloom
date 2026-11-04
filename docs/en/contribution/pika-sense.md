@@ -86,8 +86,10 @@ The mapping is relative, as in AgileX's teleoperation.
 
 ```bash
 uv run roboloom run piper-mock                     # after Launch, Move home
-uv run roboloom run piper-mock --with demo_policy  # the demo policy instead of the Senses
+uv run roboloom run piper-mock --with policy       # the demo policy instead of the Senses
 ```
+
+Running a policy trained on the recorded data is described in [Driving with a policy](../controllers/policy.md).
 
 ## First steps on hardware
 
