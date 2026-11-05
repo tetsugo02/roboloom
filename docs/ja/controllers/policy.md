@@ -3,7 +3,7 @@
 `type: policy` のcontrollerは，学習した方策でフォロワを動かします．方策は，自分で書いたものでも，LeRobotのチェックポイントでも，同じ仕組みで読み込みます．
 
 !!! warning "確かめた範囲"
-    自作の方策の経路は，Rakuda2の構成と模擬で使っています．LeRobotの方策（`roboloom.policy.lerobot`）は，学習していない小さなACTをCPUで動かす試験と，模擬のPiPER＋Pikaの構成だけで確かめています．学習済みの方策と実機では，まだ確かめていません．
+    自作の方策の経路は，Rakuda2の構成と模擬で使っています．LeRobotの方策（`roboloom.policy.lerobot`）は，模擬のPiPER＋Pikaの構成だけで確かめています．模擬で記録したデータを `lerobot-train` でCPUで短く学習したACTで，記録から推論までを通しました．実機と，十分に学習した方策では，まだ確かめていません．
 
 ## 設定
 
@@ -97,6 +97,27 @@ action_horizon: 1     # mode: step のとき
 - 必要なもの：`uv add 'roboloom[policy]'`（このリポジトリでは `uv sync --extra policy`）．torchも一緒に入ります．ACTはこれで足ります．Diffusionは `lerobot[diffusion]`，SmolVLAは `lerobot[smolvla]`，pi0は `lerobot[pi]` が別に要ります．
 - GPUで推論するときや学習するときは，始める前に `labstatus` でGPUの空きを確かめてください．
 
+## LeRobotで学習する
+
+roboloomが記録したデータセット（LeRobotDataset v3.0）は，そのまま `lerobot-train` で学習できます．
+
+```bash
+uv sync --extra policy --extra train   # 学習に lerobot[training]（accelerate，wandb）が要ります
+uv run lerobot-train \
+  --dataset.repo_id=local/piper-mock \
+  --dataset.root=.roboloom/piper-mock/datasets/piper-mock \
+  --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
+  --wandb.enable=false \
+  --output_dir=outputs/train/act_piper_mock
+```
+
+- `--dataset.repo_id` は構成の `repo_id`，`--dataset.root` はロボットのディレクトリから見た `output` です．
+- 学習したチェックポイントは `<output_dir>/checkpoints/last/pretrained_model` にできます．これを `path` に渡します．名前は記録したときのままなので，`rename` は要りません．
+- `lerobot-train` は，データセットの `observation.*` をすべて入力に，`action*` をすべて出力に数えます（`observation.meta.*`，`observation.effort`，`action.valid`，`action.meta.*` など）．ACTが読むのは `observation.state`，画像，`action` だけで，ほかは学習にも推論にも使われません．
+- `action.valid` が0の行（入力が操作していない間など）の `action` には，フォロワが保持している目標が入ります．方策は，その間は止まっていることを学びます．
+- 試しに経路だけを確かめるなら，`--policy.device=cpu --steps=200 --batch_size=8` で数分です．ネットワークにつながらないときは，`--policy.pretrained_backbone_weights=null` でbackboneの重みを取りに行きません（学習の質は落ちます）．
+- GPUで学習する前に，`labstatus` でGPUの空きを確かめてください．
+
 ## 周期と手数
 
 - 方策ノードは，`rate_hz` の周期で指令を1つ送ります．並んでいる行動がなくなると，`infer` を呼びます．
@@ -112,13 +133,18 @@ action_horizon: 1     # mode: step のとき
 ## PiPER＋Pikaでの手順（模擬）
 
 1. 模擬のSenseで記録します（[Pika SenseとIKによる遠隔操作](../contribution/pika-sense.md)）．
-2. 記録したデータセットで，LeRobotの学習（`lerobot-train`）を行います．学習の前に `labstatus` でGPUの空きを確かめます．
+
+    ```bash
+    uv run roboloom record piper-mock --task "pick" --seconds 15 --episodes 5 --home --plain
+    ```
+
+2. 記録したデータセットで，LeRobotの学習（`lerobot-train`）を行います（上の「LeRobotで学習する」）．学習の前に `labstatus` でGPUの空きを確かめます．
 3. 学習したチェックポイントで動かします．
 
     ```bash
     uv run roboloom infer piper-mock --seconds 20 --task "pick" \
       --policy roboloom.policy.lerobot:load \
-      --policy-kwargs '{"path": "outputs/train/act/checkpoints/last/pretrained_model"}'
+      --policy-kwargs '{"path": "outputs/train/act_piper_mock/checkpoints/last/pretrained_model"}'
     ```
 
     `--task` を付けると，実行した回を評価のデータとして保存します．
