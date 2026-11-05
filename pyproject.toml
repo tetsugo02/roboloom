@@ -38,6 +38,7 @@ hardware = [
 piper = ["piper_sdk>=0.6.2,<0.7"]
 ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
 policy = ["lerobot==0.6.1"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
+train = ["lerobot[training]==0.6.1"]  # lerobot-train on roboloom datasets (accelerate, wandb)
 test = [
     "pytest>=8,<9",
     "lerobot[dataset]==0.6.1",

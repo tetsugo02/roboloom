@@ -226,3 +226,74 @@ def test_a_failed_controller_says_why_instead_of_asking_to_wait():
     }
     warning = start_warning(cfg, latest, now)
     assert warning == "policy: controller failed: loading the policy: no camera"
+
+
+def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
+    """The path of `lerobot-train` (LeRobot 0.6.1) on a dataset roboloom recorded: the
+    metadata and stats it reads, a training step, and the checkpoint back in roboloom."""
+    pytest.importorskip("lerobot.policies.act.modeling_act")
+    import shutil
+
+    import torch
+    from lerobot.datasets import LeRobotDataset, LeRobotDatasetMetadata
+    from lerobot.datasets.factory import resolve_delta_timestamps
+    from lerobot.policies import make_policy, make_pre_post_processors
+    from lerobot.policies.act.configuration_act import ACTConfig
+
+    from roboloom.policy.lerobot import load
+    from roboloom.runtime.session import Session
+
+    project = tmp_path / ".roboloom" / "piper-mock"
+    shutil.copytree(
+        ".roboloom/piper-mock",
+        project,
+        ignore=shutil.ignore_patterns("datasets", "logs", "__pycache__"),
+    )
+    with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs") as s:
+        s.wait_ready(60)
+        assert s.record("pick", 4.0, home=True).saved  # the mock Senses teleoperate
+    root = project / "datasets" / "piper-mock"
+
+    cfg = ACTConfig(
+        dim_model=32,
+        n_heads=2,
+        dim_feedforward=64,
+        n_encoder_layers=1,
+        n_decoder_layers=1,
+        chunk_size=4,
+        n_action_steps=4,
+        pretrained_backbone_weights=None,
+        device="cpu",
+    )
+    meta = LeRobotDatasetMetadata("local/piper-mock", root=root)
+    dataset = LeRobotDataset(
+        "local/piper-mock",
+        root=root,
+        delta_timestamps=resolve_delta_timestamps(cfg, meta),
+    )
+    policy = make_policy(cfg, ds_meta=meta)
+    pre, post = make_pre_post_processors(cfg, dataset_stats=meta.stats)
+    # every observation.* is an input, as in lerobot-train; ACT reads state and images
+    assert "observation.meta.left.seq" in cfg.input_features
+    assert cfg.output_features["action"].shape == (14,)
+    batch = pre(next(iter(torch.utils.data.DataLoader(dataset, batch_size=4))))
+    loss, _ = policy.forward(batch)
+    loss.backward()
+    assert torch.isfinite(loss)
+
+    path = tmp_path / "pretrained_model"
+    for part in (policy, pre, post):
+        part.save_pretrained(path)
+    trained = load(str(path), device="cpu")
+    trained.bind(mock_policy_controller().spec())  # same names: no rename needed
+    trained.reset()
+    frame = dataset.hf_dataset[0]
+    observation = {
+        "observation.state": np.asarray(frame["observation.state"], np.float32),
+        **{
+            f"observation.images.{name}": np.zeros((48, 64, 3), np.uint8)
+            for name in ("camera", "left_wrist", "right_wrist")
+        },
+        "task": "pick",
+    }
+    assert trained.infer(observation).shape == (14,)

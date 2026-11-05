@@ -3,7 +3,7 @@
 A `type: policy` controller drives the followers with a learned policy. Policies you write yourself and LeRobot checkpoints are loaded the same way.
 
 !!! warning "What has been checked"
-    The path for your own policies is used with the Rakuda2 configuration and with mock devices. LeRobot policies (`roboloom.policy.lerobot`) have been checked only with tests that run an untrained tiny ACT on CPU and with the mock PiPER + Pika configuration. They have not been checked with a trained policy or on hardware.
+    The path for your own policies is used with the Rakuda2 configuration and with mock devices. LeRobot policies (`roboloom.policy.lerobot`) have been checked only with the mock PiPER + Pika configuration: an ACT trained briefly on CPU with `lerobot-train` on mock recordings ran the whole path from recording to inference. They have not been checked on hardware or with a well-trained policy.
 
 ## Configuration
 
@@ -97,6 +97,27 @@ action_horizon: 1     # with mode: step
 - Requirements: `uv add 'roboloom[policy]'` (in this repository, `uv sync --extra policy`). torch comes with it. ACT needs nothing more. Diffusion needs `lerobot[diffusion]`, SmolVLA `lerobot[smolvla]` and pi0 `lerobot[pi]` as well.
 - Before running inference or training on a GPU, check with `labstatus` that a GPU is free.
 
+## Training with LeRobot
+
+A dataset roboloom recorded (LeRobotDataset v3.0) trains with `lerobot-train` as it is.
+
+```bash
+uv sync --extra policy --extra train   # training needs lerobot[training] (accelerate, wandb)
+uv run lerobot-train \
+  --dataset.repo_id=local/piper-mock \
+  --dataset.root=.roboloom/piper-mock/datasets/piper-mock \
+  --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
+  --wandb.enable=false \
+  --output_dir=outputs/train/act_piper_mock
+```
+
+- `--dataset.repo_id` is the configuration's `repo_id`; `--dataset.root` is its `output`, from the robot's directory.
+- The trained checkpoint is `<output_dir>/checkpoints/last/pretrained_model`. Pass it as `path`. The names are those recorded, so no `rename` is needed.
+- `lerobot-train` counts every `observation.*` of the dataset as an input and every `action*` as an output (`observation.meta.*`, `observation.effort`, `action.valid`, `action.meta.*` and so on). ACT reads only `observation.state`, the images and `action`; the rest is used neither in training nor in inference.
+- In rows where `action.valid` is 0 (for example while the input is not engaged), `action` holds the target each follower keeps. The policy learns to stay still there.
+- To check only the path, `--policy.device=cpu --steps=200 --batch_size=8` takes a few minutes. Without a network, `--policy.pretrained_backbone_weights=null` skips downloading the backbone weights (training gets worse).
+- Before training on a GPU, check with `labstatus` that a GPU is free.
+
 ## Rate and steps
 
 - The policy node sends one command every `1/rate_hz`. When no action is queued, it calls `infer`.
@@ -112,13 +133,18 @@ action_horizon: 1     # with mode: step
 ## Steps for PiPER + Pika (mock)
 
 1. Record with the mock Senses ([Teleoperation with Pika Sense and IK](../contribution/pika-sense.md)).
-2. Train with LeRobot (`lerobot-train`) on the recorded dataset. Check with `labstatus` that a GPU is free before training.
+
+    ```bash
+    uv run roboloom record piper-mock --task "pick" --seconds 15 --episodes 5 --home --plain
+    ```
+
+2. Train with LeRobot (`lerobot-train`) on the recorded dataset ("Training with LeRobot" above). Check with `labstatus` that a GPU is free before training.
 3. Run the trained checkpoint.
 
     ```bash
     uv run roboloom infer piper-mock --seconds 20 --task "pick" \
       --policy roboloom.policy.lerobot:load \
-      --policy-kwargs '{"path": "outputs/train/act/checkpoints/last/pretrained_model"}'
+      --policy-kwargs '{"path": "outputs/train/act_piper_mock/checkpoints/last/pretrained_model"}'
     ```
 
     With `--task`, the runs are saved as evaluation data.
