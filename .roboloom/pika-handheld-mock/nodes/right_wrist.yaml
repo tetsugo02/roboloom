@@ -1,0 +1,9 @@
+# The right Sense's fisheye camera (mock). On hardware: its
+# /dev/v4l/by-path/...-video-index0 path and a size it delivers (e.g. 640x480 at 30 fps);
+# see docs contribution/pika-cameras.md
+type: v4l2_rgb
+device: /dev/v4l/by-path/mock-right-sense-wrist
+format: MJPG
+width: 64
+height: 48
+fps: 10

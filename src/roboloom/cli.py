@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 # Subcommands whose first word may name the configuration (a robot under .roboloom/ or a
 # YAML file). Commands without other positional words always read it as one.
 CONFIGURED = {
+    "convert-handheld",
     "launch",
     "run",
     "record",
@@ -47,7 +48,7 @@ CONFIGURED = {
     "tune-gravity",
     "capture-pose",
 }
-ONLY_CONFIG = {"launch", "run", "record", "infer", "validate"}
+ONLY_CONFIG = {"launch", "run", "record", "infer", "validate", "convert-handheld"}
 SESSION_OPERATIONS = (
     "start",
     "stop",
@@ -302,6 +303,28 @@ def main(argv: list[str] | None = None) -> None:
     inf.add_argument(
         "--task", default="", help="task given to the policy; with it, runs are saved"
     )
+    conv = sub.add_parser(
+        "convert-handheld",
+        parents=[configured],
+        help="turn a hand-held recording (no followers) into relative pose actions "
+        "for training",
+    )
+    conv.add_argument(
+        "--action",
+        choices=("delta", "relative-chunk"),
+        default="delta",
+        help="delta: one step inv(P[t]) P[t+1]; relative-chunk: inv(P[t]) P[t+k], "
+        "k=1..horizon, in one row (train with chunk_size 1)",
+    )
+    conv.add_argument("--horizon", type=int, default=16, help="for relative-chunk")
+    conv.add_argument(
+        "--hands", type=_names, default=None, metavar="A,B", help="default: every pose"
+    )
+    conv.add_argument(
+        "--max-gap", type=int, default=3, help="untracked rows filled per gap"
+    )
+    conv.add_argument("--output", help="default: <output>-<action> of the recording")
+    conv.add_argument("--repo-id", help="default: <repo_id>-<action>")
     sess = sub.add_parser(
         "session", parents=[configured], help="send one command to a running `run`"
     )
@@ -445,6 +468,23 @@ def _dispatch(args: argparse.Namespace) -> None:
         send_session(
             fifo_for(cfg), " ".join(x for x in (args.operation, args.task) if x)
         )
+        return
+    if args.command == "convert-handheld":
+        from .handheld.convert import convert
+
+        cfg = load_config(resolve_config(args.config))
+        source = Path(cfg.output)
+        report = convert(
+            source,
+            args.output or source.with_name(f"{source.name}-{args.action}"),
+            args.repo_id or f"{cfg.repo_id}-{args.action}",
+            action=args.action,
+            horizon=args.horizon,
+            hands=args.hands,
+            max_gap=args.max_gap,
+            source_repo_id=cfg.repo_id,
+        )
+        print(report.describe())
         return
     if args.command == "validate":
         cfg = _load(args)

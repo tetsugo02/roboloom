@@ -59,7 +59,7 @@ input_timeout_ms: 150
 | `max_speed` | フォロワごとの速さの上限（単位/s）．指令を送らなかった間の時間は持ち越さず，1回の指令で動くのは `input_timeout_ms` の分までです |
 | `home` | 「Move home」で移る保存した姿勢．フォロワごとに書けます |
 
-記録には，Senseごとに `observation.<名前>`（`x, y, z, qx, qy, qz, qw, gripper, engaged`，トラッカーの世界座標）が加わります．`action` は，これまでどおりフォロワの関節の指令です．
+記録には，Senseごとに `observation.<名前>`（`x, y, z, qx, qy, qz, qw, gripper, tracking, engaged`，トラッカーの世界座標）が加わります．`action` は，これまでどおりフォロワの関節の指令です．
 
 ## 写し方
 
@@ -89,7 +89,7 @@ uv run roboloom run piper-mock                     # Launchのあと，Move home
 uv run roboloom run piper-mock --with policy       # Senseの代わりに確認用の方策
 ```
 
-記録したデータで学習した方策を動かす手順は [方策で動かす](../controllers/policy.md) にあります．
+記録したデータで学習した方策を動かす手順は [方策で動かす](../controllers/policy.md) にあります．ロボットを使わずSenseを手に持って集める方法は [Pika Senseを手に持った収集](pika-handheld.md) にあります．
 
 ## 実機で最初にすること
 

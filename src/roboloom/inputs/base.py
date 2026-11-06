@@ -326,24 +326,26 @@ class PoseInput(InputDevice):
         }
 
     def features(self, dataset_fps: float) -> Features:
-        names_ = [n for n in POSE_FIELDS if n != "tracking"]
+        """`observation.<name>`: every `POSE_FIELDS` entry. `tracking` tells rows with a
+        held (stale) pose apart, which hand-held recordings filter or fill."""
         return {
             f"observation.{self.name}": {
                 "dtype": "float32",
-                "shape": (len(names_),),
-                "names": names_,
+                "shape": (len(POSE_FIELDS),),
+                "names": list(POSE_FIELDS),
             }
         }
 
     def frame(self, msg: Envelope | None, dataset_fps: float) -> dict[str, Any]:
         if msg is None:
-            values = [0.0] * 9
+            values = [0.0] * len(POSE_FIELDS)
         else:
             p = msg.payload
             values = [
                 *p["position"],
                 *p["quaternion"],
                 p["gripper"] if p.get("gripper") is not None else 0.0,
+                1.0 if p["tracking"] else 0.0,
                 1.0 if p["engaged"] else 0.0,
             ]
         return {f"observation.{self.name}": np.asarray(values, dtype=np.float32)}

@@ -97,7 +97,7 @@ def act_checkpoint(tmp_path_factory):
             "observation.images.wrist": PolicyFeature(FeatureType.VISUAL, (3, 48, 64)),
             # LeRobot's training lists every observation.* of a roboloom dataset; its
             # policies read none of these
-            "observation.left_sense": PolicyFeature(FeatureType.STATE, (9,)),
+            "observation.left_sense": PolicyFeature(FeatureType.STATE, (10,)),
             "observation.meta.left.valid": PolicyFeature(FeatureType.STATE, (1,)),
         },
         output_features={

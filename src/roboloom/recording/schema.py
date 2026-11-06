@@ -6,7 +6,8 @@ Features several sources share are joined in configuration order from each sourc
 `observation.effort_ext` and `observation.contact` over the recorded estimators. Their
 `names` say which entry belongs to which node (`follower.r_arm_sh_pitch1`).
 
-`action` has the same layout as `observation.state`: one entry per follower joint.
+`action` has the same layout as `observation.state`: one entry per follower joint. A
+configuration without followers (a hand-held device) records no `action*` features.
 `action.valid` is 1 when every follower sent a command in the row, `action.clamped`
 when any of them was limited; `action.meta.<follower>.*` keep each follower's own.
 """
@@ -89,11 +90,15 @@ def state_names(followers: Mapping[str, Follower]) -> list[str]:
 
 def features(cfg: RobotConfig) -> Features:
     names = state_names(cfg.followers)
-    out: Features = {
-        "action": {"dtype": "float32", "shape": (len(names),), "names": names},
-        "action.valid": _one("float32"),
-        "action.clamped": _one("float32"),
-    }
+    out: Features = (
+        {
+            "action": {"dtype": "float32", "shape": (len(names),), "names": names},
+            "action.valid": _one("float32"),
+            "action.clamped": _one("float32"),
+        }
+        if cfg.followers  # without followers nothing is commanded: no action
+        else {}
+    )
     for follower in cfg.followers:
         for key, dtype in ACTION_META_FIELDS:
             out[f"action.meta.{follower}.{key}"] = _one(dtype)

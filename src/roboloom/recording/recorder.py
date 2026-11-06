@@ -11,6 +11,8 @@ Rows are finalized while the episode runs, so memory stays bounded:
   is 0 and `action.valid` (every follower sent one) is 0 for that row.
 - A row is final once every follower's action stream has passed t_{k+1} (watermark),
   or `grace_ms` after t_{k+1} if a follower is silent.
+- Without followers (a hand-held device, sensors only) the rows have no `action*`
+  features, and a row is final once t_{k+1} has passed.
 
 Samples no later row can select are dropped. The newest sample received before
 `start` is kept as pre-roll so row 0 is not empty.
@@ -169,8 +171,10 @@ class EpisodeRecorder:
         count = 0
         while True:
             end = self.t0_ns + (self.next_row + 1) * self.period_ns
-            watermark = min(self.watermarks.values(), default=end)
-            if watermark < end and now < end + self.grace_ns:
+            if not self.followers:
+                if now < end:
+                    return count
+            elif min(self.watermarks.values()) < end and now < end + self.grace_ns:
                 return count
             self._emit(self.next_row)
             count += 1
@@ -217,10 +221,11 @@ class EpisodeRecorder:
         for key in self.sources:
             # int(): numpy bools would make the counters numpy ints, which JSON rejects
             self.missing[key] += int(row[f"observation.meta.{key}.valid"][0] == 0)
-        self.action_rows += int(row["action.valid"][0] == 1)
+        if self.followers:
+            self.action_rows += int(row["action.valid"][0] == 1)
+            self.clamped += int(row["action.clamped"][0] == 1)
         for name in self.followers:
             self.action_missing[name] += int(row[f"action.meta.{name}.valid"][0] == 0)
-        self.clamped += int(row["action.clamped"][0] == 1)
         if self.write:
             self.dataset.add_frame(row)
         self.written += 1
@@ -273,6 +278,8 @@ class EpisodeRecorder:
                     [values[key]], dtype=dtype
                 )
         frame.update(observation_frame(self.sources, selected, self.cfg.dataset_fps))
+        if not self.followers:
+            return frame
         parts, all_valid, any_clamped = [], True, False
         for name, follower in self.followers.items():
             actions = [
@@ -326,7 +333,7 @@ class EpisodeRecorder:
 
     def metrics(self) -> dict:
         rows = max(self.written, 1)
-        return {
+        out = {
             "rows": self.written,
             "control_interval_ms": {
                 name: summarize(values) for name, values in self.intervals.items()
@@ -340,3 +347,7 @@ class EpisodeRecorder:
             },
             "clamped_rate": self.clamped / rows,
         }
+        if not self.followers:  # no action recorded: nothing to rate
+            for key in ("action_valid_rate", "action_missing_rate", "clamped_rate"):
+                del out[key]
+        return out
