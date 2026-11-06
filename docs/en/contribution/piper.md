@@ -69,7 +69,7 @@ With two PiPER arms and two Pika Grippers, the recorded dataset and the policy's
 | `observation.state`, `action` | 14 (`left.joint1` … `left.joint6`, `right.joint1` … `right.joint6`, `left_gripper.gripper`, `right_gripper.gripper`) | rad (the gripper's motor angle) |
 | `observation.effort` | 12 (the two arms only) | N·m |
 | `observation.images.camera`, `observation.images.left_wrist`, `observation.images.right_wrist` | 48×64×3 in the mock (RGB) | — |
-| `observation.left_sense`, `observation.right_sense` | 9 (in teleoperation only; [Pika Sense](pika-sense.md)) | m, quaternion, rad |
+| `observation.left_sense`, `observation.right_sense` | 10 (in teleoperation only; [Pika Sense](pika-sense.md)) | m, quaternion, rad |
 
 - The grippers' current (mA) cannot share one `observation.effort` with the arms' N·m, so it is not recorded.
 - The policy (option `policy`) observes `camera` and the two wrist cameras, and `infer` returns targets for the 14 entries in rad: one step `[14]` or a chunk `[H, 14]`. `max_speed` is in rad/s per follower.

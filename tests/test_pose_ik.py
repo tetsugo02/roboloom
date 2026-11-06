@@ -188,7 +188,7 @@ def test_two_senses_teleoperate_the_mock_and_the_dataset_records_them(tmp_path):
     info = json.loads((project / "datasets/piper-mock/meta/info.json").read_text())
     features = info["features"]
     assert features["action"]["shape"] == [14]
-    assert features["observation.left_sense"]["shape"] == [9]
+    assert features["observation.left_sense"]["shape"] == [10]
     assert features["observation.right_sense"]["names"][7] == "gripper"
     wrist = features["observation.images.left_wrist"]  # the gripper's fisheye camera
     assert wrist["dtype"] == "video" and wrist["shape"] == [48, 64, 3]

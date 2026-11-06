@@ -59,7 +59,7 @@ input_timeout_ms: 150
 | `max_speed` | Speed limit per follower (unit/s). Time spent without commands is not saved up: one command moves at most `input_timeout_ms` worth |
 | `home` | The saved pose "Move home" goes to, per follower |
 
-The dataset gains `observation.<name>` per Sense (`x, y, z, qx, qy, qz, qw, gripper, engaged`, in the tracker's world frame). `action` stays the followers' joint commands.
+The dataset gains `observation.<name>` per Sense (`x, y, z, qx, qy, qz, qw, gripper, tracking, engaged`, in the tracker's world frame). `action` stays the followers' joint commands.
 
 ## Mapping
 
@@ -89,7 +89,7 @@ uv run roboloom run piper-mock                     # after Launch, Move home
 uv run roboloom run piper-mock --with policy       # the demo policy instead of the Senses
 ```
 
-Running a policy trained on the recorded data is described in [Driving with a policy](../controllers/policy.md).
+Running a policy trained on the recorded data is described in [Driving with a policy](../controllers/policy.md). Collecting with Senses held in the hands, without a robot, is described in [Hand-held collection with Pika Sense](pika-handheld.md).
 
 ## First steps on hardware
 

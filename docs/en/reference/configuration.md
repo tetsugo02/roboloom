@@ -30,7 +30,7 @@ Node YAML paths and `output` are relative to the configuration file's directory.
 
 The only top-level keys are `repo_id`, `output`, `dataset_fps`, `mode`, the roles (`inputs`, `controllers`, `followers`, `sensors`, `estimators`), `recorder`, `session` and `options`; any other key is refused at load. The robot's name is the configuration's directory name (`rakuda2` for `.roboloom/rakuda2/`) and is also the dataset's `robot_type`.
 
-`followers` lists the devices that move on command (arms, grippers, ...). One configuration may hold several followers. Each follower needs exactly one controller that drives it.
+`followers` lists the devices that move on command (arms, grippers, ...). One configuration may hold several followers. Each follower needs exactly one controller that drives it. A configuration with `followers: {}` records its inputs and sensors only, with no `action`; it cannot have controllers, and its inputs and sensors need their own rate (`poll_hz`, `fps`) ([Hand-held collection with Pika Sense](../contribution/pika-handheld.md), in development).
 
 Node names are used as dora IDs and as dataset feature names. Use letters, digits, `-` and `_` only. `recorder`, `session`, `action` and `tick`, names starting with `action_` and names ending in `_status` are used by the dataflow and cannot be node names.
 

@@ -1,0 +1,16 @@
+# Two mock Pika Senses held in the hands (UMI-style collection): no robot. Records each
+# Sense's pose, jaw and tracking and its fisheye camera; `roboloom convert-handheld` turns
+# the recording into a training dataset. Start:  uv run roboloom run pika-handheld-mock
+repo_id: local/pika-handheld-mock
+output: datasets/pika-handheld-mock
+mode: mock
+dataset_fps: 10
+inputs:
+  left_sense: nodes/left_sense.yaml
+  right_sense: nodes/right_sense.yaml
+followers: {}  # none: nothing is driven, and the dataset has no `action`
+sensors:
+  left_wrist: nodes/left_wrist.yaml
+  right_wrist: nodes/right_wrist.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml

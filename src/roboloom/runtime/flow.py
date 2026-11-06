@@ -39,8 +39,9 @@ def build_flow(cfg: RobotConfig) -> dict:
 
     session = {"session": "session/control"}  # every node ends on `quit`
     # a source without a rate of its own runs at the fastest follower it drives (an
-    # input: through its controllers), or else at the fastest follower of the robot
-    fastest = max(f.control_hz for f in cfg.followers.values())
+    # input: through its controllers), or else at the fastest follower of the robot (a
+    # configuration without followers gives every source its own rate, see config)
+    fastest = max((f.control_hz for f in cfg.followers.values()), default=fps)
     driven = {
         n: max(
             (

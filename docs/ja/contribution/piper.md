@@ -69,7 +69,7 @@ PiPER 2台とPika Gripper 2台の構成で，記録するデータセットと�
 | `observation.state`，`action` | 14（`left.joint1` … `left.joint6`，`right.joint1` … `right.joint6`，`left_gripper.gripper`，`right_gripper.gripper`） | rad（グリッパはモーターの角度） |
 | `observation.effort` | 12（腕の2台だけ） | N·m |
 | `observation.images.camera`，`observation.images.left_wrist`，`observation.images.right_wrist` | 模擬では48×64×3（RGB） | — |
-| `observation.left_sense`，`observation.right_sense` | 9（遠隔操作のときだけ．[Pika Sense](pika-sense.md)） | m，四元数，rad |
+| `observation.left_sense`，`observation.right_sense` | 10（遠隔操作のときだけ．[Pika Sense](pika-sense.md)） | m，四元数，rad |
 
 - グリッパの電流（mA）は，腕のN·mと1つの `observation.effort` にまとめられないので，記録しません．
 - 方策（オプション `policy`）は，`camera` と手首のカメラ2台を観測し，`infer` は14要素の目標をradで返します．1手 `[14]` か，まとめた行動 `[H, 14]` です．`max_speed` はフォロワごとのrad/sです．

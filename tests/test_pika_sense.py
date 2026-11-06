@@ -159,11 +159,14 @@ def test_the_input_checks_its_configuration_and_records_nine_values():
         with pytest.raises(error):
             PikaSense("left_sense", sense_cfg(**bad))
     feature = sense.features(10)["observation.left_sense"]
-    assert feature["shape"] == (9,) and feature["names"][-1] == "engaged"
+    assert feature["shape"] == (10,) and feature["names"][-2:] == [
+        "tracking",
+        "engaged",
+    ]
     payload = sense.encode(MockSense().read())
     assert payload["frame"] == "libsurvive" and payload["tracking"] is True
     frame = sense.frame(None, 10)["observation.left_sense"]
-    assert frame.shape == (9,)
+    assert frame.shape == (10,)
 
 
 def test_the_mock_engages_after_two_seconds_and_cycles():

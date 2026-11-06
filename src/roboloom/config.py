@@ -462,8 +462,6 @@ def parse_config(tree: dict) -> RobotConfig:
         name: FOLLOWERS.get(c.get("type"))(name, c)
         for name, c in tree["followers"].items()
     }
-    if not followers:
-        raise ValueError("followers: configure at least one follower")
     for model in followers.values():
         model.traits()  # a measured `unattended` must fill in an unknown one
     inputs = {
@@ -539,6 +537,8 @@ def parse_config(tree: dict) -> RobotConfig:
             raise ValueError("control_hz must be >= dataset_fps")
     for name, controller in controllers.items():
         _check_home(name, controller)
+    if not followers:
+        _check_without_followers(inputs, sensors, controllers, fps)
 
     if e["mode"] == "hardware":
         for owner in [*inputs.values(), *followers.values()]:
@@ -591,6 +591,31 @@ def parse_config(tree: dict) -> RobotConfig:
         raise ValueError("session must be terminal")
     features(cfg)  # rejects colliding LeRobot keys
     return cfg
+
+
+def _check_without_followers(
+    inputs: dict[str, InputDevice],
+    sensors: dict[str, Source],
+    controllers: dict[str, Controller],
+    fps: float,
+) -> None:
+    """A configuration without followers records its inputs and sensors only (e.g. a
+    hand-held device): nothing to drive, and no follower whose rate they could follow."""
+    if controllers:
+        raise ValueError(
+            "followers: none configured, so there is nothing for controllers "
+            f"({', '.join(controllers)}) to drive"
+        )
+    if not inputs and not sensors:
+        raise ValueError(
+            "followers: configure a follower, or inputs or sensors to record"
+        )
+    unpaced = [n for n, s in {**inputs, **sensors}.items() if s.rate_hz(fps) is None]
+    if unpaced:
+        raise ValueError(
+            f"{', '.join(unpaced)}: without followers, set the polling rate "
+            "(poll_hz for an input, fps for a sensor)"
+        )
 
 
 def _check_home(name: str, controller: Controller) -> None:

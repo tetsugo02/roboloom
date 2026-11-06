@@ -1,0 +1,5 @@
+max_age_ms:
+  left_sense: 300
+  right_sense: 300
+  left_wrist: 300
+  right_wrist: 300
