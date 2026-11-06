@@ -220,3 +220,24 @@ def test_a_handheld_recording_converts_and_trains(tmp_path):
     batch = pre(next(iter(torch.utils.data.DataLoader(dataset, batch_size=4))))
     loss, _ = policy.forward(batch)
     assert torch.isfinite(loss)
+
+
+def test_rows_recorded_without_a_sample_count_as_untracked():
+    from roboloom.handheld.convert import recorded_poses
+
+    rows = np.zeros((6, 10))
+    rows[:, 6] = 1.0  # qw
+    rows[:, 0] = np.arange(6) * 0.1
+    rows[:, 8] = 1.0  # tracking
+    rows[2] = 0.0  # no fresh sample: every value is zero
+    rows[4, 8] = 0.0  # untracked (the pose is the last tracked one)
+    poses, tracked = recorded_poses(rows)
+    assert tracked.tolist() == [True, True, False, True, False, True]
+    filled, count, problem = P.fill_gaps(poses, tracked, max_gap=1)
+    assert problem is None and count == 2
+    assert np.isclose(filled[2, 0, 3], 0.2) and np.allclose(
+        filled[2, :3, :3], np.eye(3)
+    )
+    rows[1:5] = 0.0
+    _, _, problem = P.fill_gaps(*recorded_poses(rows), max_gap=3)
+    assert problem == "tracking lost for 4 rows from row 1"

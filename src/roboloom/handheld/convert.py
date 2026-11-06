@@ -72,6 +72,22 @@ def hands_of(features: dict[str, dict]) -> list[str]:
     ]
 
 
+def recorded_poses(raw: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Poses `[N, 4, 4]` and which rows are tracked, from recorded `[N, 10]` rows.
+
+    A row without a fresh sample is recorded as zeros (no rotation, tracking 0); such
+    rows, and untracked ones, get the identity rotation here and count as untracked, so
+    `fill_gaps` fills or reports them instead of the conversion failing."""
+    raw = np.asarray(raw, dtype=float)
+    quaternion = raw[:, _Q].copy()
+    norm = np.linalg.norm(quaternion, axis=1)
+    tracked = (raw[:, _TRACKING] > 0.5) & np.isfinite(norm) & (norm > 1e-6)
+    tracked &= np.isfinite(raw[:, _X]).all(axis=1)
+    quaternion[~tracked] = (0.0, 0.0, 0.0, 1.0)
+    position = np.where(tracked[:, None], raw[:, _X], 0.0)
+    return P.poses_from(position, quaternion), tracked
+
+
 def _names(hands: Sequence[str], action: str, horizon: int) -> tuple[list, list]:
     per_hand = [*P.POSE_NAMES, "gripper"]
     if action == "delta":
@@ -182,9 +198,7 @@ def convert(
         problem = None
         for h in chosen:
             raw = columns[h][at].astype(float)
-            pose, filled, problem = P.fill_gaps(
-                P.poses_from(raw[:, _X], raw[:, _Q]), raw[:, _TRACKING] > 0.5, max_gap
-            )
+            pose, filled, problem = P.fill_gaps(*recorded_poses(raw), max_gap)
             if problem:
                 problem = f"{h}: {problem}"
                 break

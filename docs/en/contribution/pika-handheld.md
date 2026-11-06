@@ -71,7 +71,7 @@ Let P[t] be the Sense's pose in row t. A relative pose is 9 numbers: the positio
 
 `observation.state` is, per Sense, inv(P[t])·P[t-1] (a cue for velocity) and the jaw at t (10 entries), plus, with two or more Senses, each further Sense's pose seen from the first (9). With two Senses it has 29 entries.
 
-- Untracked rows are filled up to `--max-gap` rows: inside a gap, the position linearly and the rotation by slerp; at an episode's ends, the nearest tracked pose.
+- Untracked rows are filled up to `--max-gap` rows: inside a gap, the position linearly and the rotation by slerp; at an episode's ends, the nearest tracked pose. Rows recorded without a sample (all zeros) count as untracked too.
 - The images, the raw `observation.<Sense>` and `observation.meta.*` stay. Videos are copied, not re-encoded.
 - How the dataset was made (form, H, Senses, fps, episodes left out) is kept in `meta/roboloom_handheld.json`.
 
