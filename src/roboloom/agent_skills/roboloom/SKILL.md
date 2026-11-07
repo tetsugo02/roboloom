@@ -60,7 +60,8 @@ outdated, run `uv run roboloom skills install --force`.
 3. **Keep units.** Rakuda2 joints are raw Dynamixel counts and current is mA; PiPER is rad
    and N·m. Do not convert units in configuration or policy outputs.
 4. **Do not delete or overwrite datasets** to "fix" an append error; change `output` or
-   add an option `dataset:` name instead. Commit `.roboloom/**/*.yaml`; never commit
+   add an option `dataset:` name instead (moving the old dataset away is the user's call).
+   Commit `.roboloom/**/*.yaml`; never commit
    `*.npz`, `logs/`, `datasets/`.
 5. **Say what is verified.** Features marked *mock only* below have not run on hardware;
    tell the user so when you use them. Do not set up or tune the `bilateral` option.

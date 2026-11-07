@@ -18,8 +18,8 @@ speed_percent: 30        # share of the firmware's joint speed (1-100)
 stale_ms: 50             # optional; older feedback latches FAULT
 torque: true
 record_effort: true      # record joint torque (N·m) in observation.effort
-health:
-  every_ticks: 10        # required: teach button, collisions and driver faults show only here
+health:                  # required: teach button, collisions and driver faults show only here
+  every_ticks: 10        # optional, default 10
   max_temperature_c: 70
 limits:                  # rad; each joint inside the PiPER range
   - {name: joint1, min: -2.6, max: 2.6, max_speed: 1.0, max_jump: 0.3}
@@ -31,7 +31,7 @@ limits:                  # rad; each joint inside the PiPER range
 | `can` | The CAN interface name; a `SET_` placeholder is refused |
 | `speed_percent` | Required; an integer 1-100. The share of speed at which the firmware moves to a target in MOVE J |
 | `stale_ms` | Default 50. Feedback older than this latches FAULT as a bus failure (the SDK keeps returning the last values after a cable is pulled) |
-| `health` | Required. The state is read every `every_ticks` |
+| `health` | Required (`health: {}` is enough). The state is read every `every_ticks` control ticks (default 10) |
 | `limits` | rad. Values beyond the PiPER joint range (joint1 ±150°, joint2 0-180°, joint3 −170-0°, joint4 ±100°, joint5 ±70°, joint6 ±120°) are refused |
 | `unattended` | Optional; the measured behaviour when left alone (see "Safety traits" below) |
 
@@ -78,6 +78,8 @@ With two PiPER arms and two Pika Grippers, the recorded dataset and the policy's
 ## Checking the screen with mock devices
 
 `.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](pika-sense.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
+
+`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template), so run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; it needs the `ik` extra ([Teleoperation with Pika Sense and IK](pika-sense.md)). Its values are for mock mode only; do not reuse them on hardware.
 
 ```bash
 uv run roboloom run piper-mock

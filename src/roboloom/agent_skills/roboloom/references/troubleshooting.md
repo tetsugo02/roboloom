@@ -65,7 +65,7 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 
 | Message fragment | Cause | Fix |
 | --- | --- | --- |
-| `existing dataset schema or FPS differs from the configuration:` (recorder log) | Features or `dataset_fps` changed against an existing `output` | New `output`, or a `dataset:` name on the option. **Never delete or overwrite the dataset** |
+| `existing dataset schema or FPS differs from the configuration:` (recorder log) | Features or `dataset_fps` changed against an existing `output` | New `output`, or a `dataset:` name on the option. The message also offers moving the old dataset away; that is the user's decision, so ask first. **Never delete or overwrite the dataset** |
 | `No module named 'lerobot'` (recorder) / `converting needs lerobot` | `record` extra missing | `uv add 'roboloom[record]'` |
 | `No module named 'pyrealsense2'` / `'digit_interface'` / `'cv2'` / `'sounddevice'` | `hardware` extra missing | `uv add 'roboloom[hardware]'` |
 | `No module named 'piper_sdk'` | `piper` extra missing | `uv add 'roboloom[piper]'` |

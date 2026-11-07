@@ -35,7 +35,8 @@ class ArmModel:
         except ImportError as exc:
             raise ImportError(
                 "pose controllers need pinocchio: install roboloom with the ik extra "
-                "(uv add 'roboloom[ik]' or uv sync --extra ik)"
+                "(uv add git+https://github.com/tetsugo02/roboloom.git --extra ik; "
+                "in a roboloom checkout: uv sync --extra ik)"
             ) from exc
         self.pin = pin
         full = pin.buildModelFromUrdf(str(spec.urdf))

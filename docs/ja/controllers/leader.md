@@ -51,7 +51,7 @@ control:
 
 `position` は通電直前の実測位置を目標として書いてから，選択した関節だけトルクをオンにします．古いGoal Positionへ移動させる処理ではありません．leaderは外部目標を受けないため，その位置を保持します．固定はSessionの起動時から有効で，`stop` で収集を止めても続き，`estop`・`release`・`quit` で脱力します．起動前に，固定するleader関節をfollowerの姿勢へ揃えてください．
 
-モーターの位置制御と対応バスAPIが必要です．Operating Modeは `position`（Rakuda2では3）を読み返して検査し，不一致では通電しません．変更が必要な場合はdataflowを止め，機体を支持した上で既存の `roboloom commission leader` を使います（起動オプションでleaderを選ぶ場合は `--with` も指定します）．`robot.yaml` の `torque: false` はleaderの固定を無効にしません．
+モーターの位置制御と対応バスAPIが必要です．Operating Modeは `position`（Rakuda2では3）を読み返して検査し，不一致では通電しません．変更が必要な場合はdataflowを止め，機体を支持した上で既存の `roboloom commission leader` を使います（起動オプションでleaderを選ぶ場合は `--with` も指定します）．`nodes/follower.yaml` の `torque: false` はleaderの固定を無効にしません．
 
 ## 関節間の相殺を設定する
 

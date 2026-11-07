@@ -18,8 +18,8 @@ speed_percent: 30        # ファームウェアの関節速度の割合（1〜1
 stale_ms: 50             # 任意．これより古いフィードバックはFAULT
 torque: true
 record_effort: true      # observation.effort に関節トルク（N·m）を記録する
-health:
-  every_ticks: 10        # 必須．教示ボタン・衝突・ドライバの異常はここでしか分からない
+health:                  # 必須．教示ボタン・衝突・ドライバの異常はここでしか分からない
+  every_ticks: 10        # 任意．既定10
   max_temperature_c: 70
 limits:                  # rad．各関節はPiPERの範囲の内側に
   - {name: joint1, min: -2.6, max: 2.6, max_speed: 1.0, max_jump: 0.3}
@@ -31,7 +31,7 @@ limits:                  # rad．各関節はPiPERの範囲の内側に
 | `can` | CANインターフェースの名前．`SET_` のままでは拒否します |
 | `speed_percent` | 必須．1〜100の整数．ファームウェアがMOVE Jで目標へ向かう速さの割合 |
 | `stale_ms` | 既定50．フィードバックがこれより古いとバスの異常としてFAULTにします（ケーブルが抜けても，SDKは最後の値を返し続けるため） |
-| `health` | 必須．`every_ticks` ごとに状態を読みます |
+| `health` | 必須（`health: {}` だけでもよい）．制御の `every_ticks` 周期（既定10）ごとに状態を読みます |
 | `limits` | rad．PiPERの関節の範囲（joint1 ±150°，joint2 0〜180°，joint3 −170〜0°，joint4 ±100°，joint5 ±70°，joint6 ±120°）を超える値は拒否します |
 | `unattended` | 任意．放置したときの実測値（下の「安全に関わる性質」） |
 
@@ -78,6 +78,8 @@ PiPER 2台とPika Gripper 2台の構成で，記録するデータセットと�
 ## 模擬で画面を確かめる
 
 `.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．腕とグリッパは，模擬のPika Senseで遠隔操作します（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．Launchのあと「Move home」で腕を始める姿勢へ移すと，模擬のSenseが開始して腕が動きます．`--with policy` を付けると，同じディレクトリの確認用の方策（`demo_policy.py`）が動かします．
+
+`.roboloom/piper-mock/` はroboloomのリポジトリにあり，インストールしたパッケージには入っていません（`roboloom init` のテンプレートは `rakuda2` だけです）．下のコマンドは，cloneしたリポジトリのルートで実行します．自分のプロジェクトでは，[リポジトリ](https://github.com/tetsugo02/roboloom) からこのディレクトリを自分の `.roboloom/` にコピーして使えます．`ik` extraが要ります（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．値は模擬のためのものなので，実機に使い回さないでください．
 
 ```bash
 uv run roboloom run piper-mock

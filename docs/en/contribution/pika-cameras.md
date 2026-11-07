@@ -66,6 +66,8 @@ Depth is not recorded.
 
 `.roboloom/piper-mock/` includes the Pika Grippers' fisheye cameras `left_wrist` and `right_wrist`. In mock mode their frames are black.
 
+`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template), so run the command below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; it needs the `ik` extra ([Teleoperation with Pika Sense and IK](pika-sense.md)). Its values (including the camera paths and sizes) are for mock mode only; do not reuse them on hardware.
+
 ```bash
 uv run roboloom run piper-mock
 ```

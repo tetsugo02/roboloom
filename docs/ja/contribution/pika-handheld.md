@@ -15,6 +15,8 @@
 
 `.roboloom/pika-handheld-mock/` は，模擬のSense 2台（`left_sense`，`right_sense`）と，その魚眼カメラ（`left_wrist`，`right_wrist`）の構成です．
 
+`.roboloom/pika-handheld-mock/` はroboloomのリポジトリにあり，インストールしたパッケージには入っていません（`roboloom init` のテンプレートは `rakuda2` だけです）．このページのコマンドは，cloneしたリポジトリのルートで実行します．自分のプロジェクトでは，[リポジトリ](https://github.com/tetsugo02/roboloom) からこのディレクトリを自分の `.roboloom/` にコピーして使えます．記録と変換には `record` extraが要ります（[インストール](../quick-start/installation.md)）．値は模擬のためのものなので，実機に使い回さないでください．
+
 ```yaml
 inputs:
   left_sense: nodes/left_sense.yaml
@@ -78,7 +80,11 @@ P[t] を行tのSenseの姿勢とします．相対の姿勢は，位置（3）�
 ## 学習
 
 ```bash
+# roboloomのリポジトリをcloneした中で
 uv sync --extra policy --extra train
+# 自分のプロジェクトで（recordなど，使っているextrasはそのまま残る）
+uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train
+
 # delta
 uv run lerobot-train --dataset.repo_id=local/pika-handheld-mock-delta \
   --dataset.root=.roboloom/pika-handheld-mock/datasets/pika-handheld-mock-delta \

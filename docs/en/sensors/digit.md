@@ -21,4 +21,6 @@ Because `digit-interface.get_frame()` returns a transposed image, the configured
 
 Captured images are converted from BGR to RGB. When the node names are `digit_left` / `digit_right`, they are recorded in `observation.images.digit_left` / `observation.images.digit_right`.
 
+Each DIGIT node also needs a `max_age_ms` entry in `nodes/recorder.yaml`; see "Recorder entry" in [Sensors](index.md).
+
 The supported Rakuda2 configurations and how to combine DIGIT with gravity compensation are on the [robot page](../robots/rakuda2.md).

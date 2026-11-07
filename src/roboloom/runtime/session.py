@@ -114,7 +114,10 @@ def _dora() -> str:
         "dora", path=str(Path(sys.executable).parent)
     )
     if dora is None:
-        raise ConfigError("dora CLI unavailable; install dependencies with uv sync")
+        raise ConfigError(
+            "dora CLI unavailable; run from the project environment (uv run ...) "
+            "after uv sync"
+        )
     return dora
 
 

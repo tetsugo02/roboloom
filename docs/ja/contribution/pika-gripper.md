@@ -20,8 +20,8 @@ current_limit_A: 1.0     # 必須．有効化の前に送るモーターの電�
 stale_ms: 100            # 任意．これより古いフィードバックはFAULT
 torque: true
 record_effort: true      # observation.effort にモーターの相電流（mA）を記録する
-health:
-  every_ticks: 10        # 必須．過電流・過熱・ドライバの異常はここでしか分からない
+health:                  # 必須．過電流・過熱・ドライバの異常はここでしか分からない
+  every_ticks: 10        # 任意．既定10
   max_temperature_c: 70
 limits:                  # rad（モーターの角度）．0〜1.67の内側に
   - {name: gripper, min: 0.0, max: 1.6, max_speed: 3.0, max_jump: 0.5}
@@ -32,7 +32,7 @@ limits:                  # rad（モーターの角度）．0〜1.67の内側に
 | `port` | シリアルポート．`SET_` のままでは拒否します |
 | `current_limit_A` | 必須．モーターの電流の上限（A）．pika_sdkの説明の範囲（0〜2 A）を超える値は拒否します |
 | `stale_ms` | 既定100．フィードバックがこれより古いとバスの異常としてFAULTにします．フレームに時刻がないので，受け取った時刻で判断します |
-| `health` | 必須．`every_ticks` ごとに状態を読みます |
+| `health` | 必須（`health: {}` だけでもよい）．制御の `every_ticks` 周期（既定10）ごとに状態を読みます |
 | `limits` | rad．グリッパの範囲（0〜1.67 rad）を超える値は拒否します |
 | `unattended` | 任意．放置したときの実測値（下の「安全に関わる性質」） |
 
@@ -64,6 +64,8 @@ limits:                  # rad（モーターの角度）．0〜1.67の内側に
 ## 模擬で画面を確かめる
 
 `.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とカメラの構成です．ハードウェアなしで操作画面を確かめられます．腕とグリッパは，模擬のPika Senseで遠隔操作します（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．Launchのあと「Move home」で腕を始める姿勢へ移すと，模擬のSenseが開始して腕が動きます．`--with policy` を付けると，同じディレクトリの確認用の方策（`demo_policy.py`）が動かします．
+
+`.roboloom/piper-mock/` はroboloomのリポジトリにあり，インストールしたパッケージには入っていません（`roboloom init` のテンプレートは `rakuda2` だけです）．下のコマンドは，cloneしたリポジトリのルートで実行します．自分のプロジェクトでは，[リポジトリ](https://github.com/tetsugo02/roboloom) からこのディレクトリを自分の `.roboloom/` にコピーして使えます．`ik` extraが要ります（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．値は模擬のためのものなので，実機に使い回さないでください．
 
 ```bash
 uv run roboloom run piper-mock
