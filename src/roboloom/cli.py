@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from .agent_skills import TARGETS as SKILL_TARGETS
 from .config import (
     INFER_OPTION,
     Option,
@@ -330,6 +331,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     sess.add_argument("operation", choices=SESSION_OPERATIONS)
     sess.add_argument("task", nargs="?", default="")
+    skills = sub.add_parser(
+        "skills", help="the Agent Skill for coding agents (Claude Code, Codex, ...)"
+    )
+    skills.add_argument("action", choices=("install", "check", "path"))
+    skills.add_argument(
+        "--agent",
+        choices=("all", *SKILL_TARGETS),
+        default="all",
+        help="which agents' skills directory (default: all)",
+    )
+    skills.add_argument("--root", default=".", help="the project root (default: .)")
+    skills.add_argument(
+        "--force", action="store_true", help="replace a copy that differs"
+    )
     args = parser.parse_args(_with_config(list(sys.argv[1:] if argv is None else argv)))
     try:
         _dispatch(args)
@@ -365,11 +380,33 @@ def _load(args: argparse.Namespace) -> RobotConfig:
     )
 
 
+def _skills(args: argparse.Namespace) -> None:
+    from . import agent_skills
+
+    if args.action == "path":
+        print(agent_skills.path())
+        return
+    targets = tuple(SKILL_TARGETS) if args.agent == "all" else (args.agent,)
+    if args.action == "check":
+        copies = agent_skills.check(args.root, targets)
+        for copy in copies:
+            print(copy.line())
+        if any(c.state != "up to date" for c in copies):
+            raise SystemExit("run `roboloom skills install --force` to update")
+        return
+    for copy in agent_skills.install(args.root, targets, force=args.force):
+        done = "unchanged" if copy.state == "up to date" else "installed"
+        print(f"{copy.target}: {copy.path} {done}")
+
+
 def _dispatch(args: argparse.Namespace) -> None:
     from . import setup
     from .operator import TerminalOperator
 
     operator = TerminalOperator()
+    if args.command == "skills":
+        _skills(args)
+        return
     if args.command == "init":
         from .project import init_project
 

@@ -1,0 +1,94 @@
+# Installation
+
+roboloom is installed from GitHub into the user's own uv project. Python **3.12** only.
+
+## New or existing project
+
+```bash
+uv init --python '>=3.12,<3.13' my-robot   # new project
+cd my-robot
+uv add git+https://github.com/tetsugo02/roboloom.git
+uv run roboloom --help
+```
+
+For an existing project, first set `project.requires-python = ">=3.12,<3.13"` in
+`pyproject.toml`. Selecting a 3.12 interpreter alone does not restrict what uv resolves.
+
+## Extras
+
+| Extra | Adds | Needed for |
+| --- | --- | --- |
+| (none) | config loading, CLI, Dynamixel driver, pyserial | `init`, `validate`, `probe`, setup steps |
+| `record` | `lerobot[dataset]==0.6.1` | saving episodes (also mock collection that saves) |
+| `hardware` | pyrealsense2, digit-interface, opencv-python, sounddevice | RealSense, DIGIT, V4L2 cameras, microphone |
+| `piper` | piper_sdk 0.6 | PiPER follower (in development) |
+| `ik` | pinocchio (`pin`) | `pose_ik` controller (in development) |
+| `policy` | `lerobot==0.6.1` (brings torch) | `roboloom.policy.lerobot:load` |
+| `train` | `lerobot[training]==0.6.1` | `lerobot-train` on roboloom datasets |
+
+```bash
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv add 'roboloom[policy]'   # once roboloom is already a dependency, extras can be added like this
+```
+
+Diffusion / SmolVLA / pi0 policies additionally need `lerobot[diffusion]`,
+`lerobot[smolvla]`, `lerobot[pi]`. On a shared GPU machine, check with `labstatus` that a
+GPU is free before training or GPU inference.
+
+Hardware hosts also need: USB permissions for the devices, the RealSense system driver and
+a USB 3 port; CAN interfaces (PiPER) and libsurvive + udev rules (Pika Sense) need an
+administrator (sudo).
+
+## Reproduce, update, pin
+
+`uv add` writes the Git source into `pyproject.toml` and the resolved commit into
+`uv.lock`. Commit both; elsewhere run `uv sync --locked`.
+
+```bash
+uv lock --upgrade-package roboloom && uv sync --locked                                  # newest commit
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commit-sha>   # pin a commit
+```
+
+Updating roboloom never overwrites `.roboloom/`. It may change this skill: run
+`uv run roboloom skills check` afterwards.
+
+The repository's top-level `examples/`, `scripts/` and `.roboloom/` (the `piper-mock` and
+`pika-handheld-mock` configurations) are **not** installed with the package. Copy them from
+<https://github.com/tetsugo02/roboloom> if needed.
+
+## Check without devices
+
+```python
+# main.py – base dependencies only; MockBus; saves nothing
+from roboloom import InProcessSession
+from roboloom.drivers.mock import MockBus
+
+with InProcessSession.from_components(
+    robot="my-mock",
+    bus=MockBus(dimension=2),
+    joint_names=["j1", "j2"],
+    unit="count",
+    limits=[
+        {"name": "j1", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+        {"name": "j2", "min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400},
+    ],
+    controller=lambda obs: [2048, 2048],
+) as session:
+    session.start_inference()
+    print(session.step())
+    session.stop_inference()
+```
+
+## This agent skill
+
+```bash
+uv run roboloom skills install            # .agents/skills/roboloom and .claude/skills/roboloom
+uv run roboloom skills install --agent claude
+uv run roboloom skills check              # exit 1 when a copy is missing or outdated
+uv run roboloom skills install --force    # replace an outdated copy
+uv run roboloom skills path               # the packaged skill, for other agents' folders
+npx skills add tetsugo02/roboloom --skill roboloom   # alternative, from GitHub (latest main)
+```
+
+Python: `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`
+and `roboloom.agent_skills.check(...)`.

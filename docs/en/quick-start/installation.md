@@ -44,6 +44,17 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commi
 
 Updating the package does not overwrite existing configuration under `.roboloom/`.
 
+## Use with coding agents
+
+roboloom ships an [Agent Skill](https://agentskills.io) (`SKILL.md` and reference pages) that tells coding agents such as Claude Code and Codex how to use roboloom from your project: installation and extras, `.roboloom/<robot>/`, `Session`, `roboloom.setup`, the CLI, policies, and the safety rules (for example, not to open hardware without your request). Copy the skill of the installed version into your project:
+
+```bash
+uv run roboloom skills install            # .agents/skills/roboloom (Codex and others) and .claude/skills/roboloom (Claude Code)
+uv run roboloom skills install --agent claude
+```
+
+Commit the copied directories with your project. After updating roboloom, `uv run roboloom skills check` reports a copy that no longer matches (exit status 1); replace it with `uv run roboloom skills install --force`. Only the `roboloom/` skill directory is replaced; other skills are left as they are. For an agent that reads another directory, copy the directory printed by `uv run roboloom skills path`. The [skills CLI](https://github.com/vercel-labs/skills) can also install it from GitHub (the latest default branch, which may differ from your locked version): `npx skills add tetsugo02/roboloom --skill roboloom`.
+
 ## Check without devices
 
 With only the base dependencies, save the following as your own `main.py` and run it. It uses `MockBus` and does not save a dataset.

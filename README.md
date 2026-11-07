@@ -28,6 +28,8 @@ uv run roboloom init rakuda2
 
 `init` はインストール済みパッケージから，自分のプロジェクト内に `.roboloom/rakuda2/` を作ります．生成した設定を編集し，CLIもPythonスクリプトも自分のプロジェクトルートから実行します．`pyproject.toml` と `uv.lock` をGitで管理し，別の環境では `uv sync --locked` で再現します．更新・commit固定の手順は [Installation](docs/ja/quick-start/installation.md) を参照してください．
 
+Claude Code・Codex などのコーディングエージェント向けに，roboloom の使い方をまとめたスキル（Agent Skill）を同梱しています．`uv run roboloom skills install` で自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーします．roboloom を更新したら `uv run roboloom skills check` で確かめます（[Installation](docs/ja/quick-start/installation.md) の「コーディングエージェントで使う」）．
+
 ## Python interface
 
 roboloom の操作は，どれも Python の関数として使えます．CLI はそれを呼ぶだけの薄い層です．対応表と例は [docs/ja/reference/python-api.md](docs/ja/reference/python-api.md) にあります．
