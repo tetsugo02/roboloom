@@ -15,6 +15,8 @@ The recording keeps the raw values, so the same recording can be converted again
 
 `.roboloom/pika-handheld-mock/` has two mock Senses (`left_sense`, `right_sense`) and their fisheye cameras (`left_wrist`, `right_wrist`).
 
+`.roboloom/pika-handheld-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template), so the commands on this page run from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; recording and conversion need the `record` extra ([Installation](../quick-start/installation.md)). Its values are for mock mode only; do not reuse them on hardware.
+
 ```yaml
 inputs:
   left_sense: nodes/left_sense.yaml
@@ -78,7 +80,11 @@ Let P[t] be the Sense's pose in row t. A relative pose is 9 numbers: the positio
 ## Training
 
 ```bash
+# in a checkout of the roboloom repository
 uv sync --extra policy --extra train
+# in your own project (extras you already use, such as record, are kept)
+uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train
+
 # delta
 uv run lerobot-train --dataset.repo_id=local/pika-handheld-mock-delta \
   --dataset.root=.roboloom/pika-handheld-mock/datasets/pika-handheld-mock-delta \

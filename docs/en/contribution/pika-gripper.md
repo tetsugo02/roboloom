@@ -20,8 +20,8 @@ current_limit_A: 1.0     # required: the motor current limit sent before enablin
 stale_ms: 100            # optional: older feedback latches FAULT
 torque: true
 record_effort: true      # record the motor phase current (mA) in observation.effort
-health:
-  every_ticks: 10        # required: over-current, overheating and driver faults show only here
+health:                  # required: over-current, overheating and driver faults show only here
+  every_ticks: 10        # optional, default 10
   max_temperature_c: 70
 limits:                  # rad (motor angle), inside 0 to 1.67
   - {name: gripper, min: 0.0, max: 1.6, max_speed: 3.0, max_jump: 0.5}
@@ -32,7 +32,7 @@ limits:                  # rad (motor angle), inside 0 to 1.67
 | `port` | The serial port. A value left as `SET_` is refused |
 | `current_limit_A` | Required. The motor current limit (A). Values beyond the range pika_sdk documents (0 to 2 A) are refused |
 | `stale_ms` | Default 100. Feedback older than this latches FAULT as a bus failure. The frames carry no time, so the time they were received is used |
-| `health` | Required. The status is read every `every_ticks` |
+| `health` | Required (`health: {}` is enough). The status is read every `every_ticks` control ticks (default 10) |
 | `limits` | rad. Values beyond the gripper's range (0 to 1.67 rad) are refused |
 | `unattended` | Optional. The measured value when left alone (see "Safety traits" below) |
 
@@ -64,6 +64,8 @@ Because it is `unknown`, the quit dialog does not offer "Quit with followers hol
 ## Checking the screen with mock devices
 
 `.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](pika-sense.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
+
+`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template), so run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; it needs the `ik` extra ([Teleoperation with Pika Sense and IK](pika-sense.md)). Its values are for mock mode only; do not reuse them on hardware.
 
 ```bash
 uv run roboloom run piper-mock

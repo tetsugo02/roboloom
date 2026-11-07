@@ -14,4 +14,6 @@ fps: 30
 
 RGB8の画像を取得し，`observation.images.camera` に保存します（ノード名が `camera` の場合）．USB 3以外で接続しているとフレーム落ちの警告が表示されます．深度画像・点群・カメラ校正値はこのストリームでは出力しません．
 
+ノードには `nodes/recorder.yaml` の `max_age_ms` の項目も必要です．[Sensors](index.md) の「Recorderの設定」を参照してください．
+
 Rakuda2への接続は [機体ページ](../robots/rakuda2.md) を参照してください．

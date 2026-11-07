@@ -1,5 +1,6 @@
 # Gravity compensation tuning for the right arm. Written by `roboloom tune-gravity`;
-# edit by hand only while it is not running. See docs/gravity-tuning.md for what the values mean.
+# edit by hand only while it is not running. What the values mean:
+# https://tetsugo02.github.io/roboloom/en/reference/gravity-tuning/
 #   gain: multiple of the identified g(q). ~1.0 if the model is right; raise while a released
 #         joint sinks, lower while it rises. 0 turns gravity compensation off for the joint.
 #   hold_mA: breakaway hold. The joint stays where it is left and moves once pushed harder

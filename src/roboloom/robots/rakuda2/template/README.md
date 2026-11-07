@@ -71,7 +71,7 @@ separate `commission` step; `uv run roboloom commission <node> --with ...` is st
 1. **Ports, registers, serials.**
    `ls /dev/serial/by-id/` gives the two U2D2 ports (`SET_FOLLOWER_PORT`, `SET_LEADER_PORT`).
    `uv run roboloom probe <port>` prints each motor's EEPROM; copy per-joint `homing_offset`
-   values that are not 0 into `registers.homing_offset` of `robot.yaml` and `leader*.yaml`
+   values that are not 0 into `registers.homing_offset` of `nodes/follower.yaml` and `nodes/leader*.yaml`
    (startup refuses to run on any mismatch and lists them). Check the FTDI latency timer;
    if it needs system configuration, ask the machine administrator. `rs-enumerate-devices` and the DIGIT labels give the
    sensor serials.
@@ -147,9 +147,9 @@ need `homing:` (set in `leader_gravity.yaml`). Hands off the arms while they mov
 ## Gravity-compensated leader (optional)
 
 3. `calibration/leader_<side>.yaml`: set `port`, check the joint map, set `confirmed: true`.
-4. `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect`
+4. `uv run roboloom measure-travel .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/travel_right.yaml`, and `left`.
+5. `uv run roboloom identify-gravity .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/gravity_right.yaml --collect`
    (about 40 poses; you confirm before it moves; hands off the arm while it measures). The same for `left`.
-5. `uv run roboloom measure-travel .roboloom/rakuda2/calibration/leader_right.yaml --out .roboloom/rakuda2/calibration/travel_right.yaml`, and `left`.
 6. Arms supported, dataflow stopped: `uv run roboloom commission leader --with gravity`
    (current mode and low Current Limits, EEPROM), or just launch with the `gravity` option
    and confirm the EEPROM write. Launching without `gravity` offers to write the plain

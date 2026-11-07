@@ -51,7 +51,7 @@ control:
 
 `position` writes the measured pose immediately before enabling torque, then enables only the selected joints. It does not move to an old Goal Position. Since the leader receives no external targets, it holds that pose. Locking begins when the Session launches, continues when `stop` ends collection, and releases on `estop`, `release`, or `quit`. Align the leader joints to be locked with the follower before launching.
 
-The motors need position control and the corresponding bus APIs. The Operating Mode is read back and must match `position` (3 on Rakuda2); a mismatch prevents torque enable. If a change is needed, stop the dataflow, support the robot, and use the existing `roboloom commission leader` (add `--with` when a launch option selects the leader). Setting `torque: false` in `robot.yaml` does not disable leader locking.
+The motors need position control and the corresponding bus APIs. The Operating Mode is read back and must match `position` (3 on Rakuda2); a mismatch prevents torque enable. If a change is needed, stop the dataflow, support the robot, and use the existing `roboloom commission leader` (add `--with` when a launch option selects the leader). Setting `torque: false` in `nodes/follower.yaml` does not disable leader locking.
 
 ## Configure joint compensation
 

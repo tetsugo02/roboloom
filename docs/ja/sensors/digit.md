@@ -21,4 +21,6 @@ fps: 30
 
 取得画像はBGRからRGBへ変換されます．ノード名が `digit_left` / `digit_right` の場合，`observation.images.digit_left` / `observation.images.digit_right` に記録します．
 
+DIGITのノードごとに，`nodes/recorder.yaml` の `max_age_ms` の項目も必要です．[Sensors](index.md) の「Recorderの設定」を参照してください．
+
 Rakuda2の対応構成と重力補償との併用方法は [機体ページ](../robots/rakuda2.md) にあります．

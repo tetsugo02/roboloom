@@ -66,6 +66,8 @@ fps: 30
 
 `.roboloom/piper-mock/` には，Pika Gripperの魚眼カメラ `left_wrist` と `right_wrist` が入っています．模擬では黒い画像です．
 
+`.roboloom/piper-mock/` はroboloomのリポジトリにあり，インストールしたパッケージには入っていません（`roboloom init` のテンプレートは `rakuda2` だけです）．下のコマンドは，cloneしたリポジトリのルートで実行します．自分のプロジェクトでは，[リポジトリ](https://github.com/tetsugo02/roboloom) からこのディレクトリを自分の `.roboloom/` にコピーして使えます．`ik` extraが要ります（[Pika SenseとIKによる遠隔操作](pika-sense.md)）．値（カメラのパスと大きさを含む）は模擬のためのものなので，実機に使い回さないでください．
+
 ```bash
 uv run roboloom run piper-mock
 ```

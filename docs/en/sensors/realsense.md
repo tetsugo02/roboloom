@@ -14,4 +14,6 @@ Replace `serial` with the serial number of the connected camera. If the SDK's `r
 
 RGB8 images are captured and stored in `observation.images.camera` (when the node name is `camera`). A frame-drop warning is shown when connected over anything other than USB 3. This stream does not output depth images, point clouds, or camera calibration values.
 
+The node also needs a `max_age_ms` entry in `nodes/recorder.yaml`; see "Recorder entry" in [Sensors](index.md).
+
 For connecting it to Rakuda2, see the [robot page](../robots/rakuda2.md).
