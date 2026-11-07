@@ -1,0 +1,126 @@
+# Policies
+
+A `type: policy` controller drives **every follower** with a learned policy, inside the
+dataflow (policy node). Own policies and LeRobot checkpoints load the same way.
+
+> Status: own policies have been used with the Rakuda2 configuration and mock devices.
+> LeRobot policies were checked only with the mock PiPER + Pika configuration (a briefly
+> trained ACT), not on hardware or with a well-trained policy. Tell the user.
+
+## Configuration (`nodes/policy.yaml`, Rakuda2 template)
+
+```yaml
+type: policy
+followers: [follower]               # every follower, in configuration order
+factory: roboloom.policy:hold       # "module:callable" returning the policy (template default: hold still)
+kwargs: {}
+observe: [camera, digit_left, digit_right]   # inputs/sensors it sees; follower state always
+rate_hz: 15                         # set to the training dataset's dataset_fps
+action_horizon: 8                   # chunk steps executed before asking again (1 for mode: step)
+max_speed: {follower: 1024}         # per follower, follower unit/s
+command_deadline_ms: 300
+```
+
+- The `factory` module is looked up in installed packages first, then in
+  `.roboloom/<robot>/` (so `.roboloom/rakuda2/my_policy.py` → `factory: my_policy:load`,
+  no `PYTHONPATH`). An installed module of the same name wins.
+- In the Rakuda2 template the option `policy` removes the leader and joint controller,
+  adds `controllers.policy`, requires `digit`, conflicts with `gravity`, and records to
+  `-eval`. `roboloom infer` enables it; `--policy` / `--policy-kwargs` override the YAML.
+- Start real-hardware inference with the default `roboloom.policy:hold` to check the path.
+
+## Writing a policy
+
+```python
+# my_lab/policies.py  (or .roboloom/<robot>/my_policy.py)
+import numpy as np
+
+
+class MyPolicy:
+    def __init__(self, checkpoint: str):
+        self.checkpoint = checkpoint
+
+    def bind(self, spec):  # optional, once after loading; raise if the config differs
+        if "observation.images.camera" not in spec.observation:
+            raise ValueError("add camera to observe")
+
+    def reset(self):  # each episode start
+        pass
+
+    def infer(self, observation) -> np.ndarray:
+        state = observation["observation.state"]          # float32 [n]
+        image = observation["observation.images.camera"]  # uint8 [h, w, 3] RGB
+        task = observation["task"]
+        return np.asarray(state)  # [n] one step, or [H, n] a chunk
+
+
+def load(checkpoint: str) -> MyPolicy:
+    return MyPolicy(checkpoint)
+```
+
+- Protocol: `roboloom.Policy` (`reset()`, `infer(observation)`); optional `bind(spec)`
+  with `roboloom.policy.PolicySpec(observation, action, rate_hz, dataset_fps)`:
+  `observation` maps feature name → `{"dtype", "shape", "names"}`, `action` is the tuple
+  of `<follower>.<joint>` names.
+- Observation keys are the dataset feature names; output is joint targets in the order and
+  **units** of the recorded `action` (Rakuda2: 17 counts; PiPER+Pika mock: 14 rad).
+- A failing `bind` marks the controller `failed`; `infer` and `Session.wait_ready` stop
+  with the reason.
+
+## Running
+
+```bash
+uv run roboloom infer --seconds 30 --policy my_lab.policies:load \
+  --policy-kwargs '{"checkpoint": "outputs/act/last"}' --task "pick up the cup"
+```
+
+```python
+from roboloom import Session
+
+with Session.launch("rakuda2", options=["policy"], policy="my_lab.policies:load",
+                    policy_kwargs={"checkpoint": "outputs/act/last"}) as s:
+    s.wait_ready()
+    for k in range(10):
+        s.record(f"pick up the cup (eval {k})", seconds=30)
+```
+
+Inference is synchronous: no command is sent during `infer`; if it exceeds
+`command_deadline_ms` the followers HOLD and wait. Targets are clipped to `max_speed` and
+checked by `FollowerSafety` as in teleoperation. Asynchronous inference and LeRobot RTC
+are not supported. `InProcessSession.step(policy=fn)` is the in-process alternative
+(see [in-process.md](in-process.md)).
+
+## LeRobot checkpoints
+
+Needs `uv add 'roboloom[policy]'` (+ `lerobot[diffusion]`, `lerobot[smolvla]`,
+`lerobot[pi]` for those policies).
+
+```yaml
+factory: roboloom.policy.lerobot:load
+kwargs:
+  path: outputs/train/act/checkpoints/last/pretrained_model   # or a Hub ID
+  device: auto      # cuda if available
+  mode: step        # step (select_action; use action_horizon: 1) or chunk (ACT-like only)
+  rename: {}        # {checkpoint feature: this config's feature}
+  # revision: main  # Hub revision
+action_horizon: 1
+```
+
+Loading checks the checkpoint's `observation.state`, `observation.images.*`,
+`observation.environment_state` and action size against this configuration and refuses
+mismatches by name. ACT temporal ensembling works only with `mode: step`.
+
+## Training with LeRobot
+
+```bash
+uv add 'roboloom[policy,train]'
+uv run lerobot-train --dataset.repo_id=<repo_id> --dataset.root=<output from project root> \
+  --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
+  --wandb.enable=false --output_dir=outputs/train/act
+```
+
+- Checkpoint: `<output_dir>/checkpoints/last/pretrained_model` → `path`; no `rename`
+  needed for the same configuration.
+- Path check on CPU in minutes: `--policy.device=cpu --steps=200 --batch_size=8`; offline:
+  `--policy.pretrained_backbone_weights=null`.
+- Check that a GPU is free (`labstatus` on the lab machines) before GPU work.

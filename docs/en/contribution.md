@@ -35,6 +35,7 @@ Update the affected pages in `docs/` in the same change that adds a feature or c
 | Sensor configuration or formats | Sensors and the affected robot pages |
 | Operator input or start conditions | Controllers and the affected robot pages |
 | API, CLI, or configuration changes | Reference and related examples |
+| Public API, CLI, configuration, or supported devices | The agent skill in `src/roboloom/agent_skills/roboloom/` (`SKILL.md` and `references/`) |
 
 Put a new page at the same path in both languages and register it in the `nav` of `mkdocs.yml` (Japanese) and `mkdocs.en.yml` (English). When instructions are affected, also update the README and the README of the template that `roboloom init` distributes. If the existing code and the docs disagree, fix the docs to follow the code's conventions and list the disagreement in your change report.
 

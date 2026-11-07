@@ -38,6 +38,7 @@ Real hardware is the default. Commands that open devices accept:
 | `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task` |
 | `session [robot] <operation> [task]` | Send an operation to a running `run` |
 | `convert-handheld [robot] --action delta\|relative-chunk` | Turn a hand-held recording (a configuration without followers) into a training dataset whose actions are relative poses ([in development](../contribution/pika-handheld.md); `--horizon`, `--hands`, `--max-gap`, `--output`, `--repo-id`) |
+| `skills install\|check\|path` | Copy the Agent Skill for coding agents into your project's `.agents/skills/` and `.claude/skills/`, check that the copies match this version (exit status 1 otherwise), or print where the packaged skill is (`--agent all\|agents\|claude`, `--root`, `--force`; "Use with coding agents" in [Installation](../quick-start/installation.md)). Opens no device |
 
 `calibrate-joints`, `measure-travel`, `identify-gravity`, `commission`, `watchdog-test`, `tune-gravity` and `gravity-check` are for Dynamixel robots only (`probe` reads Dynamixel, PiPER, Pika Gripper and Pika Sense); given a node that is not Dynamixel, they refuse and say why.
 
