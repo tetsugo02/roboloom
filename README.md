@@ -28,6 +28,8 @@ uv run roboloom init rakuda2
 
 `init` はインストール済みパッケージから，自分のプロジェクト内に `.roboloom/rakuda2/` を作ります．生成した設定を編集し，CLIもPythonスクリプトも自分のプロジェクトルートから実行します．`pyproject.toml` と `uv.lock` をGitで管理し，別の環境では `uv sync --locked` で再現します．更新・commit固定の手順は [Installation](docs/ja/quick-start/installation.md) を参照してください．
 
+Claude Code・Codex などのコーディングエージェント向けに，roboloom の使い方をまとめたスキル（Agent Skill）を同梱しています．`uv run roboloom skills install` で自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーします．roboloom を更新したら `uv run roboloom skills check` で確かめます（[Installation](docs/ja/quick-start/installation.md) の「コーディングエージェントで使う」）．
+
 ## Python interface
 
 roboloom の操作は，どれも Python の関数として使えます．CLI はそれを呼ぶだけの薄い層です．対応表と例は [docs/ja/reference/python-api.md](docs/ja/reference/python-api.md) にあります．
@@ -105,7 +107,7 @@ with InProcessSession.from_components(
 
 ## dora dataflow
 
-設定はロボットごとに1つ（`.roboloom/<robot>/config.yaml`）です．ノード YAML を役割ごと（`inputs`，`controllers`，`robots`，`sensors`）に名前付きで参照し，`recorder` と `session` を加えます．各ノードの `type` で実装を選びます．ノード名がそのまま dora のノード ID と LeRobot の feature 名になります．leader と follower の Dynamixel バスはそれぞれのノードだけが開きます．`validate` は実機に接続しません．
+設定はロボットごとに1つ（`.roboloom/<robot>/config.yaml`）です．ノード YAML を役割ごと（`inputs`，`controllers`，`followers`，`sensors`）に名前付きで参照し，`recorder` と `session` を加えます．各ノードの `type` で実装を選びます．ノード名がそのまま dora のノード ID と LeRobot の feature 名になります．leader と follower の Dynamixel バスはそれぞれのノードだけが開きます．`validate` は実機に接続しません．
 
 DIGIT，重力補償，バイラテラル，方策のような構成の違いは `options:` で選びます．各オプションは `help`，`default`，`requires`，`conflicts`，`set`，`dataset` を持ちます．`set` は `<役割>.<ノード名>` をノード YAML に置き換えるか，`null` で取り除きます．オプションを有効にすると `requires` のものも有効になり，`conflicts` のものは無効になります．有効なオプションの `dataset` 名は `repo_id` と `output` に付け足されます（例：`local/rakuda2` に digit で `local/rakuda2-digit`）．記録する feature が変わる構成は別の dataset に入ります．`mode:` は省略でき，既定は hardware です．
 
@@ -233,12 +235,12 @@ recorder は取得，利用可能，受信，送信の単調時計時刻を区�
 src/roboloom/
   core/         Envelope（通信形式），値の検査，型レジストリ，Source（入力・センサー共通の契約）
   drivers/      機器バス（Dynamixel，模擬バス）．inputs と robots が共有する
-  inputs/       操作入力の契約（InputDevice，JointInput）
+  inputs/       操作入力の契約（InputDevice，JointInput，PoseInput）
     rakuda_mini/ Rakuda-mini（rakuda_mini．Rakuda2 を操作するアーム．実験では leader の役割で使う）
-  controllers/  入力から RobotCommand への変換．joint，policy（方策ノード）
+  controllers/  入力から follower への指令（command）を作る．joint，pose_ik，policy（方策ノード）
   control/      制御則（laws）と JointDevice（device）．leader と follower が共有する
   dynamics/     重力モデルの契約，URDF 運動学，同定（regressor，identify）
-  robots/       Robot の契約（base），FollowerSafety（safety）
+  robots/       Follower の契約（base），FollowerSafety（safety）
     rakuda2/    spec（関節・モーター ID・モデル．Rakuda-mini も参照），follower（rakuda2_follower），model（URDF），template（init が写す設定一式）
   sensors/
     vision/     ImageSensor（base），realsense_rgb
@@ -254,16 +256,16 @@ src/roboloom/
   errors.py     利用者が対処できるエラー（ConfigError，SetupError，HardwareError，Cancelled）
   project.py    roboloom init（robots/<robot>/template から .roboloom/<robot>/ を作る）
   api.py        1 プロセスの InProcessSession（試験・簡単な機体）
-  policy.py     方策の契約（reset，infer）と読み込み．hold（その場に留まる）
+  policy/       方策の契約（reset，infer）と読み込み．hold（その場に留まる），LeRobot の方策（lerobot）
 ```
 
-依存の向きは `core` ← `drivers` ← `dynamics` ← `control` ← `robots`/`inputs`/`sensors` ← `controllers` ← `recording`/`config` ← `runtime`/`api`/`cli` です．各役割のパッケージは `__init__.py` に `type` 名から実装への対応表（`ROBOTS`，`INPUTS`，`CONTROLLERS`，`SENSORS`）を持ちます．実装のモジュールは選ばれたときにだけ import されます．
+依存の向きは `core` ← `drivers` ← `dynamics` ← `control` ← `robots`/`inputs`/`sensors` ← `controllers` ← `recording`/`config` ← `runtime`/`api`/`cli` です．各役割のパッケージは `__init__.py` に `type` 名から実装への対応表（`FOLLOWERS`，`INPUTS`，`CONTROLLERS`，`SENSORS`）を持ちます．実装のモジュールは選ばれたときにだけ import されます．
 
 拡張するときは，次のように実装を1つのモジュールに書き，対応表に1行追加します．
 
-- **ロボット**（Koch，SO-101，xArm）：`robots/<model>/` に機体情報（`spec.py`）と `robots.base.Robot` を継承した follower を置き，`ROBOTS` に登録します．機体固有の機能は，汎用部分に書かずに機体の側で申告します．バスは `drivers.base` の契約（必要なら `read_state`，`read_health`，`write_goal_currents`，`set_torque`）を実装し，起動時に照合する EEPROM を `expected_eeprom`，`current_limits_mA` で示します．電流モードや watchdog を持たない機体では，その制御則が設定の読み込み時に拒否されます．leader アームがあれば `inputs/<model>/` に置いて `spec.py` を参照し，`INPUTS` に登録します．新しいバスが必要なら `drivers/` に追加します．
-- **入力**（SpaceMouse，VR）：`inputs/<device>/` に置きます．関節空間の入力なら `inputs.base.JointInput` を継承します．姿勢・速度の入力は `PoseInput`／`TwistInput` のような基底クラスを `inputs/base.py` に追加し，固有の `kind` を持たせます．
-- **controller**：`controllers.base.Controller` を継承します．コンストラクタで入力とロボットの組を検査するため，未対応の組は起動前にエラーになります．
+- **ロボット**（Koch，SO-101，xArm）：`robots/<model>/` に機体情報（`spec.py`）と `robots.base.Follower` を継承した follower を置き，`FOLLOWERS` に登録します．機体固有の機能は，汎用部分に書かずに機体の側で申告します．バスは `drivers.base` の契約（必要なら `read_state`，`read_health`，`write_goal_currents`，`set_torque`）を実装し，起動時に照合する EEPROM を `expected_eeprom`，`current_limits_mA` で示します．電流モードや watchdog を持たない機体では，その制御則が設定の読み込み時に拒否されます．leader アームがあれば `inputs/<model>/` に置いて `spec.py` を参照し，`INPUTS` に登録します．新しいバスが必要なら `drivers/` に追加します．
+- **入力**（SpaceMouse，VR）：`inputs/<device>/` に置きます．関節空間の入力なら `inputs.base.JointInput`，手に持った姿勢の入力なら `inputs.base.PoseInput` を継承します．速度（twist）の入力のような新しい種類は，現在は基底クラスがありません．追加するときは `inputs/base.py` に基底クラスを加え，固有の `kind` を持たせます．
+- **controller**：`controllers.base.Controller` を継承します．コンストラクタで入力と follower の組を検査するため，未対応の組は起動前にエラーになります．
 - **センサー**：該当するモダリティ（`vision`，`tactile`，`audio`）の `base` にあるストリーム型を継承し，`open_device` を実装します．ペイロードと feature はストリーム型で決まります．深度や力覚のような新しい種類はそのモダリティの `base` にストリーム型を追加し，新しいモダリティはサブパッケージごと追加します．
 
-設定の読み込みはデバイスを開きません．ロボットは現在1実験1台で，ロボットごとに controller を1個とします．
+設定の読み込みはデバイスを開きません．1つの設定に follower を複数置けます．各 follower を駆動する controller はちょうど1個で，1個の controller が複数の follower を駆動できます（`type: policy` の controller は設定のすべての follower を駆動します）．

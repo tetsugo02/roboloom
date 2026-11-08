@@ -43,8 +43,9 @@ def _import():
         from lerobot.policies.utils import prepare_observation_for_inference
     except ImportError as exc:
         raise ConfigError(
-            f"LeRobot policies need lerobot with torch ({exc}); install "
-            "`roboloom[policy]` (in this repository: uv sync --extra policy). Policy "
+            f"LeRobot policies need lerobot with torch ({exc}); install roboloom "
+            "with the policy extra (uv add git+https://github.com/tetsugo02/roboloom"
+            ".git --extra policy; in a roboloom checkout: uv sync --extra policy). Policy "
             "types such as diffusion or smolvla need lerobot's own extra as well."
         ) from exc
     return (

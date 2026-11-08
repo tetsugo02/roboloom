@@ -35,6 +35,7 @@ checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.y
 | センサーの設定・形式 | Sensorsと対応機体ページ |
 | 操作入力・開始条件 | Controllersと対応機体ページ |
 | API・CLI・設定の変更 | Referenceと関連するサンプル |
+| 公開API・CLI・設定・対応機器の変更 | `src/roboloom/agent_skills/roboloom/` のスキル（`SKILL.md` と `references/`） |
 
 新しいページは両言語の同じパスに置き，`mkdocs.yml`（日本語）と `mkdocs.en.yml`（英語）の `nav` に登録します．READMEと `roboloom init` が配布するテンプレートのREADMEも，手順に影響があれば同時に更新します．現行コードとドキュメントが食い違っていた場合は，コードの規約を基準に修正し，食い違いを変更報告に記載します．
 

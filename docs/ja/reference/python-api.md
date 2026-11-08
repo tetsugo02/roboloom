@@ -15,6 +15,7 @@ roboloom の操作は，どれも Python の関数として使えます．CLI（
 | エピソードを録る | `roboloom record [robot] --task ... --seconds 30` | `Session.launch(...)` → `record(...)` |
 | 方策で動かす | `roboloom infer [robot] --policy pkg:make --seconds 30` | `Session.launch(cfg, options=["policy"], policy="pkg:make")` → `record(...)` |
 | 操作画面で続けて録る | `roboloom run [robot]` | `Session.launch(...)` の状態画面と `start()`／`stop()`／`save()` |
+| コーディングエージェント向けのスキルを入れる | `roboloom skills install` | `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`，`agent_skills.check(...)` |
 
 設定は，ファイルのパスでも，`.roboloom/` の下の機体名（`rakuda2` は `.roboloom/rakuda2/config.yaml`）でも指定できます．
 

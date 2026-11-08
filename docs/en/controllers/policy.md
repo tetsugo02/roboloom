@@ -102,7 +102,9 @@ action_horizon: 1     # with mode: step
 A dataset roboloom recorded (LeRobotDataset v3.0) trains with `lerobot-train` as it is.
 
 ```bash
-uv sync --extra policy --extra train   # training needs lerobot[training] (accelerate, wandb)
+# training needs lerobot[training] (accelerate, wandb)
+uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train   # in your own project
+uv sync --extra policy --extra train                                                # in a checkout of the roboloom repository
 uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \
   --dataset.root=.roboloom/piper-mock/datasets/piper-mock \

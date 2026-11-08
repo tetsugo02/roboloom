@@ -30,9 +30,15 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | --- | --- | --- |
 | `observation.state`, `action` | 17 (`follower.torso_yaw`, `follower.head_yaw`, `follower.head_pitch`, the right arm `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`, the left arm `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`) | Dynamixel position counts |
 | `observation.effort` | 17 (same order; `record_effort: true` in the template) | mA (current) |
+| `observation.leader` | 17 (the leader's joint positions, same order; names without a prefix, `torso_yaw` … `l_arm_grip`; not recorded with option `policy`, which has no leader) | Dynamixel position counts |
 | `observation.images.camera` | 480×640×3 (RGB) | — |
 | `observation.images.digit_left`, `observation.images.digit_right` | 320×240×3 (RGB; option `digit`) | — |
+| `observation.meta.<node>.valid`, `capture_age_ms`, `ready_age_ms` | 1 each (float32), for every recorded node: `leader`, `follower`, `camera`, and with `digit` also `digit_left`, `digit_right` | `valid` 0/1, ages in ms |
+| `observation.meta.<node>.seq`, `capture_ns`, `ready_ns`, `receive_ns` | 1 each (int64), same nodes | sequence number, monotonic-clock ns |
+| `action.valid`, `action.clamped` | 1 each (float32) | 0/1 |
+| `action.meta.follower.valid`, `clamped`, `seq`, `sent_ns` | 1 each (`valid`, `clamped` float32; `seq`, `sent_ns` int64) | 0/1, command number, monotonic-clock ns |
 
+- What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in "Recording and resuming" of [Configuration](../reference/configuration.md#recording-and-resuming); they are the same for every robot.
 - The policy (option `policy`) observes `camera` and both DIGITs (`observe` in `nodes/policy.yaml`), and `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
 - `max_speed` is in counts/s (`{follower: 1024}` in the template).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../controllers/policy.md).

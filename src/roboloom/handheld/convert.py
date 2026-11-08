@@ -164,7 +164,9 @@ def convert(
         )
     except ImportError as exc:
         raise ConfigError(
-            f"converting needs lerobot ({exc}); install `roboloom[record]`"
+            f"converting needs lerobot ({exc}); install roboloom with the record "
+            "extra (uv add git+https://github.com/tetsugo02/roboloom.git --extra "
+            "record; in a roboloom checkout: uv sync --extra record)"
         ) from exc
     source, output = Path(source).resolve(), Path(output).resolve()
     if not (source / "meta" / "info.json").exists():

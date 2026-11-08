@@ -16,7 +16,9 @@
 
 ## 必要なもの
 
-- IKはpinocchioで解きます．`uv add 'roboloom[ik]'`（このリポジトリでは `uv sync --extra ik`）で入ります．
+- IKはpinocchioで解きます．pinocchioは `ik` extraで入ります．`pose_ik` は，模擬でも `roboloom validate` でもこれを使います．
+    - 自分のプロジェクトでは：`uv add git+https://github.com/tetsugo02/roboloom.git --extra ik`（使う他のextrasも，[インストール](../quick-start/installation.md) のように並べます）
+    - roboloomのリポジトリをcloneした中では：`uv sync --extra ik`
 - トラッカーはlibsurvive（Pythonでは `pysurvive`）で読みます．libsurviveの導入とudev規則（`81-vive.rules`）にはsudoが要るので，管理者に頼みます．pysurviveが入っていないと，Senseのノードは理由を示して止まります．
 - Senseのシリアルは，Pika Gripperと同じくpyserialで直接扱います．ポートは `/dev/serial/by-path/...` を使います．
 
@@ -27,7 +29,8 @@
 type: pika_sense
 port: /dev/serial/by-path/pci-0000:00:14.0-usb-0:3:1.0-port0
 tracker: {name: WM0}     # libsurviveでのトラッカーの名前
-stale_ms: 100            # 任意．これより古い姿勢やシリアルは，失ったと見なす
+stale_ms: 100            # 任意，既定100．これより古い姿勢やシリアルは，失ったと見なす
+# poll_hz: 100           # 任意．フォロワのない構成では必須
 ```
 
 ```yaml
@@ -37,27 +40,40 @@ input: left_sense
 followers: [left, left_gripper]
 arm: left                # IKで動かす腕（運動学のモデルを持つフォロワ）
 gripper: left_gripper    # 任意．挟みの角度で動かす1関節のフォロワ
-tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # フランジ（link6）から見た道具の座標
-workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # m．腕の基準座標（base_link）
-max_input_jump: {position_m: 0.05, rotation_rad: 0.5}
-ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}
-gripper_map: {scale: 1.0, offset: 0.0}
-max_speed: {left: 1.0, left_gripper: 3.0}
-home: {left: {pose: ../poses/left/ready.yaml, max_speed: 0.5, tolerance: 0.02}}
-command_deadline_ms: 100
-input_timeout_ms: 150
+tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # 必須．フランジ（link6）から見た道具の座標
+workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # 必須．m．腕の基準座標（base_link）
+max_input_jump: {position_m: 0.05, rotation_rad: 0.5}             # 必須
+ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}  # 任意．この値が既定
+gripper_map: {scale: 1.0, offset: 0.0}                            # 任意．この値が既定
+max_speed: {left: 1.0, left_gripper: 3.0}                         # 必須．フォロワごとに1つ
+home: {left: {pose: ../poses/left/ready.yaml, max_speed: 0.5, tolerance: 0.02}}  # 任意
+command_deadline_ms: 100 # 必須
+input_timeout_ms: 150    # 必須
 ```
+
+`pika_sense`：
 
 | キー | 意味 |
 | --- | --- |
-| `tracker.name` | libsurviveが付けるトラッカーの名前（例 `WM0`）．`args` でlibsurviveに渡す引数を足せます |
-| `tool_offset` | フランジから道具の先端への変換．上の値はAgileXが自社のグリッパに使う値です．Pika Gripperを付けたときの値は，計測して書きます |
-| `workspace` | 目標の位置がこの箱の外なら指令を送りません |
-| `max_input_jump` | Senseの姿勢が1回でこれより大きく跳んだら，遠隔操作を止めます |
-| `ik` | 反復の回数，減衰，届いたと見なす位置と回転の許容．届かなければ指令を送りません |
-| `gripper_map` | グリッパの角度 = `scale`·挟みの角度 + `offset`．グリッパの範囲に収めます |
-| `max_speed` | フォロワごとの速さの上限（単位/s）．指令を送らなかった間の時間は持ち越さず，1回の指令で動くのは `input_timeout_ms` の分までです |
-| `home` | 「Move home」で移る保存した姿勢．フォロワごとに書けます |
+| `port` | 必須．Senseのシリアルポート．`SET_` のままでは拒否します |
+| `tracker.name` | 必須．libsurviveが付けるトラッカーの名前（例 `WM0`）．`SET_` のままでは拒否します．`args`（任意，文字列のリスト）でlibsurviveに渡す引数を足せます |
+| `stale_ms` | 既定100．これより古い姿勢やシリアルのフィードバックは，失ったと見なします |
+| `poll_hz` | 任意．入力を読む周期．書かなければ，controllerが動かすフォロワの `control_hz` のうち最も速いもので読みます．フォロワのない構成では必須です（[Pika Senseを手に持った収集](pika-handheld.md)） |
+
+`pose_ik`：
+
+| キー | 意味 |
+| --- | --- |
+| `arm`，`gripper` | `arm` は必須で，運動学のモデルを持つフォロワ（PiPER）．`gripper` は任意で，1関節のフォロワ．2つで，controllerの `followers` をちょうど指します |
+| `tool_offset` | 必須．フランジから道具の先端への変換（`xyz` はm，`rpy` はrad）．上の値はAgileXが自社のグリッパに使う値です．Pika Gripperを付けたときの値は，計測して書きます |
+| `workspace` | 必須．`min` と `max`（m．どの軸も `min` が `max` より小さい）．目標の位置がこの箱の外なら指令を送りません |
+| `max_input_jump` | 必須．`position_m` と `rotation_rad`．Senseの姿勢が1回でこれより大きく跳んだら，遠隔操作を止めます |
+| `ik` | 任意．反復の回数（既定30），減衰（既定0.001），届いたと見なす位置（既定0.005 m）と回転（既定0.05 rad）の許容．知らないキーは拒否します．届かなければ指令を送りません |
+| `gripper_map` | 任意．グリッパの角度 = `scale`·挟みの角度 + `offset`（既定は1.0と0.0）．グリッパの範囲に収めます |
+| `max_speed` | 必須．フォロワごとに1つ．速さの上限（単位/s）．指令を送らなかった間の時間は持ち越さず，1回の指令で動くのは `input_timeout_ms` の分までです |
+| `home` | 任意．「Move home」で移る保存した姿勢．フォロワごとに書けます．各項目に `pose`，`max_speed`（そのフォロワの `max_speed` 以下），`tolerance` が要ります．`timeout_s` は既定30です |
+| `command_deadline_ms` | 必須．指令が有効な時間．これより古い指令はフォロワが拒否し，保持します |
+| `input_timeout_ms` | 必須．入力の届く間隔がこれを超えて空くと，遠隔操作を止めます（下の「開始と停止」） |
 
 記録には，Senseごとに `observation.<名前>`（`x, y, z, qx, qy, qz, qw, gripper, tracking, engaged`，トラッカーの世界座標）が加わります．`action` は，これまでどおりフォロワの関節の指令です．
 
@@ -83,6 +99,8 @@ AgileXの遠隔操作と同じ，相対の写し方です．
 ## 模擬で確かめる
 
 `.roboloom/piper-mock/` は，模擬のSense 2台で，模擬のPiPER 2台とPika Gripper 2台を動かす構成です．模擬のSenseは，開いてから2 s後に開始し，その後は10 s開始・2 s停止を繰り返します．
+
+`.roboloom/piper-mock/` はroboloomのリポジトリにあり，インストールしたパッケージには入っていません（`roboloom init` のテンプレートは `rakuda2` だけです）．下のコマンドは，cloneしたリポジトリのルートで実行します．自分のプロジェクトでは，[リポジトリ](https://github.com/tetsugo02/roboloom) からこのディレクトリを自分の `.roboloom/` にコピーすれば，同じように動かせます．模擬の構成（`mode: mock`）なので，ポート，CANインターフェース，トラッカーの名前，`limits`，`tool_offset`，`workspace` の値を実機に使い回さないでください．
 
 ```bash
 uv run roboloom run piper-mock                     # Launchのあと，Move home

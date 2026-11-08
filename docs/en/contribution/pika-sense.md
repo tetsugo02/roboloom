@@ -16,7 +16,9 @@ One Sense drives one arm and one gripper. Two arms use two Senses and two contro
 
 ## Requirements
 
-- The IK runs on pinocchio. Install it with `uv add 'roboloom[ik]'` (in this repository, `uv sync --extra ik`).
+- The IK runs on pinocchio, which comes with the `ik` extra. `pose_ik` needs it in mock mode and for `roboloom validate` as well.
+    - In your own project: `uv add git+https://github.com/tetsugo02/roboloom.git --extra ik` (add the other extras you use, as in [Installation](../quick-start/installation.md))
+    - In a checkout of the roboloom repository: `uv sync --extra ik`
 - The tracker is read through libsurvive (`pysurvive` in Python). Installing libsurvive and its udev rules (`81-vive.rules`) needs sudo, so ask an administrator. Without pysurvive, the Sense's node stops and says why.
 - The Sense's serial link is handled directly through pyserial, as for the Pika Gripper. Name the port with `/dev/serial/by-path/...`.
 
@@ -27,7 +29,8 @@ One Sense drives one arm and one gripper. Two arms use two Senses and two contro
 type: pika_sense
 port: /dev/serial/by-path/pci-0000:00:14.0-usb-0:3:1.0-port0
 tracker: {name: WM0}     # the tracker's name in libsurvive
-stale_ms: 100            # optional: older pose or serial feedback counts as lost
+stale_ms: 100            # optional, default 100: older pose or serial feedback counts as lost
+# poll_hz: 100           # optional; required in a configuration without followers
 ```
 
 ```yaml
@@ -37,27 +40,40 @@ input: left_sense
 followers: [left, left_gripper]
 arm: left                # the arm the IK drives (a follower with a kinematic model)
 gripper: left_gripper    # optional: a one-joint follower driven by the jaw angle
-tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # tool frame seen from the flange (link6)
-workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # m, in the arm's base frame (base_link)
-max_input_jump: {position_m: 0.05, rotation_rad: 0.5}
-ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}
-gripper_map: {scale: 1.0, offset: 0.0}
-max_speed: {left: 1.0, left_gripper: 3.0}
-home: {left: {pose: ../poses/left/ready.yaml, max_speed: 0.5, tolerance: 0.02}}
-command_deadline_ms: 100
-input_timeout_ms: 150
+tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # required: tool frame seen from the flange (link6)
+workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # required: m, in the arm's base frame (base_link)
+max_input_jump: {position_m: 0.05, rotation_rad: 0.5}             # required
+ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}  # optional; these are the defaults
+gripper_map: {scale: 1.0, offset: 0.0}                            # optional; these are the defaults
+max_speed: {left: 1.0, left_gripper: 3.0}                         # required: one value per follower
+home: {left: {pose: ../poses/left/ready.yaml, max_speed: 0.5, tolerance: 0.02}}  # optional
+command_deadline_ms: 100 # required
+input_timeout_ms: 150    # required
 ```
+
+`pika_sense`:
 
 | Key | Meaning |
 | --- | --- |
-| `tracker.name` | The name libsurvive gives the tracker (e.g. `WM0`). `args` adds arguments for libsurvive |
-| `tool_offset` | The transform from the flange to the tool tip. The value above is the one AgileX uses for its own gripper; measure it with the Pika Gripper mounted |
-| `workspace` | No command is sent while the target position is outside this box |
-| `max_input_jump` | Teleoperation stops when the Sense's pose jumps by more than this between two samples |
-| `ik` | Iterations, damping, and the position and rotation tolerances counted as reached. Nothing is sent when the IK does not reach the target |
-| `gripper_map` | Gripper angle = `scale`·jaw angle + `offset`, kept inside the gripper's range |
-| `max_speed` | Speed limit per follower (unit/s). Time spent without commands is not saved up: one command moves at most `input_timeout_ms` worth |
-| `home` | The saved pose "Move home" goes to, per follower |
+| `port` | Required. The Sense's serial port. A value left as `SET_` is refused |
+| `tracker.name` | Required. The name libsurvive gives the tracker (e.g. `WM0`). A value left as `SET_` is refused. `args` (optional, a list of strings) adds arguments for libsurvive |
+| `stale_ms` | Default 100. A pose or serial feedback older than this counts as lost |
+| `poll_hz` | Optional. The rate at which the input is read. Without it, the input runs at the fastest `control_hz` of the followers its controllers drive. Required in a configuration without followers ([Hand-held collection with Pika Sense](pika-handheld.md)) |
+
+`pose_ik`:
+
+| Key | Meaning |
+| --- | --- |
+| `arm`, `gripper` | `arm` is required: a follower with a kinematic model (the PiPER). `gripper` is optional: a one-joint follower. Together they must name exactly the controller's `followers` |
+| `tool_offset` | Required. The transform from the flange to the tool tip (`xyz` in m, `rpy` in rad). The value above is the one AgileX uses for its own gripper; measure it with the Pika Gripper mounted |
+| `workspace` | Required. `min` and `max` (m, `min` below `max` on every axis). No command is sent while the target position is outside this box |
+| `max_input_jump` | Required. `position_m` and `rotation_rad`. Teleoperation stops when the Sense's pose jumps by more than this between two samples |
+| `ik` | Optional. Iterations (default 30), damping (default 0.001), and the position (default 0.005 m) and rotation (default 0.05 rad) tolerances counted as reached. Unknown keys are refused. Nothing is sent when the IK does not reach the target |
+| `gripper_map` | Optional. Gripper angle = `scale`·jaw angle + `offset` (defaults 1.0 and 0.0), kept inside the gripper's range |
+| `max_speed` | Required, one value per follower. Speed limit (unit/s). Time spent without commands is not saved up: one command moves at most `input_timeout_ms` worth |
+| `home` | Optional. The saved pose "Move home" goes to, per follower. Each entry needs `pose`, `max_speed` (not above that follower's `max_speed`) and `tolerance`; `timeout_s` defaults to 30 |
+| `command_deadline_ms` | Required. How long a command stays valid. A follower refuses an older command and holds |
+| `input_timeout_ms` | Required. A gap between inputs longer than this stops teleoperation (see "Engaging and stopping" below) |
 
 The dataset gains `observation.<name>` per Sense (`x, y, z, qx, qy, qz, qw, gripper, tracking, engaged`, in the tracker's world frame). `action` stays the followers' joint commands.
 
@@ -83,6 +99,8 @@ The mapping is relative, as in AgileX's teleoperation.
 ## Checking with mock devices
 
 `.roboloom/piper-mock/` drives two mock PiPER arms and two Pika Grippers with two mock Senses. A mock Sense engages 2 s after opening, then repeats 10 s engaged and 2 s disengaged.
+
+`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template). Run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/` and run it the same way. It is a mock configuration (`mode: mock`); do not reuse its ports, CAN interfaces, tracker names, `limits`, `tool_offset` or `workspace` on hardware.
 
 ```bash
 uv run roboloom run piper-mock                     # after Launch, Move home

@@ -44,6 +44,17 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commi
 
 パッケージを更新しても，生成済みの `.roboloom/` の設定は書き換わりません．
 
+## コーディングエージェントで使う
+
+roboloomは [Agent Skill](https://agentskills.io)（`SKILL.md` と参照ページ）を同梱しています．Claude CodeやCodexなどのコーディングエージェントに，自分のプロジェクトからroboloomを使う方法（インストールとextras，`.roboloom/<robot>/`，`Session`，`roboloom.setup`，CLI，方策，依頼なしに実機を開かないといった安全上の規則）を伝えます．インストール済みの版のスキルを自分のプロジェクトにコピーします．
+
+```bash
+uv run roboloom skills install            # .agents/skills/roboloom（Codexなど）と .claude/skills/roboloom（Claude Code）
+uv run roboloom skills install --agent claude
+```
+
+コピーしたディレクトリはプロジェクトと一緒にGitで管理します．roboloomを更新したあとは，`uv run roboloom skills check` が内容の合わなくなったコピーを報告します（終了コード1）．`uv run roboloom skills install --force` で置き換えます．置き換えるのは `roboloom/` のスキルのディレクトリだけで，ほかのスキルには触れません．別のディレクトリを読むエージェントには，`uv run roboloom skills path` が表示するディレクトリをコピーします．[skills CLI](https://github.com/vercel-labs/skills) でGitHubから入れることもできます（既定のブランチの最新版で，lockした版と異なる場合があります）：`npx skills add tetsugo02/roboloom --skill roboloom`．
+
 ## デバイスなしで確かめる
 
 基本構成だけで，次を自分の `main.py` に保存して実行できます．`MockBus` を使い，データセットは保存しません．

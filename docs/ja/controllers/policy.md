@@ -102,7 +102,9 @@ action_horizon: 1     # mode: step のとき
 roboloomが記録したデータセット（LeRobotDataset v3.0）は，そのまま `lerobot-train` で学習できます．
 
 ```bash
-uv sync --extra policy --extra train   # 学習に lerobot[training]（accelerate，wandb）が要ります
+# 学習に lerobot[training]（accelerate，wandb）が要ります
+uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train   # 自分のプロジェクトで
+uv sync --extra policy --extra train                                                # roboloomのリポジトリをcloneした中で
 uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \
   --dataset.root=.roboloom/piper-mock/datasets/piper-mock \

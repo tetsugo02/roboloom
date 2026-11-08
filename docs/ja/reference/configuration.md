@@ -279,16 +279,21 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 `record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損はゼロ値と有効フラグで表します．`task` はフレームに記録されます．
 
-フォロワが複数あるとき，次のfeatureは全フォロワを設定の順につなげた1本のベクトルです．`names` が各要素の持ち主を `<フォロワ名>.<関節名>` で示します（例：`follower.r_arm_sh_pitch1`）．
+フォロワが複数あるとき，`observation.state`，`observation.effort`，`action` は全フォロワを設定の順につなげた1本のベクトルです．`names` が各要素の持ち主を `<フォロワ名>.<関節名>` で示します（例：`follower.r_arm_sh_pitch1`）．ほかのfeatureはノードごとで，ノード名が付きます．
 
 | feature | 中身 |
 | --- | --- |
 | `observation.state` | 各フォロワの関節の位置 |
 | `observation.effort` | `record_effort: true` のフォロワの力の量．単位の違うフォロワは混ぜられません |
+| `observation.<input名>` | 各inputの読み値．inputのノード名が付きます（例：`observation.leader`）．leaderアームのような関節のinputは，関節の位置をそのinputの単位で，関節名（接頭辞なし）を付けて記録します．姿勢のinputは `x`，`y`，`z`，`qx`，`qy`，`qz`，`qw`，`gripper`，`tracking`，`engaged` を記録します |
+| `observation.images.<センサー名>` などセンサーのfeature | 各センサーが記録するもの．[Sensors](../sensors/index.md) の各ページを参照 |
+| `observation.meta.<ノード名>.valid` / `capture_age_ms` / `ready_age_ms`（float32），`seq` / `capture_ns` / `ready_ns` / `receive_ns`（int64） | 記録するノード（input，フォロワ，センサー）ごとに1組．その行でそのノードのサンプルを使ったか，取得からと使えるようになってからの経過時間（ms），通し番号，取得・使用可能・受信の時刻（単調時計のns） |
 | `action` | 各フォロワがその行の区間に送った最初の指令．`observation.state` と同じ並び |
 | `action.valid` | 全フォロワが指令を送った行で1 |
 | `action.clamped` | どれかのフォロワが制限した行で1 |
 | `action.meta.<フォロワ名>.valid` / `clamped` / `seq` / `sent_ns` | フォロワごとの指令の有無，制限，指令の番号，送信時刻 |
+
+`nodes/recorder.yaml` のそのノードの `max_age_ms` より古いサンプルは使いません．そのfeatureは0で埋め，`observation.meta.<ノード名>.valid` を0，`seq` を-1にします．input，フォロワ，センサーのどれにも `max_age_ms` の項目が必要です（[Sensors](../sensors/index.md) の「Recorderの設定」）．
 
 指令を送らなかったフォロワの部分は，そのフォロワが保持していた目標（状態の `target`．なければ位置）で埋めます．ゼロで埋めると，学習した方策が0への跳びを覚えるためです．LeRobotの学習は `action.valid` を見ないので，有効な行だけを使う場合は `action.valid` で選んでください．行は，全フォロワの指令がその区間を過ぎたとき，または `grace_ms`（既定500 ms）が過ぎたときに確定します．
 

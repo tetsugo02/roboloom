@@ -28,6 +28,7 @@
 # Documentation
 
 - When adding a feature or changing existing behavior, update the affected pages in `docs/` in the same change. Keep configuration examples, CLI commands, Python API examples, defaults, and limitations consistent with the implementation. Update the README and robot templates' README when their instructions are affected.
+- The Agent Skill in `src/roboloom/agent_skills/roboloom/` (`SKILL.md` and `references/`) tells coding agents in downstream projects how to use roboloom. When a change affects the public Python API, CLI, configuration keys, extras, supported devices, or feature status, update the skill in the same change; `tests/test_agent_skills.py` checks its links, imports and CLI commands. `skills/roboloom` at the repository root is a symlink to it (for `npx skills add`); keep the skill in the package.
 - Build documentation with Zensical using MkDocs-compatible configs. See [https://zensical.org/docs/compatibility/mkdocs/](https://zensical.org/docs/compatibility/mkdocs/).
 - Documentation is bilingual: Japanese in `docs/ja/` (`mkdocs.yml`) and English in `docs/en/` (`mkdocs.en.yml`); shared settings are in `docs/base.yml`. Update both languages in the same change, keeping the same page paths, headings, code examples, and link targets. Theme fonts and colors live in `docs/overrides/`.
 - Organize documentation into Quick start, Robots, Sensors, Controllers, Reference, and Contribution. Add new pages to `nav` in both `mkdocs.yml` and `mkdocs.en.yml`.

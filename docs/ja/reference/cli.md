@@ -38,6 +38,7 @@
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存 |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る |
 | `convert-handheld [robot] --action delta\|relative-chunk` | フォロワのない構成で手に持って記録したデータセットを，相対の姿勢の行動を持つ学習用のデータセットに変換する（[開発中](../contribution/pika-handheld.md)．`--horizon`，`--hands`，`--max-gap`，`--output`，`--repo-id`） |
+| `skills install\|check\|path` | コーディングエージェント向けのスキル（Agent Skill）を自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーする・コピーが今の版と合っているか確かめる（合わなければ終了コード1）・同梱の場所を表示する（`--agent all\|agents\|claude`，`--root`，`--force`．[Installation](../quick-start/installation.md) の「コーディングエージェントで使う」）．デバイスは開かない |
 
 `calibrate-joints`，`measure-travel`，`identify-gravity`，`commission`，`watchdog-test`，`tune-gravity`，`gravity-check` はDynamixelの機体専用です（`probe` はDynamixel，PiPER，Pika Gripper，Pika Senseを読めます）．Dynamixelでないノードを指定すると，理由を示して拒否します．
 

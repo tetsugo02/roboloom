@@ -15,6 +15,7 @@ Add roboloom to your own uv project following [Installation](../quick-start/inst
 | Record an episode | `roboloom record [robot] --task ... --seconds 30` | `Session.launch(...)` → `record(...)` |
 | Run with a policy | `roboloom infer [robot] --policy pkg:make --seconds 30` | `Session.launch(cfg, options=["policy"], policy="pkg:make")` → `record(...)` |
 | Record continuously from the operation screen | `roboloom run [robot]` | The `Session.launch(...)` status screen and `start()` / `stop()` / `save()` |
+| Install the skill for coding agents | `roboloom skills install` | `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`, `agent_skills.check(...)` |
 
 A configuration can be specified either by file path or by its robot name under `.roboloom/` (`rakuda2` is `.roboloom/rakuda2/config.yaml`).
 
