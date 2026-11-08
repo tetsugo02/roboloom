@@ -38,8 +38,7 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | `action.valid`, `action.clamped` | 1 each (float32) | 0/1 |
 | `action.meta.follower.valid`, `clamped`, `seq`, `sent_ns` | 1 each (`valid`, `clamped` float32; `seq`, `sent_ns` int64) | 0/1, command number, monotonic-clock ns |
 
-- `observation.meta.<node>.*` tells, per row, whether a sample of that node was used (`valid`) and how old it was: the time since capture and since it became available (`capture_age_ms`, `ready_age_ms`), its sequence number, and its capture, availability and reception times. A sample older than the node's `max_age_ms` in `nodes/recorder.yaml` is not used; the row then holds zeros with `valid` 0 (`seq` -1).
-- `action.valid`, `action.clamped` and `action.meta.follower.*` are described in "Recording and resuming" of [Configuration](../reference/configuration.md#recording-and-resuming). Rows where the follower sent no command hold its kept target in `action`, not zeros.
+- What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in "Recording and resuming" of [Configuration](../reference/configuration.md#recording-and-resuming); they are the same for every robot.
 - The policy (option `policy`) observes `camera` and both DIGITs (`observe` in `nodes/policy.yaml`), and `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
 - `max_speed` is in counts/s (`{follower: 1024}` in the template).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../controllers/policy.md).

@@ -20,4 +20,4 @@ max_age_ms:
   digit_right: 200
 ```
 
-The Rakuda2 template already has the entries for `camera`, `digit_left` and `digit_right`. When you add a sensor or rename its node, add or rename its entry as well.
+The Rakuda2 template already has the entries for `camera`, `digit_left` and `digit_right`. When you add a sensor or rename its node, add or rename its entry as well. Entries for nodes that are not in the configuration are ignored, so the template keeps the entries of every option (such as `digit_left` without the `digit` option); a misspelled name is ignored in the same way, and loading then reports the correctly named node's entry as missing.

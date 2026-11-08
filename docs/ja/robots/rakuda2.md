@@ -38,8 +38,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `action.valid`，`action.clamped` | 各1（float32） | 0/1 |
 | `action.meta.follower.valid`，`clamped`，`seq`，`sent_ns` | 各1（`valid`，`clamped` はfloat32，`seq`，`sent_ns` はint64） | 0/1，指令の番号，単調時計のns |
 
-- `observation.meta.<node>.*` は，行ごとに，そのノードのサンプルを使ったか（`valid`）と，その古さを表します．取得からの時間と使えるようになってからの時間（`capture_age_ms`，`ready_age_ms`），通し番号，取得・使用可能・受信の時刻です．`nodes/recorder.yaml` のそのノードの `max_age_ms` より古いサンプルは使いません．その行は0で埋め，`valid` を0（`seq` は-1）にします．
-- `action.valid`，`action.clamped`，`action.meta.follower.*` は [設定](../reference/configuration.md) の「記録と再開」で説明しています．followerが指令を送らなかった行の `action` は，0ではなく保持していた目標です．
+- `observation.leader`，`observation.meta.<node>.*`，`action.valid`，`action.clamped`，`action.meta.follower.*` の意味，欠測の記録のしかた，指令のなかった行の `action` の中身は，[設定](../reference/configuration.md) の「記録と再開」で説明しています．どのロボットでも同じです．
 - 方策（オプション `policy`）は，`camera` と左右のDIGITを観測し（`nodes/policy.yaml` の `observe`），`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．
 - `max_speed` はカウント/sです（テンプレートは `{follower: 1024}`）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．方策の書き方は [方策で動かす](../controllers/policy.md) にあります．

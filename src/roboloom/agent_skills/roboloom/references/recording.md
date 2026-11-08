@@ -11,7 +11,8 @@ With the `record` extra, episodes are saved as **LeRobotDataset 0.6.1** (format 
 | `observation.state` | every follower's joint positions, joined in configuration order; `names` are `<follower>.<joint>` |
 | `observation.effort` | followers with `record_effort: true`; units must not mix (N·m vs mA is refused) |
 | `observation.images.<sensor>` | camera/tactile images, HWC uint8 RGB (stored as video) |
-| `observation.<input>` | input samples, e.g. a Pika Sense pose (10 values) |
+| `observation.<input>` | each input's reading: a leader's joint positions (`observation.leader`, joint names without prefix) or a pose input's 10 fields (`x`…`qw`, `gripper`, `tracking`, `engaged`) |
+| `observation.meta.<node>.valid/capture_age_ms/ready_age_ms` (float32), `seq/capture_ns/ready_ns/receive_ns` (int64) | per recorded node (inputs, followers, sensors): sample used in this row, its ages, sequence number, timestamps |
 | `action` | first command each follower sent in the row's interval, same order as state |
 | `action.valid` | 1 when every follower sent a command in that row |
 | `action.clamped` | 1 when any follower clipped its command to `max_speed` |
@@ -19,6 +20,9 @@ With the `record` extra, episodes are saved as **LeRobotDataset 0.6.1** (format 
 
 - Rows without a command hold the follower's kept target (not zeros). LeRobot training
   ignores `action.valid`; filter by it yourself if you only want valid rows.
+- A sample older than `recorder.max_age_ms.<node>` is missing: zeros, `observation.meta.<node>.valid` 0, `seq` -1.
+  Every input, follower and sensor needs an entry; entries for nodes not in the configuration
+  (and misspelled names) are ignored.
 - Missing observations are zeros plus validity flags. Timestamps distinguish capture,
   availability, reception and sending (monotonic clock).
 - A row is final once every follower's commands passed its interval or after `grace_ms`

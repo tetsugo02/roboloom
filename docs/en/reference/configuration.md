@@ -279,16 +279,21 @@ There was one stall of about 120 ms during the run. Stalls of the same size also
 
 With the `record` extra, data is saved as LeRobotDataset 0.6.1. Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by zero values and validity flags. `task` is recorded in each frame.
 
-With several followers, the following features are one vector joining all followers in configuration order. Their `names` tell which follower each entry belongs to, as `<follower>.<joint>` (for example `follower.r_arm_sh_pitch1`).
+With several followers, `observation.state`, `observation.effort` and `action` are one vector joining all followers in configuration order. Their `names` tell which follower each entry belongs to, as `<follower>.<joint>` (for example `follower.r_arm_sh_pitch1`). The other features are per node and named after it.
 
 | Feature | Content |
 | --- | --- |
 | `observation.state` | Each follower's joint positions |
 | `observation.effort` | The effort of the followers with `record_effort: true`; followers with different units cannot be mixed |
+| `observation.<input>` | Each input's own reading, named after the input node (for example `observation.leader`). A joint input such as a leader arm records its joint positions in its own unit, with its joint names (no prefix); a pose input records `x`, `y`, `z`, `qx`, `qy`, `qz`, `qw`, `gripper`, `tracking`, `engaged` |
+| `observation.images.<sensor>` and other sensor features | What each sensor records; see the [Sensors](../sensors/index.md) pages |
+| `observation.meta.<node>.valid` / `capture_age_ms` / `ready_age_ms` (float32), `seq` / `capture_ns` / `ready_ns` / `receive_ns` (int64) | One set for every recorded node (inputs, followers, sensors): whether the row used a sample of that node, its age since capture and since it became available (ms), its sequence number, and its capture, availability and reception times (monotonic clock, ns) |
 | `action` | The first command each follower sent in the row's interval, in the order of `observation.state` |
 | `action.valid` | 1 in rows where every follower sent a command |
 | `action.clamped` | 1 in rows where any follower limited its command |
 | `action.meta.<follower>.valid` / `clamped` / `seq` / `sent_ns` | Each follower's own: command present, limited, command number, send time |
+
+A sample older than the node's `max_age_ms` in `nodes/recorder.yaml` is not used: its features hold zeros, `observation.meta.<node>.valid` is 0 and `seq` is -1. Every input, follower and sensor needs a `max_age_ms` entry (see "Recorder entry" in [Sensors](../sensors/index.md)).
 
 A follower that sent no command fills its part with the target it held (its state's `target`, else its position); filling with zeros would teach a policy a jump to 0. LeRobot training does not read `action.valid`, so select rows by `action.valid` when you only want valid ones. A row is final once every follower's commands have passed its interval, or after `grace_ms` (default 500 ms).
 
