@@ -13,16 +13,16 @@ recorder, policy) and sends events. It never runs a control loop itself.
 @classmethod
 def launch(  # Session.launch
     cls,
-    config,                  # robot name ("rakuda2"), path, or a loaded RobotConfig
+    config,  # robot name ("rakuda2"), path, or a loaded RobotConfig
     *,
-    options=None,            # whole set of options to enable; None = defaults
-    mock=None,               # True mock devices, False hardware, None = YAML mode (default hardware)
-    policy=None,             # "module:callable" replacing the policy controller's factory
-    policy_kwargs=None,      # dict of kwargs for it
+    options=None,  # whole set of options to enable; None = defaults
+    mock=None,  # True mock devices, False hardware, None = YAML mode (default hardware)
+    policy=None,  # "module:callable" replacing the policy controller's factory
+    policy_kwargs=None,  # dict of kwargs for it
     log_dir=None,
-    timeout=60.0,            # wait until every node reports status
-    screen="auto",           # Rich status table when stdout is a TTY; False disables
-    operator="auto",         # ask to support arms on exit when stdin is a TTY; None skips
+    timeout=60.0,  # wait until every node reports status
+    screen="auto",  # Rich status table when stdout is a TTY; False disables
+    operator="auto",  # ask to support arms on exit when stdin is a TTY; None skips
 ) -> Session: ...
 ```
 
@@ -38,7 +38,7 @@ def launch(  # Session.launch
 
 ```python
 with Session.launch("rakuda2", options=["gravity"]) as s:
-    s.wait_ready()                      # leader aligned / policy loaded (timeout=30.0)
+    s.wait_ready()  # leader aligned / policy loaded (timeout=30.0)
     r = s.record("pick up the cup", seconds=30)
     print(r.index, r.frames, r.warnings, r.ok)
 ```
@@ -55,6 +55,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 
 ```python
 import itertools
+
 objects = itertools.cycle(["cup", "bottle", "sponge"])
 s.record(lambda info: f"pick up the {next(objects)}", seconds=20, keep=lambda ep: ep.ok)
 ```
@@ -95,6 +96,7 @@ then `record(...)` saves evaluation episodes to the `-eval` dataset. See
 
 ```python
 from roboloom import load_config, resolve_config
+
 cfg = load_config("rakuda2", options=["digit"], mock=True)  # validates; opens nothing
 cfg.options, cfg.repo_id, cfg.mock
 ```
