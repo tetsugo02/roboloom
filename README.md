@@ -19,12 +19,14 @@ uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．記録・実機収集にはextrasを追加します．
+既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，共通のセンサーには `hardware` を追加します．
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware
 uv run roboloom init rakuda2
 ```
+
+Gitソースを登録した後は，`uv add 'roboloom[rakuda2]'` や `uv add 'roboloom[piper,pika]'` の形でextrasを選べます．`rakuda2` はDynamixel SDK，`piper` はPiPER SDKとIK，`pika` はPika用のトラッカー・手首カメラを導入します．Pika／PiPERは開発中・実機未検証です．依存の内訳とシステム側の準備は [Installation](docs/ja/quick-start/installation.md) を参照してください．
 
 `init` はインストール済みパッケージから，自分のプロジェクト内に `.roboloom/rakuda2/` を作ります．生成した設定を編集し，CLIもPythonスクリプトも自分のプロジェクトルートから実行します．`pyproject.toml` と `uv.lock` をGitで管理し，別の環境では `uv sync --locked` で再現します．更新・commit固定の手順は [Installation](docs/ja/quick-start/installation.md) を参照してください．
 

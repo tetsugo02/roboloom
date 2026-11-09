@@ -1,9 +1,10 @@
 """Poses of one Vive tracker from libsurvive's Python binding (pysurvive).
 
-pysurvive is not on PyPI with roboloom: it comes with libsurvive (github.com/cntools/
-libsurvive), whose udev rules need an administrator. Base stations must be set up and
-calibrated (libsurvive's `survive-cli --force-calibrate`); poses are in that calibrated
-world frame. As in the vendor's pika_sdk (`pika/tracker/vive_tracker.py`), an object is
+pysurvive is installed by roboloom's `pika` extra as a wheel built by a fork of
+libsurvive (github.com/tetsugo02/libsurvive, branch `roboloom`; PyPI has no Python 3.12
+distribution): CPython 3.12, Linux x86_64, libusb bundled, nothing built at install time.
+The tracker's udev rules need an administrator. Base stations must be set up and
+calibrated (libsurvive's `--force-calibrate`); poses are in that calibrated world frame. As in the vendor's pika_sdk (`pika/tracker/vive_tracker.py`), an object is
 named by libsurvive (e.g. `WM0`), and its rotation comes as w, x, y, z.
 
 The frames carry libsurvive's own time; `SurviveTracker` stamps each pose when it
@@ -21,8 +22,9 @@ from typing import Any
 from ..kinematics.spec import Pose, pose_from
 
 INSTALL_HINT = (
-    "pysurvive (libsurvive's Python binding) is not installed: libsurvive and its udev "
-    "rules (81-vive.rules) need an administrator; see the Pika Sense page of the docs"
+    "pysurvive (libsurvive's Python binding) is unavailable: install roboloom[pika] "
+    "(a wheel for Linux x86_64 only); ask an administrator for the tracker's udev rules "
+    "(81-vive.rules); see the Pika Sense page of the docs"
 )
 
 

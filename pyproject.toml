@@ -15,8 +15,7 @@ dependencies = [
     "dora-rs-cli==1.0.1",
     "PyYAML>=6,<7",
     "numpy>=1.26,<3",
-    "dynamixel-sdk>=3.7,<4",
-    "pyserial>=3.5,<4",  # Pika devices (drivers.pika_serial)
+    "pyserial>=3.5,<4",  # shared by Dynamixel and Pika serial links
     "rich>=13,<15",
     "textual>=8,<9",
 ]
@@ -28,6 +27,19 @@ Repository = "https://github.com/tetsugo02/roboloom"
 Issues = "https://github.com/tetsugo02/roboloom/issues"
 
 [project.optional-dependencies]
+rakuda2 = ["dynamixel-sdk>=3.7,<4"]  # Rakuda2 follower and Rakuda-mini leader
+piper = [
+    "piper_sdk>=0.6.2,<0.7",
+    "pin>=4.1,<5",  # pose_ik for Pika Sense teleoperation
+]
+pika = [
+    # PyPI has no Python 3.12 wheels/sdist. A wheel from the libsurvive fork
+    # (github.com/tetsugo02/libsurvive, branch roboloom): libusb bundled, nothing built at
+    # install time, the GUI (gooey/wxPython) is its optional `gui` extra. Linux x86_64 only.
+    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "opencv-python>=4.8",  # Pika wrist cameras (sensors.vision.v4l2)
+]
+# Shared features, independent of the robot.
 record = ["lerobot[dataset]==0.6.1"]
 hardware = [
     "pyrealsense2>=2.55,<3",
@@ -35,12 +47,12 @@ hardware = [
     "opencv-python>=4.8",  # sensors.vision.v4l2 (digit-interface needs it too)
     "sounddevice>=0.4,<1",
 ]
-piper = ["piper_sdk>=0.6.2,<0.7"]
 ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
 policy = ["lerobot==0.6.1"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
 train = ["lerobot[training]==0.6.1"]  # lerobot-train on roboloom datasets (accelerate, wandb)
 test = [
     "pytest>=8,<9",
+    "dynamixel-sdk>=3.7,<4",
     "lerobot[dataset]==0.6.1",
     "pytest-asyncio>=1,<2",
     "pin>=4.1,<5",
@@ -51,6 +63,9 @@ roboloom = "roboloom.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/roboloom"]
+
+[tool.hatch.metadata]
+allow-direct-references = true  # the pysurvive wheel URL of the pika extra
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

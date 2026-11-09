@@ -16,6 +16,8 @@ For policy learning, record the cameras of the Pika Gripper at the end of the ar
 
 ## Fisheye camera (`v4l2_rgb`)
 
+OpenCV comes with either the `pika` robot extra or the shared `hardware` extra. The camera itself does not use pysurvive. For D405 RGB, add `hardware` for pyrealsense2 ([Installation](../quick-start/installation.md)).
+
 ```yaml
 # nodes/left_wrist.yaml
 type: v4l2_rgb

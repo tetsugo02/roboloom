@@ -6,6 +6,7 @@
 ## 必要なもの
 
 - 追加のパッケージは要りません．シリアルはpyserial（roboloomの依存）で直接扱います．AgileXのSDK（`agx-pypika`）は使いません．カメラやGUIのパッケージまで要求するためです．
+- Senseのトラッカーと手首の魚眼カメラを含むPika一式は，[インストール](../quick-start/installation.md) の `pika` extraで追加します．Gripperのシリアル制御だけならpysurviveとそのGUI依存は使いません．
 - グリッパごとにUSBシリアル1本と，24 Vの電源．PiPERのCANとは別の機器なので，PiPERとは別のフォロワとして設定します．
 - ポートは，USBの差し込み口で決まる `/dev/serial/by-path/...` を使います．`/dev/ttyUSB0` のような番号は，抜き差しや起動の順で左右が入れ替わることがあります．by-pathはsudoなしで使えます（差し込み口を変えるとパスも変わります）．
 - グリッパのカメラ（魚眼とD405）は，別のセンサとして設定します（[Pikaの手首カメラ](pika-cameras.md)）．

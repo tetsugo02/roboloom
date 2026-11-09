@@ -18,16 +18,20 @@ For an existing project, first set `project.requires-python = ">=3.12,<3.13"` in
 
 | Extra | Adds | Needed for |
 | --- | --- | --- |
-| (none) | config loading, CLI, Dynamixel driver, pyserial | `init`, `validate`, `probe`, setup steps |
+| (none) | shared runtime: dora, YAML, NumPy, pyserial, CLI/UI | `init`, mock devices, configuration validation |
+| `rakuda2` | dynamixel-sdk | Rakuda2 follower and Rakuda-mini leader hardware |
+| `piper` | piper_sdk 0.6, pinocchio (`pin`) | PiPER follower and `pose_ik` (in development) |
+| `pika` | pysurvive, opencv-python | Pika Sense tracking and Pika wrist cameras (in development); serial uses shared pyserial |
 | `record` | `lerobot[dataset]==0.6.1` | saving episodes (also mock collection that saves) |
 | `hardware` | pyrealsense2, digit-interface, opencv-python, sounddevice | RealSense, DIGIT, V4L2 cameras, microphone |
-| `piper` | piper_sdk 0.6 | PiPER follower (in development) |
-| `ik` | pinocchio (`pin`) | `pose_ik` controller (in development) |
+| `ik` | pinocchio (`pin`) | standalone IK without the PiPER SDK; also included in `piper` |
 | `policy` | `lerobot==0.6.1` (brings torch) | `roboloom.policy.lerobot:load` |
 | `train` | `lerobot[training]==0.6.1` | `lerobot-train` on roboloom datasets |
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware
+uv add 'roboloom[rakuda2]'  # after registering the Git source
+uv add 'roboloom[piper,pika]'  # PiPER + Pika Sense/Gripper
 uv add 'roboloom[policy]'   # once roboloom is already a dependency, extras can be added like this
 ```
 
@@ -36,8 +40,20 @@ Diffusion / SmolVLA / pi0 policies additionally need `lerobot[diffusion]`,
 GPU is free before training or GPU inference.
 
 Hardware hosts also need: USB permissions for the devices, the RealSense system driver and
-a USB 3 port; CAN interfaces (PiPER) and libsurvive + udev rules (Pika Sense) need an
-administrator (sudo).
+a USB 3 port; CAN interfaces (PiPER) and tracker udev rules (Pika Sense) need an
+administrator (sudo). Robot extras do not install udev rules or configure interfaces.
+
+`pika` installs pysurvive as a wheel built by a fork of libsurvive
+(github.com/tetsugo02/libsurvive, branch `roboloom`, GitHub releases), because PyPI has
+no Python 3.12 wheel or sdist: CPython 3.12, Linux x86_64 only, libusb bundled, nothing
+is compiled at install time. The fork changes only packaging: Gooey/wxPython (a GUI
+launcher roboloom does not use) is the optional extra `pysurvive[gui]`. On other
+platforms `pika` does not install pysurvive. Only the tracker's udev rules need an
+administrator.
+Pysurvive is needed only for real Pika Sense tracker poses, not PiPER joint control,
+Pika serial/cameras or mock operation. `pika` deliberately installs the complete set;
+base, `rakuda2`, `piper`, and `ik` do not install pysurvive. The Python package does not
+include `survive-cli`; calibrate from Python with `pysurvive.SimpleContext([..., "--force-calibrate"])`.
 
 ## Reproduce, update, pin
 
