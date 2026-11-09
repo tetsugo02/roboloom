@@ -301,6 +301,15 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 `recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．`control_interval_ms` と `action_missing_rate`（指令のなかった行の割合）はフォロワごとで，警告にはフォロワの名前が出ます．
 
+### Image storage
+
+画像センサーのノード YAML に `storage: video | image` を指定します（RealSense、DIGIT、Pika 手首カメラを含む V4L2）。既定は `video` で、従来の非可逆 MP4 です。`image` は可逆 PNG フレームを Parquet に埋め込みます。DIGIT と背景の微小な画素差を使う場合に推奨します。同じデータセット内で混在できます。不正な値は `validate` を含む設定読み込み時に拒否します。
+
+PNG は一般に容量と PNG 圧縮・書き込み負荷が増えます。実際の容量と速度は画像内容と機器に依存します。非圧縮 RGB の参考値は 320×240×3、dataset fps 30 でセンサーあたり 6.9 MB/s（640×480 は 27.6 MB/s）です。PNG の実測値ではありません。LeRobot 0.6.1 の `image` の PNG 圧縮レベルは 6 です。保存形式の変更は feature dtype の変更になるため、別のデータセット `output` を指定してください。以前のスキーマへの追記は拒否します。
+
+ライブ観測は引き続き HWC uint8 RGB です。LeRobot の読み出しは両形式とも既定で CHW float32、範囲 [0, 1] になり、チェックポイントの入力型は `VISUAL` のままです。保存形式は mock・合成フレームのみで試験し、実機では未検証です。
+
+
 ## ログと設定の管理
 
 ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，フォロワは毎周期の状態（位置・速度・電流・目標・モード）を `<フォロワ名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/<フォロワ名>/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．

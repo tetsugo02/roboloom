@@ -5,3 +5,7 @@ resolution: QVGA
 height: 320
 width: 240
 fps: 30
+# Use image (lossless PNG) for small tactile/background differences.
+# Larger files and more PNG write work; choose a new dataset output when changing.
+# Keep video for compatibility with existing datasets.
+storage: video

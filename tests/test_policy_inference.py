@@ -297,3 +297,14 @@ def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
         "task": "pick",
     }
     assert trained.infer(observation).shape == (14,)
+
+
+@pytest.mark.parametrize("storage", ["image", "video"])
+def test_visual_checkpoint_accepts_sensor_storage(act_checkpoint, storage):
+    from roboloom.policy.lerobot import load
+
+    controller = mock_policy_controller()
+    controller.sources["left_wrist"].storage = storage
+    spec = controller.spec()
+    assert spec.observation["observation.images.left_wrist"]["dtype"] == storage
+    load(act_checkpoint, device="cpu", rename=RENAME).bind(spec)

@@ -31,8 +31,8 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `observation.state`，`action` | 17（`follower.torso_yaw`，`follower.head_yaw`，`follower.head_pitch`，右腕 `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`，左腕 `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`） | Dynamixelの位置カウント |
 | `observation.effort` | 17（同じ並び．テンプレートの `record_effort: true`） | mA（電流） |
 | `observation.leader` | 17（leaderの関節位置．同じ並び．名前は接頭辞なしの `torso_yaw` … `l_arm_grip`．leaderを使わないオプション `policy` では記録しない） | Dynamixelの位置カウント |
-| `observation.images.camera` | 480×640×3（RGB） | — |
-| `observation.images.digit_left`，`observation.images.digit_right` | 320×240×3（RGB．オプション `digit`） | — |
+| `observation.images.camera` | 480×640×3（RGB） | [storage](../reference/configuration.md#image-storage) |
+| `observation.images.digit_left`，`observation.images.digit_right` | 320×240×3（RGB．オプション `digit`） | [storage](../reference/configuration.md#image-storage) |
 | `observation.meta.<node>.valid`，`capture_age_ms`，`ready_age_ms` | 各1（float32）．記録するノードごと：`leader`，`follower`，`camera`，`digit` のときは `digit_left`，`digit_right` も | `valid` は0/1，経過時間はms |
 | `observation.meta.<node>.seq`，`capture_ns`，`ready_ns`，`receive_ns` | 各1（int64）．同じノード | 通し番号，単調時計のns |
 | `action.valid`，`action.clamped` | 各1（float32） | 0/1 |

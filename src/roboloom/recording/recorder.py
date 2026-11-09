@@ -114,7 +114,7 @@ class EpisodeRecorder:
             ):
                 raise ValueError(
                     f"existing dataset schema or FPS differs from the configuration: {root} "
-                    "(set another `output` in the configuration, or move the old dataset)"
+                    "(image/video storage changes require a separate dataset; set another `output` in the configuration, or move the old dataset)"
                 )
         else:
             self.dataset = LeRobotDataset.create(
@@ -123,6 +123,8 @@ class EpisodeRecorder:
                 features=expected,
                 root=root,
                 robot_type=cfg.robot,
+                # LeRobot 0.6.1 preserves each feature dtype; this permits video
+                # keys alongside image keys (and also accepts image-only schemas).
                 use_videos=True,
                 **self.writer_options,
             )

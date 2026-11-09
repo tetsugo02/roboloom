@@ -32,12 +32,17 @@ class ShapeCheckedReader:
 
 
 class ImageSensor(Source):
-    """HWC RGB frames stored as a LeRobot video feature."""
+    """HWC RGB frames stored as a LeRobot image or video feature."""
 
     kind = "image"
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
+        self.storage = cfg.get("storage", "video")
+        if self.storage not in ("video", "image"):
+            raise ValueError(
+                f"{name}.storage must be one of ['video', 'image'], got {self.storage!r}"
+            )
         self.shape = (
             int(positive(cfg.get("height"), f"{name}.height")),
             int(positive(cfg.get("width"), f"{name}.width")),
@@ -61,7 +66,7 @@ class ImageSensor(Source):
     def features(self, dataset_fps: float) -> Features:
         return {
             f"observation.images.{self.name}": {
-                "dtype": "video",
+                "dtype": self.storage,
                 "shape": self.shape,
                 "names": ["height", "width", "channels"],
             }
