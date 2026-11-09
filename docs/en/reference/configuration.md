@@ -301,6 +301,15 @@ You can append further episodes to the same dataset. On resume, FPS and feature 
 
 Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_valid_rate`, and `max_interval_ms` in `recorder.quality`. Check the metrics and warnings in the save result. `control_interval_ms` and `action_missing_rate` (the share of rows without a command) are per follower, and warnings name the follower.
 
+### Image storage
+
+Set `storage: video | image` in each image sensor's node YAML (RealSense, DIGIT, V4L2 including Pika wrist cameras). The default is `video`: the existing lossy MP4 encoding. `image` embeds lossless PNG frames in Parquet; use it for DIGIT/background pixel differences. Formats can be mixed in one dataset. Invalid values are refused at configuration load, including `validate`.
+
+PNG generally needs more disk space and PNG compression/write work; actual size and throughput depend on image content and hardware. As an uncompressed RGB reference, 320×240×3 at 30 dataset fps is 6.9 MB/s per sensor (640×480: 27.6 MB/s); these are not measured PNG rates. LeRobot 0.6.1 uses PNG compression level 6 for `image`. Changing storage changes the feature dtype: choose a separate dataset `output`; resume into the previous schema is refused.
+
+Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
+
+
 ## Managing logs and configuration
 
 Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`); the dataset name tells which options were enabled. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and each follower's per-tick state (positions, velocities, currents, target, mode) to `<follower name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/<follower>/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs (`config.fifo`) are excluded by the generated `.roboloom/.gitignore`.

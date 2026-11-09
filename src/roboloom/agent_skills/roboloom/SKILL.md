@@ -166,3 +166,7 @@ with Session.launch(
 
 Errors users can act on are `roboloom.ConfigError`, `SetupError`, `HardwareError`,
 `SessionError` (all subclasses of `RoboloomError`) and `roboloom.errors.Cancelled`.
+
+Image sensor nodes accept `storage: video | image` (default `video`). Use lossless
+`image` for tactile pixel differences; changing it requires a separate dataset output.
+See [sensors](references/sensors.md#image-storage).
