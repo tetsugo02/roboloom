@@ -20,7 +20,7 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra pipe
 
 After registering the Git source: `uv add 'roboloom[piper,pika]'`. `pysurvive` is needed
 only for real Sense tracker poses: PiPER joint commands, Pika serial/cameras and mocks
-do not use it. The full `pika` extra installs it together with OpenCV for wrist cameras.
+do not use it. The `pika` extra installs pysurvive; OpenCV for wrist cameras is a core dependency.
 PyPI has no Python 3.12 distribution, so the extra installs a wheel built by the
 libsurvive fork tetsugo02/libsurvive (Linux x86_64, libusb bundled, no build at install
 time; [../installation.md](../installation.md)). For mocks, use `ik` without `pika`.

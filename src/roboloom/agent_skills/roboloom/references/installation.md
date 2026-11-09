@@ -18,12 +18,12 @@ For an existing project, first set `project.requires-python = ">=3.12,<3.13"` in
 
 | Extra | Adds | Needed for |
 | --- | --- | --- |
-| (none) | shared runtime: dora, YAML, NumPy, pyserial, CLI/UI | `init`, mock devices, configuration validation |
+| (none) | shared runtime: dora, YAML, NumPy, OpenCV, pyserial, CLI/UI | `init`, mock devices, configuration validation, webcam capture |
 | `rakuda2` | dynamixel-sdk | Rakuda2 follower and Rakuda-mini leader hardware |
 | `piper` | piper_sdk 0.6, pinocchio (`pin`) | PiPER follower and `pose_ik` (in development) |
-| `pika` | pysurvive, opencv-python | Pika Sense tracking and Pika wrist cameras (in development); serial uses shared pyserial |
+| `pika` | pysurvive | Pika Sense tracking (in development); cameras and serial use core dependencies |
 | `record` | `lerobot[dataset]==0.6.1` | saving episodes (also mock collection that saves) |
-| `hardware` | pyrealsense2, digit-interface, opencv-python, sounddevice | RealSense, DIGIT, V4L2 cameras, microphone |
+| `hardware` | pyrealsense2, digit-interface, sounddevice | RealSense, DIGIT, microphone |
 | `ik` | pinocchio (`pin`) | standalone IK without the PiPER SDK; also included in `piper` |
 | `policy` | `lerobot==0.6.1` (brings torch) | `roboloom.policy.lerobot:load` |
 | `train` | `lerobot[training]==0.6.1` | `lerobot-train` on roboloom datasets |
@@ -108,3 +108,5 @@ npx skills add tetsugo02/roboloom --skill roboloom   # alternative, from GitHub 
 
 Python: `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`
 and `roboloom.agent_skills.check(...)`.
+
+opencv-python is a core dependency for image processing, `opencv_rgb` and V4L2 cameras. Three-OS webcam driver support does not imply full Windows Session support.

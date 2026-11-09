@@ -1,21 +1,21 @@
 # Sensors
 
 A sensor is a node under `sensors:` in `config.yaml`; its YAML `type` picks the driver.
-The node name becomes the dataset feature name. Real devices need the `hardware` extra
-(`pyrealsense2`, `digit-interface`, `opencv-python`, `sounddevice`):
+The node name becomes the dataset feature name. RealSense, DIGIT and audio use the `hardware` extra
+(`pyrealsense2`, `digit-interface`, `sounddevice`):
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
 ```
 
-For Pika's `v4l2_rgb` fisheye cameras, OpenCV is also included in the `pika` extra.
-Camera access alone does not use pysurvive; `hardware` can supply OpenCV without the
-tracker dependencies. D405 RGB still needs `hardware` for pyrealsense2.
+OpenCV is a core dependency for `opencv_rgb` and `v4l2_rgb`.
+Camera access alone needs no extra and does not use pysurvive. D405 RGB still needs `hardware` for pyrealsense2.
 
 | `type` | Device | Status | Feature |
 | --- | --- | --- | --- |
 | `realsense_rgb` | Intel RealSense, colour only | Hardware-verified (Rakuda2) | `observation.images.<name>` (video by default; H×W×3 RGB) |
 | `digit` | DIGIT tactile sensor | Hardware-verified (Rakuda2) | `observation.images.<name>` (video by default; H×W×3 RGB) |
+| `opencv_rgb` | USB / built-in webcam, Linux/macOS/Windows driver | Mock only; hardware unverified | `observation.images.<name>` |
 | `v4l2_rgb` | UVC camera via V4L2/OpenCV (Pika wrist fisheye) | In development, mock only | `observation.images.<name>` |
 | `pcm_mono` | Microphone via `sounddevice` | Not in the user guides; mock only | `observation.audio.<name>` (int16) |
 
@@ -87,7 +87,7 @@ fps: 30
 - Use a stable `/dev/v4l/by-path/` or `by-id/` path, not `/dev/video<n>`. A by-path and
   by-id name of the same camera count as one device.
 - Opening sets format, size and rate and refuses a camera that delivers anything else
-  (OpenCV would silently fall back). Only the newest frame is kept; no frame for 1 s
+  (OpenCV would silently fall back). A one-frame buffer is requested (not a newest-frame guarantee); no frame for 1 s
   stops the node ("cable or camera lost").
 - Find paths and modes: `ls -l /dev/v4l/by-path/`,
   `v4l2-ctl -d <device> --list-formats-ext` (package v4l-utils; ask an administrator).
@@ -120,3 +120,21 @@ Set `storage: video | image` in each image sensor's node YAML (RealSense, DIGIT,
 PNG generally needs more disk space and PNG compression/write work; actual size and throughput depend on image content and hardware. As an uncompressed RGB reference, 320×240×3 at 30 dataset fps is 6.9 MB/s per sensor (640×480: 27.6 MB/s); these are not measured PNG rates. LeRobot 0.6.1 uses PNG compression level 6 for `image`. Changing storage changes the feature dtype: choose a separate dataset `output`; resume into the previous schema is refused.
 
 Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
+
+## Web camera (`opencv_rgb`)
+
+Install `uv add git+https://github.com/tetsugo02/roboloom.git`; OpenCV is a core dependency. Required: `device` (non-negative integer;
+Linux also accepts `/dev/` paths), positive integer `width`, `height`, and positive `fps`.
+Optional `backend: auto` selects Linux V4L2, macOS AVFoundation, Windows MSMF;
+Windows also allows `dshow`. No fallback. Optional `format: MJPG | YUYV` defaults to
+backend choice. Unavailable/mismatched fps or format warns; actual frame dimensions
+and uint8 RGB contract are strict. `storage: video | image` defaults to video.
+
+Use `roboloom.sensors.vision.opencv.OpenCVRGB(name, cfg).open(mock=False, dataset_fps=10)`
+as a Reader and always close it in `finally`. Mock needs no OpenCV. Reads are synchronous;
+loss is detected after >1 s only when native read returns, with no forced timeout.
+Buffer size 1 is a request, not a newest-frame guarantee. Timestamps are reception time,
+not exposure time; no synchronization/reconnection. Indices may change; prefer stable
+Linux paths. Set Recorder `max_age_ms` for the node. Changing size/storage requires
+separate dataset output. Hardware is unverified on all three OSes; full Windows Session
+support is excluded (Unix FIFO/process APIs). Never open a camera without user authorization.

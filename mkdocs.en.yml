@@ -17,6 +17,7 @@ nav:
       - Rakuda2: robots/rakuda2.md
   - Sensors:
       - Overview: sensors/index.md
+      - Web camera: sensors/webcam.md
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
   - Controllers:

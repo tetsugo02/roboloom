@@ -15,6 +15,7 @@ dependencies = [
     "dora-rs-cli==1.0.1",
     "PyYAML>=6,<7",
     "numpy>=1.26,<3",
+    "opencv-python>=4.8",  # shared image processing and camera capture
     "pyserial>=3.5,<4",  # shared by Dynamixel and Pika serial links
     "rich>=13,<15",
     "textual>=8,<9",
@@ -37,14 +38,12 @@ pika = [
     # (github.com/tetsugo02/libsurvive, branch roboloom): libusb bundled, nothing built at
     # install time, the GUI (gooey/wxPython) is its optional `gui` extra. Linux x86_64 only.
     "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "opencv-python>=4.8",  # Pika wrist cameras (sensors.vision.v4l2)
 ]
 # Shared features, independent of the robot.
 record = ["lerobot[dataset]==0.6.1"]
 hardware = [
     "pyrealsense2>=2.55,<3",
     "digit-interface>=0.2,<1",
-    "opencv-python>=4.8",  # sensors.vision.v4l2 (digit-interface needs it too)
     "sounddevice>=0.4,<1",
 ]
 ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)

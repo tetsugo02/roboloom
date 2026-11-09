@@ -315,3 +315,7 @@ Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW flo
 Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`); the dataset name tells which options were enabled. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and each follower's per-tick state (positions, velocities, currents, target, mode) to `<follower name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/<follower>/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs (`config.fifo`) are excluded by the generated `.roboloom/.gitignore`.
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).
+
+## Web camera
+
+`type: opencv_rgb` under `sensors.<name>` requires `device`, `width`, `height`, `fps`. `backend`, `format`, `storage` are optional. See [Web camera](../sensors/webcam.md) for details and OS limits.

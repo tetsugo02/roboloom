@@ -19,7 +19,7 @@ uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，共通のセンサーには `hardware` を追加します．
+既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，RealSense・DIGITには `hardware` を追加します．
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware
@@ -271,3 +271,5 @@ src/roboloom/
 - **センサー**：該当するモダリティ（`vision`，`tactile`，`audio`）の `base` にあるストリーム型を継承し，`open_device` を実装します．ペイロードと feature はストリーム型で決まります．深度や力覚のような新しい種類はそのモダリティの `base` にストリーム型を追加し，新しいモダリティはサブパッケージごと追加します．
 
 設定の読み込みはデバイスを開きません．1つの設定に follower を複数置けます．各 follower を駆動する controller はちょうど1個で，1個の controller が複数の follower を駆動できます（`type: policy` の controller は設定のすべての follower を駆動します）．
+
+OpenCV は共通依存に含まれ、Web カメラは `type: opencv_rgb` で利用できます（Linux・macOS・Windows 向けのセンサードライバー、実機未検証）。設定と Python 単体の例は [Web camera](docs/ja/sensors/webcam.md)（[English](docs/en/sensors/webcam.md)）を参照してください。Windows の Session 全体の対応は含みません。

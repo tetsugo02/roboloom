@@ -2,6 +2,7 @@
 
 | Sensor | `type` | Output |
 | --- | --- | --- |
+| [Web camera](webcam.md) | `opencv_rgb` | RGB frames (hardware unverified) |
 | [RealSense](realsense.md) | `realsense_rgb` | RGB camera image |
 | [DIGIT](digit.md) | `digit` | Tactile RGB image |
 

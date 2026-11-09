@@ -31,7 +31,7 @@ options: {}                     # see below
   - followers: `rakuda2_follower`, `piper_follower`, `pika_gripper_follower`
   - inputs: `rakuda_mini`, `pika_sense`
   - controllers: `joint`, `pose_ik`, `policy`
-  - sensors: `realsense_rgb`, `digit`, `v4l2_rgb`, `pcm_mono`
+  - sensors: `realsense_rgb`, `digit`, `opencv_rgb`, `v4l2_rgb`, `pcm_mono`
 - Several followers are allowed; **each follower is driven by exactly one controller**.
   `followers: {}` records inputs and sensors only (no `action`, no controllers; inputs need
   `poll_hz`, sensors `fps`).

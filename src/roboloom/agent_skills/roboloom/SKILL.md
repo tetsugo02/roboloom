@@ -83,6 +83,7 @@ outdated, run `uv run roboloom skills install --force`.
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | Mock only (PiPER + Pika) | [policy.md](references/policy.md) |
 | PiPER follower, Pika Gripper, Pika Sense + `pose_ik` | In development, mock only | [robots/piper-pika.md](references/robots/piper-pika.md) |
 | Hand-held Pika Sense collection, `convert-handheld` | In development, mock only | [robots/handheld.md](references/robots/handheld.md) |
+| `opencv_rgb` web camera (Linux/macOS/Windows driver only) | Mock only; hardware unverified; Windows Session excluded | [sensors.md](references/sensors.md) |
 | `v4l2_rgb` fisheye camera (Pika wrist cameras) | In development, mock only | [sensors.md](references/sensors.md) |
 | `pcm_mono` microphone | Not in the guides; mock only here | [sensors.md](references/sensors.md) |
 | `bilateral` option (force feedback) | Not verified on hardware; paused – do not use | – |
