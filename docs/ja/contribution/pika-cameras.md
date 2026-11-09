@@ -16,7 +16,7 @@ Pika GripperとPika Senseには，それぞれ次の2台が付いています（
 
 ## 魚眼カメラ（`v4l2_rgb`）
 
-OpenCVはロボットの `pika` extraか，共通の `hardware` extraで入ります．カメラ自体はpysurviveを使いません．D405のRGBには，pyrealsense2が入る `hardware` も追加します（[インストール](../quick-start/installation.md)）．
+OpenCVは共通依存に含まれ，カメラ用のextraは不要です．カメラ自体はpysurviveを使いません．D405のRGBには，pyrealsense2が入る `hardware` も追加します（[インストール](../quick-start/installation.md)）．
 
 ```yaml
 # nodes/left_wrist.yaml
@@ -35,10 +35,10 @@ fps: 30
 | `width`，`height`，`fps` | 記録する大きさと周期．カメラが実際に出す値と違えば，開くときに拒否します |
 
 - 開くときに，形式・大きさ・周期を設定し，実際の値を確かめます．OpenCVは出せない値を黙って別の値に変えるので，違えば理由を示して止めます．
-- 古い画像をためないように，受け取る画像は最新の1枚だけにします．
+- バッファ1枚を要求しますが，バックエンドによって無視されるため，常に最新画像とは限りません．
 - 画像が1 sのあいだ届かなければ，カメラを失ったとしてノードを止めます．
-- 記録には `observation.images.<名前>`（video）として入ります．
-- OpenCVは `hardware` の追加依存に入っています．
+- 記録には `observation.images.<名前>`（`storage: video | image`，既定 `video`）として入ります．
+- OpenCVは共通依存に含まれます．
 
 カメラのパスと出せる形式は，次のコマンドで調べます．`v4l2-ctl` はv4l-utilsのパッケージにあります（入っていなければ管理者に頼みます）．
 

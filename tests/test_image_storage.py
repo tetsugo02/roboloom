@@ -7,11 +7,14 @@ from roboloom.core.protocol import Envelope
 from roboloom.recording import EpisodeRecorder
 from roboloom.sensors.tactile.digit import DigitSensor
 from roboloom.sensors.vision.base import ImageSensor
+from roboloom.sensors.vision.opencv import OpenCVRGB
 from roboloom.sensors.vision.realsense import RealSenseRGB
 from roboloom.sensors.vision.v4l2 import V4l2RGB
 
 
-@pytest.mark.parametrize("cls", [ImageSensor, RealSenseRGB, DigitSensor, V4l2RGB])
+@pytest.mark.parametrize(
+    "cls", [ImageSensor, RealSenseRGB, DigitSensor, V4l2RGB, OpenCVRGB]
+)
 @pytest.mark.parametrize("storage", [None, "video", "image"])
 def test_sensor_storage(cls, storage):
     cfg = {
@@ -19,7 +22,7 @@ def test_sensor_storage(cls, storage):
         "width": 240,
         "fps": 30,
         "serial": "test",
-        "device": "/dev/mock",
+        "device": 0 if cls is OpenCVRGB else "/dev/mock",
     }
     if storage is not None:
         cfg["storage"] = storage
@@ -70,7 +73,8 @@ def test_invalid_storage_at_config_load(tmp_path, storage):
 @pytest.mark.parametrize(
     "storages", [("image", "video"), ("image", "image"), ("video", "video")]
 )
-def test_recording_roundtrip(tmp_path, storages):
+@pytest.mark.parametrize("camera_cls", [RealSenseRGB, OpenCVRGB])
+def test_recording_roundtrip(tmp_path, storages, camera_cls):
     import torch
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -85,13 +89,14 @@ def test_recording_roundtrip(tmp_path, storages):
                 "storage": storages[0],
             },
         ),
-        "camera": RealSenseRGB(
+        "camera": camera_cls(
             "camera",
             {
                 "height": 48,
                 "width": 64,
                 "fps": 10,
                 "serial": "mock2",
+                "device": 0,
                 "storage": storages[1],
             },
         ),

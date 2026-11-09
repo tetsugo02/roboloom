@@ -36,4 +36,5 @@ nav:
       - Pika Gripper follower (in development): contribution/pika-gripper.md
       - Teleoperation with Pika Sense and IK (in development): contribution/pika-sense.md
       - Pika wrist cameras (in development): contribution/pika-cameras.md
+      - Web camera (in development): contribution/webcam.md
       - Hand-held collection with Pika Sense (in development): contribution/pika-handheld.md

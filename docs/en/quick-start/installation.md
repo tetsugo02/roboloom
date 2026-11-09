@@ -15,7 +15,7 @@ uv run roboloom --help
 
 For an existing project, start with `uv add` from its root. First set `project.requires-python` in `pyproject.toml` to `">=3.12,<3.13"`. Selecting a Python 3.12 environment alone does not limit the Python compatibility range that uv resolves.
 
-The base install contains the shared runtime (dora, YAML, NumPy, serial communication, and the UI). Choose robot extras separately; recording and shared sensors remain independent extras. These are configuration examples for the same Git dependency.
+The base install contains the shared runtime (dora, YAML, NumPy, OpenCV, serial communication, and the UI). Choose robot extras separately; recording and RealSense / DIGIT remain independent extras. These are configuration examples for the same Git dependency.
 
 | Setup | Command | Purpose |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ uv add 'roboloom[piper,pika]'
 uv add 'roboloom[piper,pika,record]'
 ```
 
-`rakuda2` adds `dynamixel-sdk`; `piper` adds `piper_sdk` and Pinocchio (`pin`) for `pose_ik`; `pika` adds `pysurvive` and OpenCV for the wrist cameras. `pyserial` stays shared because both Dynamixel and Pika use it. The standalone `ik` extra remains available for IK without the PiPER SDK. In a repository checkout, select the same extras with `uv sync --extra rakuda2` or `uv sync --extra piper --extra pika`.
+`rakuda2` adds `dynamixel-sdk`; `piper` adds `piper_sdk` and Pinocchio (`pin`) for `pose_ik`; `pika` adds `pysurvive`. OpenCV and `pyserial` are core dependencies shared by camera processing and serial devices. OpenCV is installed as `opencv-python-headless` (no GUI), the same package LeRobot in `record` uses. digit-interface in `hardware` requires `opencv-python`, so selecting `hardware` installs two OpenCV packages into the same `cv2`. The standalone `ik` extra remains available for IK without the PiPER SDK. In a repository checkout, select the same extras with `uv sync --extra rakuda2` or `uv sync --extra piper --extra pika`.
 
 `pysurvive` is needed only for real Pika Sense tracker poses, not for PiPER joint control, Pika serial commands/cameras, or mocks. The `pika` extra installs the complete Pika dependency set. [PyPI](https://pypi.org/project/pysurvive/) has no Python 3.12 wheel or source distribution, so it uses a wheel built by a [fork of libsurvive](https://github.com/tetsugo02/libsurvive/tree/roboloom) ([releases](https://github.com/tetsugo02/libsurvive/releases); CPython 3.12, Linux x86_64, libusb bundled). Nothing is built at install time, so no compiler or libusb development files are needed. The fork changes only the Python packaging: upstream's required Gooey/wxPython (the launcher of a GUI roboloom does not use) becomes the optional extra `pysurvive[gui]`. On Linux other than x86_64 and on other systems, the `pika` extra does not install pysurvive. The extra does not change OS settings, install the tracker's udev rules (`81-vive.rules`), or configure CAN; ask an administrator for the udev rules.
 

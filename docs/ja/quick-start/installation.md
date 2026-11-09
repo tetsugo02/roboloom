@@ -15,7 +15,7 @@ uv run roboloom --help
 
 既存のプロジェクトでは，そのルートで `uv add` から実行します．先に `pyproject.toml` の `project.requires-python` を `">=3.12,<3.13"` に設定してください．Python 3.12の環境を選ぶだけでは，uvが解決するPythonの対応範囲は限定されません．
 
-基本のインストールには共通の実行環境（dora，YAML，NumPy，シリアル通信，UI）が入ります．ロボットごとのextrasを選び，記録や共通のセンサーは独立したextrasで追加します．以下は同じGit依存に対する構成例です．
+基本のインストールには共通の実行環境（dora，YAML，NumPy，OpenCV，シリアル通信，UI）が入ります．ロボットごとのextrasを選び，記録やRealSense・DIGITは独立したextrasで追加します．以下は同じGit依存に対する構成例です．
 
 | 構成 | コマンド | 用途 |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ uv add 'roboloom[piper,pika]'
 uv add 'roboloom[piper,pika,record]'
 ```
 
-`rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` と手首カメラ用のOpenCVを追加します．`pyserial` はDynamixelとPikaの両方が使うため共通に残します．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
+`rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` を追加します．OpenCVと `pyserial` は画像処理・カメラ取得やシリアル機器で共有する共通依存です．OpenCVは，`record` のLeRobotと同じGUIなしの `opencv-python-headless` を入れます．`hardware` のdigit-interfaceは `opencv-python` を要求するため，`hardware` を選ぶと2つのOpenCVのパッケージが同じ `cv2` に入ります．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
 
 `pysurvive` が必要なのは実機のPika Senseのトラッカーの姿勢だけで，PiPERの関節制御，Pikaのシリアル通信・カメラ，模擬では使いません．`pika` extraはPika一式の依存を追加します．[PyPI](https://pypi.org/project/pysurvive/) にPython 3.12用のwheelとソース配布がないため，[libsurviveのfork](https://github.com/tetsugo02/libsurvive/tree/roboloom)がビルドしたwheel（[リリース](https://github.com/tetsugo02/libsurvive/releases)．CPython 3.12，Linux x86_64，libusb同梱）を使います．インストール時のビルドはなく，コンパイラやlibusbの開発用ファイルは要りません．forkが上流から変えたのはPythonのパッケージだけで，上流が必須にしているGooey／wxPython（roboloomは使わないGUIの起動用）を任意のextra `pysurvive[gui]` にしています．x86_64以外のLinuxやほかのOSでは `pika` extraにpysurviveは入りません．extraはOSの設定やトラッカーのudev規則（`81-vive.rules`），CANの設定までは行いません．udev規則は管理者に導入してもらいます．
 

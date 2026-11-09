@@ -16,7 +16,7 @@ For policy learning, record the cameras of the Pika Gripper at the end of the ar
 
 ## Fisheye camera (`v4l2_rgb`)
 
-OpenCV comes with either the `pika` robot extra or the shared `hardware` extra. The camera itself does not use pysurvive. For D405 RGB, add `hardware` for pyrealsense2 ([Installation](../quick-start/installation.md)).
+OpenCV is a core dependency; no camera extra is needed. The camera itself does not use pysurvive. For D405 RGB, add `hardware` for pyrealsense2 ([Installation](../quick-start/installation.md)).
 
 ```yaml
 # nodes/left_wrist.yaml
@@ -35,10 +35,10 @@ fps: 30
 | `width`, `height`, `fps` | The size and rate to record. Opening refuses a camera that delivers different values |
 
 - Opening sets the format, size and rate and checks what the camera actually delivers. OpenCV silently falls back to other values it can deliver, so a mismatch stops the node and says why.
-- Only the newest frame is taken, so no backlog of old frames builds up.
+- A one-frame buffer is requested; the backend may ignore it, so newest-frame delivery is not guaranteed.
 - When no frame arrives for 1 s, the camera counts as lost and the node stops.
-- Frames are recorded as `observation.images.<name>` (video).
-- OpenCV comes with the `hardware` extra.
+- Frames are recorded as `observation.images.<name>` (`storage: video | image`, default `video`).
+- OpenCV is a core dependency.
 
 Find the camera's path and the formats it delivers with the commands below. `v4l2-ctl` is in the v4l-utils package (ask an administrator if it is missing).
 

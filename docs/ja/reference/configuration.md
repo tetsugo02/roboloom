@@ -315,3 +315,7 @@ PNG は一般に容量と PNG 圧縮・書き込み負荷が増えます。実�
 ログは設定ファイルの隣の `logs/<データセット名>-<時刻>/` に置きます（例：`logs/rakuda2-digit-20261102-101500/`）．データセット名から，有効だったオプションが分かります．leaderの電流制御は `<leader名>_trace.npz` に，フォロワは毎周期の状態（位置・速度・電流・目標・モード）を `<フォロワ名>_trace.npz` に，ノードの終了時に書きます．YAMLの設定・重力モデル・可動域・調整値・保存した初期姿勢（`poses/<フォロワ名>/`）はGitで管理し，生データ `*.npz`・ログ・dataset・FIFO（`config.fifo`）は生成した `.roboloom/.gitignore` で除外します．
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．
+
+## Webカメラ（開発中）
+
+`sensors.<名前>` の `type: opencv_rgb` には `device`，`width`，`height`，`fps` が必要です．`backend`，`format`，`storage` は任意です．実機では確かめていません．詳細とOSごとの制約は [Webカメラ](../contribution/webcam.md) を参照してください．
