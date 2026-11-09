@@ -16,10 +16,11 @@
 
 ## 必要なもの
 
-- IKはpinocchioで解きます．pinocchioは `ik` extraで入ります．`pose_ik` は，模擬でも `roboloom validate` でもこれを使います．
-    - 自分のプロジェクトでは：`uv add git+https://github.com/tetsugo02/roboloom.git --extra ik`（使う他のextrasも，[インストール](../quick-start/installation.md) のように並べます）
-    - roboloomのリポジトリをcloneした中では：`uv sync --extra ik`
-- トラッカーはlibsurvive（Pythonでは `pysurvive`）で読みます．libsurviveの導入とudev規則（`81-vive.rules`）にはsudoが要るので，管理者に頼みます．pysurviveが入っていないと，Senseのノードは理由を示して止まります．
+- PiPER＋Pikaの実機ではロボットのextrasを両方選びます．`piper` にPiPER SDKとIK用のPinocchio，`pika` に `pysurvive` と手首カメラ用の依存が入ります．
+    - 自分のプロジェクトでは：`uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika`（記録には `--extra record` も追加）
+    - roboloomのリポジトリをcloneした中では：`uv sync --extra piper --extra pika`
+- トラッカーはlibsurvive（Pythonでは `pysurvive`）で読みます．`pika` extraが，libsurviveのforkがビルドしたwheel（Linux x86_64）を入れます．インストール時のビルドはありません．トラッカーのudev規則（`81-vive.rules`）は管理者に頼みます．詳しくは [インストール](../quick-start/installation.md) にあります．pysurviveが入っていないと，Senseのノードは理由を示して止まります．
+- `pysurvive` が必要なのは実機のSenseのトラッカーの姿勢だけです．PiPERの関節制御，Pikaのシリアル・カメラ，模擬では使いません．模擬の `pose_ik` と `roboloom validate` には独立した `ik` extraだけで足ります（checkoutでは `uv sync --extra ik`）．
 - Senseのシリアルは，Pika Gripperと同じくpyserialで直接扱います．ポートは `/dev/serial/by-path/...` を使います．
 
 ## 設定
@@ -111,8 +112,26 @@ uv run roboloom run piper-mock --with policy       # Senseの代わりに確認�
 
 ## 実機で最初にすること
 
-1. 管理者に，libsurvive（pysurviveを含む）とudev規則の導入を頼みます．
-2. 基地局を置き，libsurviveで校正します（`survive-cli --force-calibrate`）．トラッカーの名前（`WM0` など）を確かめます．
+1. 上記の `pika` extraを導入し，トラッカーのudev規則は管理者に頼みます．
+2. 基地局を置き，libsurviveで校正します．Pythonのパッケージには `survive-cli` が含まれないので，Pythonから `--force-calibrate` を渡して開きます．トラッカーを基地局から見える所に置いて動かさず，姿勢が出始めたらCtrl-Cで止めます．出てくる名前（`WM0` など）がトラッカーの名前です．この手順は実機では未検証です．
+
+    ```bash
+    uv run python - <<'EOF'
+    import time
+    import pysurvive
+
+    ctx = pysurvive.SimpleContext(["calibrate", "--force-calibrate"])
+    try:
+        while ctx.Running():
+            updated = ctx.NextUpdated()
+            if updated:
+                print(updated.Name().decode(), updated.Pose()[0].Pos[:])
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        pass
+    EOF
+    ```
+
 3. Senseのシリアルを，読むだけで確かめます．版を尋ねる `GET_INFO` だけを送ります．
 
     ```bash

@@ -9,14 +9,21 @@
 
 | Node `type` | Role | Unit | Needs |
 | --- | --- | --- | --- |
-| `piper_follower` | AgileX PiPER arm, joint position (MOVE J) over CAN | rad (joint1…joint6); effort N·m | extra `piper` (piper_sdk 0.6) on hardware |
+| `piper_follower` | AgileX PiPER arm, joint position (MOVE J) over CAN | rad (joint1…joint6); effort N·m | extra `piper` (piper_sdk 0.6 and Pinocchio) |
 | `pika_gripper_follower` | Pika Gripper, one joint `gripper` = motor angle, 0 = closed | rad; effort mA | nothing extra (pyserial) |
-| `pika_sense` (input) | hand-held pose (Vive tracker via libsurvive) + jaw angle + engage button | m, quaternion xyzw, rad | `pysurvive` from libsurvive (not on PyPI; admin install, sudo) |
-| `pose_ik` (controller) | Sense pose → arm joints by IK, jaw → gripper angle | follower units | extra `ik` (pinocchio), also for mock and `validate` |
+| `pika_sense` (input) | hand-held pose (Vive tracker via libsurvive) + jaw angle + engage button | m, quaternion xyzw, rad | extra `pika` (pysurvive wheel from the libsurvive fork, Linux x86_64); admin-provided udev rules |
+| `pose_ik` (controller) | Sense pose → arm joints by IK, jaw → gripper angle | follower units | Pinocchio, included in `piper` or standalone `ik`; also for mock and `validate` |
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra piper --extra ik
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra piper --extra pika
 ```
+
+After registering the Git source: `uv add 'roboloom[piper,pika]'`. `pysurvive` is needed
+only for real Sense tracker poses: PiPER joint commands, Pika serial/cameras and mocks
+do not use it. The full `pika` extra installs it together with OpenCV for wrist cameras.
+PyPI has no Python 3.12 distribution, so the extra installs a wheel built by the
+libsurvive fork tetsugo02/libsurvive (Linux x86_64, libusb bundled, no build at install
+time; [../installation.md](../installation.md)). For mocks, use `ik` without `pika`.
 
 The unit is fixed in code (`rad`); do not add `unit:` or `control:` (both followers refuse
 `control:`). Do not convert to degrees or mm.
@@ -125,7 +132,9 @@ with Session.launch("piper-mock", mock=True) as s:
 
 ## Hardware steps (only when the user asks; tell them it is unverified)
 
-CAN interfaces (1 Mbps, one per arm) and libsurvive udev rules need an administrator. Read
+CAN interfaces (1 Mbps, one per arm) and libsurvive udev rules need an administrator.
+`pysurvive` comes with the `pika` extra; it has no `survive-cli`, so calibration opens
+`pysurvive.SimpleContext` with `--force-calibrate` (unverified on hardware). Read
 only: `roboloom probe <can>`, `roboloom probe <port> --device pika`, `roboloom probe <port>
 --device pika_sense`. `roboloom check-hold <follower> --tolerance <x>` energizes the arm.
 

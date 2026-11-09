@@ -16,6 +16,8 @@ Pika GripperとPika Senseには，それぞれ次の2台が付いています（
 
 ## 魚眼カメラ（`v4l2_rgb`）
 
+OpenCVはロボットの `pika` extraか，共通の `hardware` extraで入ります．カメラ自体はpysurviveを使いません．D405のRGBには，pyrealsense2が入る `hardware` も追加します（[インストール](../quick-start/installation.md)）．
+
 ```yaml
 # nodes/left_wrist.yaml
 type: v4l2_rgb

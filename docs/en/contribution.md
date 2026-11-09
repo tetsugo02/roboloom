@@ -7,7 +7,7 @@ For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git` in
 ```bash
 git clone https://github.com/tetsugo02/roboloom.git
 cd roboloom
-uv sync --extra test --group dev --group docs
+uv sync --extra rakuda2 --extra test --group dev --group docs
 uv run ruff format .
 uv run ruff check .
 uv run mypy src

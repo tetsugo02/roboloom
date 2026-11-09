@@ -1684,6 +1684,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pysurvive"
+version = "1.1.219"
+source = { url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl" }
+wheels = [
+    { url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3bca072aa9f26e392ba7b986d71a17ea13a3a4c727b114b2a9dd5cef3c7da45f" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "gooey", marker = "extra == 'gui'" }]
+provides-extras = ["gui"]
+
+[[package]]
 name = "pytest"
 version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1809,7 +1821,6 @@ source = { editable = "." }
 dependencies = [
     { name = "dora-rs" },
     { name = "dora-rs-cli" },
-    { name = "dynamixel-sdk" },
     { name = "numpy" },
     { name = "pyserial" },
     { name = "pyyaml" },
@@ -1827,16 +1838,25 @@ hardware = [
 ik = [
     { name = "pin" },
 ]
+pika = [
+    { name = "opencv-python" },
+    { name = "pysurvive", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+]
 piper = [
+    { name = "pin" },
     { name = "piper-sdk" },
 ]
 policy = [
     { name = "lerobot" },
 ]
+rakuda2 = [
+    { name = "dynamixel-sdk" },
+]
 record = [
     { name = "lerobot", extra = ["dataset"] },
 ]
 test = [
+    { name = "dynamixel-sdk" },
     { name = "lerobot", extra = ["dataset"] },
     { name = "pin" },
     { name = "pytest" },
@@ -1862,18 +1882,22 @@ requires-dist = [
     { name = "digit-interface", marker = "extra == 'hardware'", specifier = ">=0.2,<1" },
     { name = "dora-rs", specifier = "==1.0.1" },
     { name = "dora-rs-cli", specifier = "==1.0.1" },
-    { name = "dynamixel-sdk", specifier = ">=3.7,<4" },
+    { name = "dynamixel-sdk", marker = "extra == 'rakuda2'", specifier = ">=3.7,<4" },
+    { name = "dynamixel-sdk", marker = "extra == 'test'", specifier = ">=3.7,<4" },
     { name = "lerobot", marker = "extra == 'policy'", specifier = "==0.6.1" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'record'", specifier = "==0.6.1" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'test'", specifier = "==0.6.1" },
     { name = "lerobot", extras = ["training"], marker = "extra == 'train'", specifier = "==0.6.1" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "opencv-python", marker = "extra == 'hardware'", specifier = ">=4.8" },
+    { name = "opencv-python", marker = "extra == 'pika'", specifier = ">=4.8" },
     { name = "pin", marker = "extra == 'ik'", specifier = ">=4.1,<5" },
+    { name = "pin", marker = "extra == 'piper'", specifier = ">=4.1,<5" },
     { name = "pin", marker = "extra == 'test'", specifier = ">=4.1,<5" },
     { name = "piper-sdk", marker = "extra == 'piper'", specifier = ">=0.6.2,<0.7" },
     { name = "pyrealsense2", marker = "extra == 'hardware'", specifier = ">=2.55,<3" },
     { name = "pyserial", specifier = ">=3.5,<4" },
+    { name = "pysurvive", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'pika'", url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=1,<2" },
     { name = "pyyaml", specifier = ">=6,<7" },
@@ -1881,7 +1905,7 @@ requires-dist = [
     { name = "sounddevice", marker = "extra == 'hardware'", specifier = ">=0.4,<1" },
     { name = "textual", specifier = ">=8,<9" },
 ]
-provides-extras = ["record", "hardware", "piper", "ik", "policy", "train", "test"]
+provides-extras = ["rakuda2", "piper", "pika", "record", "hardware", "ik", "policy", "train", "test"]
 
 [package.metadata.requires-dev]
 dev = [

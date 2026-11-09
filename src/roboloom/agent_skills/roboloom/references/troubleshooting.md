@@ -69,6 +69,8 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | `No module named 'lerobot'` (recorder) / `converting needs lerobot` | `record` extra missing | `uv add 'roboloom[record]'` |
 | `No module named 'pyrealsense2'` / `'digit_interface'` / `'cv2'` / `'sounddevice'` | `hardware` extra missing | `uv add 'roboloom[hardware]'` |
 | `No module named 'piper_sdk'` | `piper` extra missing | `uv add 'roboloom[piper]'` |
+| `No module named 'dynamixel_sdk'` | `rakuda2` extra missing | `uv add 'roboloom[rakuda2]'` |
+| `pysurvive ... unavailable` | `pika` extra missing, or not Linux x86_64 (the wheel exists only there) | `uv add 'roboloom[pika]'` on Linux x86_64; ask an administrator for the tracker udev rules; see [installation.md](installation.md) |
 | `pose controllers need pinocchio` | `ik` extra missing | `uv add 'roboloom[ik]'` |
 | `LeRobot policies need lerobot with torch` | `policy` extra missing | `uv add 'roboloom[policy]'` (+ `lerobot[diffusion]` etc. per policy type) |
 | `policy 'x': expected 'module:callable'` | Missing `:` | `my_lab.policies:load` |

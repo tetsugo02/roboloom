@@ -16,10 +16,11 @@ One Sense drives one arm and one gripper. Two arms use two Senses and two contro
 
 ## Requirements
 
-- The IK runs on pinocchio, which comes with the `ik` extra. `pose_ik` needs it in mock mode and for `roboloom validate` as well.
-    - In your own project: `uv add git+https://github.com/tetsugo02/roboloom.git --extra ik` (add the other extras you use, as in [Installation](../quick-start/installation.md))
-    - In a checkout of the roboloom repository: `uv sync --extra ik`
-- The tracker is read through libsurvive (`pysurvive` in Python). Installing libsurvive and its udev rules (`81-vive.rules`) needs sudo, so ask an administrator. Without pysurvive, the Sense's node stops and says why.
+- For PiPER + Pika hardware, choose both robot extras. `piper` includes the PiPER SDK and Pinocchio for IK; `pika` includes `pysurvive` and the wrist-camera dependency.
+    - In your own project: `uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika` (add `--extra record` to save episodes)
+    - In a checkout of the roboloom repository: `uv sync --extra piper --extra pika`
+- The tracker is read through libsurvive (`pysurvive` in Python). The `pika` extra installs a wheel (Linux x86_64) built by a fork of libsurvive; nothing is built at install time. Ask an administrator for the tracker's udev rules (`81-vive.rules`). See [Installation](../quick-start/installation.md) for details. Without pysurvive, the Sense's node stops and says why.
+- `pysurvive` is required for real Sense tracker poses only: PiPER joint control, Pika serial/camera access and mocks do not use it. For mock `pose_ik` and `roboloom validate`, the standalone `ik` extra is sufficient (`uv sync --extra ik` in the checkout).
 - The Sense's serial link is handled directly through pyserial, as for the Pika Gripper. Name the port with `/dev/serial/by-path/...`.
 
 ## Configuration
@@ -111,8 +112,26 @@ Running a policy trained on the recorded data is described in [Driving with a po
 
 ## First steps on hardware
 
-1. Ask an administrator to install libsurvive (with pysurvive) and its udev rules.
-2. Place the base stations and calibrate them with libsurvive (`survive-cli --force-calibrate`). Find the tracker's name (`WM0` or another).
+1. Install the `pika` extra (above); ask an administrator for the tracker's udev rules.
+2. Place the base stations and calibrate them with libsurvive. The Python package does not include `survive-cli`, so open libsurvive from Python with `--force-calibrate`. Keep the tracker still where the base stations see it, and stop with Ctrl-C once poses appear. The printed name (`WM0` or another) is the tracker's name. This procedure has not been verified on hardware.
+
+    ```bash
+    uv run python - <<'EOF'
+    import time
+    import pysurvive
+
+    ctx = pysurvive.SimpleContext(["calibrate", "--force-calibrate"])
+    try:
+        while ctx.Running():
+            updated = ctx.NextUpdated()
+            if updated:
+                print(updated.Name().decode(), updated.Pose()[0].Pos[:])
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        pass
+    EOF
+    ```
+
 3. Check the Sense's serial link by reading only. Only `GET_INFO`, which asks for the version, is sent.
 
     ```bash

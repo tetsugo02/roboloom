@@ -8,6 +8,10 @@ The node name becomes the dataset feature name. Real devices need the `hardware`
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
 ```
 
+For Pika's `v4l2_rgb` fisheye cameras, OpenCV is also included in the `pika` extra.
+Camera access alone does not use pysurvive; `hardware` can supply OpenCV without the
+tracker dependencies. D405 RGB still needs `hardware` for pyrealsense2.
+
 | `type` | Device | Status | Feature |
 | --- | --- | --- | --- |
 | `realsense_rgb` | Intel RealSense, colour only | Hardware-verified (Rakuda2) | `observation.images.<name>` (video by default; H×W×3 RGB) |

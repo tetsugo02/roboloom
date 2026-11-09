@@ -122,7 +122,9 @@ def test_libsurvive_poses_are_kept_for_the_named_tracker_only():
     tracker.close()
 
 
-def test_without_pysurvive_the_error_says_who_installs_it(monkeypatch):
+def test_without_pysurvive_the_error_explains_the_extra_and_system_requirements(
+    monkeypatch,
+):
     import builtins
 
     real = builtins.__import__
@@ -133,8 +135,9 @@ def test_without_pysurvive_the_error_says_who_installs_it(monkeypatch):
         return real(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", no_survive)
-    with pytest.raises(ConnectionError, match="administrator"):
+    with pytest.raises(ConnectionError, match=r"roboloom\[pika\]") as error:
         SurviveTracker("WM0")
+    assert "administrator" in str(error.value)
 
 
 def sense_cfg(**extra) -> dict:

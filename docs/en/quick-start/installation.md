@@ -15,13 +15,27 @@ uv run roboloom --help
 
 For an existing project, start with `uv add` from its root. First set `project.requires-python` in `pyproject.toml` to `">=3.12,<3.13"`. Selecting a Python 3.12 environment alone does not limit the Python compatibility range that uv resolves.
 
-Add extras for your use case. These are configuration examples for the same dependency.
+The base install contains the shared runtime (dora, YAML, NumPy, serial communication, and the UI). Choose robot extras separately; recording and shared sensors remain independent extras. These are configuration examples for the same Git dependency.
 
 | Setup | Command | Purpose |
 | --- | --- | --- |
-| Base | `uv add git+https://github.com/tetsugo02/roboloom.git` | Configuration loading, CLI, Dynamixel driver |
+| Base | `uv add git+https://github.com/tetsugo02/roboloom.git` | Configuration loading, CLI, mock devices |
+| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2` | Dynamixel SDK for the follower and Rakuda-mini leader |
+| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika` | PiPER SDK, IK, Pika tracking and wrist cameras (in development, hardware unverified) |
 | Recording | `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` | Saving to LeRobotDataset, mock collection |
-| Hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware` | Recording plus the RealSense and DIGIT SDKs |
+| Rakuda2 hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware` | Rakuda2, recording, RealSense and DIGIT SDKs |
+
+Once the Git source is registered, extras can also be added by package name. Quote the brackets in shells such as zsh:
+
+```bash
+uv add 'roboloom[rakuda2]'
+uv add 'roboloom[piper,pika]'
+uv add 'roboloom[piper,pika,record]'
+```
+
+`rakuda2` adds `dynamixel-sdk`; `piper` adds `piper_sdk` and Pinocchio (`pin`) for `pose_ik`; `pika` adds `pysurvive` and OpenCV for the wrist cameras. `pyserial` stays shared because both Dynamixel and Pika use it. The standalone `ik` extra remains available for IK without the PiPER SDK. In a repository checkout, select the same extras with `uv sync --extra rakuda2` or `uv sync --extra piper --extra pika`.
+
+`pysurvive` is needed only for real Pika Sense tracker poses, not for PiPER joint control, Pika serial commands/cameras, or mocks. The `pika` extra installs the complete Pika dependency set. [PyPI](https://pypi.org/project/pysurvive/) has no Python 3.12 wheel or source distribution, so it uses a wheel built by a [fork of libsurvive](https://github.com/tetsugo02/libsurvive/tree/roboloom) ([releases](https://github.com/tetsugo02/libsurvive/releases); CPython 3.12, Linux x86_64, libusb bundled). Nothing is built at install time, so no compiler or libusb development files are needed. The fork changes only the Python packaging: upstream's required Gooey/wxPython (the launcher of a GUI roboloom does not use) becomes the optional extra `pysurvive[gui]`. On Linux other than x86_64 and on other systems, the `pika` extra does not install pysurvive. The extra does not change OS settings, install the tracker's udev rules (`81-vive.rules`), or configure CAN; ask an administrator for the udev rules.
 
 The `hardware` extra also includes audio libraries, but this guide covers RealSense and DIGIT. Check USB device access permissions, the RealSense system-side driver, and the USB 3 connection on the machine the hardware is connected to.
 

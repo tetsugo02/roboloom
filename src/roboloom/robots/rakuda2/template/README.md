@@ -11,7 +11,7 @@ Run commands from your own uv project root, which contains `pyproject.toml` and
 `.roboloom/`. Set `project.requires-python` to `">=3.12,<3.13"` and add roboloom from GitHub:
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware
 uv run roboloom --help
 ```
 
