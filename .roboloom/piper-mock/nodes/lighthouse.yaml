@@ -1,0 +1,5 @@
+# Lighthouse tracking through libsurvive (mock: no tracker is seen; the mock Senses make up
+# their own poses). On hardware this node opens libsurvive once for every Sense; see docs
+# contribution/pika-sense.md
+type: libsurvive
+args: []  # extra libsurvive arguments, e.g. [--lighthouse-gen, "2"]

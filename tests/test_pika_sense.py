@@ -8,11 +8,18 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from roboloom.drivers.survive import SurviveTracker
+from roboloom.core.protocol import Envelope, Publisher
+from roboloom.drivers.survive import SurviveSystem
 from roboloom.inputs.base import POSE_FIELDS
-from roboloom.inputs.pika_sense.sense import MockSense, PikaSense, SenseReader
+from roboloom.inputs.pika_sense.sense import (
+    MockSense,
+    PikaSense,
+    SenseReader,
+    TrackerFeed,
+)
 from roboloom.inputs.pika_sense.spec import TRACKER_TO_SENSE
 from roboloom.kinematics.spec import pose_from
+from roboloom.trackers.base import TrackedPose, Tracker
 
 
 class Clock:
@@ -108,18 +115,50 @@ def test_losing_the_pose_or_the_serial_link_disengages():
     assert link.closed and tracker.closed
 
 
-def test_libsurvive_poses_are_kept_for_the_named_tracker_only():
-    clock = Clock()
+def survive(**kwargs) -> SurviveSystem:
     context = SimpleNamespace(Running=lambda: False)  # the thread ends at once
-    tracker = SurviveTracker("WM0", context=context, clock=clock)
-    pose = SimpleNamespace(Pos=[0.1, 0.2, 0.3], Rot=[1.0, 0.0, 0.0, 0.0])  # w, x, y, z
-    tracker.take("WM1", pose)
-    assert tracker.latest() is None and tracker.objects() == ["WM1"]
-    tracker.take("WM0", pose)
-    got = tracker.latest()
-    assert got is not None and got[1] == clock.now
-    assert np.allclose(got[0], pose_from([0.1, 0.2, 0.3], [0, 0, 0, 1]))
-    tracker.close()
+    return SurviveSystem(context=context, clock=lambda: 7_000, **kwargs)
+
+
+def lh_pose(pos=(0.1, 0.2, 0.3), rot=(1.0, 0.0, 0.0, 0.0)):
+    return SimpleNamespace(Pos=list(pos), Rot=list(rot))  # Rot is w, x, y, z
+
+
+def test_libsurvive_poses_are_kept_by_serial_and_a_zero_rotation_marks_them_lost():
+    system = survive()
+    assert system.read() == {}
+    system.take("LHR-A", "WM0", lh_pose(rot=(0, 0, 0, 0)))  # lost before ever tracked
+    assert system.read() == {} and system.lost == 1
+    system.take("LHR-A", "WM0", lh_pose(rot=(2.0, 0.0, 0.0, 0.0)))  # normalized
+    got = system.read()["LHR-A"]
+    assert got == TrackedPose((0.1, 0.2, 0.3), (0.0, 0.0, 0.0, 1.0), 7_000, True)
+    system.take("LHR-A", "WM0", lh_pose(pos=(9, 9, 9), rot=(0, 0, 0, 0)))
+    lost = system.read()["LHR-A"]
+    assert not lost.tracking and lost.position == (0.1, 0.2, 0.3)  # the last tracked
+    system.take("LHR-A", "WM1", lh_pose(rot=(math.nan, 0, 0, 0)))  # renamed, invalid
+    assert system.lost == 3 and system.status()["serials"] == "LHR-A (WM1)"
+    system.take("LHR-A", "WM1", lh_pose(pos=(1, 2, 3)))  # tracked again
+    assert system.read()["LHR-A"].tracking
+    system.close()
+
+
+def test_libsurvive_skips_objects_until_their_serial_is_known():
+    updates = [SimpleNamespace(Name=lambda: b"WM0", Pose=lambda: (lh_pose(), 0.0))] * 2
+    state = {"running": 3}
+
+    def running():
+        state["running"] -= 1
+        return state["running"] > 0
+
+    serials = iter(["", "LHR-B"])
+    context = SimpleNamespace(Running=running, NextUpdated=lambda: updates.pop())
+    system = SurviveSystem(
+        context=context, serial=lambda obj: next(serials), clock=lambda: 1
+    )
+    system.thread.join(timeout=2)
+    assert system.unidentified == 1 and list(system.read()) == ["LHR-B"]
+    assert system.error is None
+    system.close()
 
 
 def test_without_pysurvive_the_error_explains_the_extra_and_system_requirements(
@@ -136,38 +175,79 @@ def test_without_pysurvive_the_error_explains_the_extra_and_system_requirements(
 
     monkeypatch.setattr(builtins, "__import__", no_survive)
     with pytest.raises(ConnectionError, match=r"roboloom\[pika\]") as error:
-        SurviveTracker("WM0")
+        SurviveSystem()
     assert "administrator" in str(error.value)
+
+
+def poses_msg(poses: dict) -> Envelope:
+    return Publisher("lighthouse").make(Tracker.kind, Tracker.encode(poses))
+
+
+def test_the_feed_follows_its_serial_and_drops_a_lost_pose():
+    feed = TrackerFeed("LHR-A")
+    assert feed.latest() is None
+    other = TrackedPose((5.0, 5.0, 5.0), (0.0, 0.0, 0.0, 1.0), 1_000_000_000)
+    feed.on_tracker(poses_msg({"LHR-B": other}))
+    assert feed.latest() is None
+    mine = TrackedPose((0.1, 0.2, 0.3), (0.0, 0.0, 0.0, 1.0), 2_000_000_000)
+    feed.on_tracker(poses_msg({"LHR-A": mine, "LHR-B": other}))
+    got = feed.latest()
+    assert got is not None and got[1] == 2.0
+    assert np.allclose(got[0], pose_from([0.1, 0.2, 0.3], [0, 0, 0, 1]))
+    lost = TrackedPose(mine.position, mine.quaternion, 3_000_000_000, False)
+    feed.on_tracker(poses_msg({"LHR-A": lost}))
+    assert feed.latest() is None  # lost: the Sense reports tracking 0 and disengages
+    feed.on_tracker(poses_msg({"LHR-A": mine}))
+    assert feed.latest() is not None
+
+
+def test_a_sense_reads_its_tracker_through_the_feed():
+    clock = Clock()
+    feed = TrackerFeed("LHR-A")
+    sense = SenseReader(FakeLink(clock), feed, 0.1, clock)
+    assert fields(sense.read())["tracking"] == 0.0
+    tracked = TrackedPose((1.0, 2.0, 0.5), (0.0, 0.0, 0.0, 1.0), int(clock.now * 1e9))
+    sense.on_tracker(poses_msg({"LHR-A": tracked}))
+    f = fields(sense.read())
+    expected = pose_from([1.0, 2.0, 0.5], [0, 0, 0, 1]) @ TRACKER_TO_SENSE
+    assert f["tracking"] == 1.0
+    assert [f["x"], f["y"], f["z"]] == pytest.approx(expected[:3, 3].tolist())
 
 
 def sense_cfg(**extra) -> dict:
     return {
         "type": "pika_sense",
         "port": "/dev/serial/by-path/mock-sense",
-        "tracker": {"name": "WM0"},
+        "tracker": {"system": "lighthouse", "serial": "LHR-A"},
         **extra,
     }
 
 
-def test_the_input_checks_its_configuration_and_records_nine_values():
+def test_the_input_checks_its_configuration_and_records_ten_values():
     sense = PikaSense("left_sense", sense_cfg())
-    assert sense.device_ids() == ("/dev/serial/by-path/mock-sense", "libsurvive:WM0")
+    assert sense.tracker_system() == "lighthouse"
+    assert sense.device_ids() == (
+        "/dev/serial/by-path/mock-sense",
+        "tracker:lighthouse:LHR-A",
+    )
     for bad, error in (
         ({"port": "SET_PORT"}, ValueError),
         ({"tracker": "WM0"}, TypeError),
-        ({"tracker": {"name": "SET_TRACKER"}}, ValueError),
-        ({"tracker": {"name": "WM0", "args": "--lh"}}, ValueError),
+        ({"tracker": {"system": "lighthouse", "serial": "SET_SERIAL"}}, ValueError),
+        ({"tracker": {"serial": "LHR-A"}}, ValueError),
         ({"stale_ms": 0}, ValueError),
     ):
         with pytest.raises(error):
             PikaSense("left_sense", sense_cfg(**bad))
+    with pytest.raises(ValueError, match="serial.*trackers:"):
+        PikaSense("left_sense", sense_cfg(tracker={"name": "WM0", "args": ["--lh"]}))
     feature = sense.features(10)["observation.left_sense"]
     assert feature["shape"] == (10,) and feature["names"][-2:] == [
         "tracking",
         "engaged",
     ]
     payload = sense.encode(MockSense().read())
-    assert payload["frame"] == "libsurvive" and payload["tracking"] is True
+    assert payload["frame"] == "lighthouse" and payload["tracking"] is True
     frame = sense.frame(None, 10)["observation.left_sense"]
     assert frame.shape == (10,)
 

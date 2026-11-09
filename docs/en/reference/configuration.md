@@ -28,7 +28,7 @@ options:
 
 Node YAML paths and `output` are relative to the configuration file's directory. With no option enabled, the output location above is `.roboloom/rakuda2/datasets/rakuda2`.
 
-The only top-level keys are `repo_id`, `output`, `dataset_fps`, `mode`, the roles (`inputs`, `controllers`, `followers`, `sensors`, `estimators`), `recorder`, `session` and `options`; any other key is refused at load. The robot's name is the configuration's directory name (`rakuda2` for `.roboloom/rakuda2/`) and is also the dataset's `robot_type`.
+The only top-level keys are `repo_id`, `output`, `dataset_fps`, `mode`, the roles (`trackers`, `inputs`, `controllers`, `followers`, `sensors`, `estimators`), `recorder`, `session` and `options`; any other key is refused at load. The robot's name is the configuration's directory name (`rakuda2` for `.roboloom/rakuda2/`) and is also the dataset's `robot_type`.
 
 `followers` lists the devices that move on command (arms, grippers, ...). One configuration may hold several followers. Each follower needs exactly one controller that drives it. A configuration with `followers: {}` records its inputs and sensors only, with no `action`; it cannot have controllers, and its inputs and sensors need their own rate (`poll_hz`, `fps`) ([Hand-held collection with Pika Sense](../contribution/pika-handheld.md), in development).
 
@@ -102,7 +102,7 @@ Each follower model and each actuated input model (a leader that runs control la
 | `default` | `true` enables it when nothing is specified (default `false`) |
 | `requires` | List of options enabled together with it |
 | `conflicts` | List of options that cannot be used at the same time |
-| `set` | Maps `<role>.<node>` (role one of `inputs`, `controllers`, `followers`, `sensors`, `estimators`) to a node file; `null` removes that node |
+| `set` | Maps `<role>.<node>` (role one of `trackers`, `inputs`, `controllers`, `followers`, `sensors`, `estimators`) to a node file; `null` removes that node |
 | `dataset` | Short name appended to the dataset name while the option is enabled |
 
 The rules are:

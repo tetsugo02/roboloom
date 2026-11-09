@@ -26,10 +26,26 @@ One Sense drives one arm and one gripper. Two arms use two Senses and two contro
 ## Configuration
 
 ```yaml
+# config.yaml (excerpt): one tracking system node serves both Senses
+trackers:
+  lighthouse: nodes/lighthouse.yaml
+inputs:
+  left_sense: nodes/left_sense.yaml
+  right_sense: nodes/right_sense.yaml
+```
+
+```yaml
+# nodes/lighthouse.yaml
+type: libsurvive
+args: []                 # optional: extra libsurvive arguments, e.g. [--lighthouse-gen, "2"]
+# poll_hz: 200           # optional: how often the poses are published
+```
+
+```yaml
 # nodes/left_sense.yaml
 type: pika_sense
 port: /dev/serial/by-path/pci-0000:00:14.0-usb-0:3:1.0-port0
-tracker: {name: WM0}     # the tracker's name in libsurvive
+tracker: {system: lighthouse, serial: LHR-0123ABCD}  # the tracker's serial number
 stale_ms: 100            # optional, default 100: older pose or serial feedback counts as lost
 # poll_hz: 100           # optional; required in a configuration without followers
 ```
@@ -57,9 +73,17 @@ input_timeout_ms: 150    # required
 | Key | Meaning |
 | --- | --- |
 | `port` | Required. The Sense's serial port. A value left as `SET_` is refused |
-| `tracker.name` | Required. The name libsurvive gives the tracker (e.g. `WM0`). A value left as `SET_` is refused. `args` (optional, a list of strings) adds arguments for libsurvive |
+| `tracker.system` | Required. The tracking system node under `trackers:` that reads this Sense's tracker |
+| `tracker.serial` | Required. The tracker's serial number (`LHR-...`; see "First steps on hardware"). Names like `WM0` follow the order libsurvive finds the trackers in and may swap, so they are not used. A value left as `SET_` is refused. The older keys `tracker.name` and `tracker.args` are refused with a pointer to these |
 | `stale_ms` | Default 100. A pose or serial feedback older than this counts as lost |
 | `poll_hz` | Optional. The rate at which the input is read. Without it, the input runs at the fastest `control_hz` of the followers its controllers drive. Required in a configuration without followers ([Hand-held collection with Pika Sense](pika-handheld.md)) |
+
+`libsurvive` (a node under `trackers:`): one libsurvive context opens the USB receivers once and serves every Sense, and both trackers' poses come in one calibrated world frame. libsurvive claims the receivers, so a second context in another process would find no tracker. Its single thread keys poses by serial; a rotation libsurvive reports as all zeros (lost tracking) marks that tracker lost (`tracking` 0, the Sense disengages) until the next good pose. The node is not recorded; its status shows the serials it sees, how often tracking was lost, and an error if libsurvive stopped.
+
+| Key | Meaning |
+| --- | --- |
+| `args` | Optional. A list of strings passed to libsurvive |
+| `poll_hz` | Optional. How often the poses are published. Without it, as fast as the fastest Sense that reads it |
 
 `pose_ik`:
 
@@ -113,7 +137,7 @@ Running a policy trained on the recorded data is described in [Driving with a po
 ## First steps on hardware
 
 1. Install the `pika` extra (above); ask an administrator for the tracker's udev rules.
-2. Place the base stations and calibrate them with libsurvive. The Python package does not include `survive-cli`, so open libsurvive from Python with `--force-calibrate`. Keep the tracker still where the base stations see it, and stop with Ctrl-C once poses appear. The printed name (`WM0` or another) is the tracker's name. This procedure has not been verified on hardware.
+2. Place the base stations and calibrate them with libsurvive. The Python package does not include `survive-cli`, so open libsurvive from Python with `--force-calibrate`. Keep the tracker still where the base stations see it, and stop with Ctrl-C once poses appear. Each line shows the tracker's serial number (`LHR-...`), which goes into `tracker.serial`, and its current name. This procedure has not been verified on hardware.
 
     ```bash
     uv run python - <<'EOF'
@@ -125,7 +149,8 @@ Running a policy trained on the recorded data is described in [Driving with a po
         while ctx.Running():
             updated = ctx.NextUpdated()
             if updated:
-                print(updated.Name().decode(), updated.Pose()[0].Pos[:])
+                serial = pysurvive.simple_serial_number(updated.ptr) or b""
+                print(serial.decode(), updated.Name().decode(), updated.Pose()[0].Pos[:])
             time.sleep(0.01)
     except KeyboardInterrupt:
         pass
@@ -144,8 +169,9 @@ Running a policy trained on the recorded data is described in [Driving with a po
 
 ## What to check on hardware
 
-- The tracker's name and serial, and the pose rate and latency.
-- Whether two Senses can be read through libsurvive from separate processes. If not, read both in one input node.
+- The trackers' serial numbers, and the pose rate and latency.
+- Whether the one `lighthouse` node sees both trackers and both Senses follow their own.
+- Recovery after unplugging the receiver or switching a Sense off. The fork carries upstream's unmerged fixes for the crash on unplug ([#383](https://github.com/collabora/libsurvive/pull/383), issue #372) and for timed-out or stalled USB transfers ([#378](https://github.com/collabora/libsurvive/pull/378)); they are tested against a fake libusb only.
 - How `Command` changes (whether a double-click swaps 0 and 1).
 - The jaw angle's direction and range, and how it maps to the Pika Gripper's angle (`gripper_map`).
 - Whether the SDK's transform from the tracker to the Sense's centre (`inputs/pika_sense/spec.py`) is right for your units.

@@ -18,6 +18,8 @@ The recording keeps the raw values, so the same recording can be converted again
 `.roboloom/pika-handheld-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template), so the commands on this page run from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; recording and conversion need the `record` extra ([Installation](../quick-start/installation.md)). Its values are for mock mode only; do not reuse them on hardware.
 
 ```yaml
+trackers:  # one libsurvive context for both Senses
+  lighthouse: nodes/lighthouse.yaml
 inputs:
   left_sense: nodes/left_sense.yaml
   right_sense: nodes/right_sense.yaml
@@ -29,7 +31,7 @@ sensors:
 
 - A configuration without followers cannot have controllers.
 - Inputs and sensors need their own rate: `poll_hz` for a Sense (e.g. 100), `fps` for a camera. Without followers there is no rate to borrow.
-- A Sense is written as in [Teleoperation with Pika Sense and IK](pika-sense.md); the cameras are `v4l2_rgb` as in [Pika wrist cameras](pika-cameras.md).
+- A Sense and the `lighthouse` tracker node are written as in [Teleoperation with Pika Sense and IK](pika-sense.md); the cameras are `v4l2_rgb` as in [Pika wrist cameras](pika-cameras.md).
 
 ## Recording
 

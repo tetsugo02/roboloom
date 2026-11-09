@@ -26,6 +26,7 @@ from roboloom.robots.safety import FollowerSafety
 
 COMMANDS = ("start", "stop", "save", "discard", "estop", "release", "home", "quit")
 from roboloom.runtime.flow import STATE_PREFIX, STATUS_SUFFIX, command_output
+from roboloom.trackers.base import Tracker
 
 
 def _send(node, output: str, msg: Envelope) -> None:
@@ -218,6 +219,7 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
     status = StatusReporter(Publisher(source.name), role)
     on_session = getattr(reader, "on_session", None)
     on_feedback = getattr(reader, "on_feedback", None)
+    on_tracker = getattr(reader, "on_tracker", None)
     gc_pauses = GcPauses()
     samples: deque[int] = deque(maxlen=60)
     work: deque[float] = deque(maxlen=60)  # ms in read()
@@ -234,6 +236,10 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
             if event_id == "feedback" and msg is not None:
                 if on_feedback is not None:
                     on_feedback(msg)
+                continue
+            if event_id == "tracker" and msg is not None:
+                if on_tracker is not None:
+                    on_tracker(msg)
                 continue
             if event_id == "tick":
                 began = time.perf_counter()
@@ -265,6 +271,45 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
                     "gc_max_ms": gc_pauses.take(),
                     **(extra() if extra is not None else {}),
                 }
+                _send(node, "status", status.make(fields, level, now))
+    finally:
+        reader.close()
+
+
+def _tracker(node, tracker: Tracker, cfg: RobotConfig):
+    """A tracking system: publish every tracked pose on each tick for the inputs that
+    hold its objects (`roboloom.trackers`)."""
+    reader = tracker.open(cfg.mock)
+    p = Publisher(tracker.name)
+    status = StatusReporter(Publisher(tracker.name), "tracker")
+    gc_pauses = GcPauses()
+    sent: deque[int] = deque(maxlen=60)
+    work: deque[float] = deque(maxlen=60)  # ms in read()
+    try:
+        while True:
+            event_id, msg = _event(node)
+            if _quit(event_id, msg):
+                return
+            if event_id == "tick":
+                began = time.perf_counter()
+                poses = reader.read()
+                work.append((time.perf_counter() - began) * 1e3)
+                _send(node, "poses", p.make(tracker.kind, tracker.encode(poses)))
+                sent.append(time.monotonic_ns())
+            now = time.monotonic_ns()
+            if status.due(now):
+                rate = (
+                    (len(sent) - 1) / ((sent[-1] - sent[0]) / 1e9)
+                    if len(sent) > 1 and sent[-1] > sent[0]
+                    else 0.0
+                )
+                fields = {
+                    "rate_hz": round(rate, 1),
+                    **_work_fields(work),
+                    "gc_max_ms": gc_pauses.take(),
+                    **reader.status(),
+                }
+                level = "error" if fields.get("error") else "ok"
                 _send(node, "status", status.make(fields, level, now))
     finally:
         reader.close()
@@ -775,6 +820,8 @@ def main() -> None:
             _policy(node, controller)
         else:
             _controller(node, controller)
+    elif name in cfg.trackers:
+        _tracker(node, cfg.trackers[name], cfg)
     elif name in cfg.inputs:
         _source(node, cfg.inputs[name], cfg, "input")
     elif name in cfg.sensors:

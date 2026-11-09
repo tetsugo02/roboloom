@@ -37,7 +37,7 @@ copy that directory from <https://github.com/tetsugo02/roboloom> into the user's
 `.roboloom/`. It has `mode: mock` and mock ports/limits: **never reuse its `can`, `port`,
 `tracker`, `limits`, `tool_offset` or `workspace` values for hardware.** For hardware, write
 the YAML by hand with `SET_` placeholders and let the user fill them from measurements
-(`roboloom validate` lists the remaining `SET_` values; `can`/`port`/`tracker.name` left as
+(`roboloom validate` lists the remaining `SET_` values; `can`/`port`/`tracker.serial` left as
 `SET_` are refused).
 
 ## Node keys (verified against code)
@@ -52,8 +52,17 @@ optional `unattended` (only from `check-hold`).
 `current_limit_A` (**required**, 0 < x ≤ 2), `stale_ms` (default 100), `health`
 (**required**), `limits` (1 entry `gripper`, inside 0–1.67 rad), `torque`, `record_effort`.
 
-`pika_sense`: `port`, `tracker: {name: ..., args: [...]}` (libsurvive object name, extra
-args), `stale_ms` (default 100), `poll_hz` (optional; required when there are no followers).
+`pika_sense`: `port`, `tracker: {system: <node under trackers:>, serial: LHR-...}` (the
+tracker's serial number; names like `WM0` swap between runs and are refused, as are the old
+keys `tracker.name`/`tracker.args`), `stale_ms` (default 100), `poll_hz` (optional;
+required when there are no followers).
+
+`trackers:` role, `type: libsurvive`: `args` (optional list of libsurvive arguments),
+`poll_hz` (optional). One node opens libsurvive once for every Sense (a second context in
+another process finds no tracker) and publishes poses by serial; not recorded. An all-zero
+rotation marks that tracker lost (`tracking` 0, disengage) until the next good pose.
+Calibration (`--force-calibrate` from Python) prints each tracker's serial via
+`pysurvive.simple_serial_number(obj.ptr)`.
 
 `pose_ik`:
 
@@ -141,5 +150,7 @@ only: `roboloom probe <can>`, `roboloom probe <port> --device pika`, `roboloom p
 ## Limitations
 
 No template or Quick start; joint signs/zeros, `tool_offset`, gripper zero, feedback rates,
-two Senses in separate processes and `unattended` are unchecked. URDF matches PiPER
+both Senses on one `libsurvive` tracker node, recovery after a USB unplug (the fork
+carries upstream PRs #383/#378, tested against a fake libusb only) and `unattended` are
+unchecked. URDF matches PiPER
 firmware S-V1.6-3 and later. Closing the dataflow does not disable PiPER or gripper motors.

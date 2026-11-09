@@ -36,7 +36,7 @@ pika = [
     # PyPI has no Python 3.12 wheels/sdist. A wheel from the libsurvive fork
     # (github.com/tetsugo02/libsurvive, branch roboloom): libusb bundled, nothing built at
     # install time, the GUI (gooey/wxPython) is its optional `gui` extra. Linux x86_64 only.
-    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "opencv-python>=4.8",  # Pika wrist cameras (sensors.vision.v4l2)
 ]
 # Shared features, independent of the robot.

@@ -307,6 +307,11 @@ class PoseInput(InputDevice):
     kind = "pose_intent"
     world_frame = "world"  # the name of the tracker's world frame (subclasses set it)
 
+    def tracker_system(self) -> str | None:
+        """The tracking system node (under `trackers:`) this input reads its pose from,
+        if any. Its reader then gets that node's poses through `on_tracker(msg)`."""
+        return None
+
     def encode(self, sample: Sample) -> dict:
         v = np.asarray(sample.value, dtype=float)
         if v.shape != (len(POSE_FIELDS),):

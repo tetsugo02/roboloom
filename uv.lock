@@ -1685,10 +1685,10 @@ wheels = [
 
 [[package]]
 name = "pysurvive"
-version = "1.1.219"
-source = { url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl" }
+version = "1.1.227"
+source = { url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl" }
 wheels = [
-    { url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3bca072aa9f26e392ba7b986d71a17ea13a3a4c727b114b2a9dd5cef3c7da45f" },
+    { url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:92424eb8f6144ca17863133efbf2dec857c990c25435df42593e33d44ee6efd1" },
 ]
 
 [package.metadata]
@@ -1897,7 +1897,7 @@ requires-dist = [
     { name = "piper-sdk", marker = "extra == 'piper'", specifier = ">=0.6.2,<0.7" },
     { name = "pyrealsense2", marker = "extra == 'hardware'", specifier = ">=2.55,<3" },
     { name = "pyserial", specifier = ">=3.5,<4" },
-    { name = "pysurvive", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'pika'", url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-1/pysurvive-1.1.219-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl" },
+    { name = "pysurvive", marker = "platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'pika'", url = "https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=1,<2" },
     { name = "pyyaml", specifier = ">=6,<7" },

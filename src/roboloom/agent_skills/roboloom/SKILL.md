@@ -30,7 +30,8 @@ outdated, run `uv run roboloom skills install --force`.
   `calibration/`, `poses/`, and (git-ignored) `logs/` and `datasets/`.
 - `config.yaml` names nodes by **role**: `inputs` (leader arms, hand-held devices),
   `controllers` (`joint`, `pose_ik`, `policy`), `followers` (driven arms/grippers),
-  `sensors`, `estimators`, plus `recorder` and `session`. Each node YAML's `type` picks
+  `sensors`, `estimators`, `trackers` (a tracking system several inputs share, e.g.
+  libsurvive for Pika Senses), plus `recorder` and `session`. Each node YAML's `type` picks
   the implementation. **Node names become dora IDs and dataset feature names.**
 - **Launch options** (`options:` in `config.yaml`) swap node files at launch: e.g.
   `digit`, `gravity`, `policy`. Options with a `dataset:` name append it to `repo_id` and
