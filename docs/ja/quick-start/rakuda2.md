@@ -1,6 +1,6 @@
 # Rakuda2 Quick start
 
-[インストール](installation.md) の手順で，自分のuvプロジェクトにroboloomとロボット・実機収集用extras（`rakuda2` / `record` / `hardware`）を追加した前提です．コマンドと設定ファイルのパスは，自分のプロジェクトルートを基準に示します．対応機器と構成は [Rakuda2](../robots/rakuda2.md) を参照してください．
+[インストール](installation.md) の手順で，自分のuvプロジェクトにroboloomとロボット・実機収集用extras（`rakuda2` / `record` / `hardware` / `digit`）を追加した前提です．コマンドと設定ファイルのパスは，自分のプロジェクトルートを基準に示します．対応機器と構成は [Rakuda2](../robots/rakuda2.md) を参照してください．
 
 ## 1. 機体設定と読み取り確認
 

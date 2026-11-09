@@ -15,7 +15,7 @@ uv run roboloom --help
 
 既存のプロジェクトでは，そのルートで `uv add` から実行します．先に `pyproject.toml` の `project.requires-python` を `">=3.12,<3.13"` に設定してください．Python 3.12の環境を選ぶだけでは，uvが解決するPythonの対応範囲は限定されません．
 
-基本のインストールには共通の実行環境（dora，YAML，NumPy，OpenCV，シリアル通信，UI）が入ります．ロボットごとのextrasを選び，記録やRealSense・DIGITは独立したextrasで追加します．以下は同じGit依存に対する構成例です．
+基本のインストールには共通の実行環境（dora，YAML，NumPy，OpenCV，シリアル通信，UI）が入ります．ロボットごとのextrasを選び，記録，RealSense，DIGITは独立したextrasで追加します．以下は同じGit依存に対する構成例です．
 
 | 構成 | コマンド | 用途 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ uv run roboloom --help
 | Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2` | followerとRakuda-mini leader用のDynamixel SDK |
 | PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika` | PiPER SDK，IK，Pikaのトラッカー・手首カメラ（開発中・実機未検証） |
 | 記録 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` | LeRobotDatasetへの保存，模擬収集 |
-| Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware` | Rakuda2，記録，RealSense・DIGITのSDK |
+| Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2，記録，RealSense（`hardware`），DIGIT（`digit`） |
 
 Gitソースを登録した後は，パッケージ名でextrasを追加することもできます．zshなどのシェルでは角括弧を引用符で囲みます．
 
@@ -33,11 +33,13 @@ uv add 'roboloom[piper,pika]'
 uv add 'roboloom[piper,pika,record]'
 ```
 
-`rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` を追加します．OpenCVと `pyserial` は画像処理・カメラ取得やシリアル機器で共有する共通依存です．OpenCVは，`record` のLeRobotと同じGUIなしの `opencv-python-headless` を入れます．`hardware` のdigit-interfaceは `opencv-python` を要求するため，`hardware` を選ぶと2つのOpenCVのパッケージが同じ `cv2` に入ります．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
+`rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` を追加します．OpenCVと `pyserial` は画像処理・カメラ取得やシリアル機器で共有する共通依存です．OpenCVは，`record` のLeRobotと同じGUIなしの `opencv-python-headless` を入れます．DIGITの `digit` extraもheadlessを使います（下記）．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
 
 `pysurvive` が必要なのは実機のPika Senseのトラッカーの姿勢だけで，PiPERの関節制御，Pikaのシリアル通信・カメラ，模擬では使いません．`pika` extraはPika一式の依存を追加します．[PyPI](https://pypi.org/project/pysurvive/) にPython 3.12用のwheelとソース配布がないため，[libsurviveのfork](https://github.com/tetsugo02/libsurvive/tree/roboloom)がビルドしたwheel（[リリース](https://github.com/tetsugo02/libsurvive/releases)．CPython 3.12，Linux x86_64，libusb同梱）を使います．インストール時のビルドはなく，コンパイラやlibusbの開発用ファイルは要りません．forkが上流から変えたのはPythonのパッケージだけで，上流が必須にしているGooey／wxPython（roboloomは使わないGUIの起動用）を任意のextra `pysurvive[gui]` にしています．x86_64以外のLinuxやほかのOSでは `pika` extraにpysurviveは入りません．extraはOSの設定やトラッカーのudev規則（`81-vive.rules`），CANの設定までは行いません．udev規則は管理者に導入してもらいます．
 
-`hardware` extraには音声用ライブラリも含まれますが，このガイドではRealSenseとDIGITを扱います．USBデバイスへのアクセス権，RealSenseのシステム側のドライバ・USB 3接続は実機を接続する環境で確認してください．
+`hardware` extraはRealSenseと音声用のライブラリ，`digit` extraはDIGITのdigit-interfaceを追加します．このガイドではRealSenseとDIGITを扱います．USBデバイスへのアクセス権，RealSenseのシステム側のドライバ・USB 3接続は実機を接続する環境で確認してください．
+
+DIGITの `digit` extraは，上流のdigit-interface 0.2.1（アーカイブ済み）ではなく，[digit-interfaceのfork](https://github.com/tetsugo02/digit-interface/tree/roboloom)がビルドしたwheel（[リリース](https://github.com/tetsugo02/digit-interface/releases)．Pythonのみ）を使います．上流はGUI付きの `opencv-python` を要求しますが，これはroboloomとLeRobotが使う `opencv-python-headless` と同じ `cv2` に入ります．両方が入ると読まれる版が定まらず，片方を消すと `cv2` が壊れます．forkが変えたのは依存の宣言だけで（`opencv-python-headless` に変更），コードは上流と同じです．GUIで表示する `Digit.show_view` はheadlessでは動きませんが，roboloomは使いません．
 
 `uv add` は自分の `pyproject.toml` に依存とGitソースを登録し，`uv.lock` に解決したcommitを記録します．両方をGitで管理し，別の環境では `uv sync --locked` で再現します．詳細は [uvのGit依存の説明](https://docs.astral.sh/uv/concepts/projects/dependencies/#git) を参照してください．
 

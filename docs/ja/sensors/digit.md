@@ -1,6 +1,6 @@
 # DIGIT
 
-`DigitSensor` は `digit-interface` を使って触覚画像を取得します．`hardware` extraが必要です．左右のセンサーには異なるシリアル番号を設定します．
+`DigitSensor` は `digit-interface` を使って触覚画像を取得します．`digit` extraが必要です（[インストール](../quick-start/installation.md)）．左右のセンサーには異なるシリアル番号を設定します．
 
 ```yaml
 type: digit

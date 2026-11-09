@@ -23,13 +23,14 @@ For an existing project, first set `project.requires-python = ">=3.12,<3.13"` in
 | `piper` | piper_sdk 0.6, pinocchio (`pin`) | PiPER follower and `pose_ik` (in development) |
 | `pika` | pysurvive | Pika Sense tracking (in development); cameras and serial use core dependencies |
 | `record` | `lerobot[dataset]==0.6.1` | saving episodes (also mock collection that saves) |
-| `hardware` | pyrealsense2, digit-interface, sounddevice | RealSense, DIGIT, microphone |
+| `hardware` | pyrealsense2, sounddevice | RealSense, microphone |
+| `digit` | digit-interface 0.2.1 (fork wheel, opencv-python-headless) | DIGIT |
 | `ik` | pinocchio (`pin`) | standalone IK without the PiPER SDK; also included in `piper` |
 | `policy` | `lerobot==0.6.1` (brings torch) | `roboloom.policy.lerobot:load` |
 | `train` | `lerobot[training]==0.6.1` | `lerobot-train` on roboloom datasets |
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
 uv add 'roboloom[rakuda2]'  # after registering the Git source
 uv add 'roboloom[piper,pika]'  # PiPER + Pika Sense/Gripper
 uv add 'roboloom[policy]'   # once roboloom is already a dependency, extras can be added like this
@@ -109,4 +110,4 @@ npx skills add tetsugo02/roboloom --skill roboloom   # alternative, from GitHub 
 Python: `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`
 and `roboloom.agent_skills.check(...)`.
 
-opencv-python-headless (no GUI; the same package as LeRobot's in `record`) is a core dependency for `opencv_rgb` and V4L2 cameras. digit-interface in `hardware` requires opencv-python, so `hardware` installs two OpenCV packages into the same `cv2`. Three-OS webcam driver support does not imply full Windows Session support.
+opencv-python-headless (no GUI; the same package as LeRobot's in `record`) is a core dependency for `opencv_rgb` and V4L2 cameras. `digit` installs digit-interface 0.2.1 from a fork's wheel (github.com/tetsugo02/digit-interface, release `roboloom-1`) whose only change is depending on opencv-python-headless instead of opencv-python; the two distributions write the same `cv2`, so never add opencv-python to the environment. Three-OS webcam driver support does not imply full Windows Session support.
