@@ -30,8 +30,10 @@ from .recording.metrics import QUALITY
 from .robots import FOLLOWERS
 from .robots.base import Follower
 from .sensors import SENSORS
+from .trackers import TRACKERS
+from .trackers.base import Tracker
 
-ROLES = ("inputs", "controllers", "followers", "sensors", "estimators")
+ROLES = ("trackers", "inputs", "controllers", "followers", "sensors", "estimators")
 SERVICES = ("recorder", "session")
 # Service node ids and fixed dora input ids; LeRobot key collisions are checked by `features`.
 RESERVED = {*SERVICES, "action", "tick"}
@@ -252,6 +254,8 @@ class RobotConfig:
     sensors: dict[str, Source] = field(default_factory=dict)
     controllers: dict[str, Controller] = field(default_factory=dict)
     estimators: dict[str, Estimator] = field(default_factory=dict)
+    # tracking systems several inputs share (not recorded; see roboloom.trackers)
+    trackers: dict[str, Tracker] = field(default_factory=dict)
     max_age_ms: dict[str, float] = field(default_factory=dict)
     recorder: dict = field(default_factory=dict)
     quality: dict = field(default_factory=dict)  # see recording.metrics.QUALITY
@@ -442,7 +446,7 @@ def parse_config(tree: dict) -> RobotConfig:
         raise ValueError("mode must be mock or hardware")
     fps = positive(e.get("dataset_fps"), "dataset_fps")
 
-    names = [name for role in ROLES for name in tree[role]]
+    names = [name for role in ROLES for name in tree.get(role) or {}]
     if len(set(names)) != len(names):
         raise ValueError("node names must be unique across roles")
     for name in names:
@@ -464,9 +468,20 @@ def parse_config(tree: dict) -> RobotConfig:
     }
     for model in followers.values():
         model.traits()  # a measured `unattended` must fill in an unknown one
+    trackers = {
+        name: TRACKERS.get(c.get("type"))(name, c)
+        for name, c in (tree.get("trackers") or {}).items()
+    }
     inputs = {
         name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
     }
+    for name, held in inputs.items():
+        system = getattr(held, "tracker_system", lambda: None)()
+        if system is not None and system not in trackers:
+            raise ValueError(
+                f"inputs.{name}.tracker.system: {system!r} is not a node under trackers: "
+                f"({', '.join(trackers) or 'none configured'})"
+            )
     sensors = {
         name: SENSORS.get(c.get("type"))(name, c) for name, c in tree["sensors"].items()
     }
@@ -546,7 +561,8 @@ def parse_config(tree: dict) -> RobotConfig:
             if check is not None:
                 check()
 
-    owners: list[Source | Follower] = [
+    owners: list[Source | Follower | Tracker] = [
+        *trackers.values(),
         *inputs.values(),
         *followers.values(),
         *sensors.values(),
@@ -566,6 +582,7 @@ def parse_config(tree: dict) -> RobotConfig:
         sensors=sensors,
         controllers=controllers,
         estimators=estimators,
+        trackers=trackers,
         max_age_ms={
             name: positive(ages.get(name), f"max_age_ms.{name}")
             for name in (

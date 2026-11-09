@@ -22,7 +22,7 @@ options: {}                     # see below
 ```
 
 - Only these top-level keys are accepted: `repo_id`, `output`, `dataset_fps`, `mode`,
-  `inputs`, `controllers`, `followers`, `sensors`, `estimators`, `recorder`, `session`,
+  `trackers`, `inputs`, `controllers`, `followers`, `sensors`, `estimators`, `recorder`, `session`,
   `options`. Anything else is refused at load.
 - **Node names** (keys under the roles) are dora IDs and dataset feature names: letters,
   digits, `-`, `_`. Reserved: `recorder`, `session`, `action`, `tick`, names starting with

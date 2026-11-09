@@ -28,7 +28,7 @@ options:
 
 ノードYAMLのパスと `output` は設定ファイルのディレクトリが基準です．オプションを有効にしない場合，上の保存先は `.roboloom/rakuda2/datasets/rakuda2` です．
 
-最上位に書けるキーは `repo_id`，`output`，`dataset_fps`，`mode`，役割（`inputs`，`controllers`，`followers`，`sensors`，`estimators`），`recorder`，`session`，`options` だけです．それ以外のキーは読み込み時に拒否します．ロボットの名前は設定のディレクトリ名（`.roboloom/rakuda2/` なら `rakuda2`）で，データセットの `robot_type` にも使います．
+最上位に書けるキーは `repo_id`，`output`，`dataset_fps`，`mode`，役割（`trackers`，`inputs`，`controllers`，`followers`，`sensors`，`estimators`），`recorder`，`session`，`options` だけです．それ以外のキーは読み込み時に拒否します．ロボットの名前は設定のディレクトリ名（`.roboloom/rakuda2/` なら `rakuda2`）で，データセットの `robot_type` にも使います．
 
 `followers` には，指令を受けて動く装置（腕，グリッパなど）を並べます．1つの設定に複数のフォロワを置けます．各フォロワには，それを動かすcontrollerがちょうど1つ必要です．`followers: {}` としてフォロワを置かない構成は，入力とセンサーを記録するだけで，`action` を記録しません．このときcontrollerは置けず，入力とセンサーは自分の周期（`poll_hz`，`fps`）を持つ必要があります（[Pika Senseを手に持った収集](../contribution/pika-handheld.md)，開発中）．
 
@@ -102,7 +102,7 @@ options:
 | `default` | `true` なら，指定がないときに有効（既定 `false`） |
 | `requires` | 一緒に有効にするオプションのリスト |
 | `conflicts` | 同時に使えないオプションのリスト |
-| `set` | `<role>.<node>`（roleは `inputs`，`controllers`，`followers`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
+| `set` | `<role>.<node>`（roleは `trackers`，`inputs`，`controllers`，`followers`，`sensors`，`estimators` のどれか）からノードファイルへの対応．`null` はそのノードを削除する |
 | `dataset` | 有効なときにデータセット名へ付ける短い名前 |
 
 規則は次のとおりです．

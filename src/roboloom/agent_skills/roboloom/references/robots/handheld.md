@@ -35,7 +35,8 @@ session: nodes/session.yaml
 
 - `followers: {}` forbids controllers; every input needs `poll_hz` and every sensor `fps`
   (no follower rate to borrow). Loading refuses otherwise.
-- `pika_sense` keys (`port`, `tracker: {name, args}`, `stale_ms`, `poll_hz`): see
+- `pika_sense` keys (`port`, `tracker: {system, serial}`, `stale_ms`, `poll_hz`) and the
+  `trackers:` node (`type: libsurvive`): see
   [piper-pika.md](piper-pika.md); cameras: [../sensors.md](../sensors.md).
 
 ## Recording

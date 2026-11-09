@@ -5,6 +5,8 @@ repo_id: local/pika-handheld-mock
 output: datasets/pika-handheld-mock
 mode: mock
 dataset_fps: 10
+trackers:  # shared by both Senses
+  lighthouse: nodes/lighthouse.yaml
 inputs:
   left_sense: nodes/left_sense.yaml
   right_sense: nodes/right_sense.yaml

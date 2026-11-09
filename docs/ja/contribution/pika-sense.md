@@ -26,10 +26,26 @@
 ## 設定
 
 ```yaml
+# config.yaml（抜粋）：1つのトラッキングシステムのノードが両方のSenseに配る
+trackers:
+  lighthouse: nodes/lighthouse.yaml
+inputs:
+  left_sense: nodes/left_sense.yaml
+  right_sense: nodes/right_sense.yaml
+```
+
+```yaml
+# nodes/lighthouse.yaml
+type: libsurvive
+args: []                 # 任意：libsurviveに渡す引数（例 [--lighthouse-gen, "2"]）
+# poll_hz: 200           # 任意：姿勢を公開する周期
+```
+
+```yaml
 # nodes/left_sense.yaml
 type: pika_sense
 port: /dev/serial/by-path/pci-0000:00:14.0-usb-0:3:1.0-port0
-tracker: {name: WM0}     # libsurviveでのトラッカーの名前
+tracker: {system: lighthouse, serial: LHR-0123ABCD}  # トラッカーのシリアル番号
 stale_ms: 100            # 任意，既定100．これより古い姿勢やシリアルは，失ったと見なす
 # poll_hz: 100           # 任意．フォロワのない構成では必須
 ```
@@ -57,9 +73,17 @@ input_timeout_ms: 150    # 必須
 | キー | 意味 |
 | --- | --- |
 | `port` | 必須．Senseのシリアルポート．`SET_` のままでは拒否します |
-| `tracker.name` | 必須．libsurviveが付けるトラッカーの名前（例 `WM0`）．`SET_` のままでは拒否します．`args`（任意，文字列のリスト）でlibsurviveに渡す引数を足せます |
+| `tracker.system` | 必須．このSenseのトラッカーを読む，`trackers:` の下のトラッキングシステムのノード |
+| `tracker.serial` | 必須．トラッカーのシリアル番号（`LHR-...`．「実機で最初にすること」で調べます）．`WM0` のような名前はlibsurviveが見つけた順で付き，入れ替わりうるので使いません．`SET_` のままでは拒否します．以前のキー `tracker.name` と `tracker.args` は，これらを案内して拒否します |
 | `stale_ms` | 既定100．これより古い姿勢やシリアルのフィードバックは，失ったと見なします |
 | `poll_hz` | 任意．入力を読む周期．書かなければ，controllerが動かすフォロワの `control_hz` のうち最も速いもので読みます．フォロワのない構成では必須です（[Pika Senseを手に持った収集](pika-handheld.md)） |
+
+`libsurvive`（`trackers:` の下のノード）：1つのlibsurviveのコンテキストがUSBの受信機を一度だけ開いて全部のSenseに配ります．両方のトラッカーの姿勢は，校正済みの同じワールド座標で来ます．libsurviveは受信機を占有するので，別のプロセスで開いた2つ目のコンテキストにはトラッカーが見えません．1つのスレッドがシリアル番号ごとに姿勢を持ちます．libsurviveが全部0の回転（追跡を失った）を返したら，次の正しい姿勢まで，そのトラッカーを喪失として扱います（`tracking` が0になり，Senseの係合が解けます）．このノードは記録しません．statusには，見えているシリアル，追跡を失った回数，libsurviveが止まったときのエラーが出ます．
+
+| キー | 意味 |
+| --- | --- |
+| `args` | 任意．libsurviveに渡す文字列のリスト |
+| `poll_hz` | 任意．姿勢を公開する周期．書かなければ，それを読むSenseのうち最も速いものに合わせます |
 
 `pose_ik`：
 
@@ -113,7 +137,7 @@ uv run roboloom run piper-mock --with policy       # Senseの代わりに確認�
 ## 実機で最初にすること
 
 1. 上記の `pika` extraを導入し，トラッカーのudev規則は管理者に頼みます．
-2. 基地局を置き，libsurviveで校正します．Pythonのパッケージには `survive-cli` が含まれないので，Pythonから `--force-calibrate` を渡して開きます．トラッカーを基地局から見える所に置いて動かさず，姿勢が出始めたらCtrl-Cで止めます．出てくる名前（`WM0` など）がトラッカーの名前です．この手順は実機では未検証です．
+2. 基地局を置き，libsurviveで校正します．Pythonのパッケージには `survive-cli` が含まれないので，Pythonから `--force-calibrate` を渡して開きます．トラッカーを基地局から見える所に置いて動かさず，姿勢が出始めたらCtrl-Cで止めます．各行に，`tracker.serial` に書くトラッカーのシリアル番号（`LHR-...`）と，今の名前が出ます．この手順は実機では未検証です．
 
     ```bash
     uv run python - <<'EOF'
@@ -125,7 +149,8 @@ uv run roboloom run piper-mock --with policy       # Senseの代わりに確認�
         while ctx.Running():
             updated = ctx.NextUpdated()
             if updated:
-                print(updated.Name().decode(), updated.Pose()[0].Pos[:])
+                serial = pysurvive.simple_serial_number(updated.ptr) or b""
+                print(serial.decode(), updated.Name().decode(), updated.Pose()[0].Pos[:])
             time.sleep(0.01)
     except KeyboardInterrupt:
         pass
@@ -144,8 +169,9 @@ uv run roboloom run piper-mock --with policy       # Senseの代わりに確認�
 
 ## 実機で確かめること
 
-- トラッカーの名前とシリアル，姿勢の周期と遅れ．
-- 2台のSenseを，別々のプロセスからlibsurviveで読めるか．読めない場合は，1つの入力ノードで2台を読む形に変えます．
+- トラッカーのシリアル番号，姿勢の周期と遅れ．
+- 1つの `lighthouse` のノードに両方のトラッカーが見え，それぞれのSenseが自分のトラッカーに従うか．
+- 受信機を抜いたときやSenseの電源を切ったときに戻るか．forkには，上流で未マージの修正（抜いたときのクラッシュ：[#383](https://github.com/collabora/libsurvive/pull/383)，issue #372．タイムアウトやSTALLのUSB転送：[#378](https://github.com/collabora/libsurvive/pull/378)）を入れています．試験は偽のlibusbに対してだけです．
 - `Command` の変わり方（ダブルクリックで0と1が入れ替わるか）．
 - 挟みの角度の向きと範囲，Pika Gripperの角度との対応（`gripper_map`）．
 - SDKのトラッカーからSenseの中心への変換（`inputs/pika_sense/spec.py`）が，手元の機器で正しいか．

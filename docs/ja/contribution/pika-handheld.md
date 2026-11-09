@@ -18,6 +18,8 @@
 `.roboloom/pika-handheld-mock/` はroboloomのリポジトリにあり，インストールしたパッケージには入っていません（`roboloom init` のテンプレートは `rakuda2` だけです）．このページのコマンドは，cloneしたリポジトリのルートで実行します．自分のプロジェクトでは，[リポジトリ](https://github.com/tetsugo02/roboloom) からこのディレクトリを自分の `.roboloom/` にコピーして使えます．記録と変換には `record` extraが要ります（[インストール](../quick-start/installation.md)）．値は模擬のためのものなので，実機に使い回さないでください．
 
 ```yaml
+trackers:  # 両方のSenseで1つのlibsurviveのコンテキスト
+  lighthouse: nodes/lighthouse.yaml
 inputs:
   left_sense: nodes/left_sense.yaml
   right_sense: nodes/right_sense.yaml
@@ -29,7 +31,7 @@ sensors:
 
 - フォロワのない構成には，controllerを置けません．
 - 入力とセンサーは，自分の周期を持つ必要があります．Senseは `poll_hz`（例：100），カメラは `fps` です．フォロワがないので，周期を借りる先がありません．
-- Senseの書き方は [Pika SenseとIKによる遠隔操作](pika-sense.md) と同じです．カメラは [Pikaの手首カメラ](pika-cameras.md) と同じ `v4l2_rgb` です．
+- Senseとトラッカーのノード `lighthouse` の書き方は [Pika SenseとIKによる遠隔操作](pika-sense.md) と同じです．カメラは [Pikaの手首カメラ](pika-cameras.md) と同じ `v4l2_rgb` です．
 
 ## 記録
 

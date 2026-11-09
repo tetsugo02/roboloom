@@ -6,6 +6,8 @@ repo_id: local/piper-mock
 output: datasets/piper-mock
 mode: mock
 dataset_fps: 10
+trackers:  # shared by both Senses
+  lighthouse: nodes/lighthouse.yaml
 inputs:
   left_sense: nodes/left_sense.yaml
   right_sense: nodes/right_sense.yaml

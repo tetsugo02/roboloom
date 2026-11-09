@@ -67,7 +67,25 @@ def build_flow(cfg: RobotConfig) -> dict:
         for name, c in cfg.controllers.items()
         if c.feedback is not None and c.source is not None
     }
+    # tracking systems: one node each serves the inputs that hold its tracked objects
+    readers = {
+        name: getattr(source, "tracker_system", lambda: None)()
+        for name, source in cfg.inputs.items()
+    }
     nodes = [
+        node(
+            name,
+            session,
+            ["poses", "status"],
+            tracker.rate_hz()
+            or max(
+                (rate(n, cfg.inputs[n]) for n, s in readers.items() if s == name),
+                default=fastest,
+            ),
+        )
+        for name, tracker in cfg.trackers.items()
+    ]
+    nodes += [
         node(
             name,
             {
@@ -75,6 +93,11 @@ def build_flow(cfg: RobotConfig) -> dict:
                 **(
                     {"feedback": latest(f"{feedback[name]}/feedback")}
                     if name in feedback
+                    else {}
+                ),
+                **(
+                    {"tracker": latest(f"{readers[name]}/poses")}
+                    if readers[name] is not None
                     else {}
                 ),
             },
