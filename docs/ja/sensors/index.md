@@ -2,7 +2,6 @@
 
 | センサー | `type` | 出力 |
 | --- | --- | --- |
-| [Web camera](webcam.md) | `opencv_rgb` | RGB画像（実機未検証） |
 | [RealSense](realsense.md) | `realsense_rgb` | RGBカメラ画像 |
 | [DIGIT](digit.md) | `digit` | 触覚RGB画像 |
 

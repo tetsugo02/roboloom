@@ -234,12 +234,3 @@ Python `Session.launch(..., screen="auto")` keeps its input-free Rich display
 and existing operator prompts. See [Operator screen](https://tetsugo02.github.io/roboloom/en/reference/operator-screen/)
 ([日本語](https://tetsugo02.github.io/roboloom/ja/reference/operator-screen/)).
 This screen migration is verified with mocks; hardware operation needs separate validation.
-
-## Web camera (hardware unverified)
-
-OpenCV is a core dependency. Replace `nodes/camera.yaml` with `type: opencv_rgb`, `device: 0`,
-`width: 640`, `height: 480`, `fps: 30` (one YAML key per line). Remove `serial`.
-Keep the `camera` node name and Recorder age entry. Prefer a separate dataset output
-when changing cameras; size/storage changes require one. Match policy training inputs.
-The default template remains RealSense. See [Web camera](https://tetsugo02.github.io/roboloom/en/sensors/webcam/)
-([日本語](https://tetsugo02.github.io/roboloom/ja/sensors/webcam/)).

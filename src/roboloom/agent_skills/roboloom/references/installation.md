@@ -109,4 +109,4 @@ npx skills add tetsugo02/roboloom --skill roboloom   # alternative, from GitHub 
 Python: `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`
 and `roboloom.agent_skills.check(...)`.
 
-opencv-python is a core dependency for image processing, `opencv_rgb` and V4L2 cameras. Three-OS webcam driver support does not imply full Windows Session support.
+opencv-python-headless (no GUI; the same package as LeRobot's in `record`) is a core dependency for `opencv_rgb` and V4L2 cameras. digit-interface in `hardware` requires opencv-python, so `hardware` installs two OpenCV packages into the same `cv2`. Three-OS webcam driver support does not imply full Windows Session support.

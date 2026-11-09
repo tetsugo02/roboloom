@@ -96,7 +96,3 @@ Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits 
 The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Configuration](../reference/configuration.md#control-rate).
 
 For the steps from setup to data collection, see [Rakuda2 Quick start](../quick-start/rakuda2.md); for the meaning of the control values, see [Gravity tuning](../reference/gravity-tuning.md).
-
-## Web camera
-
-Replace the RealSense YAML for `camera` with the [Web camera](../sensors/webcam.md) `opencv_rgb` configuration. OpenCV is a core dependency. It shares the leader/controller/DIGIT data path, but these combinations with real web cameras are unverified. For `policy`, match the training camera content and resolution.

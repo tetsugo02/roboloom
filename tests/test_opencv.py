@@ -6,10 +6,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from conftest import rakuda2_tree
-from test_v4l2 import fake_cv2
+from test_v4l2 import fake_cv2, fourcc
 
 from roboloom.config import parse_config
 from roboloom.sensors import SENSORS
+from roboloom.sensors.vision._opencv import OpenCVReader
+from roboloom.sensors.vision.base import ShapeCheckedReader
 from roboloom.sensors.vision.opencv import OpenCVRGB
 
 
@@ -187,3 +189,28 @@ def test_actual_dtype_is_checked_even_if_properties_match(monkeypatch):
     finally:
         reader.close()
     assert made[0].released
+
+
+def test_format_warning_names_the_reported_fourcc(monkeypatch):
+    made = fake_cv2(monkeypatch, delivers={6: fourcc("YUYV")})
+    with pytest.warns(RuntimeWarning, match="format requested=MJPG, reported=YUYV"):
+        reader = OpenCVRGB("camera", cfg(format="MJPG")).open(False, 10)
+    reader.close()
+    assert made[0].released
+
+
+def test_broken_opencv_import_names_the_cause(monkeypatch):
+    def broken(name, *args, **kwargs):
+        raise ImportError("libGL.so.1: cannot open shared object file")
+
+    monkeypatch.setattr("roboloom.sensors.vision.opencv.import_module", broken)
+    with pytest.raises(ImportError, match="libGL.so.1.*core dependency"):
+        OpenCVRGB("camera", cfg()).open(False, 10)
+
+
+def test_frames_are_shape_checked_once(monkeypatch):
+    fake_cv2(monkeypatch)
+    reader = OpenCVRGB("camera", cfg()).open(False, 10)
+    assert isinstance(reader, ShapeCheckedReader)
+    assert isinstance(reader.reader, OpenCVReader)
+    reader.close()

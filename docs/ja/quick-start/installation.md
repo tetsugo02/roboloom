@@ -33,7 +33,7 @@ uv add 'roboloom[piper,pika]'
 uv add 'roboloom[piper,pika,record]'
 ```
 
-`rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` を追加します．OpenCVと `pyserial` は画像処理・カメラ取得やシリアル機器で共有する共通依存です．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
+`rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` を追加します．OpenCVと `pyserial` は画像処理・カメラ取得やシリアル機器で共有する共通依存です．OpenCVは，`record` のLeRobotと同じGUIなしの `opencv-python-headless` を入れます．`hardware` のdigit-interfaceは `opencv-python` を要求するため，`hardware` を選ぶと2つのOpenCVのパッケージが同じ `cv2` に入ります．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
 
 `pysurvive` が必要なのは実機のPika Senseのトラッカーの姿勢だけで，PiPERの関節制御，Pikaのシリアル通信・カメラ，模擬では使いません．`pika` extraはPika一式の依存を追加します．[PyPI](https://pypi.org/project/pysurvive/) にPython 3.12用のwheelとソース配布がないため，[libsurviveのfork](https://github.com/tetsugo02/libsurvive/tree/roboloom)がビルドしたwheel（[リリース](https://github.com/tetsugo02/libsurvive/releases)．CPython 3.12，Linux x86_64，libusb同梱）を使います．インストール時のビルドはなく，コンパイラやlibusbの開発用ファイルは要りません．forkが上流から変えたのはPythonのパッケージだけで，上流が必須にしているGooey／wxPython（roboloomは使わないGUIの起動用）を任意のextra `pysurvive[gui]` にしています．x86_64以外のLinuxやほかのOSでは `pika` extraにpysurviveは入りません．extraはOSの設定やトラッカーのudev規則（`81-vive.rules`），CANの設定までは行いません．udev規則は管理者に導入してもらいます．
 
@@ -101,11 +101,3 @@ uv run roboloom init rakuda2
 `init` はインストール済みパッケージのテンプレートから，自分のプロジェクト内に `.roboloom/rakuda2/` を生成します．デバイスを開きません．`SET_...` の値を埋めるまでは `validate` が設定不足を報告します．生成した設定を使う実機の手順は [Rakuda2 Quick start](rakuda2.md) に続きます．模擬例の値を実機の安全値として使わないでください．
 
 roboloomのソース変更・テスト・docsのビルドは [Contribution](../contribution.md) を参照してください．リポジトリ直下の `examples/` や `scripts/` は，Git依存としてインストールしたパッケージの利用ファイルには含まれません．
-
-## Web camera
-
-```bash
-uv add git+https://github.com/tetsugo02/roboloom.git
-```
-
-[Web camera](../sensors/webcam.md) を参照してください。3 OS 対応はセンサードライバー単体で、Windows の Session 全体の対応を意味しません。

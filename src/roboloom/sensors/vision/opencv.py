@@ -12,8 +12,8 @@ from typing import Protocol, cast
 
 from ...core.checks import positive
 from ...core.source import Reader
-from ._opencv import Capture, ColorConverter, OpenCVReader
-from .base import ImageSensor, ShapeCheckedReader
+from ._opencv import Capture, ColorConverter, OpenCVReader, fourcc_name
+from .base import ImageSensor
 
 BACKENDS = {
     "linux": {"v4l2": 200},
@@ -95,9 +95,10 @@ class OpenCVRGB(ImageSensor):
             )
         try:
             cv2 = cast(OpenCV, import_module("cv2"))
-        except ModuleNotFoundError as exc:
-            raise ModuleNotFoundError(
-                "OpenCV is a core dependency; reinstall roboloom or run uv sync"
+        except ImportError as exc:  # missing, or a broken / mixed cv2 install
+            raise type(exc)(
+                f"cannot import OpenCV ({exc}); it is a core dependency "
+                "(opencv-python-headless): reinstall roboloom or run uv sync"
             ) from exc
         device = (
             os.path.realpath(self.device)
@@ -119,7 +120,9 @@ class OpenCVRGB(ImageSensor):
                     context,
                     "format",
                     self.format,
-                    reported,
+                    fourcc_name(int(reported))
+                    if math.isfinite(reported) and reported > 0
+                    else f"{reported:g}",
                     accepted and reported == wanted,
                 )
             height, width, _ = self.shape
@@ -131,7 +134,7 @@ class OpenCVRGB(ImageSensor):
                 context,
                 "fps",
                 self.fps,
-                reported,
+                f"{reported:g}",
                 accepted
                 and math.isfinite(reported)
                 and reported > 0
@@ -143,18 +146,17 @@ class OpenCVRGB(ImageSensor):
         except BaseException:
             capture.release()
             raise
-        # Check actual pixels, not unreliable width/height property readback.
-        return ShapeCheckedReader(
-            self.name, OpenCVReader(capture, cv2, str(self.device)), self.shape
-        )
+        # Size is checked on actual frames (ImageSensor.open wraps this reader),
+        # not on the unreliable width/height property readback.
+        return OpenCVReader(capture, cv2, str(self.device))
 
     @staticmethod
     def _warn_setting(
-        context: str, key: str, requested: str | float, reported: float, matches: bool
+        context: str, key: str, requested: str | float, reported: str, matches: bool
     ) -> None:
         if not matches:
             warnings.warn(
-                f"{context}: {key} requested={requested}, reported={reported:g}; setting unsupported, unconfirmed or different",
+                f"{context}: {key} requested={requested}, reported={reported}; setting unsupported, unconfirmed or different",
                 RuntimeWarning,
                 stacklevel=3,
             )

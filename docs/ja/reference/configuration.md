@@ -316,6 +316,6 @@ PNG は一般に容量と PNG 圧縮・書き込み負荷が増えます。実�
 
 APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) にあります．
 
-## Web camera
+## Webカメラ（開発中）
 
-`sensors.<名前>` の `type: opencv_rgb` は `device`、`width`、`height`、`fps` を要求します。`backend`、`format`、`storage` は任意です。詳細と OS 制約は [Web camera](../sensors/webcam.md) を参照してください。
+`sensors.<名前>` の `type: opencv_rgb` には `device`，`width`，`height`，`fps` が必要です．`backend`，`format`，`storage` は任意です．実機では確かめていません．詳細とOSごとの制約は [Webカメラ](../contribution/webcam.md) を参照してください．

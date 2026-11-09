@@ -15,7 +15,7 @@ dependencies = [
     "dora-rs-cli==1.0.1",
     "PyYAML>=6,<7",
     "numpy>=1.26,<3",
-    "opencv-python>=4.8",  # shared image processing and camera capture
+    "opencv-python-headless>=4.8,<5",  # camera capture; headless like lerobot's, so both share one cv2
     "pyserial>=3.5,<4",  # shared by Dynamixel and Pika serial links
     "rich>=13,<15",
     "textual>=8,<9",

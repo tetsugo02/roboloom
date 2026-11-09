@@ -8,7 +8,7 @@ The node name becomes the dataset feature name. RealSense, DIGIT and audio use t
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
 ```
 
-OpenCV is a core dependency for `opencv_rgb` and `v4l2_rgb`.
+OpenCV (`opencv-python-headless`) is a core dependency for `opencv_rgb` and `v4l2_rgb`.
 Camera access alone needs no extra and does not use pysurvive. D405 RGB still needs `hardware` for pyrealsense2.
 
 | `type` | Device | Status | Feature |
@@ -127,7 +127,10 @@ Install `uv add git+https://github.com/tetsugo02/roboloom.git`; OpenCV is a core
 Linux also accepts `/dev/` paths), positive integer `width`, `height`, and positive `fps`.
 Optional `backend: auto` selects Linux V4L2, macOS AVFoundation, Windows MSMF;
 Windows also allows `dshow`. No fallback. Optional `format: MJPG | YUYV` defaults to
-backend choice. Unavailable/mismatched fps or format warns; actual frame dimensions
+backend choice. A backend that does not match the OS, or a `/dev/` path outside Linux,
+passes config loading/mock and raises `ValueError` only when the real camera opens; use
+`backend: auto` for configs shared across OSes. Unavailable/mismatched fps or format warns (format
+warnings name the reported FOURCC); actual frame dimensions
 and uint8 RGB contract are strict. `storage: video | image` defaults to video.
 
 Use `roboloom.sensors.vision.opencv.OpenCVRGB(name, cfg).open(mock=False, dataset_fps=10)`
@@ -137,4 +140,5 @@ Buffer size 1 is a request, not a newest-frame guarantee. Timestamps are recepti
 not exposure time; no synchronization/reconnection. Indices may change; prefer stable
 Linux paths. Set Recorder `max_age_ms` for the node. Changing size/storage requires
 separate dataset output. Hardware is unverified on all three OSes; full Windows Session
-support is excluded (Unix FIFO/process APIs). Never open a camera without user authorization.
+support is excluded (Unix FIFO/process APIs). Docs: `docs/*/contribution/webcam.md` (in development).
+Never open a camera without user authorization.

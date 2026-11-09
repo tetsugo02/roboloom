@@ -96,7 +96,3 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 制御周期はテンプレートで120 Hzです．前提条件と下げ方は [設定](../reference/configuration.md) の「制御周期」を参照してください．
 
 セットアップから収集までの手順は [Rakuda2 Quick start](../quick-start/rakuda2.md)，制御値の意味は [Gravity tuning](../reference/gravity-tuning.md) を参照してください．
-
-## Web camera
-
-`camera` の RealSense YAML を [Web camera](../sensors/webcam.md) の `opencv_rgb` 設定に差し替えられます。OpenCV は共通依存に含まれます。leader・controller・DIGIT と組み合わせる経路は共通ですが、Web カメラ実機との組み合わせは未検証です。`policy` は学習時と同じ画像内容・解像度に合わせてください。

@@ -14,7 +14,7 @@ from importlib import import_module
 
 from ...core.checks import identity, positive
 from ...core.source import Reader
-from ._opencv import LOST_S, OpenCVReader
+from ._opencv import LOST_S, OpenCVReader, fourcc_name
 from .base import ImageSensor
 
 __all__ = ["LOST_S", "V4l2RGB", "V4l2Reader"]
@@ -66,7 +66,7 @@ class V4l2RGB(ImageSensor):
                 int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),
                 int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)),
                 float(capture.get(cv2.CAP_PROP_FPS)),
-                _fourcc(int(capture.get(cv2.CAP_PROP_FOURCC))),
+                fourcc_name(int(capture.get(cv2.CAP_PROP_FOURCC))),
             )
             wanted = (width, height, float(self.fps), self.format)
             if (
@@ -83,7 +83,3 @@ class V4l2RGB(ImageSensor):
             capture.release()
             raise
         return V4l2Reader(capture, cv2, self.device)
-
-
-def _fourcc(code: int) -> str:
-    return "".join(chr((code >> (8 * i)) & 0xFF) for i in range(4))

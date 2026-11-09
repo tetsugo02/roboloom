@@ -316,6 +316,6 @@ Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file 
 
 API details are in [Python API](python-api.md), and commands are in [CLI](cli.md).
 
-## Web camera
+## Web camera (in development)
 
-`type: opencv_rgb` under `sensors.<name>` requires `device`, `width`, `height`, `fps`. `backend`, `format`, `storage` are optional. See [Web camera](../sensors/webcam.md) for details and OS limits.
+`type: opencv_rgb` under `sensors.<name>` requires `device`, `width`, `height` and `fps`; `backend`, `format` and `storage` are optional. It has not been checked on hardware. See [Web camera](../contribution/webcam.md) for details and per-OS limits.

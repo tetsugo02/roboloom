@@ -13,6 +13,11 @@ from ...core.source import Sample
 LOST_S = 1.0
 
 
+def fourcc_name(code: int) -> str:
+    """The four characters of an OpenCV FOURCC code, e.g. 1196444237 -> "MJPG"."""
+    return "".join(chr((code >> (8 * i)) & 0xFF) for i in range(4))
+
+
 class Capture(Protocol):
     def read(self) -> tuple[bool, np.ndarray | None]: ...
     def release(self) -> None: ...
