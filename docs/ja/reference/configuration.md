@@ -138,7 +138,6 @@ options:
     dataset: bilateral
   policy:
     help: a learned policy drives the follower (`roboloom infer` turns this on)
-    requires: [digit]  # nodes/policy.yaml observes the DIGIT sensors
     conflicts: [gravity]
     set:
       inputs.leader: null
@@ -151,6 +150,7 @@ options:
 | --- | --- |
 | なし | `local/rakuda2` |
 | `digit` | `local/rakuda2-digit` |
+| `policy` | `local/rakuda2-eval` |
 | `digit`，`policy` | `local/rakuda2-digit-eval` |
 | `gravity`，`bilateral` | `local/rakuda2-bilateral` |
 

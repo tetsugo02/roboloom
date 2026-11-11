@@ -81,7 +81,6 @@ options:
       inputs.leader: nodes/leader_gravity.yaml
   policy:
     help: a learned policy drives the follower (`roboloom infer` turns this on)
-    requires: [digit]
     conflicts: [gravity]
     set:
       inputs.leader: null          # null removes the node

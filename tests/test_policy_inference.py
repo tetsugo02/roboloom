@@ -6,6 +6,7 @@ import sys
 
 import numpy as np
 import pytest
+from conftest import mock_project
 
 from roboloom.config import load_config
 from roboloom.errors import ConfigError
@@ -15,6 +16,47 @@ MOCK = ".roboloom/piper-mock/config.yaml"
 
 def mock_policy_controller():
     return load_config(MOCK, options=["policy"]).controllers["policy"]
+
+
+@pytest.mark.parametrize(
+    "observe", [[], ["camera"], ["camera", "digit_left", "digit_right"]]
+)
+def test_rakuda_policy_runs_with_the_selected_sensors(tmp_path, observe):
+    import yaml
+
+    from roboloom.runtime.session import Session
+
+    project = mock_project(tmp_path / ".roboloom")
+    path = project / "nodes" / "policy.yaml"
+    node = yaml.safe_load(path.read_text())
+    node["observe"] = observe
+    path.write_text(yaml.safe_dump(node))
+    options = ["policy"]
+    if "digit_left" in observe:
+        options.append("digit")
+    else:
+        # Unused sensors need neither configuration files nor connected devices.
+        for side in ("left", "right"):
+            (project / "nodes" / f"digit_{side}.yaml").unlink()
+    if not observe:
+        config = project / "config.yaml"
+        tree = yaml.safe_load(config.read_text())
+        tree["sensors"] = {}
+        config.write_text(yaml.safe_dump(tree))
+        (project / "nodes" / "camera.yaml").unlink()
+
+    with Session.launch(
+        project / "config.yaml",
+        options=options,
+        log_dir=tmp_path / "logs",
+        screen=False,
+    ) as session:
+        session.wait_ready()
+        result = session.record("hold", seconds=1)
+        status = session.status()["policy"]["fields"]
+    assert result.saved
+    assert result.metrics["action_valid_rate"] > 0.5, result.metrics
+    assert "infer_ms" in status and "error" not in status, status
 
 
 def test_the_spec_has_the_recorded_observation_and_action():

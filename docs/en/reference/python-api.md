@@ -195,7 +195,7 @@ def load(checkpoint: str) -> MyPolicy:
 ```python
 with Session.launch(
     "rakuda2",
-    options=["policy"],  # also enables digit (requires)
+    options=["policy"],  # joint state + RealSense by default; add "digit" if needed
     policy="my_lab.policies:load",
     policy_kwargs={"checkpoint": "outputs/act/last"},
 ) as s:

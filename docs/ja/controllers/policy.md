@@ -28,6 +28,22 @@ uv run roboloom infer piper-mock --seconds 20 \
   --policy roboloom.policy.lerobot:load --policy-kwargs '{"path": "outputs/act/pretrained_model"}'
 ```
 
+## 観測を選ぶ
+
+Rakuda2のテンプレートは，DIGITなしで関節状態とRealSenseを方策に渡します．`nodes/policy.yaml` の `observe` を，学習時に使った入力に合わせます．フォロワの関節状態は常に渡されます．
+
+| 方策に渡す観測 | `observe` | 有効にするオプション |
+| --- | --- | --- |
+| 関節状態＋RealSense（既定） | `[camera]` | `policy` |
+| 関節状態＋RealSense＋左右DIGIT | `[camera, digit_left, digit_right]` | `digit`，`policy` |
+| 関節状態のみ | `[]` | `policy` |
+
+`digit` を有効にするだけでは，方策の入力は変わりません．`observe` に追加したセンサーは，`sensors` にも存在する必要があります．`observe` から外しても，`sensors` にあるセンサーは開いて記録します．カメラも使わない構成では，`config.yaml` の `sensors` から `camera` を外してください．
+
+DIGITを入力とする学習済み方策を，DIGITなしでそのまま使えるわけではありません．DIGITなしの入力で学習した方策を使います．LeRobotの読み込みは，必要な入力が足りなければ開始前に拒否します．自作の方策では `bind(spec)` で同じ検査を書けます．
+
+既存プロジェクトの設定は，パッケージ更新では上書きされません．以前のテンプレートから移行するときは，`config.yaml` の `options.policy` から `requires: [digit]` を削除し，`nodes/policy.yaml` を `observe: [camera]` に変更します．評価の保存先はDIGITなしなら `datasets/rakuda2-eval`，`digit` も有効なら `datasets/rakuda2-digit-eval` です．
+
 ## 自作の方策
 
 `reset()` と `infer(observation)` を持つオブジェクトを返す関数を書きます（`roboloom.Policy`）．

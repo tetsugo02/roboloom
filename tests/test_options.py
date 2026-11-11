@@ -73,8 +73,15 @@ def test_template_options_replace_nodes_and_name_datasets():
     assert cfg.repo_id == "local/rakuda2-digit"
     assert cfg.output.endswith("datasets/rakuda2-digit")
     tree = rakuda2_tree(["policy"])
-    assert tree["options"] == ("digit", "policy")  # policy observes the DIGIT
+    assert tree["options"] == ("policy",)
     assert "leader" not in tree["inputs"] and set(tree["controllers"]) == {"policy"}
+    cfg = parse_config(tree)
+    assert set(cfg.sensors) == {"camera"}
+    assert cfg.controllers["policy"].observes() == ["camera"]
+    assert cfg.repo_id == "local/rakuda2-eval"
+    cfg = parse_config(rakuda2_tree(["digit", "policy"]))
+    assert set(cfg.sensors) == {"camera", "digit_left", "digit_right"}
+    assert cfg.repo_id == "local/rakuda2-digit-eval"
 
 
 def test_option_changing_features_needs_its_own_dataset(tmp_path):

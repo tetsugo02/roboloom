@@ -39,7 +39,7 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | `action.meta.follower.valid`, `clamped`, `seq`, `sent_ns` | 1 each (`valid`, `clamped` float32; `seq`, `sent_ns` int64) | 0/1, command number, monotonic-clock ns |
 
 - What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in "Recording and resuming" of [Configuration](../reference/configuration.md#recording-and-resuming); they are the same for every robot.
-- The policy (option `policy`) observes `camera` and both DIGITs (`observe` in `nodes/policy.yaml`), and `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
+- The policy (option `policy`) observes joint state and `camera` by default. Select sensors with `observe` in `nodes/policy.yaml` (`[]` for joint state only). `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
 - `max_speed` is in counts/s (`{follower: 1024}` in the template).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../controllers/policy.md).
 
@@ -52,7 +52,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `digit` | Records the left and right DIGIT | | Appends `-digit` |
 | `gravity` | Gravity-compensates the leader's left and right arms (`nodes/leader_gravity.yaml`) | | Unchanged |
 | `bilateral` | Force feedback (not verified on hardware); replaces the leader, controller, and robot and adds the estimator `effort` | Requires `gravity` | Appends `-bilateral` |
-| `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Requires `digit`, conflicts with `gravity` | Appends `-eval` |
+| `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Conflicts with `gravity` | Appends `-eval` |
 
 | Enabled options | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
@@ -61,13 +61,16 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `gravity` | With gravity compensation | RealSense | `local/rakuda2` |
 | `gravity`, `digit` | With gravity compensation | RealSense + left/right DIGIT | `local/rakuda2-digit` |
 | `gravity`, `bilateral` | With gravity compensation + force feedback (not verified on hardware) | RealSense | `local/rakuda2-bilateral` |
+| `policy` | None (policy) | RealSense | `local/rakuda2-eval` |
 | `digit`, `policy` | None (policy) | RealSense + left/right DIGIT | `local/rakuda2-digit-eval` |
 
 Limitations:
 
 - Use `gravity` only after the measurement steps of the [Quick start](../quick-start/rakuda2.md) (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`). Loading is refused while measured values are still `SET_...`.
 - Enabling or disabling `gravity` changes the leader's Operating Mode. On a hardware launch from a terminal, the CLI shows the EEPROM differences and writes them after confirmation.
-- The policy of `policy` (`nodes/policy.yaml`) observes the DIGIT images, so it requires `digit`. It does not use the leader, so it cannot be combined with `gravity`, nor with `bilateral`, which requires `gravity`.
+- `policy` works without DIGIT. To pass DIGIT images to the policy, enable `digit` and change `observe` in `nodes/policy.yaml` to `[camera, digit_left, digit_right]`. Enabling `digit` alone does not change the policy inputs. Match the inputs used for training. Loading a LeRobot checkpoint that needs DIGIT without DIGIT is refused before starting.
+- For a policy using joint state only, set `observe: []`. To avoid opening sensors, also remove their nodes from `sensors` in `config.yaml`.
+- `policy` does not use the leader, so it cannot be combined with `gravity`, nor with `bilateral`, which requires `gravity`.
 - `gravity` does not change the dataset name because it records the same features as the standard leader; episodes with the standard and the gravity-compensated leader go into the same dataset.
 - Because the image features change, `digit` separates the dataset; DIGIT episodes are not appended to an existing RealSense-only dataset.
 

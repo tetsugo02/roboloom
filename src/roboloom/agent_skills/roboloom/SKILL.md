@@ -156,6 +156,11 @@ with Session.launch("rakuda2", options=["gravity"], mock=True) as s:
 Run a policy (`"module:callable"`, looked up in installed packages, then in
 `.roboloom/<robot>/`):
 
+Rakuda2 defaults to joint state + RealSense without DIGIT. Select inputs with
+`nodes/policy.yaml`'s `observe`; adding DIGIT requires both the `digit` option and
+its names in `observe`. See [policy.md](references/policy.md) for state-only inputs
+and migrating existing project configurations.
+
 ```python
 from roboloom import Session
 

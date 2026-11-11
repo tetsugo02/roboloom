@@ -49,7 +49,7 @@ dataset:
 | `digit` | off | add the left/right DIGIT sensors (fill their serials) | `local/rakuda2-digit` |
 | `gravity` | off | gravity-compensated leader (after steps 3-7) | same as without it |
 | `bilateral` | off | force feedback to the leader; requires `gravity`; **not verified on hardware** | `local/rakuda2-bilateral` |
-| `policy` | off | a policy drives the follower; requires `digit`, conflicts with `gravity`; `infer` turns it on | `local/rakuda2-digit-eval` |
+| `policy` | off | a policy drives the follower; DIGIT optional, conflicts with `gravity`; `infer` turns it on | `local/rakuda2-eval` (`-digit-eval` with `digit`) |
 
 Real hardware is the default; `--mock` uses mock devices (`--hardware` is gone and errors).
 `uv run roboloom` alone opens the launcher: pick the robot (from the robots under
@@ -202,12 +202,23 @@ is **not verified on hardware**; check every step with the arms supported. Files
 
 ## Inference
 
-8. `uv run roboloom infer --seconds 20` (turns on the `policy` option, which needs the DIGIT
-   serials and turns `gravity` off) first runs the
+8. `uv run roboloom infer --seconds 20` (turns on the `policy` option, uses joint state
+   and RealSense by default, and turns `gravity` off) first runs the
    template's `hold` policy, which keeps the arm where it is: it checks the inference path.
    Then pass yours: `--policy my_lab.policies:load --policy-kwargs '{"checkpoint": "..."}'`
    (or set `factory`/`kwargs` in `nodes/policy.yaml`). Add `--task` to record the run into
-   `datasets/rakuda2-digit-eval`.
+   `datasets/rakuda2-eval` (`datasets/rakuda2-digit-eval` with `--with digit`).
+
+Set `observe` in `nodes/policy.yaml` to the sources used during training: `[camera]`
+(default), `[camera, digit_left, digit_right]` with the `digit` option, or `[]` for
+joint state only. Enabling `digit` alone only adds sensors for recording; it does not
+change the policy inputs. To avoid opening an unused sensor, also remove its node
+from `sensors` in `config.yaml`. LeRobot checkpoints requiring missing inputs are
+refused before an episode starts. Use `action_horizon: 1` with LeRobot `mode: step`.
+
+Existing project files are not overwritten by package updates. To migrate an older
+configuration, remove `requires: [digit]` from `options.policy` in `config.yaml` and
+set `observe: [camera]` in `nodes/policy.yaml`.
 
 ## Operator screen
 

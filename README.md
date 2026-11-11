@@ -152,13 +152,13 @@ uv run roboloom record --task handover --seconds 10
 - 保存したとき：
   - 欠損率，有効な行動の割合，制御周期の最大値が `recorder.quality` の上限を超えていれば，警告を出します．
 
-方策で動かす（`infer` は `policy` オプションを有効にします．テンプレートでは `type: policy` の controller に置き換え，DIGIT を必要とし，重力補償とは両立しません）：
+方策で動かす（`infer` は `policy` オプションを有効にします．テンプレートでは `type: policy` の controller に置き換え，既定は関節状態＋RealSenseで，重力補償とは両立しません）：
 
 ```bash
 uv run roboloom infer --policy my_lab.policies:load --seconds 30
 ```
 
-`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-digit-eval`）．
+`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．
 
 EEPROM について：
 

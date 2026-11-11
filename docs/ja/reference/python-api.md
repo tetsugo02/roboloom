@@ -195,7 +195,7 @@ def load(checkpoint: str) -> MyPolicy:
 ```python
 with Session.launch(
     "rakuda2",
-    options=["policy"],  # digit も有効になる（requires）
+    options=["policy"],  # 既定は関節状態＋RealSense．DIGITを使うなら "digit" も選ぶ
     policy="my_lab.policies:load",
     policy_kwargs={"checkpoint": "outputs/act/last"},
 ) as s:
