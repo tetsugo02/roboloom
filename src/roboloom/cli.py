@@ -111,6 +111,13 @@ def main(argv: list[str] | None = None) -> None:
     configured.add_argument("--hardware", action=_Removed)
     # devices: launch options and mock/hardware
     devices = argparse.ArgumentParser(add_help=False)
+    for selection in ("sensors", "observe"):
+        devices.add_argument(
+            "--" + selection,
+            type=lambda value: [n.strip() for n in value.split(",") if n.strip()],
+            default=None,
+        )
+
     devices.add_argument(
         "--with",
         dest="with_",
@@ -376,6 +383,8 @@ def _load(args: argparse.Namespace) -> RobotConfig:
     return load_config(
         path,
         options=_selection(args, path),
+        sensors=getattr(args, "sensors", None),
+        observe=getattr(args, "observe", None),
         mock=True if getattr(args, "mock", False) else None,
     )
 
@@ -572,6 +581,8 @@ def _operate_robot(
     plan = LaunchPlan(
         mode="run" if args.command == "launch" else args.command,
         options=given or (),
+        sensors=getattr(args, "sensors", None),
+        observe=getattr(args, "observe", None),
         mock=mock,
         task=getattr(args, "task", "") or "",
         seconds=getattr(args, "seconds", 0.0) or 0.0,
@@ -599,7 +610,13 @@ def _operate_robot(
                 return None
             plan = chosen
         selected = plan.options if (show or given is not None) else None
-        cfg = load_config(path, options=selected, mock=True if plan.mock else None)
+        cfg = load_config(
+            path,
+            options=selected,
+            mock=True if plan.mock else None,
+            sensors=plan.sensors,
+            observe=plan.observe,
+        )
         if terminal and not cfg.mock:
             _commission(cfg)
         outcome = _start(

@@ -180,3 +180,17 @@ Errors users can act on are `roboloom.ConfigError`, `SetupError`, `HardwareError
 Image sensor nodes accept `storage: video | image` (default `video`). Use lossless
 `image` for tactile pixel differences; changing it requires a separate dataset output.
 See [sensors](references/sensors.md#image-storage).
+
+## Sensor selection and audio
+
+load_config and Session.launch accept sensors and observe independently (None:
+configuration defaults; []: none). Follower state remains included. With RobotConfig,
+select in load_config. CLI: --sensors camera,audio --observe camera; "" selects none.
+Unselected YAML files are not loaded. Inactive observed sensors are errors.
+Optional YAML sensor: {file: nodes/audio.yaml, default: false}.
+audio extra supplies sounddevice and librosa; pcm_mono preserves mono int16 chunks,
+mel_mono supplies ascending-frequency float32 mel arrays. Both are numeric
+observation.audio.<name> features for custom policies; standard LeRobot audio
+encoders and real microphone behavior are unverified.
+Dataset append compares full schema and audio processing metadata; manually change
+repo_id/output on mismatch. No automatic configuration naming is added.

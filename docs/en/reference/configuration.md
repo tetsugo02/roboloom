@@ -319,3 +319,32 @@ API details are in [Python API](python-api.md), and commands are in [CLI](cli.md
 ## Web camera (in development)
 
 `type: opencv_rgb` under `sensors.<name>` requires `device`, `width`, `height` and `fps`; `backend`, `format` and `storage` are optional. It has not been checked on hardware. See [Web camera](../contribution/webcam.md) for details and per-OS limits.
+
+## Sensor selection
+
+`load_config(..., sensors=[...], observe=[...])` and
+`Session.launch(..., sensors=[...], observe=[...])` select sensors independently
+from policy observations. None keeps configuration defaults; [] selects none.
+Follower state is always observed. When passing RobotConfig, select in load_config;
+Session.launch rejects additional selection arguments.
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+`--sensors camera,audio --observe camera` makes the same CLI selection;
+`--sensors "" --observe ""` selects none. The launcher provides separate
+sensor and observation checkboxes and remembers selections.
+Unselected sensor YAML files are not loaded. Observing an inactive sensor fails.
+Sensors introduced by options can also be selected individually, including either DIGIT.
+An optional sensor uses `{file: nodes/audio.yaml, default: false}`; string paths
+remain enabled by default. Options apply first. Recording includes every active sensor,
+even those omitted from observe. See [Audio](../sensors/audio.md).

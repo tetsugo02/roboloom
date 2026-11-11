@@ -15,6 +15,7 @@ SENSORS: Registry[Source] = Registry(
         "opencv_rgb": "roboloom.sensors.vision.opencv:OpenCVRGB",
         "v4l2_rgb": "roboloom.sensors.vision.v4l2:V4l2RGB",
         "digit": "roboloom.sensors.tactile.digit:DigitSensor",
+        "mel_mono": "roboloom.sensors.audio.microphone:MelMono",
         "pcm_mono": "roboloom.sensors.audio.microphone:SoundDeviceMic",
     },
 )

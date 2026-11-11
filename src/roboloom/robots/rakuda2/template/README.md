@@ -245,3 +245,11 @@ Python `Session.launch(..., screen="auto")` keeps its input-free Rich display
 and existing operator prompts. See [Operator screen](https://tetsugo02.github.io/roboloom/en/reference/operator-screen/)
 ([日本語](https://tetsugo02.github.io/roboloom/ja/reference/operator-screen/)).
 This screen migration is verified with mocks; hardware operation needs separate validation.
+
+
+Sensors can be selected individually with `--sensors camera,audio`; policy inputs
+are selected separately with `--observe camera`. Empty strings select none.
+Rakuda2 audio is off by default; configure nodes/audio.yaml and install the audio
+extra to use PCM or mel numeric observations with a custom policy.
+Dataset schema mismatches require a manually chosen repo_id/output.
+Physical microphone capture is unverified.

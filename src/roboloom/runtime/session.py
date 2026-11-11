@@ -177,6 +177,8 @@ class Session:
         *,
         options: Iterable[str] | None = None,
         mock: bool | None = None,
+        sensors: Iterable[str] | None = None,
+        observe: Iterable[str] | None = None,
         policy: str | None = None,
         policy_kwargs: dict | None = None,
         log_dir: str | Path | None = None,
@@ -196,10 +198,18 @@ class Session:
         - `operator`: asked to support the arms before closing makes an actuated leader
           go limp ("auto": a TerminalOperator when stdin is a terminal; None: no question).
         """
+        if isinstance(config, RobotConfig) and (
+            sensors is not None or observe is not None
+        ):
+            raise ConfigError(
+                "select sensors and observe in load_config before passing RobotConfig"
+            )
         cfg = (
             config
             if isinstance(config, RobotConfig)
-            else load_config(config, options=options, mock=mock)
+            else load_config(
+                config, options=options, mock=mock, sensors=sensors, observe=observe
+            )
         )
         if (policy or policy_kwargs) and not any(
             not c.uses_input for c in cfg.controllers.values()
@@ -233,6 +243,14 @@ class Session:
             # the nodes reload the configuration from cfg.path with the same choices
             "ROBOLOOM_OPTIONS": ",".join(cfg.options) or NO_OPTIONS,
             "ROBOLOOM_MODE": cfg.mode,
+            "ROBOLOOM_SENSORS": json.dumps(list(cfg.sensors)),
+            "ROBOLOOM_OBSERVE": json.dumps(
+                {
+                    name: controller.observes()
+                    for name, controller in cfg.controllers.items()
+                    if hasattr(controller, "observes")
+                }
+            ),
         }
         if policy:
             env["ROBOLOOM_POLICY"] = policy

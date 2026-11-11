@@ -20,6 +20,7 @@ Samples no later row can select are dropped. The newest sample received before
 
 from __future__ import annotations
 
+import json
 import math
 import time
 from importlib import import_module
@@ -101,21 +102,44 @@ class EpisodeRecorder:
         root = Path(cfg.output).resolve()
         expected = features(cfg)
         if (root / "meta" / "info.json").exists():
+            info = json.loads((root / "meta" / "info.json").read_text())
+            defaults = import_module("lerobot.utils.constants").DEFAULT_FEATURES
+            actual = {k: v for k, v in info["features"].items() if k not in defaults}
+            differences = []
+            for key in sorted(actual.keys() - expected.keys()):
+                differences.append(f"removed feature: {key}")
+            for key in sorted(expected.keys() - actual.keys()):
+                differences.append(f"added feature: {key}")
+            for name in sorted(expected.keys() & actual.keys()):
+                for key, value in expected[name].items():
+                    old = actual[name].get(key)
+                    if key == "shape":
+                        old, value = list(old), list(value)
+                    if old != value:
+                        differences.append(f"{name}.{key}: {old!r} -> {value!r}")
+            for key, value in (("fps", cfg.dataset_fps), ("robot_type", cfg.robot)):
+                if info.get(key) != value:
+                    differences.append(f"{key}: {info.get(key)!r} -> {value!r}")
+            signature = self._audio_signature()
+            manifest = root / "meta" / "roboloom.json"
+            previous = (
+                json.loads(manifest.read_text()).get("audio")
+                if manifest.exists()
+                else None
+            )
+            if signature and previous != signature:
+                differences.append(
+                    "audio processing settings differ or old metadata is missing"
+                )
+            if differences:
+                raise ValueError(
+                    f"existing dataset schema differs: {root}\n"
+                    + "\n".join(differences)
+                    + "\nSet another repo_id and output; existing data was not changed."
+                )
             self.dataset = LeRobotDataset.resume(
                 repo_id=cfg.repo_id, root=root, **self.writer_options
             )
-            if self.dataset.fps != cfg.dataset_fps or any(
-                name not in self.dataset.features
-                or any(
-                    self.dataset.features[name].get(key) != value
-                    for key, value in spec.items()
-                )
-                for name, spec in expected.items()
-            ):
-                raise ValueError(
-                    f"existing dataset schema or FPS differs from the configuration: {root} "
-                    "(image/video storage changes require a separate dataset; set another `output` in the configuration, or move the old dataset)"
-                )
         else:
             self.dataset = LeRobotDataset.create(
                 repo_id=cfg.repo_id,
@@ -128,6 +152,19 @@ class EpisodeRecorder:
                 use_videos=True,
                 **self.writer_options,
             )
+
+        manifest = root / "meta" / "roboloom.json"
+        if self._audio_signature() and not manifest.exists():
+            manifest.write_text(
+                json.dumps({"audio": self._audio_signature()}, indent=2)
+            )
+
+    def _audio_signature(self) -> dict:
+        return {
+            name: source.signature(self.cfg.dataset_fps)
+            for name, source in self.cfg.sensors.items()
+            if hasattr(source, "signature")
+        }
 
     def start(self, task: str, now_ns: int | None = None, write: bool = True) -> None:
         """Begin an episode. `write=False` keeps rows for `frames()` without a dataset (tests)."""

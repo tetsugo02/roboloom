@@ -1,4 +1,5 @@
 max_age_ms:
+  audio: 1500
   leader: 200
   follower: 200
   camera: 200

@@ -319,3 +319,32 @@ APIの詳細は [Python API](python-api.md)，コマンドは [CLI](cli.md) に�
 ## Webカメラ（開発中）
 
 `sensors.<名前>` の `type: opencv_rgb` には `device`，`width`，`height`，`fps` が必要です．`backend`，`format`，`storage` は任意です．実機では確かめていません．詳細とOSごとの制約は [Webカメラ](../contribution/webcam.md) を参照してください．
+
+## センサー選択
+
+`load_config(..., sensors=[...], observe=[...])` と
+`Session.launch(..., sensors=[...], observe=[...])` で起動・記録と policy 観測を
+独立に指定します。None は設定の既定、[] は選択なしです。フォロワ状態は常に渡します。
+RobotConfig を渡す場合は load_config で選択を確定してください。
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+CLI は `--sensors camera,audio --observe camera`、
+空の選択は `--sensors "" --observe ""` です。ランチャーにはセンサー起動と
+policy 観測の独立したチェック欄があり、前回の選択を保存します。
+未選択センサーの YAML は読み込みません。未起動センサーの観測指定はエラーです。
+左右の DIGIT を含め、オプションで追加されるセンサーも個別選択できます。
+任意センサーは `{file: nodes/audio.yaml, default: false}` と宣言し、
+従来の文字列パスは既定で有効です。オプション適用後に選択を解決します。
+observe に含めないセンサーも、起動すれば記録対象になります。
+[音声](../sensors/audio.md)も参照してください。

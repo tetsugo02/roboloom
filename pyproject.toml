@@ -28,6 +28,7 @@ Repository = "https://github.com/tetsugo02/roboloom"
 Issues = "https://github.com/tetsugo02/roboloom/issues"
 
 [project.optional-dependencies]
+audio = ["sounddevice>=0.4,<1", "librosa>=0.10,<1"]
 rakuda2 = ["dynamixel-sdk>=3.7,<4"]  # Rakuda2 follower and Rakuda-mini leader
 piper = [
     "piper_sdk>=0.6.2,<0.7",
