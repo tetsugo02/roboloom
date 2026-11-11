@@ -15,7 +15,7 @@ dependencies = [
     "dora-rs-cli==1.0.1",
     "PyYAML>=6,<7",
     "numpy>=1.26,<3",
-    "opencv-python-headless>=4.8,<5",  # camera capture; headless like lerobot's, so both share one cv2
+    "opencv-python-headless>=4.9,<4.14",  # same package and range as lerobot 0.6.1, so both share one cv2
     "pyserial>=3.5,<4",  # shared by Dynamixel and Pika serial links
     "rich>=13,<15",
     "textual>=8,<9",
@@ -43,8 +43,14 @@ pika = [
 record = ["lerobot[dataset]==0.6.1"]
 hardware = [
     "pyrealsense2>=2.55,<3",
-    "digit-interface>=0.2,<1",
     "sounddevice>=0.4,<1",
+]
+digit = [
+    # DIGIT tactile sensors. Upstream digit-interface 0.2.1 (archived) requires opencv-python,
+    # which installs into the same cv2/ as the core opencv-python-headless. A wheel from the
+    # fork (github.com/tetsugo02/digit-interface, branch roboloom) with the same code that
+    # depends on opencv-python-headless instead.
+    "digit-interface @ https://github.com/tetsugo02/digit-interface/releases/download/roboloom-1/digit_interface-0.2.1-py3-none-any.whl",
 ]
 ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
 policy = ["lerobot==0.6.1"]  # LeRobot checkpoints (policy.lerobot); torch comes with it

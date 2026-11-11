@@ -19,10 +19,10 @@ uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，RealSense・DIGITには `hardware` を追加します．
+既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，RealSenseには `hardware`，DIGITには `digit` を追加します．
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
 uv run roboloom init rakuda2
 ```
 

@@ -1,11 +1,12 @@
 # Sensors
 
 A sensor is a node under `sensors:` in `config.yaml`; its YAML `type` picks the driver.
-The node name becomes the dataset feature name. RealSense, DIGIT and audio use the `hardware` extra
-(`pyrealsense2`, `digit-interface`, `sounddevice`):
+The node name becomes the dataset feature name. RealSense and audio use the `hardware` extra
+(`pyrealsense2`, `sounddevice`); DIGIT uses the `digit` extra (`digit-interface`,
+from a fork that depends on opencv-python-headless; see [installation.md](installation.md)):
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware
+uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware --extra digit
 ```
 
 OpenCV (`opencv-python-headless`) is a core dependency for `opencv_rgb` and `v4l2_rgb`.

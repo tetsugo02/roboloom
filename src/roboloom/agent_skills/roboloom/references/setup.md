@@ -6,7 +6,8 @@ Enter) go through an `Operator`:
 
 ```python
 from roboloom.operator import TerminalOperator, ScriptedOperator
-op = TerminalOperator()                 # what the CLI uses
+
+op = TerminalOperator()  # what the CLI uses
 # ScriptedOperator(...) answers from a list, for scripts and tests
 ```
 
@@ -71,10 +72,11 @@ Tuning without the screen:
 
 ```python
 import time
+
 tuning = setup.open_tuning(gravity, "leader", "right_arm")
 try:
     tuning.start()
-    tuning.key("]")            # gain +0.1 for the selected joint
+    tuning.key("]")  # gain +0.1 for the selected joint
     for _ in range(120):
         tuning.step()
         time.sleep(tuning.period_s)

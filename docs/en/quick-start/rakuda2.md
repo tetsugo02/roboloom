@@ -1,6 +1,6 @@
 # Rakuda2 Quick start
 
-This assumes you have added roboloom and the robot/hardware-collection extras (`rakuda2` / `record` / `hardware`) to your own uv project following [Installation](installation.md). Commands and configuration paths are relative to your project root. For supported devices and configurations, see [Rakuda2](../robots/rakuda2.md).
+This assumes you have added roboloom and the robot/hardware-collection extras (`rakuda2` / `record` / `hardware` / `digit`) to your own uv project following [Installation](installation.md). Commands and configuration paths are relative to your project root. For supported devices and configurations, see [Rakuda2](../robots/rakuda2.md).
 
 ## 1. Robot configuration and read check
 

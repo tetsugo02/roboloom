@@ -78,11 +78,13 @@ report = convert(
     ".roboloom/pika-handheld-mock/datasets/pika-handheld-mock",  # source dataset dir
     ".roboloom/pika-handheld-mock/datasets/pika-handheld-mock-delta",
     "local/pika-handheld-mock-delta",
-    action="delta",            # or "relative-chunk"
-    horizon=16, hands=None, max_gap=3,
+    action="delta",  # or "relative-chunk"
+    horizon=16,
+    hands=None,
+    max_gap=3,
     source_repo_id="local/pika-handheld-mock",
 )
-print(report.describe())       # Report: output, episodes, frames, dropped, filled_rows
+print(report.describe())  # Report: output, episodes, frames, dropped, filled_rows
 meta = read_metadata(report.output)  # meta/roboloom_handheld.json
 ```
 

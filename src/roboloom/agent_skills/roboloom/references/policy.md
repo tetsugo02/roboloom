@@ -48,7 +48,7 @@ class MyPolicy:
         pass
 
     def infer(self, observation) -> np.ndarray:
-        state = observation["observation.state"]          # float32 [n]
+        state = observation["observation.state"]  # float32 [n]
         image = observation["observation.images.camera"]  # uint8 [h, w, 3] RGB
         task = observation["task"]
         return np.asarray(state)  # [n] one step, or [H, n] a chunk
@@ -77,8 +77,12 @@ uv run roboloom infer --seconds 30 --policy my_lab.policies:load \
 ```python
 from roboloom import Session
 
-with Session.launch("rakuda2", options=["policy"], policy="my_lab.policies:load",
-                    policy_kwargs={"checkpoint": "outputs/act/last"}) as s:
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    policy="my_lab.policies:load",
+    policy_kwargs={"checkpoint": "outputs/act/last"},
+) as s:
     s.wait_ready()
     for k in range(10):
         s.record(f"pick up the cup (eval {k})", seconds=30)

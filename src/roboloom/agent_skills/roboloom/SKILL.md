@@ -19,7 +19,7 @@ sensors, recorder and policy as a **dora-rs dataflow** and saves episodes as
 
 Public docs: <https://tetsugo02.github.io/roboloom/en/> (Japanese: `/ja/`).
 Choose robot extras (`rakuda2`, or `piper,pika`) separately from shared features
-(`record`, `hardware`, `policy`, `train`); see [installation](references/installation.md).
+(`record`, `hardware`, `digit`, `policy`, `train`); see [installation](references/installation.md).
 This skill matches roboloom `0.1.0`; if `uv run roboloom skills check` says it is
 outdated, run `uv run roboloom skills install --force`.
 
@@ -94,10 +94,10 @@ outdated, run `uv run roboloom skills install --force`.
 uv add git+https://github.com/tetsugo02/roboloom.git                                      # shared runtime, config, CLI, mocks
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2                       # + Dynamixel SDK
 uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika             # + PiPER SDK, IK, Pika tracker/cameras
-uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware  # Rakuda2 collection + sensors
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit  # Rakuda2 collection + sensors
 ```
 
-`project.requires-python` must be `">=3.12,<3.13"`. Other extras: `record`, `hardware`, `ik`,
+`project.requires-python` must be `">=3.12,<3.13"`. Other extras: `record`, `hardware`, `digit`, `ik`,
 `policy`, `train`. Run everything from the project root with `uv run`. Details:
 [installation.md](references/installation.md).
 

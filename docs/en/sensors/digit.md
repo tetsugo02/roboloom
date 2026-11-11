@@ -1,6 +1,6 @@
 # DIGIT
 
-`DigitSensor` uses `digit-interface` to capture tactile images. It requires the `hardware` extra. Set different serial numbers for the left and right sensors.
+`DigitSensor` uses `digit-interface` to capture tactile images. It requires the `digit` extra ([Installation](../quick-start/installation.md)). Set different serial numbers for the left and right sensors.
 
 ```yaml
 type: digit

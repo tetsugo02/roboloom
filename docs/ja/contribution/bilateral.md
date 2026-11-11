@@ -282,7 +282,9 @@ class EffortEstimator(Protocol):
     ]  # 使う state の項目，例 ("positions", "velocities", "currents_mA", "target")
 
     def reset(self) -> None: ...
-    def update(self, state: dict, t_ns: int) -> Estimate: ...  # follower_state の payload
+    def update(
+        self, state: dict, t_ns: int
+    ) -> Estimate: ...  # follower_state の payload
 
 
 @dataclass

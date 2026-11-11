@@ -1,4 +1,4 @@
-"""DIGIT tactile sensor frames (extra: hardware)."""
+"""DIGIT tactile sensor frames (extra: digit)."""
 
 from __future__ import annotations
 

@@ -49,7 +49,9 @@ def search_directions(
     return sorted(results, key=lambda r: r[0])
 
 
-def robust_outliers(values: np.ndarray, floor: float, max_fraction: float = 0.1) -> np.ndarray:
+def robust_outliers(
+    values: np.ndarray, floor: float, max_fraction: float = 0.1
+) -> np.ndarray:
     """Rows (N x joints) far outside the bulk: |v - median| > max(4 robust sigma, floor) on any joint.
 
     At most `max_fraction` of the rows are flagged, worst first, so a poor model cannot
