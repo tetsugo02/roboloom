@@ -88,7 +88,7 @@ class ActionInterpolator:
         self,
         action: np.ndarray,
         previous: np.ndarray | None = None,
-        next: np.ndarray | None = None,  # noqa: A002 - the action after this one
+        next: np.ndarray | None = None,  # the action after this one
     ) -> None:
         """Queue the steps toward `action`. `previous` stands in for the previous action
         when there is none yet (after `reset`); it is ignored otherwise. `next` is the
