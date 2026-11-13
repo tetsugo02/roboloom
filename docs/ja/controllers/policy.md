@@ -105,6 +105,29 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は 
 - `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位）も渡ります．
 - **新しい観測だけを使う**：観測する入力やセンサーの最新の値が，recorderの `max_age_ms.<ノード>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，フォロワは保持します．値が新しくなると，方策を `reset()` して始め直します．
 
+### 方策を別のプロセスで動かす { #running-the-policy-in-another-process }
+
+roboloomを動かす環境に依存関係が入らないモデル（torchの版が違うなど）や，別のマシンで動かしたいモデルは，自分のプロセスから提供します．方策ノードは `roboloom.policy.remote:connect` でそこへつなぎます．`bind`，`reset`，`infer`，`options` はそのまま渡るので，方策の書き方は上と同じです．
+
+```bash
+# モデルのある側：そのモデルの環境．roboloomはextraなしで入れる
+export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
+uv run roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
+# roboloomのコマンドを使わない場合：python -m roboloom.policy.remote my_lab.policies:load
+```
+
+```yaml
+# nodes/policy.yaml（roboloomを動かす環境にも同じ ROBOLOOM_POLICY_AUTHKEY が要る）
+factory: roboloom.policy.remote:connect
+kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 は infer 1回の上限
+```
+
+- サーバーはモデルを1回だけ読み込み，方策ノードを1つずつ相手にします．エピソードやセッションをまたいで使えます．`roboloom infer` より先に起動してください．ノードは `connect_timeout_s`（30秒）まで待ちます．
+- サーバー側に要るのは，numpyとextraなしのroboloomだけです（LeRobotも，roboloomが入れるtorchも要りません）．
+- 方策が出した例外は，同じプロセスの方策と同じく，controllerの行に出ます．
+- 共有する秘密の文字列で両側を認証します．通信は暗号化しません．アドレスはループバックか，信頼できるネットワークにしてください．メッセージはJSONのヘッダと配列の生のバイト列です（pickleは使いません）．
+- ネットワーク越しでは，`infer` のたびに観測を送ります（480×640の画像1枚で約0.9 MB，`observation_history` の枚数分）．
+
 ## LeRobotの方策
 
 `roboloom.policy.lerobot:load` は，LeRobotで学習したチェックポイントを読み込む，既製の方策です．

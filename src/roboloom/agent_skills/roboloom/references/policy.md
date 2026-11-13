@@ -61,6 +61,14 @@ command_deadline_ms: 300
 - An observed input or sensor older than `recorder.max_age_ms.<node>` stops the policy
   (`stale_observation`, followers hold); when fresh again it restarts with `reset()`.
 
+- A model that cannot share roboloom's environment (other torch) or runs elsewhere:
+  serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or
+  `python -m roboloom.policy.remote ...`; needs only numpy + roboloom without extras) and
+  set `factory: roboloom.policy.remote:connect`, `kwargs: {address: "127.0.0.1:18765"}`.
+  Both sides need the same `ROBOLOOM_POLICY_AUTHKEY`. `bind`/`reset`/`infer`/`options` are
+  forwarded; policy errors show on the controller line. Not encrypted: loopback or a
+  trusted network only.
+
 ## Writing a policy
 
 Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint

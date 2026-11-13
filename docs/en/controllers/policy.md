@@ -107,6 +107,32 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
 - `bind(spec)` also receives `spec.history`, `spec.hold` and `spec.units` (the unit of each action entry).
 - **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold. Once the sample is fresh again, the policy starts over with `reset()`.
 
+### Running the policy in another process
+
+A model whose dependencies do not fit the environment roboloom runs in (another torch
+version, for example), or that should run on another machine, is served from its own
+process. The policy node connects to it with `roboloom.policy.remote:connect`; `bind`,
+`reset`, `infer` and `options` are forwarded, so the policy itself is written as above.
+
+```bash
+# where the model lives: its own environment, with roboloom installed without extras
+export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
+uv run roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
+# the same, without roboloom's command line: python -m roboloom.policy.remote my_lab.policies:load
+```
+
+```yaml
+# nodes/policy.yaml (the environment roboloom runs in needs the same ROBOLOOM_POLICY_AUTHKEY)
+factory: roboloom.policy.remote:connect
+kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 bounds one infer
+```
+
+- The server loads the model once and serves one policy node at a time, across episodes and sessions. Start it before `roboloom infer`; the node waits up to `connect_timeout_s` (30 s) for it.
+- The server side needs only numpy and roboloom without extras (no LeRobot, no torch from roboloom).
+- An exception raised by the policy is shown on the controller's line, as for a policy in the same process.
+- The shared secret authenticates both ends; the data is not encrypted. Keep the address on the loopback interface or a trusted network. Messages carry a JSON header and raw array bytes (no pickle).
+- Over a network, every `infer` sends the observation (about 0.9 MB per 480×640 image, times `observation_history`).
+
 ## LeRobot policies
 
 `roboloom.policy.lerobot:load` is a ready-made policy that loads a checkpoint trained with LeRobot.

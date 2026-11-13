@@ -2034,7 +2034,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=1,<2" },
     { name = "pyyaml", specifier = ">=6,<7" },
-    { name = "rich", specifier = ">=13,<15" },
+    { name = "rich", specifier = ">=13,<16" },
     { name = "sounddevice", marker = "extra == 'audio'", specifier = ">=0.4,<1" },
     { name = "sounddevice", marker = "extra == 'hardware'", specifier = ">=0.4,<1" },
     { name = "textual", specifier = ">=8,<9" },

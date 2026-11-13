@@ -37,6 +37,7 @@ Flags of commands that open devices:
 | `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--plain]` | fixed-length episodes | yes |
 | `roboloom infer [robot] --seconds <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only with `--task` | yes |
 | `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit> [task]` | send one operation to a running `run` | no |
+| `roboloom serve-policy <module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node (`factory: roboloom.policy.remote:connect`) | no |
 | `roboloom convert-handheld [robot] --action delta\|relative-chunk [--horizon 16] [--hands a,b] [--max-gap 3] [--output P] [--repo-id R]` | hand-held recording → training dataset (in development) | no |
 | `roboloom skills install\|check\|path [--agent all\|agents\|claude] [--root .] [--force]` | install / check this agent skill | no |
 
