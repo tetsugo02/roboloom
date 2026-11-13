@@ -16,6 +16,7 @@ factory: roboloom.policy:hold       # "module:callable" returning the policy (te
 kwargs: {}
 observe: [camera]                  # explicit inputs/sensors; [] for joint state only
 rate_hz: 15                         # set to the training dataset's dataset_fps
+interpolation_multiplier: 1         # commands at rate_hz * N, interpolated between actions
 action_horizon: 8                   # chunk steps executed before asking again (1 for mode: step)
 max_speed: {follower: 1024}         # per follower, follower unit/s
 command_deadline_ms: 300
@@ -28,6 +29,12 @@ command_deadline_ms: 300
   adds `controllers.policy`, makes DIGIT optional, conflicts with `gravity`, and records to
   `-eval`. `roboloom infer` enables it; `--policy` / `--policy-kwargs` override the YAML.
 - Start real-hardware inference with the default `roboloom.policy:hold` to check the path.
+- `interpolation_multiplier: N` (default 1) commands at `rate_hz * N`: one action every N
+  ticks, the straight line from the previous action in between (LeRobot's
+  `ActionInterpolator`; roboloom also ramps the first action from the held target).
+  Keep `rate_hz` at the training fps; never raise it to command faster. `rate_hz * N`
+  must be whole Hz and <= every follower's `control_hz`. Followers lag one action period;
+  the recorded `action` is the interpolated target. RTC/async inference: not supported.
 
 ## Writing a policy
 

@@ -14,7 +14,8 @@ followers: [left, right, left_gripper, right_gripper]  # every follower, in conf
 factory: demo_policy:wave           # "module:callable" returning the policy
 kwargs: {}                          # arguments for the factory
 observe: [camera, left_wrist, right_wrist]  # inputs and sensors the policy sees; follower states are always seen
-rate_hz: 10
+rate_hz: 10                         # one action per 1/rate_hz: the training dataset's dataset_fps
+interpolation_multiplier: 1         # commands at rate_hz × this; 1 sends each action as is
 action_horizon: 2                   # steps of a chunk to run before asking for the next
 max_speed: {left: 1.0, right: 1.0, left_gripper: 3.0, right_gripper: 3.0}  # per follower, in unit/s
 command_deadline_ms: 300
@@ -138,9 +139,25 @@ uv run lerobot-train \
 
 ## Rate and steps
 
-- The policy node sends one command every `1/rate_hz`. When no action is queued, it calls `infer`.
+- The policy node takes one action every `1/rate_hz`. When no action is queued, it calls `infer`.
+- Set `rate_hz` to the `dataset_fps` of the dataset the policy was trained on. Raising `rate_hz` to command faster would use up the actions faster than in training.
 - No command is sent during `infer` (synchronous). When inference takes longer than `command_deadline_ms`, the followers go to HOLD and wait. The controller's row on the screen shows the inference time (`infer_ms`, `infer_max_ms`).
-- Set `rate_hz` to the `dataset_fps` of the dataset the policy was trained on.
+
+### Action interpolation
+
+With `interpolation_multiplier: N`, the policy node sends commands at `rate_hz × N`. It takes an action every N commands and, in between, sends the straight line from the previous action to the current one in N equal steps. The actions keep their trained spacing while the followers get fine-grained targets.
+
+```yaml
+rate_hz: 5                    # a policy trained at 5 Hz
+interpolation_multiplier: 12  # commands at 60 Hz
+```
+
+- This is the scheme of LeRobot's rollout (`interpolation_multiplier`, `lerobot.utils.action_interpolator.ActionInterpolator`) with one difference: LeRobot sends the first action as is, while roboloom interpolates from the target the follower holds to the first action.
+- A follower reaches each action one action period (`1/rate_hz`, 200 ms at 5 Hz) after the action was produced.
+- The default 1 sends each action as before.
+- `rate_hz × N` must be whole Hz and at most every follower's `control_hz`; otherwise loading is refused.
+- The `action` recorded in an evaluation dataset is the interpolated target actually sent to the follower.
+- At a chunk boundary the interpolation also pauses while `infer` runs; the next action continues from the action reached before the pause.
 - Targets are cut to `max_speed` from what each follower holds, and `FollowerSafety` checks the joint limits and the deadline, as in teleoperation.
 
 ## Limitations
