@@ -195,7 +195,7 @@ def load(checkpoint: str) -> MyPolicy:
 ```python
 with Session.launch(
     "rakuda2",
-    options=["policy"],  # digit も有効になる（requires）
+    options=["policy"],  # 既定は関節状態＋RealSense．DIGITを使うなら "digit" も選ぶ
     policy="my_lab.policies:load",
     policy_kwargs={"checkpoint": "outputs/act/last"},
 ) as s:
@@ -303,3 +303,32 @@ with InProcessSession.from_components(
 ```
 
 実機の収集手順は [Rakuda2 Quick start](../quick-start/rakuda2.md) を参照してください．
+
+## センサー選択
+
+`load_config(..., sensors=[...], observe=[...])` と
+`Session.launch(..., sensors=[...], observe=[...])` で起動・記録と policy 観測を
+独立に指定します。None は設定の既定、[] は選択なしです。フォロワ状態は常に渡します。
+RobotConfig を渡す場合は load_config で選択を確定してください。
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+CLI は `--sensors camera,audio --observe camera`、
+空の選択は `--sensors "" --observe ""` です。ランチャーにはセンサー起動と
+policy 観測の独立したチェック欄があり、前回の選択を保存します。
+未選択センサーの YAML は読み込みません。未起動センサーの観測指定はエラーです。
+左右の DIGIT を含め、オプションで追加されるセンサーも個別選択できます。
+任意センサーは `{file: nodes/audio.yaml, default: false}` と宣言し、
+従来の文字列パスは既定で有効です。オプション適用後に選択を解決します。
+observe に含めないセンサーも、起動すれば記録対象になります。
+[音声](../sensors/audio.md)も参照してください。

@@ -20,6 +20,13 @@ class PcmAudio(Source):
         super().__init__(name, cfg)
         self.sample_rate = positive(cfg.get("sample_rate"), f"{name}.sample_rate")
 
+    def signature(self, dataset_fps: float) -> dict:
+        return {
+            "representation": "pcm",
+            "sample_rate": self.sample_rate,
+            "window_samples": self.chunk(dataset_fps),
+        }
+
     def chunk(self, dataset_fps: float) -> int:
         return int(self.sample_rate / dataset_fps)
 

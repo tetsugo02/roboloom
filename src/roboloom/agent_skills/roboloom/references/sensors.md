@@ -1,7 +1,7 @@
 # Sensors
 
 A sensor is a node under `sensors:` in `config.yaml`; its YAML `type` picks the driver.
-The node name becomes the dataset feature name. RealSense and audio use the `hardware` extra
+The node name becomes the dataset feature name. RealSense uses the `hardware` extra; audio uses `audio` (also retained in `hardware` for PCM)
 (`pyrealsense2`, `sounddevice`); DIGIT uses the `digit` extra (`digit-interface`,
 from a fork that depends on opencv-python-headless; see [installation.md](installation.md)):
 
@@ -18,7 +18,7 @@ Camera access alone needs no extra and does not use pysurvive. D405 RGB still ne
 | `digit` | DIGIT tactile sensor | Hardware-verified (Rakuda2) | `observation.images.<name>` (video by default; H×W×3 RGB) |
 | `opencv_rgb` | USB / built-in webcam, Linux/macOS/Windows driver | Mock only; hardware unverified | `observation.images.<name>` |
 | `v4l2_rgb` | UVC camera via V4L2/OpenCV (Pika wrist fisheye) | In development, mock only | `observation.images.<name>` |
-| `pcm_mono` | Microphone via `sounddevice` | Not in the user guides; mock only | `observation.audio.<name>` (int16) |
+| `pcm_mono` | Microphone via `sounddevice` | Hardware unverified | `observation.audio.<name>` (int16) |
 
 Common rules:
 
@@ -97,7 +97,7 @@ fps: 30
   decode latency. Tell the user before relying on it. See
   [robots/piper-pika.md](robots/piper-pika.md) and [robots/handheld.md](robots/handheld.md).
 
-## Microphone (`pcm_mono`) – mock only
+## Microphone (`pcm_mono`, `mel_mono`) – hardware unverified
 
 ```yaml
 type: pcm_mono
@@ -108,8 +108,7 @@ channels: 1            # required, must be 1
 
 - Records one int16 chunk of `sample_rate / dataset_fps` samples per frame (no `fps`
   key; the rate is `dataset_fps`). Missing samples are zero-padded.
-- Not documented in the user guides and never run on hardware; do not present it as
-  supported.
+- Documented PCM/mel capture is verified with synthetic and mock data; physical microphones remain unverified.
 
 New sensor types: [extending.md](extending.md); in-process readers:
 [in-process.md](in-process.md).
@@ -143,3 +142,5 @@ Linux paths. Set Recorder `max_age_ms` for the node. Changing size/storage requi
 separate dataset output. Hardware is unverified on all three OSes; full Windows Session
 support is excluded (Unix FIFO/process APIs). Docs: `docs/*/contribution/webcam.md` (in development).
 Never open a camera without user authorization.
+
+mel_mono uses float32[n_mels, n_frames], ascending frequency, with defaults 44100 Hz, 1 second, 64 bins, n_fft=2048, hop_length=690, fmax=15000. Install the audio extra. Select independently through sensors/observe.

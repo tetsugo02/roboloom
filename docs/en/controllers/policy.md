@@ -28,6 +28,22 @@ uv run roboloom infer piper-mock --seconds 20 \
   --policy roboloom.policy.lerobot:load --policy-kwargs '{"path": "outputs/act/pretrained_model"}'
 ```
 
+## Selecting observations
+
+The Rakuda2 template passes joint state and RealSense to the policy without DIGIT. Set `observe` in `nodes/policy.yaml` to match the training inputs. Follower joint state is always included.
+
+| Observations passed to the policy | `observe` | Enabled options |
+| --- | --- | --- |
+| Joint state + RealSense (default) | `[camera]` | `policy` |
+| Joint state + RealSense + left/right DIGIT | `[camera, digit_left, digit_right]` | `digit`, `policy` |
+| Joint state only | `[]` | `policy` |
+
+Enabling `digit` alone does not change the policy inputs. Sensors added to `observe` must also exist in `sensors`. Removing a sensor from `observe` still opens and records it if it remains in `sensors`. For a configuration without a camera, also remove `camera` from `sensors` in `config.yaml`.
+
+A policy trained with DIGIT inputs cannot simply run unchanged without them. Use a policy trained without DIGIT inputs. The LeRobot loader refuses missing required inputs before starting. Custom policies can implement the same check with `bind(spec)`.
+
+Package updates do not overwrite existing project configurations. To migrate an older template, remove `requires: [digit]` from `options.policy` in `config.yaml` and set `observe: [camera]` in `nodes/policy.yaml`. Evaluation runs save to `datasets/rakuda2-eval` without DIGIT, or `datasets/rakuda2-digit-eval` with `digit` enabled.
+
 ## Your own policy
 
 Write a function that returns an object with `reset()` and `infer(observation)` (`roboloom.Policy`).
@@ -150,3 +166,32 @@ uv run lerobot-train \
     ```
 
     With `--task`, the runs are saved as evaluation data.
+
+## Sensor selection
+
+`load_config(..., sensors=[...], observe=[...])` and
+`Session.launch(..., sensors=[...], observe=[...])` select sensors independently
+from policy observations. None keeps configuration defaults; [] selects none.
+Follower state is always observed. When passing RobotConfig, select in load_config;
+Session.launch rejects additional selection arguments.
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+`--sensors camera,audio --observe camera` makes the same CLI selection;
+`--sensors "" --observe ""` selects none. The launcher provides separate
+sensor and observation checkboxes and remembers selections.
+Unselected sensor YAML files are not loaded. Observing an inactive sensor fails.
+Sensors introduced by options can also be selected individually, including either DIGIT.
+An optional sensor uses `{file: nodes/audio.yaml, default: false}`; string paths
+remain enabled by default. Options apply first. Recording includes every active sensor,
+even those omitted from observe. See [Audio](../sensors/audio.md).

@@ -42,6 +42,7 @@ from ..config import (
     option_changes,
     parse_options,
     project_robots,
+    read_config,
     toggle_option,
 )
 from ..errors import ConfigError
@@ -62,6 +63,8 @@ class LaunchPlan:
     seconds: float = 0.0
     episodes: int = 1
     home: bool = False
+    sensors: list[str] | None = None
+    observe: list[str] | None = None
 
     def problem(self) -> str:
         """Why it cannot start, or ''."""
@@ -85,6 +88,8 @@ def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
         data = yaml.safe_load(last_path(config).read_text()) or {}
         plan = LaunchPlan(
             mode=str(data.get("mode", "run")),
+            sensors=data.get("sensors"),
+            observe=data.get("observe"),
             options=tuple(n for n in data.get("options", []) if n in options),
             mock=bool(data.get("mock", False)),
             task=str(data.get("task", "")),
@@ -386,10 +391,45 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         self.config, self.back = config, back
         raw = yaml.safe_load(config.read_text()) or {}
         self.options = parse_options(raw.get("options"))
+        self.sensor_names = list(raw.get("sensors") or {})
+        for option in self.options.values():
+            for key, value in option.set.items():
+                if (
+                    key.startswith("sensors.")
+                    and value is not None
+                    and key[8:] not in self.sensor_names
+                ):
+                    self.sensor_names.append(key[8:])
+        self.observation_names = list(
+            dict.fromkeys([*self.sensor_names, *(raw.get("inputs") or {})])
+        )
         self.repo_id = str(raw.get("repo_id", ""))
         self.yaml_mock = raw.get("mode") == "mock"  # runs mock even when not ticked
         self.plan = initial
         self.chosen = set(initial.options)
+
+        observation_defaults: list[str]
+        try:
+            tree = read_config(config, initial.options)
+            sensor_defaults = list(tree["sensors"])
+            observation_defaults = next(
+                (
+                    c.get("observe", [])
+                    for c in tree["controllers"].values()
+                    if c.get("type") == "policy"
+                ),
+                [],
+            )
+        except (ValueError, TypeError, OSError):
+            sensor_defaults, observation_defaults = [], []
+        self.sensor_selection = (
+            sensor_defaults if initial.sensors is None else initial.sensors
+        )
+        self.observation_selection = (
+            observation_defaults if initial.observe is None else initial.observe
+        )
+        self._observe_explicit = initial.observe is not None
+        self._observation_options = frozenset(self.chosen)
         self._syncing = False
         self.panes = Panes(0.45, bottom=8)
 
@@ -440,6 +480,16 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             with VerticalScroll(id="options"):
                 if not self.options:
                     yield Static("(this configuration declares no options)")
+                yield Static("Start / record sensors", classes="section")
+                for index, name in enumerate(self.sensor_names):
+                    yield OptionToggle(
+                        name, name in self.sensor_selection, id=f"sensor-{index}"
+                    )
+                yield Static("Policy observation inputs", classes="section")
+                for index, name in enumerate(self.observation_names):
+                    yield OptionToggle(
+                        name, name in self.observation_selection, id=f"observe-{index}"
+                    )
                 for name, option in self.options.items():
                     with Vertical(classes="option", id=f"card-{name}"):
                         yield OptionToggle(name, name in self.chosen, id=f"opt-{name}")
@@ -517,6 +567,20 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             self.plan,
             mode=mode,
             options=tuple(n for n in self.options if n in self.chosen),
+            sensors=[
+                n
+                for i, n in enumerate(self.sensor_names)
+                if self.query_one(f"#sensor-{i}", Checkbox).value
+            ]
+            if self.sensor_names
+            else None,
+            observe=[
+                n
+                for i, n in enumerate(self.observation_names)
+                if self.query_one(f"#observe-{i}", Checkbox).value
+            ]
+            if self._observe_explicit
+            else None,
             mock=self.query_one("#mock", Checkbox).value,
             task=self.query_one("#task", Input).value,
             seconds=float(number("seconds", float, 0.0)),
@@ -524,10 +588,37 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             home=self.query_one("#home", Checkbox).value,
         )
 
+    def _refresh_observation_defaults(self) -> None:
+        """Follow newly selected policy YAML until the user overrides observations."""
+        selected = frozenset(self.chosen)
+        if selected == self._observation_options:
+            return
+        self._observation_options = selected
+        if self._observe_explicit:
+            return
+        try:
+            # Only controller defaults are needed; inactive sensor files stay unread.
+            tree = read_config(self.config, self.chosen, sensors=[])
+        except (ValueError, TypeError, OSError):
+            return  # incomplete configurations remain editable in the launcher
+        self.observation_selection = list(
+            dict.fromkeys(
+                source
+                for controller in tree["controllers"].values()
+                if controller.get("type") == "policy"
+                for source in controller.get("observe", [])
+            )
+        )
+        for index, name in enumerate(self.observation_names):
+            self.query_one(f"#observe-{index}", Checkbox).value = (
+                name in self.observation_selection
+            )
+
     def _sync(self) -> None:
         """Reflect `chosen` on the checkboxes and refresh the summary."""
         self._syncing = True
         try:
+            self._refresh_observation_defaults()
             for name in self.options:
                 on = name in self.chosen
                 self.query_one(f"#opt-{name}", Checkbox).value = on
@@ -555,6 +646,10 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             check_options(self.options, plan.options)
         except ConfigError as exc:
             return str(exc)
+        observed = self.observation_selection if plan.observe is None else plan.observe
+        missing = set(observed) & (set(self.sensor_names) - set(plan.sensors or []))
+        if missing:
+            return f"policy observes inactive sensors: {sorted(missing)}"
         return plan.problem()
 
     def _devices(self, plan: LaunchPlan) -> str:
@@ -584,9 +679,28 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if self._syncing:
             return
-        name = (event.checkbox.id or "").removeprefix("opt-")
+        widget_id = event.checkbox.id or ""
+        if widget_id.startswith("observe-"):
+            source = self.observation_names[int(widget_id.removeprefix("observe-"))]
+            # Programmatic refresh events arrive after _sync returns, too.
+            if event.value != (source in self.observation_selection):
+                self._observe_explicit = True
+                self.observation_selection = [
+                    name
+                    for index, name in enumerate(self.observation_names)
+                    if self.query_one(f"#observe-{index}", Checkbox).value
+                ]
+        name = widget_id.removeprefix("opt-")
         if event.checkbox.id and event.checkbox.id.startswith("opt-"):
+            before = option_changes(self.options, self.chosen)
             self.chosen = toggle_option(self.options, self.chosen, name, event.value)
+            after = option_changes(self.options, self.chosen)
+            for index, sensor in enumerate(self.sensor_names):
+                key = f"sensors.{sensor}"
+                if before.get(key) != after.get(key):
+                    self.query_one(f"#sensor-{index}", Checkbox).value = (
+                        after.get(key) is not None
+                    )
         self._sync()
 
     def on_radio_set_changed(self, _: RadioSet.Changed) -> None:

@@ -19,6 +19,7 @@ nav:
       - 概要: sensors/index.md
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
+      - Audio: sensors/audio.md
   - Controllers:
       - 概要: controllers/index.md
       - Leader: controllers/leader.md

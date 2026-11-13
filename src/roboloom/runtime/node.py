@@ -12,7 +12,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from roboloom.config import RobotConfig, env_options, load_config
+from roboloom.config import RobotConfig, env_options, parse_config, read_config
 from roboloom.control.trace import FollowerTrace
 from roboloom.controllers.base import Controller, FollowerView
 from roboloom.controllers.policy import PolicyController
@@ -802,11 +802,19 @@ def main() -> None:
 
     name, path = sys.argv[1:3]
     mode = os.environ.get("ROBOLOOM_MODE")
-    cfg = load_config(
+    tree = read_config(
         path,
         options=env_options(os.environ.get("ROBOLOOM_OPTIONS")),
         mock=None if mode is None else mode == "mock",
+        sensors=json.loads(os.environ["ROBOLOOM_SENSORS"])
+        if "ROBOLOOM_SENSORS" in os.environ
+        else None,
     )
+    for controller, selected in json.loads(
+        os.environ.get("ROBOLOOM_OBSERVE", "{}")
+    ).items():
+        tree["controllers"][controller]["observe"] = selected
+    cfg = parse_config(tree)
     node = Node()
     if name == "session":
         _session(node, cfg)

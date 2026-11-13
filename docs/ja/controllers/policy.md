@@ -28,6 +28,22 @@ uv run roboloom infer piper-mock --seconds 20 \
   --policy roboloom.policy.lerobot:load --policy-kwargs '{"path": "outputs/act/pretrained_model"}'
 ```
 
+## 観測を選ぶ
+
+Rakuda2のテンプレートは，DIGITなしで関節状態とRealSenseを方策に渡します．`nodes/policy.yaml` の `observe` を，学習時に使った入力に合わせます．フォロワの関節状態は常に渡されます．
+
+| 方策に渡す観測 | `observe` | 有効にするオプション |
+| --- | --- | --- |
+| 関節状態＋RealSense（既定） | `[camera]` | `policy` |
+| 関節状態＋RealSense＋左右DIGIT | `[camera, digit_left, digit_right]` | `digit`，`policy` |
+| 関節状態のみ | `[]` | `policy` |
+
+`digit` を有効にするだけでは，方策の入力は変わりません．`observe` に追加したセンサーは，`sensors` にも存在する必要があります．`observe` から外しても，`sensors` にあるセンサーは開いて記録します．カメラも使わない構成では，`config.yaml` の `sensors` から `camera` を外してください．
+
+DIGITを入力とする学習済み方策を，DIGITなしでそのまま使えるわけではありません．DIGITなしの入力で学習した方策を使います．LeRobotの読み込みは，必要な入力が足りなければ開始前に拒否します．自作の方策では `bind(spec)` で同じ検査を書けます．
+
+既存プロジェクトの設定は，パッケージ更新では上書きされません．以前のテンプレートから移行するときは，`config.yaml` の `options.policy` から `requires: [digit]` を削除し，`nodes/policy.yaml` を `observe: [camera]` に変更します．評価の保存先はDIGITなしなら `datasets/rakuda2-eval`，`digit` も有効なら `datasets/rakuda2-digit-eval` です．
+
 ## 自作の方策
 
 `reset()` と `infer(observation)` を持つオブジェクトを返す関数を書きます（`roboloom.Policy`）．
@@ -150,3 +166,32 @@ uv run lerobot-train \
     ```
 
     `--task` を付けると，実行した回を評価のデータとして保存します．
+
+## センサー選択
+
+`load_config(..., sensors=[...], observe=[...])` と
+`Session.launch(..., sensors=[...], observe=[...])` で起動・記録と policy 観測を
+独立に指定します。None は設定の既定、[] は選択なしです。フォロワ状態は常に渡します。
+RobotConfig を渡す場合は load_config で選択を確定してください。
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+CLI は `--sensors camera,audio --observe camera`、
+空の選択は `--sensors "" --observe ""` です。ランチャーにはセンサー起動と
+policy 観測の独立したチェック欄があり、前回の選択を保存します。
+未選択センサーの YAML は読み込みません。未起動センサーの観測指定はエラーです。
+左右の DIGIT を含め、オプションで追加されるセンサーも個別選択できます。
+任意センサーは `{file: nodes/audio.yaml, default: false}` と宣言し、
+従来の文字列パスは既定で有効です。オプション適用後に選択を解決します。
+observe に含めないセンサーも、起動すれば記録対象になります。
+[音声](../sensors/audio.md)も参照してください。

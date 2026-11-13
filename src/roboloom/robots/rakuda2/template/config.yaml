@@ -14,6 +14,7 @@ controllers:
 followers:
   follower: nodes/follower.yaml
 sensors:
+  audio: {file: nodes/audio.yaml, default: false}
   camera: nodes/camera.yaml
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
@@ -39,7 +40,6 @@ options:
     dataset: bilateral
   policy:
     help: a learned policy drives the follower (`roboloom infer` turns this on)
-    requires: [digit]  # nodes/policy.yaml observes the DIGIT sensors
     conflicts: [gravity]
     set:
       inputs.leader: null

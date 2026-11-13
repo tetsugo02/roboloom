@@ -19,6 +19,7 @@ nav:
       - Overview: sensors/index.md
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
+      - Audio: sensors/audio.md
   - Controllers:
       - Overview: controllers/index.md
       - Leader: controllers/leader.md

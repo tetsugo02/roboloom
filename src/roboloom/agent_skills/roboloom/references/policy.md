@@ -14,7 +14,7 @@ type: policy
 followers: [follower]               # every follower, in configuration order
 factory: roboloom.policy:hold       # "module:callable" returning the policy (template default: hold still)
 kwargs: {}
-observe: [camera, digit_left, digit_right]   # inputs/sensors it sees; follower state always
+observe: [camera]                  # explicit inputs/sensors; [] for joint state only
 rate_hz: 15                         # set to the training dataset's dataset_fps
 action_horizon: 8                   # chunk steps executed before asking again (1 for mode: step)
 max_speed: {follower: 1024}         # per follower, follower unit/s
@@ -25,11 +25,23 @@ command_deadline_ms: 300
   `.roboloom/<robot>/` (so `.roboloom/rakuda2/my_policy.py` → `factory: my_policy:load`,
   no `PYTHONPATH`). An installed module of the same name wins.
 - In the Rakuda2 template the option `policy` removes the leader and joint controller,
-  adds `controllers.policy`, requires `digit`, conflicts with `gravity`, and records to
+  adds `controllers.policy`, makes DIGIT optional, conflicts with `gravity`, and records to
   `-eval`. `roboloom infer` enables it; `--policy` / `--policy-kwargs` override the YAML.
 - Start real-hardware inference with the default `roboloom.policy:hold` to check the path.
 
 ## Writing a policy
+
+Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint
+state only, or `observe: [camera, digit_left, digit_right]` and enable `digit` for tactile
+inputs. Enabling `digit` alone only adds recorded sensors; it does not change policy
+inputs. All observed sensors must exist in `sensors`. To avoid opening unused sensors,
+also remove their nodes from `config.yaml`. A checkpoint requiring DIGIT cannot run
+unchanged without it; LeRobot checks this at load, custom policies can use `bind`.
+
+Existing project files are not overwritten on update. Migrate older Rakuda2 configs by
+removing `options.policy.requires: [digit]` and setting `observe: [camera]` in
+`nodes/policy.yaml`. Evaluation datasets are `rakuda2-eval` without DIGIT and
+`rakuda2-digit-eval` with the `digit` option.
 
 ```python
 # my_lab/policies.py  (or .roboloom/<robot>/my_policy.py)

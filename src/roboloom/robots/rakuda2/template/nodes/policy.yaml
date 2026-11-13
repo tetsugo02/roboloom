@@ -8,7 +8,7 @@ type: policy
 followers: [follower]
 factory: roboloom.policy:hold
 kwargs: {}
-observe: [camera, digit_left, digit_right]
+observe: [camera]  # add digit_left/digit_right with the digit option; [] for state only
 rate_hz: 15
 action_horizon: 8
 max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)

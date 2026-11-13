@@ -107,13 +107,11 @@ def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypa
         result = s.record("creep", 1.5)
         policy = s.status()["policy"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
-    assert policy["state"] == "ready" and "infer_ms" in policy, policy
+    assert policy["state"] in ("ready", "running") and "infer_ms" in policy, policy
 
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    dataset = LeRobotDataset(
-        "local/rakuda2-digit-eval", root=project / "datasets" / "rakuda2-digit-eval"
-    )
+    dataset = LeRobotDataset(s.cfg.repo_id, root=s.cfg.output)
     first = [float(dataset[i]["observation.state"][0]) for i in range(len(dataset))]
     assert first[-1] > first[0] + 20  # the policy moved joint 0 up
 

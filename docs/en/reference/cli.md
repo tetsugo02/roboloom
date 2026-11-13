@@ -88,3 +88,32 @@ The Textual operations menu shows unavailable actions with reasons, including `h
 
 `run --plain` retains line input; `record --plain` and `infer --plain` collect without key input. Non-TTY invocation selects these paths automatically (no launcher). `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
 `stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Quick start](../quick-start/rakuda2.md). For details beyond the leader, such as the existing policy API, see [Python API](python-api.md).
+
+## Sensor selection
+
+`load_config(..., sensors=[...], observe=[...])` and
+`Session.launch(..., sensors=[...], observe=[...])` select sensors independently
+from policy observations. None keeps configuration defaults; [] selects none.
+Follower state is always observed. When passing RobotConfig, select in load_config;
+Session.launch rejects additional selection arguments.
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+`--sensors camera,audio --observe camera` makes the same CLI selection;
+`--sensors "" --observe ""` selects none. The launcher provides separate
+sensor and observation checkboxes and remembers selections.
+Unselected sensor YAML files are not loaded. Observing an inactive sensor fails.
+Sensors introduced by options can also be selected individually, including either DIGIT.
+An optional sensor uses `{file: nodes/audio.yaml, default: false}`; string paths
+remain enabled by default. Options apply first. Recording includes every active sensor,
+even those omitted from observe. See [Audio](../sensors/audio.md).

@@ -39,7 +39,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `action.meta.follower.valid`，`clamped`，`seq`，`sent_ns` | 各1（`valid`，`clamped` はfloat32，`seq`，`sent_ns` はint64） | 0/1，指令の番号，単調時計のns |
 
 - `observation.leader`，`observation.meta.<node>.*`，`action.valid`，`action.clamped`，`action.meta.follower.*` の意味，欠測の記録のしかた，指令のなかった行の `action` の中身は，[設定](../reference/configuration.md) の「記録と再開」で説明しています．どのロボットでも同じです．
-- 方策（オプション `policy`）は，`camera` と左右のDIGITを観測し（`nodes/policy.yaml` の `observe`），`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．
+- 方策（オプション `policy`）は，既定で関節状態と `camera` を観測します．`nodes/policy.yaml` の `observe` でセンサーを選べます（`[]` なら関節状態のみ）．`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．
 - `max_speed` はカウント/sです（テンプレートは `{follower: 1024}`）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．方策の書き方は [方策で動かす](../controllers/policy.md) にあります．
 
@@ -52,7 +52,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `digit` | 左右DIGITを記録する | | `-digit` を付ける |
 | `gravity` | leaderの左右腕を重力補償する（`nodes/leader_gravity.yaml`） | | 変えない |
 | `bilateral` | 力の逆送（実機未検証）．leader・controller・robotを置き換え，推定器 `effort` を足す | `gravity` が必要 | `-bilateral` を付ける |
-| `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `digit` が必要，`gravity` と競合 | `-eval` を付ける |
+| `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `gravity` と競合 | `-eval` を付ける |
 
 | 有効なオプション | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
@@ -61,13 +61,16 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `gravity` | 重力補償付き | RealSense | `local/rakuda2` |
 | `gravity`，`digit` | 重力補償付き | RealSense + 左右DIGIT | `local/rakuda2-digit` |
 | `gravity`，`bilateral` | 重力補償付き＋力の逆送（実機未検証） | RealSense | `local/rakuda2-bilateral` |
+| `policy` | なし（方策） | RealSense | `local/rakuda2-eval` |
 | `digit`，`policy` | なし（方策） | RealSense + 左右DIGIT | `local/rakuda2-digit-eval` |
 
 制約：
 
 - `gravity` は，[Quick start](../quick-start/rakuda2.md) の測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）を済ませてから使います．測定値が `SET_...` のままだと読み込みを拒否します．
 - `gravity` の有無でleaderのOperating Modeが変わります．端末から実機で起動するとき，CLIはEEPROMの差分を表示し，確認してから書きます．
-- `policy` の方策（`nodes/policy.yaml`）はDIGITの画像を観測するので，`digit` が必要です．leaderを使わないため `gravity` とは同時に使えません．`gravity` を必要とする `bilateral` とも併用できません．
+- `policy` はDIGITなしで使えます．DIGITを方策に渡すときは，`digit` を有効にし，`nodes/policy.yaml` の `observe` を `[camera, digit_left, digit_right]` に変更します．`digit` の有効化だけでは方策の入力は変わりません．学習時の入力と一致させてください．DIGITが必要なLeRobotチェックポイントをDIGITなしで読み込むと，開始前に拒否します．
+- 関節状態のみの方策は `observe: []` にします．センサーを開かない場合は，`config.yaml` の `sensors` から該当ノードも外します．
+- `policy` はleaderを使わないため `gravity` とは同時に使えません．`gravity` を必要とする `bilateral` とも併用できません．
 - `gravity` はデータセット名を変えません．記録するfeatureが通常leaderと同じためです．通常leaderと重力補償付きleaderのエピソードは同じデータセットに入ります．
 - 画像featureが変わるため，`digit` の有無でデータセットが分かれます．RealSenseだけの既存データセットへDIGITのエピソードは追記しません．
 
@@ -96,3 +99,32 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 制御周期はテンプレートで120 Hzです．前提条件と下げ方は [設定](../reference/configuration.md) の「制御周期」を参照してください．
 
 セットアップから収集までの手順は [Rakuda2 Quick start](../quick-start/rakuda2.md)，制御値の意味は [Gravity tuning](../reference/gravity-tuning.md) を参照してください．
+
+## センサー選択
+
+`load_config(..., sensors=[...], observe=[...])` と
+`Session.launch(..., sensors=[...], observe=[...])` で起動・記録と policy 観測を
+独立に指定します。None は設定の既定、[] は選択なしです。フォロワ状態は常に渡します。
+RobotConfig を渡す場合は load_config で選択を確定してください。
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+CLI は `--sensors camera,audio --observe camera`、
+空の選択は `--sensors "" --observe ""` です。ランチャーにはセンサー起動と
+policy 観測の独立したチェック欄があり、前回の選択を保存します。
+未選択センサーの YAML は読み込みません。未起動センサーの観測指定はエラーです。
+左右の DIGIT を含め、オプションで追加されるセンサーも個別選択できます。
+任意センサーは `{file: nodes/audio.yaml, default: false}` と宣言し、
+従来の文字列パスは既定で有効です。オプション適用後に選択を解決します。
+observe に含めないセンサーも、起動すれば記録対象になります。
+[音声](../sensors/audio.md)も参照してください。

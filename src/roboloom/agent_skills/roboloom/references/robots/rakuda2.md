@@ -16,7 +16,7 @@ convert them. `roboloom init rakuda2` copies the template (the only packaged one
 | `nodes/controller.yaml` | `controller` / `joint` | identity map of 17 joints, `unit: dynamixel_count`, `alignment_tolerance: 300`, `max_speed: 2048`, `couplings: []`, `home` commented out |
 | `nodes/camera.yaml` | `camera` / `realsense_rgb` | 640×480, `fps: 30` |
 | `nodes/digit_left.yaml`, `digit_right.yaml` | `digit` | QVGA, `height: 320`, `width: 240`, `fps: 30` |
-| `nodes/policy.yaml` | `policy` / `policy` | `factory: roboloom.policy:hold`, `observe: [camera, digit_left, digit_right]`, `rate_hz: 15`, `action_horizon: 8`, `max_speed: {follower: 1024}` |
+| `nodes/policy.yaml` | `policy` / `policy` | `factory: roboloom.policy:hold`, `observe: [camera]`, `rate_hz: 15`, `action_horizon: 8`, `max_speed: {follower: 1024}` |
 | `nodes/recorder.yaml`, `session.yaml` | – | `max_age_ms` per recorded node; `type: terminal` |
 | `calibration/leader_<side>.yaml` | – | port, joint→URDF map, `zero`, `direction`, `confirmed: false` |
 | `calibration/gravity_tuning_<side>.yaml` | – | `gain`, `hold_mA` per joint (written by `tune-gravity`) |
@@ -33,7 +33,7 @@ fill them yourself; see "Bring-up" for where each value comes from.
 | (none) | standard leader, `joint` controller, RealSense | – | `local/rakuda2` |
 | `digit` | adds `sensors.digit_left`, `sensors.digit_right` | – | `local/rakuda2-digit` |
 | `gravity` | `inputs.leader` → `nodes/leader_gravity.yaml` | – | unchanged (same features) |
-| `policy` | removes leader and controller, adds `controllers.policy`; `roboloom infer` enables it | requires `digit`, conflicts `gravity` | `local/rakuda2-digit-eval` |
+| `policy` | removes leader and controller, adds `controllers.policy`; `roboloom infer` enables it | DIGIT optional, conflicts `gravity` | `local/rakuda2-eval` (`-digit-eval` with `digit`) |
 
 `bilateral` also exists: force feedback, **not verified on hardware, paused – do not use
 or set it up**. `gravity` loads only after the measurement files below exist.

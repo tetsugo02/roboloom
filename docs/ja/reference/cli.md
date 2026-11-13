@@ -88,3 +88,32 @@ Textualの操作メニューは使えない操作も理由付きで表示し，�
 
 `run --plain` は行入力を維持し，`record --plain`・`infer --plain` はキー入力なしで収集します．非TTYも同じ経路です（ランチャーは開きません）．`tune-gravity` はデバイスを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
 `stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../quick-start/rakuda2.md) にあります．既存の方策APIなど，leader以外の詳細は [Python API](python-api.md) を参照してください．
+
+## センサー選択
+
+`load_config(..., sensors=[...], observe=[...])` と
+`Session.launch(..., sensors=[...], observe=[...])` で起動・記録と policy 観測を
+独立に指定します。None は設定の既定、[] は選択なしです。フォロワ状態は常に渡します。
+RobotConfig を渡す場合は load_config で選択を確定してください。
+
+```python
+with Session.launch(
+    "rakuda2",
+    options=["policy"],
+    sensors=["camera", "audio"],
+    observe=["camera"],
+    policy="my_lab.policies:load",
+) as session:
+    session.wait_ready()
+    session.record("pick", seconds=20)
+```
+
+CLI は `--sensors camera,audio --observe camera`、
+空の選択は `--sensors "" --observe ""` です。ランチャーにはセンサー起動と
+policy 観測の独立したチェック欄があり、前回の選択を保存します。
+未選択センサーの YAML は読み込みません。未起動センサーの観測指定はエラーです。
+左右の DIGIT を含め、オプションで追加されるセンサーも個別選択できます。
+任意センサーは `{file: nodes/audio.yaml, default: false}` と宣言し、
+従来の文字列パスは既定で有効です。オプション適用後に選択を解決します。
+observe に含めないセンサーも、起動すれば記録対象になります。
+[音声](../sensors/audio.md)も参照してください。

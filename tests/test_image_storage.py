@@ -147,6 +147,6 @@ def test_recording_roundtrip(tmp_path, storages, camera_cls):
             assert list((tmp_path / "data" / "videos" / key).rglob("*.mp4"))
     sensors["digit"].storage = "video" if storages[0] == "image" else "image"
     resumed = EpisodeRecorder(cfg)
-    with pytest.raises(ValueError, match="storage changes require a separate dataset"):
+    with pytest.raises(ValueError, match="existing dataset schema differs"):
         resumed.open_dataset()
     resumed.close()

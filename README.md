@@ -152,13 +152,13 @@ uv run roboloom record --task handover --seconds 10
 - 保存したとき：
   - 欠損率，有効な行動の割合，制御周期の最大値が `recorder.quality` の上限を超えていれば，警告を出します．
 
-方策で動かす（`infer` は `policy` オプションを有効にします．テンプレートでは `type: policy` の controller に置き換え，DIGIT を必要とし，重力補償とは両立しません）：
+方策で動かす（`infer` は `policy` オプションを有効にします．テンプレートでは `type: policy` の controller に置き換え，既定は関節状態＋RealSenseで，重力補償とは両立しません）：
 
 ```bash
 uv run roboloom infer --policy my_lab.policies:load --seconds 30
 ```
 
-`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-digit-eval`）．
+`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．
 
 EEPROM について：
 
@@ -273,3 +273,11 @@ src/roboloom/
 設定の読み込みはデバイスを開きません．1つの設定に follower を複数置けます．各 follower を駆動する controller はちょうど1個で，1個の controller が複数の follower を駆動できます（`type: policy` の controller は設定のすべての follower を駆動します）．
 
 OpenCV（`opencv-python-headless`）は共通依存に含まれます．USB／内蔵のWebカメラを読む `type: opencv_rgb`（Linux・macOS・Windows向けのドライバー）は開発中・実機未検証です．設定とPython単体の例は [Webカメラ](docs/ja/contribution/webcam.md)（[English](docs/en/contribution/webcam.md)）を参照してください．WindowsでのSession全体の対応は含みません．
+
+
+Sensors can be selected individually with `--sensors camera,audio`; policy inputs
+are selected separately with `--observe camera`. Empty strings select none.
+Rakuda2 audio is off by default; configure nodes/audio.yaml and install the audio
+extra to use PCM or mel numeric observations with a custom policy.
+Dataset schema mismatches require a manually chosen repo_id/output.
+Physical microphone capture is unverified.

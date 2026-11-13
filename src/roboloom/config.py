@@ -293,6 +293,8 @@ def read_config(
     path: str | Path,
     options: Iterable[str] | None = None,
     mock: bool | None = None,
+    sensors: Iterable[str] | None = None,
+    observe: Iterable[str] | None = None,
 ) -> dict:
     """Load the configuration YAML and every referenced node file into one tree.
 
@@ -315,6 +317,30 @@ def read_config(
         else:
             group[name] = value
         raw[role] = group
+    # Options may introduce sensors; explicit selection resolves after them.
+    catalog = dict(raw.get("sensors") or {})
+    for option in available.values():
+        for key, value in option.set.items():
+            role, _, name = key.partition(".")
+            if role == "sensors" and value is not None and name not in catalog:
+                catalog[name] = {"file": value, "default": False}
+    chosen = (
+        set(sensors)
+        if sensors is not None
+        else {
+            name
+            for name, value in catalog.items()
+            if not isinstance(value, dict) or value.get("default", True)
+        }
+    )
+    unknown_sensors = chosen - catalog.keys()
+    if unknown_sensors:
+        raise ConfigError(f"unknown sensors: {sorted(unknown_sensors)}")
+    raw["sensors"] = {
+        name: value["file"] if isinstance(value, dict) else value
+        for name, value in catalog.items()
+        if name in chosen
+    }
     suffix = dataset_suffix(available, enabled)
     for key in ("repo_id", "output"):
         if suffix and isinstance(raw.get(key), str) and raw[key]:
@@ -343,6 +369,11 @@ def read_config(
         tree[role] = {
             name: node(relative, f"{role}.{name}") for name, relative in group.items()
         }
+    if observe is not None:
+        observed = list(observe)
+        for controller in tree["controllers"].values():
+            if controller.get("type") == "policy":
+                controller["observe"] = observed
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
     unknown = set(raw) - set(SETTINGS)
@@ -668,15 +699,23 @@ def load_config(
     *,
     options: Iterable[str] | None = None,
     mock: bool | None = None,
+    sensors: Iterable[str] | None = None,
+    observe: Iterable[str] | None = None,
 ) -> RobotConfig:
     """Load and validate a configuration file, or one named under the project root.
 
+    `sensors`: active recorded sensors (None: defaults, []: none).
+    `observe`: policy inputs (None: YAML, []: follower state only).
     `options`: the launch options to enable (None: their defaults). `mock`: override the
     YAML's `mode` (True: mock devices, False: hardware)."""
+    # Materialize iterable selections once; names remain in YAML declaration order.
+    sensors = None if sensors is None else tuple(sensors)
+    observe = None if observe is None else tuple(observe)
     path = resolve_config(config, root)
     try:
-        cfg = parse_config(read_config(path, options, mock))
-        _check_datasets(path, cfg)
+        cfg = parse_config(read_config(path, options, mock, sensors, observe))
+        if sensors is None:
+            _check_datasets(path, cfg)
         return cfg
     except ConfigError:
         raise
