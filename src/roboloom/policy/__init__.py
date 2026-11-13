@@ -17,6 +17,15 @@ before any episode, with the observation's names, dtypes and shapes and the acti
 names. A policy checks there that it gets what it was trained on and raises otherwise,
 so a mismatch refuses the start instead of failing mid-episode. Policies without `bind`
 work as before. `roboloom.policy.lerobot:load` is such a policy for LeRobot checkpoints.
+
+What a model needs beyond the latest frame is asked from the controller, not rebuilt in
+every policy: `observation_history: N` adds `observation["history"]` (each observation
+stacked `[N, ...]`, oldest first, the current frame last, plus `"action"`: the actions
+executed so far) and `hold:` names joints the policy leaves where they are. A policy may
+state these itself with `options()` (a dict with `observation_history`, `hold`,
+`action_horizon`), which wins over the YAML, so swapping the model needs no edited
+configuration. Normalization, resizing and decoding the model's own action form into
+joint targets stay in the policy.
 """
 
 from __future__ import annotations
@@ -38,12 +47,17 @@ class PolicySpec:
 
     `observation`: dataset feature name -> {"dtype", "shape", "names"}, the keys and
     shapes of the observation `infer` receives (besides `task`); images are [h, w, 3].
-    `action`: the names of the action's entries, `<follower>.<joint>` in order."""
+    `action`: the names of the action's entries, `<follower>.<joint>` in order; `units`
+    their units. `history` and `hold` are the controller's `observation_history` and
+    `hold` (see `controllers.policy`)."""
 
     observation: Mapping[str, Mapping[str, Any]]
     action: tuple[str, ...]
     rate_hz: float
     dataset_fps: float
+    history: int = 1  # frames in observation["history"] (1: no history)
+    hold: tuple[str, ...] = ()  # action entries the policy does not drive
+    units: tuple[str, ...] = ()  # the unit of each action entry (its follower's)
 
 
 class Policy(Protocol):

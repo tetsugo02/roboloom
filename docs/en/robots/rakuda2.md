@@ -19,6 +19,7 @@ The current operation guide covers the [Leader](../controllers/leader.md). Joint
 | --- | --- | --- | --- |
 | [RealSense](../sensors/realsense.md) | `camera` | `nodes/camera.yaml` | RGB image (depth is not captured) |
 | [DIGIT](../sensors/digit.md) | `digit_left`, `digit_right` | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | Left and right tactile RGB images |
+| [Audio](../sensors/audio.md) | `audio` | `nodes/audio.yaml` | Mel spectrogram of one microphone (off by default; select it with `--sensors`) |
 
 Set the sensor serial numbers to match the hardware. Sensor names are also used as feature names in the dataset.
 
@@ -37,6 +38,8 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | `observation.meta.<node>.seq`, `capture_ns`, `ready_ns`, `receive_ns` | 1 each (int64), same nodes | sequence number, monotonic-clock ns |
 | `action.valid`, `action.clamped` | 1 each (float32) | 0/1 |
 | `action.meta.follower.valid`, `clamped`, `seq`, `sent_ns` | 1 each (`valid`, `clamped` float32; `seq`, `sent_ns` int64) | 0/1, command number, monotonic-clock ns |
+| `action.intervention` | 1 (float32; only with option `policy_teleop`) | 1 in rows a person drove with the leader |
+| `observation.audio.audio` | only when the sensor `audio` is selected; shape in [Audio](../sensors/audio.md) | mel spectrogram |
 
 - What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in "Recording and resuming" of [Configuration](../reference/configuration.md#recording-and-resuming); they are the same for every robot.
 - The policy (option `policy`) observes joint state and `camera` by default. Select sensors with `observe` in `nodes/policy.yaml` (`[]` for joint state only). `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.

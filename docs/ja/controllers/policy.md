@@ -84,6 +84,27 @@ def load(checkpoint: str) -> MyPolicy:
 
   学習したときと違う構成なら例外を出してください．controllerは `failed` になり，理由を画面に出して，エピソードを始めません．`roboloom infer` と `Session.wait_ready` は，待たずに理由を示して終わります．`bind` を書かない方策も，これまでどおり動きます．
 
+### 履歴，動かさない関節，新しい観測
+
+最新のフレーム以外にモデルが要るものは，controllerに頼みます．モデルを作り替えるたびに書き直す必要はありません．正規化，画像の縮小，モデル独自の行動（差分，一部の関節だけ）を関節の目標へ直す処理は，方策の側に書きます．
+
+```yaml
+observation_history: 4                       # 既定は1：最新のフレームだけ
+hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は []
+```
+
+- **`observation_history: N`**：観測を行動1手ごと（`1/rate_hz` ごと）に1回採ります．まとめた行動のうち推論しない手でも採ります．`infer` には `observation["history"]` も渡ります．観測の各配列を `[N, ...]` に重ねたもので，古い順に並び，最後が今のフレームです．エピソードの始めは，最初のフレームで履歴を埋めます．`history["action"]`（float32 `[N, n]`）は，各フレームの前に実行した行動です（始めはフォロワが保持していた目標）．過去の行動を読むモデルに使います．`N = 1` なら観測は今までと同じです．
+- **`hold`**：行動のうち方策が動かさない要素（`<フォロワ>.<関節>`）です．方策がそこに何を返しても（NaNでも），フォロワが保持している目標に置き換えます．一部の関節だけで学習したモデルも，`[n]` か `[H, n]` を返せば済みます．ほかの要素は有限でなければならず，そうでなければエピソードを止めます．
+- **`options()`（任意）**：方策が自分でこれらを指定できます．YAMLより優先します．モデルを差し替えても設定を書き換えずに済みます．
+
+    ```python
+    def options(self) -> dict:
+        return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
+    ```
+
+- `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位）も渡ります．
+- **新しい観測だけを使う**：観測する入力やセンサーの最新の値が，recorderの `max_age_ms.<ノード>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，フォロワは保持します．値が新しくなると，方策を `reset()` して始め直します．
+
 ## LeRobotの方策
 
 `roboloom.policy.lerobot:load` は，LeRobotで学習したチェックポイントを読み込む，既製の方策です．

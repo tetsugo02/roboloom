@@ -50,6 +50,17 @@ command_deadline_ms: 300
   trigger reaches it). Rows a person drove: `action.intervention` = 1. Only `type: joint`
   teleop controllers (pose_ik refused). Handing back calls `policy.reset()`.
 
+- `observation_history: N` (default 1): the observation is sampled once per action and
+  `infer` also gets `observation["history"]`: every array stacked `[N, ...]`, oldest first,
+  current frame last (the first frame fills it), plus `"action"` `[N, n]`, the action
+  executed before each frame. `hold: [<follower>.<joint>, ...]`: action entries the policy
+  does not drive; whatever it returns there (NaN too) becomes the held target, other
+  entries must be finite. A policy may return both (and `action_horizon`) from an optional
+  `options()`; it wins over the YAML. `bind(spec)` sees `spec.history`, `spec.hold`,
+  `spec.units`. Normalization, resizing and decoding deltas stay in the policy.
+- An observed input or sensor older than `recorder.max_age_ms.<node>` stops the policy
+  (`stale_observation`, followers hold); when fresh again it restarts with `reset()`.
+
 ## Writing a policy
 
 Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint

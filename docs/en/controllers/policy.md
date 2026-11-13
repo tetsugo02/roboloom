@@ -84,6 +84,29 @@ def load(checkpoint: str) -> MyPolicy:
 
   Raise when the configuration differs from what the policy was trained on. The controller turns `failed`, shows the reason on the screen and starts no episode. `roboloom infer` and `Session.wait_ready` stop at once with the reason instead of waiting. Policies without `bind` work as before.
 
+### History, joints left alone, and fresh samples
+
+What a model needs beyond the latest frame is asked from the controller, so a new model
+does not rebuild it. Normalization, resizing and turning the model's own action form
+(deltas, a subset of joints) into joint targets stay in the policy.
+
+```yaml
+observation_history: 4                       # default 1: only the latest frame
+hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
+```
+
+- **`observation_history: N`**: the observation is sampled once per action (every `1/rate_hz`), also for the actions of a chunk that need no inference. `infer` then also gets `observation["history"]`: every array of the observation stacked `[N, ...]`, oldest first, the current frame last. At the start of an episode the first frame fills the history. `history["action"]` (float32 `[N, n]`) is the action executed before each frame (the targets the followers held at the start), for models that read their past actions. With `N = 1` the observation is unchanged.
+- **`hold`**: entries of the action (`<follower>.<joint>`) the policy does not drive. Whatever the policy returns there, NaN included, is replaced by the target the follower holds, so a model trained on some of the joints still returns `[n]` or `[H, n]`. Every other entry must be finite, or the episode stops.
+- **`options()` (optional)**: a policy states these itself, and its values win over the YAML. Swapping the model then needs no edited configuration.
+
+    ```python
+    def options(self) -> dict:
+        return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
+    ```
+
+- `bind(spec)` also receives `spec.history`, `spec.hold` and `spec.units` (the unit of each action entry).
+- **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold. Once the sample is fresh again, the policy starts over with `reset()`.
+
 ## LeRobot policies
 
 `roboloom.policy.lerobot:load` is a ready-made policy that loads a checkpoint trained with LeRobot.
