@@ -63,8 +63,10 @@ def test_a_rakuda_arm_is_a_chain_in_counts():
     assert np.allclose(np.abs(turn), 2 * np.pi)
     assert {np.sign(x) for x in turn} == {1.0, -1.0}  # directions from the file
 
-    plain = parse_config(rakuda2_tree()).followers["follower"]
-    assert plain.part("right_arm").kinematics() is None  # no `kinematics:` in the YAML
+    tree = rakuda2_tree()
+    del tree["followers"]["follower"]["kinematics"]  # the template names the files
+    plain = parse_config(tree).followers["follower"]
+    assert plain.part("right_arm").kinematics() is None  # not described
 
 
 def test_rakuda_arm_poses_are_reached_again_by_the_ik():

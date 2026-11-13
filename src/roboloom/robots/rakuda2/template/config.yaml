@@ -46,6 +46,16 @@ options:
       controllers.controller: null
       controllers.policy: nodes/policy.yaml
     dataset: eval
+  pika:
+    help: a Pika Sense per arm through inverse kinematics (in development, mock only)
+    conflicts: [gravity, policy]
+    set:
+      trackers.lighthouse: nodes/lighthouse.yaml
+      inputs.leader: null
+      inputs.right_sense: nodes/right_sense.yaml
+      inputs.left_sense: nodes/left_sense.yaml
+      controllers.controller: nodes/controller_pika.yaml
+    dataset: pika
   policy_teleop:
     help: with policy, the leader can drive before and during an episode (Teleop / Policy)
     requires: [policy]
