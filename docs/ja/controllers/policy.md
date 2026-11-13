@@ -14,7 +14,8 @@ followers: [left, right, left_gripper, right_gripper]  # 全フォロワを設�
 factory: demo_policy:wave           # "module:callable"．方策を返す
 kwargs: {}                          # factory に渡す引数
 observe: [camera, left_wrist, right_wrist]  # 方策が見る入力とセンサー．フォロワの状態は常に見える
-rate_hz: 10
+rate_hz: 10                         # 行動1手の周期．学習したデータセットの dataset_fps
+interpolation_multiplier: auto      # 指令は rate_hz × この値の周期．省略・auto はフォロワの control_hz から計算
 action_horizon: 2                   # まとめた行動のうち，次を求めるまでに実行する手数
 max_speed: {left: 1.0, right: 1.0, left_gripper: 3.0, right_gripper: 3.0}  # フォロワごと，単位/s
 command_deadline_ms: 300
@@ -138,9 +139,36 @@ uv run lerobot-train \
 
 ## 周期と手数
 
-- 方策ノードは，`rate_hz` の周期で指令を1つ送ります．並んでいる行動がなくなると，`infer` を呼びます．
+- 方策ノードは，`rate_hz` の周期で行動を1手ずつ取り出します．並んでいる行動がなくなると，`infer` を呼びます．
+- `rate_hz` は，学習に使ったデータセットの `dataset_fps` に合わせます．指令を速くするために `rate_hz` を上げると，行動の列を学習時より速く使い切ってしまいます．
 - `infer` の間は指令を送りません（同期）．推論が `command_deadline_ms` より長くかかると，フォロワはHOLDに入り，止まって待ちます．画面のcontrollerの行に，推論の時間（`infer_ms`，`infer_max_ms`）が出ます．
-- `rate_hz` は，学習に使ったデータセットの `dataset_fps` に合わせます．
+
+### 行動の補間
+
+方策ノードは `rate_hz × N`（N は `interpolation_multiplier`）の周期で指令を送ります．行動はN回の指令ごとに1手取り出し，その間は1つ前の行動から今の行動までの直線をN等分した目標を送ります．行動の時間の間隔は学習時のまま，フォロワには細かい目標が届きます．
+
+N を書かなければ（または `auto`），`rate_hz × N` が整数のHzで，いちばん遅いフォロワの `control_hz` 以下になる最大のNを使います．フォロワが受け取れる限り細かく指令を送ります．
+
+| `rate_hz` | フォロワの `control_hz` | 計算されるN | 指令の周期 |
+| --- | --- | --- | --- |
+| 15 | 120（Rakuda2） | 8 | 120 Hz |
+| 5 | 120 | 24 | 120 Hz |
+| 7.5 | 120 | 16 | 120 Hz |
+| 30 | 30 | 1（補間しない） | 30 Hz |
+
+数を書くと，その値を使います．`1` は補間せず，行動を1手ずつ送ります．
+
+```yaml
+rate_hz: 5                    # 5 Hz で学習した方策
+interpolation_multiplier: 12  # 指令を 60 Hz に抑える（省略すると 24，120 Hz）
+```
+
+- LeRobotのrollout（`lerobot.utils.action_interpolator.ActionInterpolator` の `interpolation_multiplier`）と同じ方法です．違いは最初の1手だけです．LeRobotは最初の行動をそのまま送りますが，roboloomはフォロワが保持している目標から最初の行動まで補間します．
+- フォロワが各行動に着くのは，その行動が出てから1手分（`1/rate_hz`，5 Hzなら200 ms）あとです．
+- 数を書くときは，`rate_hz × N` を整数のHzで，どのフォロワの `control_hz` 以下にします．それ以外は読み込み時に拒否します．`rate_hz` が整数のHzにできない値（7.33 など）のときは，計算されるNは1です．
+- 使っているNは，操作画面の方策の行に `interpolation` として出ます．
+- 評価で記録するデータセットの `action` は，フォロワに実際に送った補間後の目標です．
+- まとめた行動の境目では，`infer` の間だけ補間も止まります．次の行動は，止まる前に着いた行動から続けます．
 - 送る目標は，フォロワが保持している目標から `max_speed` の分までに切り詰め，`FollowerSafety` が可動域と期限を検査します．遠隔操作と同じです．
 
 ## 限界

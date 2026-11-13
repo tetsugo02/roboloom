@@ -120,7 +120,8 @@ def build_flow(cfg: RobotConfig) -> dict:
         if c.feedback is not None:
             inputs["estimate"] = latest(f"{c.feedback.estimator_name}/estimate")
             outputs.append("feedback")
-        nodes.append(node(name, inputs, outputs, getattr(c, "rate_hz", None)))
+        # a policy runs at its command rate (rate_hz * interpolation_multiplier)
+        nodes.append(node(name, inputs, outputs, getattr(c, "command_hz", None)))
     # estimators run on each follower state they receive, so they need no timer
     nodes += [
         node(

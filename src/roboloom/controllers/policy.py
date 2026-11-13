@@ -10,6 +10,13 @@ it calls `policy.infer` and queues the first `action_horizon` steps of the retur
 deadlines turn into HOLD). Targets are speed-limited from what each follower holds, and
 FollowerSafety checks them like any teleoperation command.
 
+`rate_hz` is the policy's action rate (the rate it was trained at). With
+`interpolation_multiplier: N` the node runs at `rate_hz * N`, takes a new action every N
+ticks and sends the straight line to it in N steps (`control.interpolation`, LeRobot's
+scheme): the actions keep their trained spacing and the followers get smooth targets.
+Without it (or `auto`) N is the largest that keeps `rate_hz * N` whole Hz and at most
+the slowest follower's `control_hz`; 1 sends each action as is.
+
     type: policy
     followers: [follower]               # every follower, in configuration order
     factory: my_lab.policies:load_act   # "module:callable" returning a Policy (also
@@ -17,6 +24,7 @@ FollowerSafety checks them like any teleoperation command.
     kwargs: {checkpoint: ...}
     observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
+    interpolation_multiplier: auto      # commands at rate_hz * N (auto: up to control_hz)
     action_horizon: 8
     max_speed: {follower: 1024}         # per follower, in its unit/s
     command_deadline_ms: 200
@@ -31,6 +39,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
+from ..control.interpolation import ActionInterpolator, auto_multiplier, whole_hz
 from ..core.checks import positive
 from ..core.protocol import Envelope
 from ..errors import ConfigError
@@ -65,6 +74,34 @@ class PolicyController(Controller):
         ):
             raise ValueError(f"{name}.observe must be a list of input or sensor names")
         self.rate_hz = positive(cfg.get("rate_hz"), f"{name}.rate_hz")
+        slowest = min(f.control_hz for f in self.followers.values())
+        multiplier = cfg.get("interpolation_multiplier", "auto")
+        if multiplier in (None, "auto"):  # as often as the followers take commands
+            multiplier = auto_multiplier(self.rate_hz, slowest)
+        elif (
+            isinstance(multiplier, bool)
+            or not isinstance(multiplier, int)
+            or multiplier < 1
+        ):
+            raise ValueError(
+                f"{name}.interpolation_multiplier must be auto or an integer >= 1, "
+                f"not {multiplier!r}"
+            )
+        self.multiplier = multiplier
+        self.interpolator = ActionInterpolator(multiplier)
+        self.command_hz = self.rate_hz * multiplier  # the node's timer
+        if multiplier > 1:
+            if not whole_hz(self.command_hz):
+                raise ValueError(
+                    f"{name}: rate_hz * interpolation_multiplier = {self.command_hz:g} "
+                    "Hz; the node's timer needs whole Hz"
+                )
+            if self.command_hz > slowest:
+                raise ValueError(
+                    f"{name}: rate_hz * interpolation_multiplier = {self.command_hz:g} "
+                    f"Hz exceeds the follower control_hz {slowest:g}; lower "
+                    "interpolation_multiplier"
+                )
         self.horizon = int(
             positive(cfg.get("action_horizon", 1), f"{name}.action_horizon")
         )
@@ -141,12 +178,14 @@ class PolicyController(Controller):
         self.policy.reset()
         self.task, self.running = task, True
         self.queue.clear()
+        self.interpolator.reset()
         self.last_ns = 0
         self.state = "running"
 
     def stop(self) -> None:
         self.running = False
         self.queue.clear()
+        self.interpolator.reset()
         if self.state == "running":
             self.state = "ready"
 
@@ -170,8 +209,10 @@ class PolicyController(Controller):
         return out
 
     def tick(self, now_ns: int | None = None) -> dict[str, Envelope]:
-        """The next command per follower while an episode runs; infers when no action
-        is queued. Nothing while a follower has no state yet or latched FAULT/ESTOP."""
+        """The next command per follower while an episode runs: a new action every
+        `interpolation_multiplier` ticks (inferring when none is queued) and the steps
+        toward it in between. Nothing while a follower has no state yet or latched
+        FAULT/ESTOP."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         if not self.running or self.policy is None:
             return {}
@@ -181,31 +222,28 @@ class PolicyController(Controller):
             for s in states.values()
         ):
             return {}
-        if not self.queue:
-            observation = self.observation()
-            if observation is None:
-                self.state = "waiting_observation"
-                return {}
-            t0 = time.perf_counter()
-            actions = np.asarray(self.policy.infer(observation), dtype=np.float64)
-            self.infer_ms.append((time.perf_counter() - t0) * 1000)
-            n = sum(len(f.joint_names) for f in self.followers.values())
-            if actions.ndim == 1:
-                actions = actions[None, :]
-            if (
-                actions.ndim != 2
-                or actions.shape[1] != n
-                or not np.isfinite(actions).all()
-            ):
-                raise ValueError(
-                    f"policy returned shape {actions.shape}; expected [{n}] or [H, {n}], finite"
-                )
-            self.queue.extend(actions[: self.horizon])
-            self.state = "running"
-            now = time.monotonic_ns()
-        action = self.queue.popleft()
-        dt = max((now - self.last_ns) / 1e9, 1e-6) if self.last_ns else 1 / self.rate_hz
-        span = min(dt, 2 / self.rate_hz)
+        if self.interpolator.needs_new_action():
+            if not self.queue:
+                if not self._infer():
+                    return {}
+                if now_ns is None:  # infer took time
+                    now = time.monotonic_ns()
+            # after a reset the line starts from what the followers hold
+            held = np.concatenate(
+                [
+                    np.asarray(
+                        s.payload.get("target") or s.payload["positions"],  # type: ignore[union-attr]
+                        dtype=np.float64,
+                    )
+                    for s in states.values()
+                ]
+            )
+            self.interpolator.add(self.queue.popleft(), previous=held)
+        action = self.interpolator.get()
+        assert action is not None  # an action was just added if the steps ran out
+        period = 1 / self.command_hz
+        dt = max((now - self.last_ns) / 1e9, 1e-6) if self.last_ns else period
+        span = min(dt, 2 * period)
         out: dict[str, Envelope] = {}
         start = 0
         for name, follower in self.followers.items():
@@ -223,6 +261,28 @@ class PolicyController(Controller):
         self.last_ns = now
         return out
 
+    def _infer(self) -> bool:
+        """Queue the first `action_horizon` steps of the policy's output; False while an
+        observed source has no sample yet."""
+        assert self.policy is not None
+        observation = self.observation()
+        if observation is None:
+            self.state = "waiting_observation"
+            return False
+        t0 = time.perf_counter()
+        actions = np.asarray(self.policy.infer(observation), dtype=np.float64)
+        self.infer_ms.append((time.perf_counter() - t0) * 1000)
+        n = sum(len(f.joint_names) for f in self.followers.values())
+        if actions.ndim == 1:
+            actions = actions[None, :]
+        if actions.ndim != 2 or actions.shape[1] != n or not np.isfinite(actions).all():
+            raise ValueError(
+                f"policy returned shape {actions.shape}; expected [{n}] or [H, {n}], finite"
+            )
+        self.queue.extend(actions[: self.horizon])
+        self.state = "running"
+        return True
+
     def update(
         self,
         intent: Envelope,
@@ -232,7 +292,11 @@ class PolicyController(Controller):
         raise TypeError(f"{self.name}: a policy controller is stepped by `tick`")
 
     def status(self) -> dict:
-        out: dict = {"state": self.state, "queued": len(self.queue)}
+        out: dict = {
+            "state": self.state,
+            "queued": len(self.queue),
+            "interpolation": self.multiplier,
+        }
         if self.infer_ms:
             out["infer_ms"] = round(self.infer_ms[-1], 1)
             out["infer_max_ms"] = round(max(self.infer_ms), 1)

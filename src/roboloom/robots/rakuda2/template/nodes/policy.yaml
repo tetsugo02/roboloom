@@ -9,7 +9,13 @@ followers: [follower]
 factory: roboloom.policy:hold
 kwargs: {}
 observe: [camera]  # add digit_left/digit_right with the digit option; [] for state only
-rate_hz: 15
+rate_hz: 15  # the policy's action rate: the rate it was trained at
+# interpolation_multiplier: N sends rate_hz * N commands per second, the straight line
+#   between consecutive actions (LeRobot's interpolation). Left out (or auto): the
+#   largest N with rate_hz * N whole Hz and at most the follower's control_hz (120),
+#   e.g. 8 at rate_hz 15 (120 Hz), 24 at 5 Hz. 1 sends each action as is (no
+#   interpolation). A number must keep rate_hz * N whole Hz and <= control_hz.
+# interpolation_multiplier: auto
 action_horizon: 8
 max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)
 command_deadline_ms: 300
