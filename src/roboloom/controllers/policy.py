@@ -14,6 +14,8 @@ FollowerSafety checks them like any teleoperation command.
 `interpolation_multiplier: N` the node runs at `rate_hz * N`, takes a new action every N
 ticks and sends the straight line to it in N steps (`control.interpolation`, LeRobot's
 scheme): the actions keep their trained spacing and the followers get smooth targets.
+Without it (or `auto`) N is the largest that keeps `rate_hz * N` whole Hz and at most
+the slowest follower's `control_hz`; 1 sends each action as is.
 
     type: policy
     followers: [follower]               # every follower, in configuration order
@@ -22,7 +24,7 @@ scheme): the actions keep their trained spacing and the followers get smooth tar
     kwargs: {checkpoint: ...}
     observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
-    interpolation_multiplier: 1         # commands at rate_hz * N (1: one per action)
+    interpolation_multiplier: auto      # commands at rate_hz * N (auto: up to control_hz)
     action_horizon: 8
     max_speed: {follower: 1024}         # per follower, in its unit/s
     command_deadline_ms: 200
@@ -51,7 +53,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import numpy as np
 
 from ..control.homing import parse_home
-from ..control.interpolation import ActionInterpolator
+from ..control.interpolation import ActionInterpolator, auto_multiplier, whole_hz
 from ..core.checks import positive
 from ..core.protocol import Envelope
 from ..errors import ConfigError
@@ -86,25 +88,28 @@ class PolicyController(Controller):
         ):
             raise ValueError(f"{name}.observe must be a list of input or sensor names")
         self.rate_hz = positive(cfg.get("rate_hz"), f"{name}.rate_hz")
-        multiplier = cfg.get("interpolation_multiplier", 1)
-        if (
+        slowest = min(f.control_hz for f in self.followers.values())
+        multiplier = cfg.get("interpolation_multiplier", "auto")
+        if multiplier in (None, "auto"):  # as often as the followers take commands
+            multiplier = auto_multiplier(self.rate_hz, slowest)
+        elif (
             isinstance(multiplier, bool)
             or not isinstance(multiplier, int)
             or multiplier < 1
         ):
             raise ValueError(
-                f"{name}.interpolation_multiplier must be an integer >= 1, "
+                f"{name}.interpolation_multiplier must be auto or an integer >= 1, "
                 f"not {multiplier!r}"
             )
+        self.multiplier = multiplier
         self.interpolator = ActionInterpolator(multiplier)
         self.command_hz = self.rate_hz * multiplier  # the node's timer
         if multiplier > 1:
-            if abs(self.command_hz - round(self.command_hz)) > 1e-9:
+            if not whole_hz(self.command_hz):
                 raise ValueError(
                     f"{name}: rate_hz * interpolation_multiplier = {self.command_hz:g} "
                     "Hz; the node's timer needs whole Hz"
                 )
-            slowest = min(f.control_hz for f in self.followers.values())
             if self.command_hz > slowest:
                 raise ValueError(
                     f"{name}: rate_hz * interpolation_multiplier = {self.command_hz:g} "
@@ -433,7 +438,11 @@ class PolicyController(Controller):
         raise TypeError(f"{self.name}: a policy controller is stepped by `tick`")
 
     def status(self) -> dict:
-        out: dict = {"state": self.state, "queued": len(self.queue)}
+        out: dict = {
+            "state": self.state,
+            "queued": len(self.queue),
+            "interpolation": self.multiplier,
+        }
         if self.infer_ms:
             out["infer_ms"] = round(self.infer_ms[-1], 1)
             out["infer_max_ms"] = round(max(self.infer_ms), 1)
