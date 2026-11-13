@@ -672,7 +672,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 why.display = bool(reason)
             plan = self._read()
             self.query_one("#recording").display = plan.mode in ("record", "infer")
-            self.query_one("#home").display = plan.mode == "record"
+            self.query_one("#home").display = plan.mode in ("record", "infer")
             self.query_one("#summary", Static).update(self._summary(plan))
             self.query_one("#launch", Button).disabled = bool(self._problem(plan))
         finally:

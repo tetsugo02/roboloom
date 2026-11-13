@@ -83,6 +83,15 @@ def _joined_features(sources: Mapping[str, Recordable], fps: float) -> Features:
     }
 
 
+INTERVENTION = "action.intervention"  # 1 where a person drove the row (policy teleop)
+
+
+def records_intervention(cfg: RobotConfig) -> bool:
+    """A policy that can hand the followers to teleoperation (`teleop:`) records which
+    rows a person drove."""
+    return any(getattr(c, "teleop", None) for c in cfg.controllers.values())
+
+
 def state_names(followers: Mapping[str, Follower]) -> list[str]:
     """`observation.state` and `action` entries: `<follower>.<joint>`, in order."""
     return [f"{name}.{j}" for name, f in followers.items() for j in f.joint_names]
@@ -102,6 +111,8 @@ def features(cfg: RobotConfig) -> Features:
     for follower in cfg.followers:
         for key, dtype in ACTION_META_FIELDS:
             out[f"action.meta.{follower}.{key}"] = _one(dtype)
+    if records_intervention(cfg):
+        out[INTERVENTION] = _one("float32")
 
     def add(own: Features, owner: str) -> None:
         clash = out.keys() & own.keys()

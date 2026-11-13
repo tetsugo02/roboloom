@@ -46,3 +46,10 @@ options:
       controllers.controller: null
       controllers.policy: nodes/policy.yaml
     dataset: eval
+  policy_teleop:
+    help: with policy, the leader can drive before and during an episode (Teleop / Policy)
+    requires: [policy]
+    set:
+      inputs.leader: nodes/leader.yaml
+      controllers.policy: nodes/policy_teleop.yaml
+    dataset: teleop

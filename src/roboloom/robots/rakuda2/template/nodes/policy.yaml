@@ -19,3 +19,11 @@ rate_hz: 15  # the policy's action rate: the rate it was trained at
 action_horizon: 8
 max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)
 command_deadline_ms: 300
+# Optional saved start pose: `home` (infer --home, Session.home()) moves the follower
+# there slowly before an episode. Save it with `roboloom capture-pose <name>`.
+# Arrival is measured: every joint within tolerance (counts) within 2 s of the move.
+# home:
+#   pose: ../poses/follower/ready.yaml
+#   max_speed: 200  # counts/s, at most max_speed above
+#   tolerance: 30
+#   timeout_s: 30
