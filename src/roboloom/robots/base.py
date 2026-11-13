@@ -171,8 +171,10 @@ class Follower:
             )
         return FollowerPart(self, part, parts[part])
 
-    def kinematics(self) -> KinematicSpec | None:
-        """The arm's URDF chain, for controllers that command poses (None: not described)."""
+    def kinematics(self, part: str | None = None) -> KinematicSpec | None:
+        """The URDF chain of the follower (or of one of its parts), for controllers that
+        command poses; None when it is not described. The spec also maps the follower's
+        joint unit to the URDF's rad."""
         return None
 
     def declared_traits(self) -> SafetyTraits:
@@ -287,6 +289,9 @@ class FollowerPart(Follower):
 
     def parts(self) -> dict[str, tuple[str, ...]]:
         return {}
+
+    def kinematics(self, part: str | None = None) -> KinematicSpec | None:
+        return self.parent.kinematics(self.part_name)
 
     def declared_traits(self) -> SafetyTraits:
         return self.parent.declared_traits()

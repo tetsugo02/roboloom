@@ -688,7 +688,13 @@ def parse_config(tree: dict) -> RobotConfig:
         _check_without_followers(inputs, sensors, controllers, fps)
 
     if e["mode"] == "hardware":
-        for owner in [*inputs.values(), *followers.values()]:
+        nested = [n for c in controllers.values() for n in c.nested()]
+        for owner in [
+            *inputs.values(),
+            *followers.values(),
+            *controllers.values(),
+            *nested,
+        ]:
             check = getattr(owner, "check_hardware", None)
             if check is not None:
                 check()

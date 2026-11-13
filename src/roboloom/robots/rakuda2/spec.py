@@ -67,6 +67,13 @@ REGISTERS = (
 )
 
 
+COUNTS_PER_TURN = 4096  # Dynamixel X series position resolution
+# the tip link of each arm in model/assembly_2.urdf (the fixed gripper mount), and the
+# joint frame both arms hang from
+ARM_TIP = {"right_arm": "gripper_right_dof", "left_arm": "gripper_left_dof"}
+ARM_BASE = "torso_yaw_dof"
+
+
 def check_motor_ids(cfg: dict, name: str) -> None:
     if cfg.get("motor_ids") != list(MOTOR_IDS):
         raise ValueError(
