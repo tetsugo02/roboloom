@@ -233,11 +233,17 @@ def test_the_node_commands_at_the_interpolated_rate(tmp_path):
     cfg = load_config(path, options=["policy"])
     (policy,) = [n for n in build_flow(cfg)["nodes"] if n["id"] == "policy"]
     assert policy["inputs"]["tick"] == "dora/timer/hz/60"
+    rates: list[int] = []  # command_hz counts the commands of the last second
+
+    def during(status: dict) -> None:
+        rates.append(status.get("policy", {}).get("fields", {}).get("command_hz", 0))
+
     with Session.launch(
         path, options=["policy"], log_dir=tmp_path / "logs", screen=False
     ) as session:
         session.wait_ready()
-        result = session.record("hold", seconds=2)
-        status = session.status()["policy"]["fields"]
+        result = session.record("hold", seconds=2.5, on_tick=during)
     assert result.saved
-    assert 40 <= status["command_hz"] <= 65, status
+    # read while recording: after stop the policy sends nothing, so a count read after
+    # save falls with the time save takes (measured 47 after a 0.35 s save)
+    assert 50 <= max(rates) <= 65, rates
