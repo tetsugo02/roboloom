@@ -9,7 +9,7 @@ import yaml
 from conftest import mock_project
 
 from roboloom.config import load_config
-from roboloom.control.interpolation import ActionInterpolator
+from roboloom.control.interpolation import ActionInterpolator, auto_multiplier
 from roboloom.core.protocol import Envelope
 
 # -- the interpolator --------------------------------------------------------------
@@ -165,8 +165,9 @@ def test_steps_stay_within_max_speed(tmp_path):
 @pytest.mark.parametrize(
     ("rate_hz", "multiplier", "message"),
     [
-        (5, 0, "integer >= 1"),
-        (5, 1.5, "integer >= 1"),
+        (5, 0, "auto or an integer >= 1"),
+        (5, 1.5, "auto or an integer >= 1"),
+        (5, "fast", "auto or an integer >= 1"),
         (7.5, 3, "whole Hz"),
         (15, 10, "exceeds the follower control_hz"),
     ],
@@ -177,9 +178,51 @@ def test_bad_multipliers_are_refused(tmp_path, rate_hz, multiplier, message):
         load_config(path, options=["policy"])
 
 
-def test_without_a_multiplier_the_rate_is_unchanged(tmp_path):
-    cfg = load_config(_project(tmp_path, rate_hz=7.5), options=["policy"])
-    assert cfg.controllers["policy"].command_hz == 7.5
+@pytest.mark.parametrize(
+    ("rate_hz", "control_hz", "expected"),
+    [
+        (15, 120, 8),
+        (5, 120, 24),
+        (7.5, 120, 16),
+        (7.3, 120, 10),
+        (7.33, 120, 1),
+        (15, 100, 6),
+        (30, 30, 1),
+        (40, 30, 1),
+    ],
+)
+def test_the_multiplier_is_computed_from_the_rates(rate_hz, control_hz, expected):
+    assert auto_multiplier(rate_hz, control_hz) == expected
+
+
+@pytest.mark.parametrize("given", [None, "auto"])
+def test_without_a_multiplier_commands_follow_the_control_rate(tmp_path, given):
+    policy = (
+        {"rate_hz": 5}
+        if given is None
+        else {"rate_hz": 5, "interpolation_multiplier": given}
+    )
+    controller = load_config(
+        _project(tmp_path, **policy), options=["policy"]
+    ).controllers["policy"]
+    assert (
+        controller.multiplier == 24 and controller.command_hz == 120
+    )  # control_hz 120
+    assert controller.status()["interpolation"] == 24
+
+
+def test_a_given_multiplier_wins(tmp_path):
+    for n in (1, 6):
+        cfg = load_config(
+            _project(tmp_path / str(n), rate_hz=5, interpolation_multiplier=n),
+            options=["policy"],
+        )
+        assert cfg.controllers["policy"].command_hz == 5 * n
+
+
+def test_a_rate_that_is_not_whole_hz_keeps_one_action_per_command(tmp_path):
+    cfg = load_config(_project(tmp_path, rate_hz=7.33), options=["policy"])
+    assert cfg.controllers["policy"].multiplier == 1
 
 
 def test_the_node_commands_at_the_interpolated_rate(tmp_path):

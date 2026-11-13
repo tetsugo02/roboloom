@@ -267,8 +267,10 @@ def test_a_policy_splits_its_action_over_the_followers_in_order(tmp_path):
     assert set(commands) == {"follower", "left"}
     first, left = commands["follower"].payload, commands["left"].payload
     assert first["follower"] == "follower" and left["follower"] == "left"
-    # the first entry moved +1000; the speed limit (50/s at 10 Hz) keeps it to +5
-    assert first["positions"][0] == pytest.approx(2005.0)
+    # the first entry moved +1000; the speed limit (50/s per command period, the
+    # policy's rate times the computed interpolation_multiplier) keeps it small
+    assert policy.command_hz > policy.rate_hz  # interpolated by default
+    assert first["positions"][0] == pytest.approx(2000.0 + 50 / policy.command_hz)
     assert left["positions"] == [1000.0] * 17  # left's part of the action: unchanged
 
 
