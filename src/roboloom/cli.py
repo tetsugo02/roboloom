@@ -311,6 +311,11 @@ def main(argv: list[str] | None = None) -> None:
     inf.add_argument("--seconds", type=float, required=True)
     inf.add_argument("--episodes", type=int, default=1)
     inf.add_argument(
+        "--home",
+        action="store_true",
+        help="move to the policy's saved home pose before every episode",
+    )
+    inf.add_argument(
         "--policy", help="module:callable returning the policy (default: the YAML's)"
     )
     inf.add_argument(
@@ -725,6 +730,7 @@ def _start(
                 plan.seconds,
                 plan.episodes,
                 keep=lambda _: bool(plan.task),
+                home=plan.home,
             )
         else:
             _plain_loop(session.client, session.process, session.release_note())

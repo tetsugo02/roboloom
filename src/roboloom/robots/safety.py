@@ -1,7 +1,9 @@
 """Final command check at the bus boundary and the follower mode state machine.
 
 Modes: IDLE -> HOLD <-> ACTIVE, HOLD -> HOMING -> HOLD; FAULT, ESTOP and RELEASED are
-latched. HOMING moves slowly to a saved pose (`home`), then holds it.
+latched. HOMING moves slowly to a saved pose (`home`), then holds it. With a tolerance,
+the pose counts as reached only once the measured joints are within it (`home_state`
+"settling", then "reached", or "short" when they stay out after HOME_SETTLE_S).
 HOLD keeps writing one fixed target (the last sent command, or the pose at
 stop/start), never the freshly measured pose, so a gravity-loaded joint does not
 creep. Small overshoots are clamped to `max_speed`; NaN, stale, out-of-range or
@@ -26,6 +28,9 @@ from ..drivers.base import (
 )
 
 MAX_CLAMP_DT_S = 0.1  # a stalled tick never widens the speed clamp beyond this
+HOME_SETTLE_S = (
+    2.0  # after a home move, how long the joints may take to get within tolerance
+)
 
 
 def make_command(
@@ -87,6 +92,11 @@ class FollowerSafety:
         self.homing_since_ns = 0
         self.home_name = ""  # the saved pose last moved to (or being moved to)
         self.home_reached = False
+        self.home_goal: list[float] | None = None
+        self.home_tolerance: float | None = None
+        self.home_settling_ns: int | None = None  # the move ended; joints not there yet
+        self.home_short = False  # they stayed out of tolerance
+        self.home_diff: tuple[str, float] | None = None  # farthest joint from the goal
 
     @property
     def current(self) -> list[float] | None:
@@ -157,7 +167,12 @@ class FollowerSafety:
     def arm(self) -> None:
         if self.mode not in self.LATCHED and self.homing is None:
             self.armed = True
-            self.home_reached = False
+            self._forget_home()
+
+    def _forget_home(self) -> None:
+        self.home_reached = self.home_short = False
+        self.home_settling_ns = None
+        self.home_goal = self.home_diff = None
 
     def home(
         self,
@@ -165,9 +180,11 @@ class FollowerSafety:
         max_speed: float,
         name: str,
         now_ns: int | None = None,
+        tolerance: float | None = None,
     ) -> None:
         """Move slowly to `target` (a saved pose), then hold it. Only while stopped in HOLD;
-        the move still passes the range and speed checks of every write."""
+        the move still passes the range and speed checks of every write. With `tolerance`,
+        reached means the measured joints got within it of `target`."""
         if self.armed or self.mode != "HOLD":
             raise RuntimeError(
                 f"home needs the robot stopped in HOLD (it is {self.mode}"
@@ -177,7 +194,8 @@ class FollowerSafety:
         start = list(self.hold_target or self._read().positions)
         self.homing = Trajectory(start, target, max_speed)
         self.homing_since_ns = time.monotonic_ns() if now_ns is None else now_ns
-        self.home_name, self.home_reached = name, False
+        self._forget_home()
+        self.home_name, self.home_goal, self.home_tolerance = name, target, tolerance
         self.mode = "HOMING"
 
     def _home_step(self, now: int, dt: float) -> None:
@@ -195,8 +213,30 @@ class FollowerSafety:
         # later commands are checked (max_jump) against where the follower now is
         self.last_sent = self.hold_target = out
         if self.homing.progress(elapsed) >= 1 and out == self.homing.goal:
-            self.homing, self.home_reached = None, True
+            self.homing = None
             self.mode = "HOLD"
+            if self.home_tolerance is None:
+                self.home_reached = True
+            else:
+                self.home_settling_ns = now
+
+    def _check_home(self, now: int) -> None:
+        """How far the measured joints are from the home goal; reached or short once the
+        move has ended."""
+        if self.home_goal is None or self.state is None:
+            return
+        diffs = [
+            abs(p - g)
+            for p, g in zip(self.state.positions, self.home_goal, strict=True)
+        ]
+        worst = max(range(len(diffs)), key=diffs.__getitem__)
+        self.home_diff = (self.names[worst], diffs[worst])
+        if self.home_settling_ns is None or self.home_tolerance is None:
+            return
+        if diffs[worst] <= self.home_tolerance:
+            self.home_settling_ns, self.home_reached = None, True
+        elif now - self.home_settling_ns > HOME_SETTLE_S * 1e9:
+            self.home_settling_ns, self.home_short = None, True
 
     def _read_health(self) -> Health | None:
         """A bus that reads one health register at a time refreshes one per health tick, in
@@ -284,6 +324,7 @@ class FollowerSafety:
         command: Envelope | None = None
         try:
             self._read()
+            self._check_home(now)  # the measured joints against the last home move
             problem = self._check_health(now) if self.mode not in self.LATCHED else None
             if problem:
                 self._latch("FAULT", problem)

@@ -26,6 +26,10 @@ scheme): the actions keep their trained spacing and the followers get smooth tar
     action_horizon: 8
     max_speed: {follower: 1024}         # per follower, in its unit/s
     command_deadline_ms: 200
+    home:                               # optional: `home` moves here first
+      pose: ../poses/follower/ready.yaml  # (roboloom capture-pose ready)
+      max_speed: 200                    # <= max_speed; tolerance: measured, per joint
+      tolerance: 30
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
+from ..control.homing import parse_home
 from ..control.interpolation import ActionInterpolator
 from ..core.checks import positive
 from ..core.protocol import Envelope
@@ -115,6 +120,7 @@ class PolicyController(Controller):
         self.max_speed = {
             n: positive(v, f"{name}.max_speed.{n}") for n, v in speeds.items()
         }
+        self._parse_homes(cfg.get("home"))
         self.policy: Policy | None = None
         self.sources: dict[str, Recordable] = {}  # set by `bind`
         self.dataset_fps = 30.0  # set by `bind`
@@ -126,6 +132,35 @@ class PolicyController(Controller):
         self.error = ""
         self.infer_ms: deque[float] = deque(maxlen=20)
         self.last_ns = 0
+
+    def _parse_homes(self, raw: object) -> None:
+        """`home:` the saved pose(s) `home` moves the followers to before an episode: one
+        spec with a single follower, else {follower: spec} (followers left out stay)."""
+        if raw is None:
+            return
+        if len(self.followers) == 1 and isinstance(raw, dict) and "pose" in raw:
+            raw = {self.follower.name: raw}
+        if not isinstance(raw, dict) or not set(raw) <= set(self.followers):
+            raise ConfigError(
+                f"{self.name}.home: {{pose, max_speed, tolerance}}"
+                + (
+                    ""
+                    if len(self.followers) == 1
+                    else f" per follower ({', '.join(self.followers)})"
+                )
+            )
+        for follower, spec in raw.items():
+            home = parse_home(
+                spec,
+                f"{self.name}.home.{follower}"
+                if len(self.followers) > 1
+                else self.name,
+                self.cfg.get("__dir__"),
+                self.followers[follower],
+                self.max_speed[follower],
+            )
+            if home is not None:
+                self.homes[follower] = home
 
     def observes(self) -> list[str]:
         return list(self.cfg.get("observe", []))

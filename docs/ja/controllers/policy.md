@@ -160,6 +160,23 @@ interpolation_multiplier: 12  # 指令は 60 Hz
 - まとめた行動の境目では，`infer` の間だけ補間も止まります．次の行動は，止まる前に着いた行動から続けます．
 - 送る目標は，フォロワが保持している目標から `max_speed` の分までに切り詰め，`FollowerSafety` が可動域と期限を検査します．遠隔操作と同じです．
 
+## 初期姿勢から始める（home）
+
+方策でも，エピソードの前に保存した姿勢へフォロワを動かせます．`roboloom capture-pose <名前>` で姿勢を保存し，`nodes/policy.yaml` に `home:` を書きます．
+
+```yaml
+home:
+  pose: ../poses/follower/ready.yaml  # roboloom capture-pose ready
+  max_speed: 200                      # この max_speed 以下（フォロワの単位/s）
+  tolerance: 30                       # 測った各関節がこの差以内なら到着
+  timeout_s: 30                       # 任意
+```
+
+- フォロワが複数のときは，`home: {left: {...}, right: {...}}` のようにフォロワごとに書きます．書かなかったフォロワは動きません．
+- `roboloom infer --home` は毎回のエピソードの前に動かします．ランチャーの `infer` でも「Move home before every episode」を選べます．操作画面の `home`，Pythonの `Session.home()`・`Session.record(..., home=True)` も同じです．
+- 到着は，送った目標ではなく測った関節で確かめます．移動のあと，すべての関節が `tolerance` 以内に入れば `reached` です．2秒たっても入らなければ `short` として関節名と差を表示し，`home` は失敗，`start` は拒否します．
+- 開始前の検査は `home` と同じく，録画中・追従中は `home` を拒否し，移動中は `start` を拒否します．
+
 ## 限界
 
 - 推論しながら前の行動を実行し続ける非同期の推論と，LeRobotのRTCには対応していません．

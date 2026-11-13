@@ -35,6 +35,10 @@ command_deadline_ms: 300
   Keep `rate_hz` at the training fps; never raise it to command faster. `rate_hz * N`
   must be whole Hz and <= every follower's `control_hz`. Followers lag one action period;
   the recorded `action` is the interpolated target. RTC/async inference: not supported.
+- `home: {pose, max_speed, tolerance[, timeout_s]}` (several followers: `{follower: {...}}`)
+  moves the followers to a `capture-pose` pose with `home` / `Session.home()` /
+  `infer --home`. Arrival is measured: every joint within `tolerance` within 2 s after the
+  move (`reached`), else `short` – home fails and start is refused. Same for teleop homes.
 
 ## Writing a policy
 
