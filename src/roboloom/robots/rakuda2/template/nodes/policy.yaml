@@ -16,6 +16,7 @@ rate_hz: 15  # the policy's action rate: the rate it was trained at
 #   e.g. 8 at rate_hz 15 (120 Hz), 24 at 5 Hz. 1 sends each action as is (no
 #   interpolation). A number must keep rate_hz * N whole Hz and <= control_hz.
 # interpolation_multiplier: auto
+# interpolation: linear  # or pchip: a monotone cubic curve through the same actions
 action_horizon: 8
 # observation_history: N gives infer the last N frames (one per action) as
 #   observation["history"] (arrays [N, ...], oldest first; "action": executed actions).

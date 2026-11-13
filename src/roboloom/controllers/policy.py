@@ -25,6 +25,7 @@ the slowest follower's `control_hz`; 1 sends each action as is.
     observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
     interpolation_multiplier: auto      # commands at rate_hz * N (auto: up to control_hz)
+    interpolation: linear               # or pchip: a monotone cubic through the actions
     action_horizon: 8
     max_speed: {follower: 1024}         # per follower, in its unit/s
     command_deadline_ms: 200
@@ -78,7 +79,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import numpy as np
 
 from ..control.homing import parse_home
-from ..control.interpolation import ActionInterpolator, auto_multiplier, whole_hz
+from ..control.interpolation import (
+    METHODS,
+    ActionInterpolator,
+    auto_multiplier,
+    whole_hz,
+)
 from ..core.checks import positive
 from ..core.protocol import Envelope
 from ..errors import ConfigError
@@ -154,7 +160,13 @@ class PolicyController(Controller):
                 f"not {multiplier!r}"
             )
         self.multiplier = multiplier
-        self.interpolator = ActionInterpolator(multiplier)
+        self.interpolation = cfg.get("interpolation", "linear")
+        if self.interpolation not in METHODS:
+            raise ValueError(
+                f"{name}.interpolation must be one of {', '.join(METHODS)}, not "
+                f"{self.interpolation!r}"
+            )
+        self.interpolator = ActionInterpolator(multiplier, self.interpolation)
         self.command_hz = self.rate_hz * multiplier  # the node's timer
         if multiplier > 1:
             if not whole_hz(self.command_hz):
@@ -604,7 +616,10 @@ class PolicyController(Controller):
             chosen[self.hold_index] = held[self.hold_index]  # joints the policy leaves
             self.executed = chosen
             # after a reset the line starts from what the followers hold
-            self.interpolator.add(chosen, previous=held)
+            following = self.queue[0].copy() if self.queue else None
+            if following is not None:
+                following[self.hold_index] = held[self.hold_index]
+            self.interpolator.add(chosen, previous=held, next=following)
         action = self.interpolator.get()
         assert action is not None  # an action was just added if the steps ran out
         period = 1 / self.command_hz

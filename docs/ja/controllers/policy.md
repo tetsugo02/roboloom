@@ -131,7 +131,7 @@ PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
 
 15 fpsの記録で `--stride 3` なら，方策の周期は5 Hzです．`nodes/policy.yaml` を `rate_hz: 5` にします．学習でデータセットを読むとき，表の列（`observation.state`，`action`，`action.valid`，`episode_index`，`index`）は `LeRobotDataset(...).hf_dataset` にあります．画像は `dataset[i]` で1行ずつ復号します．
 
-### 記録を再生する
+### 記録を再生する { #replaying-a-recording }
 
 `roboloom.policy.replay:load` は，記録した1エピソードの `action` を，観測に関係なくフォロワへ送ります．学習した方策と同じ経路（controller，速度の制限，補間，安全の検査）を通るので，モデルなしでその経路を確かめられます．再生を記録すれば，その `observation.state` を元のエピソードと比べられます．
 
@@ -271,6 +271,20 @@ interpolation_multiplier: 12  # 指令を 60 Hz に抑える（省略すると 2
 - 評価で記録するデータセットの `action` は，フォロワに実際に送った補間後の目標です．
 - まとめた行動の境目では，`infer` の間だけ補間も止まります．次の行動は，止まる前に着いた行動から続けます．
 - 送る目標は，フォロワが保持している目標から `max_speed` の分までに切り詰め，`FollowerSafety` が可動域と期限を検査します．遠隔操作と同じです．
+
+#### 直線の代わりに滑らかな曲線を使う（`interpolation: pchip`）
+
+直線では，行動のたびに速度が急に変わります．`interpolation: pchip` は，同じ行動を通る単調な3次曲線（Fritsch–Carlson）を送ります．
+
+```yaml
+interpolation: pchip   # 既定は linear
+```
+
+- 目標は，どの行動もその本来の時刻に通ります．直線に対する遅れは増えません（ローパスフィルタでは遅れます）．
+- 隣り合う2つの行動の間では，目標はその範囲から出ません．方策の行動に雑音があっても，行き過ぎません．
+- 行動の時刻で速度が連続します．保持している姿勢からの最初の行動は，速度0から始まります．2つの行動の中間では，速度が直線の1.5倍まで上がることがあります．`max_speed` の制限は同じく効きます．
+- 曲線には，向かっている行動の次の行動が要ります．並んでいる行動から取ります．まとめた行動の最後の手（同期の推論，または `action_horizon: 1`）には次がないので，その区間は直線の傾きで終わります．`inference: async` なら，並んでいる行動がなくなる前に次の列が届くのがふつうです．
+- 既定は `linear` のままです．LeRobotと同じ方法で，これまでの確認はこちらで行っています．どちらも実機で比べてはいません．記録したエピソードをそれぞれで再生し（[記録を再生する](#replaying-a-recording)），記録された `observation.state` を比べてください．
 
 ## 初期姿勢から始める（home）
 

@@ -277,6 +277,20 @@ interpolation_multiplier: 12  # cap the commands at 60 Hz (left out: 24, 120 Hz)
 - At a chunk boundary the interpolation also pauses while `infer` runs; the next action continues from the action reached before the pause.
 - Targets are cut to `max_speed` from what each follower holds, and `FollowerSafety` checks the joint limits and the deadline, as in teleoperation.
 
+#### A smooth curve instead of the line (`interpolation: pchip`)
+
+The straight line changes its speed abruptly at every action. `interpolation: pchip` sends a monotone cubic curve (Fritsch–Carlson) through the same actions instead:
+
+```yaml
+interpolation: pchip   # default linear
+```
+
+- The targets still pass through every action at its own time, so the curve adds no lag to the line (a low-pass filter would).
+- Between two consecutive actions the targets stay within their range: no overshoot, also when the policy's actions are noisy.
+- The speed is continuous at the actions. From the held pose the first action starts at rest. Halfway between two actions the speed can be up to 1.5 times the line's; `max_speed` still limits it.
+- The curve needs the action after the one being approached, taken from the queued chunk. For the last action of a chunk (synchronous inference, or `action_horizon: 1`) there is none, and the segment ends at the line's slope. With `inference: async` the next chunk usually arrives before the queue is empty.
+- `linear` stays the default: it is LeRobot's scheme and what the checks so far were done with. Neither has been compared on hardware; replay a recorded episode ([Replaying a recording](#replaying-a-recording)) with each and compare the recorded `observation.state`.
+
 ## Starting from a saved pose (home)
 
 A policy can also move the followers to a saved pose before each episode. Save the pose with `roboloom capture-pose <name>` and add `home:` to `nodes/policy.yaml`.
