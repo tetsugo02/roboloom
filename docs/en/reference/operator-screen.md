@@ -13,6 +13,8 @@ Interactive `run`, `record`, `infer`, and `tune-gravity` use Textual. There is a
 
 The next screen is split into the operation pane on the left (Operation, Devices), the options pane on the right (one card per option: green when on, a yellow line and the reason when a conflict would turn it off), and the summary pane at the bottom. On both screens the pane borders adjust like the operator screen's: drag them, or focus them and use the arrow keys; double-click or Ctrl-R resets. Below 90 columns the panes stack vertically.
 
+Policy observation checkboxes follow the selected policy YAML when launch options change, including when switching to inference. Once observations are explicitly selected (including an empty selection), later mode or option changes preserve them. Saved choices preserve whether observations use YAML defaults or an explicit override.
+
 Launch (Ctrl-S) starts; Cancel exits without starting anything. When it came from the robot list, Back (Esc) returns to the list; otherwise Esc is the same as Cancel. The choice is saved in `.roboloom/<robot>/logs/last_launch.yaml` and becomes the next initial value.
 
 ## Layout and focus

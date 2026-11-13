@@ -317,3 +317,59 @@ async def test_launcher_panes_resize_and_stack_when_narrow(tmp_path: Path):
         await pilot.press("left", "left")
         await pilot.pause()
         assert robots.query_one("#robots").region.width == width - 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("via", ["mode", "option"])
+async def test_launcher_loads_new_policy_observation_defaults(tmp_path, via):
+    project = mock_project(tmp_path)
+    path = project / "config.yaml"
+    app = LauncherApp(path, LaunchPlan())
+    async with app.run_test(size=(100, 50)) as pilot:
+        camera = app.observation_names.index("camera")
+        assert not app.query_one(f"#observe-{camera}", Checkbox).value
+        if via == "mode":
+            app.query_one("#mode-infer").value = True
+        else:
+            app.query_one("#opt-policy", Checkbox).value = True
+        await pilot.pause()
+        assert app.query_one(f"#observe-{camera}", Checkbox).value
+        plan = app._read()
+        assert plan.observe is None
+        cfg = load_config(
+            path, options=plan.options, sensors=plan.sensors, observe=plan.observe
+        )
+        assert cfg.controller_for("follower").observes() == ["camera"]
+        # Default-derived observations remain defaults after saving/reopening.
+        save_last(path, plan)
+        assert load_last(path, app.options).observe is None
+        app.query_one(
+            f"#sensor-{app.sensor_names.index('camera')}", Checkbox
+        ).value = False
+        await pilot.pause()
+        assert "inactive sensors" in app._problem(app._read())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("explicit", ["initial_empty", "initial_other", "edited"])
+async def test_launcher_preserves_explicit_observations(tmp_path, explicit):
+    project = mock_project(tmp_path)
+    initial = LaunchPlan(
+        options=("policy",) if explicit == "edited" else (),
+        observe=None
+        if explicit == "edited"
+        else ([] if explicit == "initial_empty" else ["digit_left"]),
+    )
+    app = LauncherApp(project / "config.yaml", initial)
+    async with app.run_test(size=(100, 50)) as pilot:
+        camera = app.observation_names.index("camera")
+        if explicit == "edited":
+            app.query_one(f"#observe-{camera}", Checkbox).value = False
+            await pilot.pause()
+            app.query_one("#opt-policy", Checkbox).value = False
+            await pilot.pause()
+        app.query_one("#mode-infer").value = True
+        await pilot.pause()
+        expected = ["digit_left"] if explicit == "initial_other" else []
+        assert app._read().observe == expected
+        assert not app.query_one(f"#observe-{camera}", Checkbox).value

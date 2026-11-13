@@ -42,6 +42,7 @@ from ..config import (
     option_changes,
     parse_options,
     project_robots,
+    read_config,
     toggle_option,
 )
 from ..errors import ConfigError
@@ -406,7 +407,6 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         self.yaml_mock = raw.get("mode") == "mock"  # runs mock even when not ticked
         self.plan = initial
         self.chosen = set(initial.options)
-        from ..config import read_config
 
         observation_defaults: list[str]
         try:
@@ -428,6 +428,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         self.observation_selection = (
             observation_defaults if initial.observe is None else initial.observe
         )
+        self._observe_explicit = initial.observe is not None
+        self._observation_options = frozenset(self.chosen)
         self._syncing = False
         self.panes = Panes(0.45, bottom=8)
 
@@ -577,7 +579,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 for i, n in enumerate(self.observation_names)
                 if self.query_one(f"#observe-{i}", Checkbox).value
             ]
-            if self.observation_names
+            if self._observe_explicit
             else None,
             mock=self.query_one("#mock", Checkbox).value,
             task=self.query_one("#task", Input).value,
@@ -586,10 +588,37 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             home=self.query_one("#home", Checkbox).value,
         )
 
+    def _refresh_observation_defaults(self) -> None:
+        """Follow newly selected policy YAML until the user overrides observations."""
+        selected = frozenset(self.chosen)
+        if selected == self._observation_options:
+            return
+        self._observation_options = selected
+        if self._observe_explicit:
+            return
+        try:
+            # Only controller defaults are needed; inactive sensor files stay unread.
+            tree = read_config(self.config, self.chosen, sensors=[])
+        except (ValueError, TypeError, OSError):
+            return  # incomplete configurations remain editable in the launcher
+        self.observation_selection = list(
+            dict.fromkeys(
+                source
+                for controller in tree["controllers"].values()
+                if controller.get("type") == "policy"
+                for source in controller.get("observe", [])
+            )
+        )
+        for index, name in enumerate(self.observation_names):
+            self.query_one(f"#observe-{index}", Checkbox).value = (
+                name in self.observation_selection
+            )
+
     def _sync(self) -> None:
         """Reflect `chosen` on the checkboxes and refresh the summary."""
         self._syncing = True
         try:
+            self._refresh_observation_defaults()
             for name in self.options:
                 on = name in self.chosen
                 self.query_one(f"#opt-{name}", Checkbox).value = on
@@ -617,9 +646,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             check_options(self.options, plan.options)
         except ConfigError as exc:
             return str(exc)
-        missing = set(plan.observe or []) & (
-            set(self.sensor_names) - set(plan.sensors or [])
-        )
+        observed = self.observation_selection if plan.observe is None else plan.observe
+        missing = set(observed) & (set(self.sensor_names) - set(plan.sensors or []))
         if missing:
             return f"policy observes inactive sensors: {sorted(missing)}"
         return plan.problem()
@@ -651,7 +679,18 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if self._syncing:
             return
-        name = (event.checkbox.id or "").removeprefix("opt-")
+        widget_id = event.checkbox.id or ""
+        if widget_id.startswith("observe-"):
+            source = self.observation_names[int(widget_id.removeprefix("observe-"))]
+            # Programmatic refresh events arrive after _sync returns, too.
+            if event.value != (source in self.observation_selection):
+                self._observe_explicit = True
+                self.observation_selection = [
+                    name
+                    for index, name in enumerate(self.observation_names)
+                    if self.query_one(f"#observe-{index}", Checkbox).value
+                ]
+        name = widget_id.removeprefix("opt-")
         if event.checkbox.id and event.checkbox.id.startswith("opt-"):
             before = option_changes(self.options, self.chosen)
             self.chosen = toggle_option(self.options, self.chosen, name, event.value)

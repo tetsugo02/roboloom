@@ -186,6 +186,7 @@ See [sensors](references/sensors.md#image-storage).
 load_config and Session.launch accept sensors and observe independently (None:
 configuration defaults; []: none). Follower state remains included. With RobotConfig,
 select in load_config. CLI: --sensors camera,audio --observe camera; "" selects none.
+Launcher observation defaults follow newly selected policy YAML until explicitly overridden; saved defaults remain distinct from explicit empty selections.
 Unselected YAML files are not loaded. Inactive observed sensors are errors.
 Optional YAML sensor: {file: nodes/audio.yaml, default: false}.
 audio extra supplies sounddevice and librosa; pcm_mono preserves mono int16 chunks,

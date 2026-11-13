@@ -103,3 +103,5 @@ def stage(node: NodeSnapshot) -> Presentation:
 役割別には `role="my_role"` を指定します．Backendは型付きの `Snapshot` / `Capabilities` / `Operation` を渡し，`ui.models.Backend` の契約で操作要求を受け取ります．Operationに利用可否・理由・確認条件をまとめ，メニューと入力欄が共用します．Backendと機器実装はTextual Widgetに依存しません．拡張は明示的なPython登録に限り，外部プラグインの自動探索や新しい設定形式はありません．
 
 スレッド通知は [Textualのメッセージ](https://textual.textualize.io/guide/workers/) を使います．テストはfake Backend・MockBusと [run_test / Pilot](https://textual.textualize.io/guide/testing/) を使います．mock成功は実機の停止時間や収集品質を保証しません．
+
+policy 観測のチェック欄は，推論への切り替えなどで起動オプションを変更すると，選択された policy YAML の既定値に更新されます．観測を明示的に選択した後は，空の選択も含め，モードやオプションを変更しても保持します．前回の選択を保存するときも，YAML の既定値を使うか，明示指定かを区別します．
