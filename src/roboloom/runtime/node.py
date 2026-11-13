@@ -75,11 +75,14 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
         ]
         for node in pair:
             moving = latest.get(node, {}).get("fields", {})
-            if moving.get("home_state") == "moving":
+            if moving.get("home_state") in ("moving", "settling"):
                 return (
                     f"{node} is still moving home ({moving.get('home')}); "
                     "wait, then retry start"
                 )
+            if node in cfg.followers and moving.get("home_state") == "short":
+                return f"{node}: {home_short(moving)}"
+
         # Checked before every start: following can leave the follower behind the leader
         # (speed and range limits), and the first alignment says nothing about later ones.
         diff, tolerance = fields.get("worst_diff"), fields.get("tolerance")
@@ -90,6 +93,16 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
                 "the follower, then retry start"
             )
     return None
+
+
+def home_short(fields: dict) -> str:
+    """Why a follower's home move ended out of tolerance, and what to do."""
+    return (
+        f"did not reach home {fields.get('home')}: {fields.get('home_joint')} is "
+        f"{fields.get('home_diff')} from the pose (tolerance "
+        f"{fields.get('home_tolerance')}); move home again, or support the arm / "
+        "raise home.tolerance"
+    )
 
 
 def home_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
@@ -330,7 +343,12 @@ def _home_follower(safety: FollowerSafety, robot: Follower, cfg: RobotConfig) ->
     if spec is None:
         return ""  # this follower has no home pose; it stays where it is
     try:
-        safety.home(spec.target(robot.joint_names), spec.max_speed, spec.pose.name)
+        safety.home(
+            spec.target(robot.joint_names),
+            spec.max_speed,
+            spec.pose.name,
+            tolerance=spec.tolerance,
+        )
     except (RuntimeError, ValueError) as exc:
         return str(exc)
     return ""
@@ -345,13 +363,27 @@ def _home_fields(safety: FollowerSafety) -> dict:
             "home_progress": round(safety.homing.progress(elapsed), 2),
             "home_since_ns": safety.homing_since_ns,
         }
-    if safety.home_reached:
-        return {
-            "home": safety.home_name,
-            "home_state": "reached",
-            "home_since_ns": safety.homing_since_ns,
-        }
-    return {}
+    state = (
+        "reached"
+        if safety.home_reached
+        else "short"
+        if safety.home_short
+        else "settling"
+        if safety.home_settling_ns is not None
+        else ""
+    )
+    if not state:
+        return {}
+    out = {
+        "home": safety.home_name,
+        "home_state": state,
+        "home_since_ns": safety.homing_since_ns,
+    }
+    if safety.home_diff is not None:  # how far the measured joints are from the pose
+        out["home_joint"], diff = safety.home_diff
+        out["home_diff"] = round(diff, 4)
+        out["home_tolerance"] = safety.home_tolerance
+    return out
 
 
 def _follower(node, robot: Follower, cfg: RobotConfig):

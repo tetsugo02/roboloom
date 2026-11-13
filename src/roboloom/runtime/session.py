@@ -682,8 +682,19 @@ class Session:
                 # A status sent after `home` but before the node handled it still shows
                 # the previous move's result: count only a move that began after sent_ns.
                 began = fields.get("home_since_ns", 0) >= sent_ns
-                # "short": the move ended short of the pose where friction stopped a
-                # spring; the start check (alignment) decides whether that is close enough
+                # a follower whose measured joints stayed out of home.tolerance
+                if (
+                    fresh
+                    and began
+                    and name in self.cfg.followers
+                    and fields.get("home_state") == "short"
+                ):
+                    from .node import home_short
+
+                    raise SessionError(f"{name}: {home_short(fields)}")
+                # a leader's "short": the move ended short of the pose where friction
+                # stopped a spring; the start check (alignment) decides whether that is
+                # close enough
                 if not (fresh and began) or fields.get("home_state") not in (
                     "reached",
                     "short",

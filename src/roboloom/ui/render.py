@@ -128,10 +128,19 @@ def _home(f: dict) -> Text:
     state = f.get("home_state")
     if state == "moving":
         text.append(f"moving {round(100 * (f.get('home_progress') or 0))}%", WATCH)
-    elif state == "short":  # friction stopped a spring short of the pose
-        text.append("short", WATCH)
+    elif state == "settling":  # the move ended; the joints are not within tolerance yet
+        text.append("settling", WATCH)
+    elif state == "short":  # friction stopped a spring short of the pose (a leader),
+        # or a follower's joints stayed out of tolerance
+        text.append("short", BAD if f.get("home_tolerance") is not None else WATCH)
     else:
         text.append("reached", GOOD)
+    if f.get("home_joint") is not None and state in ("settling", "short"):
+        text.append(
+            f" ({f['home_joint']} off by {f.get('home_diff')}, tolerance "
+            f"{f.get('home_tolerance')})",
+            WATCH,
+        )
     if f.get("home_far"):
         off = ", ".join(f"{j} {d:+d}" for j, d in f["home_far"].items())
         text.append(f" (off by: {off})", WATCH)

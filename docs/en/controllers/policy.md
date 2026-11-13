@@ -171,6 +171,23 @@ interpolation_multiplier: 12  # cap the commands at 60 Hz (left out: 24, 120 Hz)
 - At a chunk boundary the interpolation also pauses while `infer` runs; the next action continues from the action reached before the pause.
 - Targets are cut to `max_speed` from what each follower holds, and `FollowerSafety` checks the joint limits and the deadline, as in teleoperation.
 
+## Starting from a saved pose (home)
+
+A policy can also move the followers to a saved pose before each episode. Save the pose with `roboloom capture-pose <name>` and add `home:` to `nodes/policy.yaml`.
+
+```yaml
+home:
+  pose: ../poses/follower/ready.yaml  # roboloom capture-pose ready
+  max_speed: 200                      # at most this controller's max_speed (follower unit/s)
+  tolerance: 30                       # arrived when every measured joint is this close
+  timeout_s: 30                       # optional
+```
+
+- With several followers, write one per follower: `home: {left: {...}, right: {...}}`. Followers left out do not move.
+- `roboloom infer --home` moves there before every episode. The launcher offers "Move home before every episode" for `infer` as well. `home` on the operator screen and `Session.home()` / `Session.record(..., home=True)` in Python do the same.
+- Arrival is checked with the measured joints, not the sent target. After the move, `reached` means every joint is within `tolerance`. If one is still out after 2 s, the screen shows `short` with the joint and its difference; `home` fails and `start` is refused.
+- As with teleoperation, `home` is refused while recording or following, and `start` is refused while moving home.
+
 ## Limitations
 
 - Asynchronous inference (running the previous chunk while inferring) and LeRobot's RTC are not supported.
