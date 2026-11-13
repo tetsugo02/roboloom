@@ -145,6 +145,7 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
   - `reports()`: unread reports, such as robot mode changes.
 - When a command is rejected (e.g. the leader is not aligned), a `SessionError` is raised.
 - `home(timeout=None)`: move the leader and follower slowly to the initial pose chosen in the controller and wait until both arrive. Raises `SessionError` if they do not arrive or a node refuses. `record(..., home=True)` does this before every episode. See "Move to an initial pose" in [Leader](../controllers/leader.md).
+- `teleop()`, `policy()`, `stop_teleop()`: with `teleop:` in the policy, hand the followers to the leader (before an episode, or during one as an intervention), hand back to the policy, and end teleoperation outside an episode. See [teleoperation and interventions](../controllers/policy.md).
 
 ```python
 s.start("wipe the table")

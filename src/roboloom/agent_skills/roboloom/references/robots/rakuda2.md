@@ -17,6 +17,7 @@ convert them. `roboloom init rakuda2` copies the template (the only packaged one
 | `nodes/camera.yaml` | `camera` / `realsense_rgb` | 640×480, `fps: 30` |
 | `nodes/digit_left.yaml`, `digit_right.yaml` | `digit` | QVGA, `height: 320`, `width: 240`, `fps: 30` |
 | `nodes/policy.yaml` | `policy` / `policy` | `factory: roboloom.policy:hold`, `observe: [camera]`, `rate_hz: 15`, `action_horizon: 8`, `max_speed: {follower: 1024}` |
+| `nodes/policy_teleop.yaml` | `policy` / `policy_teleop` | `policy.yaml` + `teleop: [controller.yaml]` (leader before/during an episode; dataset `-eval-teleop`) |
 | `nodes/recorder.yaml`, `session.yaml` | – | `max_age_ms` per recorded node; `type: terminal` |
 | `calibration/leader_<side>.yaml` | – | port, joint→URDF map, `zero`, `direction`, `confirmed: false` |
 | `calibration/gravity_tuning_<side>.yaml` | – | `gain`, `hold_mA` per joint (written by `tune-gravity`) |
