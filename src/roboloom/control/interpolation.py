@@ -16,7 +16,24 @@ queue (e.g. real-time chunking) can feed the same interpolation.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
+
+
+def whole_hz(hz: float) -> bool:
+    """Whether `hz` is a whole number of Hz (dora timers take whole Hz)."""
+    return abs(hz - round(hz)) < 1e-9
+
+
+def auto_multiplier(rate_hz: float, control_hz: float) -> int:
+    """The largest N with `rate_hz * N` whole Hz and at most `control_hz` (the slowest
+    follower's control rate): the commands come as often as the followers can take
+    them. 1 when no N fits (e.g. a policy rate that is not whole Hz)."""
+    for n in range(max(1, math.floor(control_hz / rate_hz + 1e-9)), 1, -1):
+        if whole_hz(rate_hz * n):
+            return n
+    return 1
 
 
 class ActionInterpolator:

@@ -15,7 +15,7 @@ factory: demo_policy:wave           # "module:callable" returning the policy
 kwargs: {}                          # arguments for the factory
 observe: [camera, left_wrist, right_wrist]  # inputs and sensors the policy sees; follower states are always seen
 rate_hz: 10                         # one action per 1/rate_hz: the training dataset's dataset_fps
-interpolation_multiplier: 1         # commands at rate_hz × this; 1 sends each action as is
+interpolation_multiplier: auto      # commands at rate_hz × this; left out or auto: from the followers' control_hz
 action_horizon: 2                   # steps of a chunk to run before asking for the next
 max_speed: {left: 1.0, right: 1.0, left_gripper: 3.0, right_gripper: 3.0}  # per follower, in unit/s
 command_deadline_ms: 300
@@ -145,17 +145,28 @@ uv run lerobot-train \
 
 ### Action interpolation
 
-With `interpolation_multiplier: N`, the policy node sends commands at `rate_hz × N`. It takes an action every N commands and, in between, sends the straight line from the previous action to the current one in N equal steps. The actions keep their trained spacing while the followers get fine-grained targets.
+The policy node sends commands at `rate_hz × N` (N: `interpolation_multiplier`). It takes an action every N commands and, in between, sends the straight line from the previous action to the current one in N equal steps. The actions keep their trained spacing while the followers get fine-grained targets.
+
+Left out (or `auto`), N is the largest that keeps `rate_hz × N` whole Hz and at most the slowest follower's `control_hz`: commands come as often as the followers take them.
+
+| `rate_hz` | Follower `control_hz` | Computed N | Command rate |
+| --- | --- | --- | --- |
+| 15 | 120 (Rakuda2) | 8 | 120 Hz |
+| 5 | 120 | 24 | 120 Hz |
+| 7.5 | 120 | 16 | 120 Hz |
+| 30 | 30 | 1 (no interpolation) | 30 Hz |
+
+A number is used as given; `1` sends each action as is, without interpolation.
 
 ```yaml
 rate_hz: 5                    # a policy trained at 5 Hz
-interpolation_multiplier: 12  # commands at 60 Hz
+interpolation_multiplier: 12  # cap the commands at 60 Hz (left out: 24, 120 Hz)
 ```
 
 - This is the scheme of LeRobot's rollout (`interpolation_multiplier`, `lerobot.utils.action_interpolator.ActionInterpolator`) with one difference: LeRobot sends the first action as is, while roboloom interpolates from the target the follower holds to the first action.
 - A follower reaches each action one action period (`1/rate_hz`, 200 ms at 5 Hz) after the action was produced.
-- The default 1 sends each action as before.
-- `rate_hz × N` must be whole Hz and at most every follower's `control_hz`; otherwise loading is refused.
+- A given N must keep `rate_hz × N` whole Hz and at most every follower's `control_hz`; otherwise loading is refused. When no N gives whole Hz (e.g. `rate_hz: 7.33`), the computed N is 1.
+- The N in use shows as `interpolation` in the policy's row on the operator screen.
 - The `action` recorded in an evaluation dataset is the interpolated target actually sent to the follower.
 - At a chunk boundary the interpolation also pauses while `infer` runs; the next action continues from the action reached before the pause.
 - Targets are cut to `max_speed` from what each follower holds, and `FollowerSafety` checks the joint limits and the deadline, as in teleoperation.
