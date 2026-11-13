@@ -126,6 +126,7 @@ SETTLE_S = 10.0  # how long a reset waits for an inference that is still running
 
 class PolicyController(Controller):
     uses_input: ClassVar[bool] = False
+    drives_all_followers: ClassVar[bool] = True
 
     def __init__(
         self,
@@ -332,6 +333,12 @@ class PolicyController(Controller):
     def teleop_inputs(self) -> list[str]:
         """The inputs the teleop controllers follow (not observed by the policy)."""
         return [c.source.name for c in self.teleop.values() if c.source is not None]
+
+    def nested(self) -> list[Controller]:
+        return list(self.teleop.values())
+
+    def intent_inputs(self) -> list[str]:
+        return self.teleop_inputs()
 
     def _views(self) -> dict[str, FollowerView]:
         return {

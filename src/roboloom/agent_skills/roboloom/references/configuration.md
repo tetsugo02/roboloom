@@ -44,6 +44,7 @@ options: {}                     # see below
 | --- | --- | --- |
 | `joint` | exactly one follower | follower joints follow the input joints of the same name (optional `joints` table of `{leader, follower, sign, offset}` for other names/signs/offsets; optional `unit`, must equal input and follower); `alignment_tolerance`, `max_speed`, `command_deadline_ms`, `input_timeout_ms`, `follower_timeout_ms` (150), optional `couplings`, `home` |
 | `pose_ik` | one arm + optional gripper | hand-held pose → IK (in development) |
+| `parts` | exactly one, split into parts (mock-verified only) | `parts: [a.yaml, b.yaml]` (inner controller files); each inner controller has `followers: [<follower>.<part>, ...]` and its own `input`; parts come from the follower model (Rakuda2: `body`, `right_arm`, `right_gripper`, `left_arm`, `left_gripper`) or the follower YAML's `parts: {name: [joints]}`; a joint has at most one inner controller, undriven joints hold; no inner `home`/`feedback` |
 | `policy` | every follower, in configuration order | `factory`, `kwargs`, `observe`, `rate_hz`, `interpolation_multiplier`, `action_horizon`, `max_speed` per follower, `command_deadline_ms`, optional `observation_history` (1), `hold` ([]), `inference` (sync\|async), `replan_at` (auto), `interpolation` (linear\|pchip) |
 
 A multi-follower controller sends nothing until every follower reported state, and stops

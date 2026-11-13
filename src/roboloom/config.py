@@ -373,7 +373,13 @@ def read_config(
         }
     for name, controller in tree["controllers"].items():
         if controller.get("type") == "policy" and "teleop" in controller:
-            controller["teleop"] = _teleop_nodes(controller, f"controllers.{name}")
+            controller["teleop"] = _nested_nodes(
+                controller, "teleop", f"controllers.{name}"
+            )
+        if controller.get("type") == "parts":
+            controller["parts"] = _nested_nodes(
+                controller, "parts", f"controllers.{name}"
+            )
     if observe is not None:
         observed = list(observe)
         for controller in tree["controllers"].values():
@@ -467,21 +473,21 @@ def resolve_config(
     )
 
 
-def _teleop_nodes(policy: dict, where: str) -> dict[str, dict]:
-    """`teleop: [controller.yaml, ...]` of a policy, paths next to its file -> the
-    controllers' YAML by name (the file's stem)."""
-    paths = policy["teleop"]
+def _nested_nodes(policy: dict, key: str, where: str) -> dict[str, dict]:
+    """`teleop: [controller.yaml, ...]` of a policy (or `parts:` of a parts controller),
+    paths next to its file -> the controllers' YAML by name (the file's stem)."""
+    paths = policy.get(key)
     if (
         not isinstance(paths, list)
         or not paths
         or not all(isinstance(x, str) for x in paths)
     ):
-        raise ConfigError(f"{where}.teleop: a list of controller YAML paths")
+        raise ConfigError(f"{where}.{key}: a list of controller YAML paths")
     out: dict[str, dict] = {}
     for relative in paths:
         file = (Path(policy["__dir__"]) / relative).resolve()
         if file.stem in out:
-            raise ConfigError(f"{where}.teleop: two controllers named {file.stem!r}")
+            raise ConfigError(f"{where}.{key}: two controllers named {file.stem!r}")
         out[file.stem] = {
             **_read(file),
             "__dir__": str(file.parent),
@@ -520,6 +526,35 @@ def _bind_teleop(
             controller.homes.update(
                 c.homes
             )  # the teleop's home, unless the policy has one
+
+
+def _bind_parts(name: str, controller: Controller, inputs: dict) -> None:
+    """Build the inner controllers of a `type: parts` controller; each drives parts of
+    the controller's follower (`<follower>.<part>`) from an input of its own."""
+    follower = controller.follower
+    built = {}
+    for inner, c in (controller.cfg.get("parts") or {}).items():
+        where = f"controllers.{name}.parts.{inner}"
+        cls = CONTROLLERS.get(c.get("type"))
+        source = inputs.get(c.get("input"))
+        if not cls.uses_input or source is None:
+            raise ConfigError(
+                f"{where} must follow a configured input (input: {c.get('input')!r})"
+            )
+        targets = c.get("followers")
+        prefix = f"{follower.name}."
+        if (
+            not isinstance(targets, list)
+            or not targets
+            or not all(isinstance(t, str) and t.startswith(prefix) for t in targets)
+        ):
+            raise ConfigError(
+                f"{where}.followers: parts of {follower.name}, as "
+                f"{', '.join(prefix + p for p in follower.parts()) or prefix + '<part>'}"
+            )
+        parts = {t: follower.part(t.removeprefix(prefix)) for t in targets}
+        built[inner] = cls(f"{name}.{inner}", c, source, parts)
+    controller.bind_parts(built)  # type: ignore[attr-defined]  # a PartsController
 
 
 def parse_config(tree: dict) -> RobotConfig:
@@ -611,7 +646,7 @@ def parse_config(tree: dict) -> RobotConfig:
                 f"{'input and followers' if cls.uses_input else 'followers'}"
                 + (f" (unknown: {', '.join(absent)})" if absent else "")
             )
-        if not cls.uses_input and targets != list(followers):
+        if cls.drives_all_followers and targets != list(followers):
             # the recorded action joins every follower in configuration order; a policy
             # trained on it outputs that whole vector
             raise ValueError(
@@ -634,6 +669,8 @@ def parse_config(tree: dict) -> RobotConfig:
             bind({**inputs, **sensors}, fps, tree["recorder"].get("max_age_ms", {}))
         if c.get("teleop"):
             _bind_teleop(name, controller, inputs, followers)
+        if c.get("type") == "parts":
+            _bind_parts(name, controller, inputs)
         controller.bind_feedback(estimators)
         controllers[name] = controller
     for follower in followers.values():

@@ -9,6 +9,7 @@ from .spec import (
     FOLLOWER_MODELS,
     JOINTS,
     MOTOR_IDS,
+    PARTS,
     UNIT,
     check_motor_ids,
     expected_registers,
@@ -19,6 +20,7 @@ from .spec import (
 class RakudaFollower(Follower):
     model = "rakuda2"
     effort_signal = ("currents_mA", "mA")
+    PARTS = PARTS
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg, JOINTS, UNIT)

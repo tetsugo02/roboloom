@@ -22,7 +22,7 @@ from ..core.traits import WORST_CASE, SafetyTraits, Unattended
 from ..drivers.base import JointBus
 from ..kinematics.spec import KinematicSpec
 
-__all__ = ["Follower", "JointBus", "SafetyTraits", "check_limits"]
+__all__ = ["Follower", "FollowerPart", "JointBus", "SafetyTraits", "check_limits"]
 
 
 LIMIT_KEYS = ("min", "max", "max_speed", "max_jump")
@@ -92,6 +92,9 @@ class Follower:
     # (core.traits). Every model declares it, as this attribute or, when it depends on
     # the configuration, as `declared_traits()`; a bus nobody described gets the worst case.
     safety_traits: ClassVar[SafetyTraits] = WORST_CASE
+    # Named groups of joints several controllers can drive separately (`type: parts`),
+    # e.g. the arms of a two-armed robot on one bus; the YAML's `parts:` adds more.
+    PARTS: ClassVar[dict[str, tuple[str, ...]]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -140,9 +143,33 @@ class Follower:
             build_laws(
                 self.control, self.joint_names, cfg.get("__dir__")
             )  # validate law parameters now
+        self.parts()  # validate `parts:` now
 
     def device_ids(self) -> tuple[str, ...]:
         return ()
+
+    def parts(self) -> dict[str, tuple[str, ...]]:
+        """Part name -> its joints: the model's `PARTS` and the YAML's `parts:`
+        ({name: [joints]}). A follower without parts is driven as a whole only."""
+        extra = self.cfg.get("parts") or {}
+        if not isinstance(extra, dict):
+            raise TypeError(f"{self.name}.parts: a mapping of part name to joints")
+        out = dict(self.PARTS)
+        for part, joints in extra.items():
+            out[str(part)] = names(joints, f"{self.name}.parts.{part}")
+        for part, joints in out.items():
+            unknown = [j for j in joints if j not in self.joint_names]
+            if unknown:
+                raise ValueError(f"{self.name}.parts.{part}: unknown joints {unknown}")
+        return out
+
+    def part(self, part: str) -> FollowerPart:
+        parts = self.parts()
+        if part not in parts:
+            raise ValueError(
+                f"{self.name} has no part {part!r} (it has {', '.join(parts) or 'none'})"
+            )
+        return FollowerPart(self, part, parts[part])
 
     def kinematics(self) -> KinematicSpec | None:
         """The arm's URDF chain, for controllers that command poses (None: not described)."""
@@ -234,3 +261,32 @@ class Follower:
                 effort if effort is not None else zeros, dtype=np.float32
             )
         return out
+
+
+class FollowerPart(Follower):
+    """Some joints of a follower, seen by a controller as a follower of its own: the
+    same unit and rate, its joints' limits. It owns no bus; the parent follower gets the
+    commands (`controllers.parts`)."""
+
+    safety_traits = WORST_CASE  # never asked: the parent's traits decide
+
+    def __init__(self, parent: Follower, part: str, joints: Sequence[str]):
+        self.parent, self.part_name = parent, part
+        self.name = f"{parent.name}.{part}"
+        self.cfg = parent.cfg
+        self.model = parent.model
+        self.joint_names = tuple(joints)
+        self.unit = parent.unit
+        self.control_hz = parent.control_hz
+        by_name = {limit["name"]: limit for limit in parent.limits}
+        self.limits = [by_name[j] for j in self.joint_names]
+        self.health = {}
+        self.record_effort = False
+        self.torque = parent.torque
+        self.control = None
+
+    def parts(self) -> dict[str, tuple[str, ...]]:
+        return {}
+
+    def declared_traits(self) -> SafetyTraits:
+        return self.parent.declared_traits()

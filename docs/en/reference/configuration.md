@@ -44,11 +44,43 @@ Each controller lists the followers it drives under `followers:`. Each follower 
 | --- | --- |
 | `joint` | Exactly one (maps the leader's joints onto one follower's joints) |
 | `pose_ik` | One arm and optionally one gripper (a hand-held device's pose onto the arm's joints through IK; [in development](../contribution/pika-sense.md)) |
+| `parts` | Exactly one, through inner controllers that each drive some of its joints ([Parts of a follower](#parts-of-a-follower)) |
 | `policy` | Every follower, in configuration order. The recorded `action` and `observation.state` join all followers, so the policy's output has the same layout; it is split in that order and sent to each follower |
 
 A controller of several followers sends nothing until every one of them has reported its state. When any of its followers latches `FAULT` or `ESTOP`, or its state gets older than `follower_timeout_ms`, the controller stops commanding all of them. A follower without commands keeps holding its target. The controller sends no further command until it has re-aligned. A `policy` controller stops running the policy for the current episode when a follower's state gets stale. The controller's row on the screen shows why it stopped (`stopped_by`) and the followers it waits for (`waiting_state`).
 
 `feedback` (force feedback) is available only on a controller of one follower.
+
+### Parts of a follower
+
+With a `type: parts` controller, a follower with many joints, such as Rakuda2 (17 joints on one bus), can be driven by several inputs, each with its own joints: a hand-held device per arm, or a leader for one arm only. The follower still gets one command from one controller, so its safety checks, the recorded `action` and the dataset do not change. This has been checked with mock devices only.
+
+A follower names its parts. Rakuda2 has `body` (torso and head), `right_arm`, `right_gripper`, `left_arm` and `left_gripper`; any follower YAML can add more with `parts: {name: [joints]}`. A follower without parts needs nothing and is driven as a whole.
+
+```yaml
+# nodes/controller.yaml
+type: parts
+followers: [follower]
+command_deadline_ms: 100
+parts: [right_hand.yaml, left_hand.yaml]   # controller files next to this one
+```
+
+```yaml
+# nodes/right_hand.yaml: any controller type; its followers are parts, <follower>.<part>
+type: joint
+input: leader
+followers: [follower.right_arm]
+alignment_tolerance: 300
+max_speed: 2048
+command_deadline_ms: 100
+input_timeout_ms: 150
+```
+
+- Each inner controller sees its part as a follower of its own (the same unit and rate, its joints' limits) and follows its own input. Several inner controllers may follow the same input.
+- A joint is driven by at most one inner controller. Joints no part drives stay where the follower holds them.
+- When the follower latches `FAULT` or `ESTOP`, every part re-aligns before it commands again.
+- Inner controllers cannot set `home` or `feedback` yet, and a parts controller cannot be a policy's `teleop:` controller.
+- The controller's row shows `following` once any part commands; `parts` lists each inner controller's state.
 
 ## Units
 
