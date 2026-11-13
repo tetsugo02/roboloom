@@ -27,6 +27,7 @@ from .inputs import INPUTS
 from .inputs.base import InputDevice
 from .recording import features
 from .recording.metrics import QUALITY
+from .recording.video import normalize_video_codec
 from .robots import FOLLOWERS
 from .robots.base import Follower
 from .sensors import SENSORS
@@ -295,6 +296,7 @@ def read_config(
     mock: bool | None = None,
     sensors: Iterable[str] | None = None,
     observe: Iterable[str] | None = None,
+    video_codec: str | None = None,
 ) -> dict:
     """Load the configuration YAML and every referenced node file into one tree.
 
@@ -376,6 +378,8 @@ def read_config(
                 controller["observe"] = observed
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
+    if video_codec is not None:
+        tree["recorder"]["video_codec"] = video_codec
     unknown = set(raw) - set(SETTINGS)
     if unknown:
         problems = [f"{k}: {RENAMED[k]}" for k in sorted(unknown) if k in RENAMED]
@@ -628,6 +632,11 @@ def parse_config(tree: dict) -> RobotConfig:
             for k, v in tree["recorder"].items()
             if k
             in ("grace_ms", "image_writer_threads", "streaming_encoding", "queue_s")
+        }
+        | {
+            "video_codec": normalize_video_codec(
+                tree["recorder"].get("video_codec"), "recorder.video_codec"
+            )
         },
         quality=_quality(tree["recorder"].get("quality") or {}),
         mode=e["mode"],
@@ -701,19 +710,26 @@ def load_config(
     mock: bool | None = None,
     sensors: Iterable[str] | None = None,
     observe: Iterable[str] | None = None,
+    video_codec: str | None = None,
 ) -> RobotConfig:
     """Load and validate a configuration file, or one named under the project root.
 
     `sensors`: active recorded sensors (None: defaults, []: none).
     `observe`: policy inputs (None: YAML, []: follower state only).
+    `video_codec`: codec of `storage: video` images, "av1" (alias "libsvtav1") or
+    "h264" (None: the recorder YAML's `video_codec`, else the saved videos' codec when
+    appending, else H.264).
     `options`: the launch options to enable (None: their defaults). `mock`: override the
     YAML's `mode` (True: mock devices, False: hardware)."""
     # Materialize iterable selections once; names remain in YAML declaration order.
     sensors = None if sensors is None else tuple(sensors)
     observe = None if observe is None else tuple(observe)
+    video_codec = normalize_video_codec(video_codec)
     path = resolve_config(config, root)
     try:
-        cfg = parse_config(read_config(path, options, mock, sensors, observe))
+        cfg = parse_config(
+            read_config(path, options, mock, sensors, observe, video_codec)
+        )
         if sensors is None:
             _check_datasets(path, cfg)
         return cfg

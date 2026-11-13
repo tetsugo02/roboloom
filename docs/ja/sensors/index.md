@@ -22,4 +22,6 @@ max_age_ms:
 
 Rakuda2のテンプレートには `camera`，`digit_left`，`digit_right` の項目があります．センサーを追加したときやノード名を変えたときは，この項目も追加・変更します．構成にないノードの項目は無視されるので，テンプレートはどのオプションの項目も持っています（`digit` オプションを使わないときの `digit_left` など）．名前を打ち間違えた項目も同じく無視され，読み込みは正しい名前のノードの項目がないと報告します．
 
+`storage: video` の画像の codec（AV1 か H.264）は，同じ `nodes/recorder.yaml` の `video_codec` で選びます（[Video codec](../reference/configuration.md#video-codec)）．
+
 [音声](audio.md): PCM とメル。ロボット共通、実機未検証。

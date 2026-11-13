@@ -46,9 +46,17 @@ from ..config import (
     toggle_option,
 )
 from ..errors import ConfigError
+from ..recording.video import VIDEO_CODECS, normalize_video_codec
 from .splitter import Splitter
 
 MODES = ("run", "record", "infer")
+# Video codec choices: `VIDEO_DEFAULT` leaves the choice to the recorder YAML (and, when
+# appending, to the saved videos); the others are recording.video.VIDEO_CODECS names.
+VIDEO_DEFAULT = "yaml"
+VIDEO_CHOICES = {
+    VIDEO_DEFAULT: "YAML / dataset",
+    **{name: codec.label for name, codec in VIDEO_CODECS.items()},
+}
 BACK: Literal["back"] = "back"  # the options screen's Back: choose the robot again
 
 
@@ -65,6 +73,7 @@ class LaunchPlan:
     home: bool = False
     sensors: list[str] | None = None
     observe: list[str] | None = None
+    video_codec: str | None = None  # None: the recorder YAML (recording.video)
 
     def problem(self) -> str:
         """Why it cannot start, or ''."""
@@ -90,6 +99,7 @@ def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
             mode=str(data.get("mode", "run")),
             sensors=data.get("sensors"),
             observe=data.get("observe"),
+            video_codec=_codec(data.get("video_codec")),
             options=tuple(n for n in data.get("options", []) if n in options),
             mock=bool(data.get("mock", False)),
             task=str(data.get("task", "")),
@@ -107,6 +117,14 @@ def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
         yaml.YAMLError,
         ConfigError,
     ):
+        return None
+
+
+def _codec(value: object) -> str | None:
+    """A saved codec, or None when it is no longer accepted."""
+    try:
+        return normalize_video_codec(value)
+    except ConfigError:
         return None
 
 
@@ -353,10 +371,12 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     #panes.narrow #row-splitter, #panes.narrow #summary-pane { column-span: 1; }
     .section { margin-top: 1; color: $text-muted; text-style: bold; }
     .section.first { margin-top: 0; }
-    RadioSet#mode {
+    RadioSet#mode, RadioSet#video-codec {
         layout: horizontal; border: none; padding: 0; background: transparent;
     }
-    RadioSet#mode > RadioButton { width: auto; margin-right: 2; }
+    RadioSet#mode > RadioButton, RadioSet#video-codec > RadioButton {
+        width: auto; margin-right: 2;
+    }
     #recording { height: auto; }
     .field-label { margin-top: 1; color: $text-muted; }
     #task { width: 1fr; }
@@ -476,6 +496,14 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 yield OptionToggle(
                     "Mock devices (no hardware)", self.plan.mock, id="mock"
                 )
+                yield Static("Video codec (storage: video)", classes="section")
+                with RadioSet(id="video-codec"):
+                    for codec, label in VIDEO_CHOICES.items():
+                        yield RadioButton(
+                            label,
+                            value=codec == (self.plan.video_codec or VIDEO_DEFAULT),
+                            id=f"video-{codec}",
+                        )
             yield Splitter("x", id="col-splitter")
             with VerticalScroll(id="options"):
                 if not self.options:
@@ -581,6 +609,15 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             ]
             if self._observe_explicit
             else None,
+            video_codec=next(
+                (
+                    codec
+                    for codec in VIDEO_CHOICES
+                    if codec != VIDEO_DEFAULT
+                    and self.query_one(f"#video-{codec}", RadioButton).value
+                ),
+                None,
+            ),
             mock=self.query_one("#mock", Checkbox).value,
             task=self.query_one("#task", Input).value,
             seconds=float(number("seconds", float, 0.0)),
@@ -670,6 +707,13 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         lines.append(
             f"dataset: {self.repo_id}{dataset_suffix(self.options, plan.options)}"
         )
+        lines.append(
+            "video codec: "
+            + (
+                plan.video_codec
+                or "from the YAML (appending: the saved videos'; default h264)"
+            )
+        )
         for key, value in option_changes(self.options, plan.options).items():
             lines.append(f"  {key}: {value if value is not None else '(removed)'}")
         return "\n".join(lines)
@@ -703,10 +747,14 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                     )
         self._sync()
 
-    def on_radio_set_changed(self, _: RadioSet.Changed) -> None:
+    def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         if self._syncing:
             return
-        if self._read().mode == "infer" and INFER_OPTION in self.options:
+        if (
+            event.radio_set.id == "mode"
+            and self._read().mode == "infer"
+            and INFER_OPTION in self.options
+        ):
             self.chosen = toggle_option(self.options, self.chosen, INFER_OPTION, True)
         self._sync()
 

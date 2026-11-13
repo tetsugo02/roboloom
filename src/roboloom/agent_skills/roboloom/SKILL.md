@@ -181,6 +181,14 @@ Image sensor nodes accept `storage: video | image` (default `video`). Use lossle
 `image` for tactile pixel differences; changing it requires a separate dataset output.
 See [sensors](references/sensors.md#image-storage).
 
+`storage: video` images are H.264 by default. Choose AV1 with `video_codec: av1` in
+`nodes/recorder.yaml`, `load_config(..., video_codec="av1")`,
+`Session.launch(..., video_codec="av1")` or `--video-codec av1` (`libsvtav1` is an
+alias of `av1`; None: the YAML). A dataset keeps one codec: appending without a choice reuses the
+saved videos' codec, and a different explicit codec is refused before writing – never
+delete or convert videos to get around it; set another `repo_id` and `output`. See
+[configuration](references/configuration.md#video-codec).
+
 ## Sensor selection and audio
 
 load_config and Session.launch accept sensors and observe independently (None:

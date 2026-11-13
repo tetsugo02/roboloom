@@ -121,6 +121,8 @@ PNG generally needs more disk space and PNG compression/write work; actual size 
 
 Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
 
+The MP4 codec of `video` (H.264 by default, or AV1) is `video_codec` in the recorder YAML: see [configuration](configuration.md#video-codec).
+
 ## Web camera (`opencv_rgb`)
 
 Install `uv add git+https://github.com/tetsugo02/roboloom.git`; OpenCV is a core dependency. Required: `device` (non-negative integer;

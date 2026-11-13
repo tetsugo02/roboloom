@@ -280,4 +280,7 @@ are selected separately with `--observe camera`. Empty strings select none.
 Rakuda2 audio is off by default; configure nodes/audio.yaml and install the audio
 extra to use PCM or mel numeric observations with a custom policy.
 Dataset schema mismatches require a manually chosen repo_id/output.
+Camera videos (`storage: video`) are H.264 by default for wide playback compatibility;
+record smaller AV1 with `video_codec: av1` in nodes/recorder.yaml or `--video-codec av1`.
+A dataset keeps one codec: a different explicit codec needs a new repo_id/output.
 Physical microphone capture is unverified.

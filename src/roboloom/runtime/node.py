@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 from collections import deque
+from collections.abc import Mapping
 from pathlib import Path
 
 from roboloom.config import RobotConfig, env_options, parse_config, read_config
@@ -797,24 +798,29 @@ def _recorder(node, cfg: RobotConfig):
         writer.close()
 
 
+def config_from_env(path: str, env: Mapping[str, str]) -> RobotConfig:
+    """The configuration as the launching process chose it (`session.config_env`)."""
+    mode = env.get("ROBOLOOM_MODE")
+    tree = read_config(
+        path,
+        options=env_options(env.get("ROBOLOOM_OPTIONS")),
+        mock=None if mode is None else mode == "mock",
+        sensors=json.loads(env["ROBOLOOM_SENSORS"])
+        if "ROBOLOOM_SENSORS" in env
+        else None,
+    )
+    for controller, selected in json.loads(env.get("ROBOLOOM_OBSERVE", "{}")).items():
+        tree["controllers"][controller]["observe"] = selected
+    if "ROBOLOOM_VIDEO_CODEC" in env:  # the parent's choice, None included
+        tree["recorder"]["video_codec"] = json.loads(env["ROBOLOOM_VIDEO_CODEC"])
+    return parse_config(tree)
+
+
 def main() -> None:
     from dora import Node
 
     name, path = sys.argv[1:3]
-    mode = os.environ.get("ROBOLOOM_MODE")
-    tree = read_config(
-        path,
-        options=env_options(os.environ.get("ROBOLOOM_OPTIONS")),
-        mock=None if mode is None else mode == "mock",
-        sensors=json.loads(os.environ["ROBOLOOM_SENSORS"])
-        if "ROBOLOOM_SENSORS" in os.environ
-        else None,
-    )
-    for controller, selected in json.loads(
-        os.environ.get("ROBOLOOM_OBSERVE", "{}")
-    ).items():
-        tree["controllers"][controller]["observe"] = selected
-    cfg = parse_config(tree)
+    cfg = config_from_env(path, os.environ)
     node = Node()
     if name == "session":
         _session(node, cfg)

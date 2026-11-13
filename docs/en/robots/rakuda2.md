@@ -41,6 +41,7 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 - What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in "Recording and resuming" of [Configuration](../reference/configuration.md#recording-and-resuming); they are the same for every robot.
 - The policy (option `policy`) observes joint state and `camera` by default. Select sensors with `observe` in `nodes/policy.yaml` (`[]` for joint state only). `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
 - `max_speed` is in counts/s (`{follower: 1024}` in the template).
+- `storage: video` images are H.264 by default; `video_codec: av1` in `nodes/recorder.yaml` or `--video-codec av1` records AV1 ([Video codec](../reference/configuration.md#video-codec)).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../controllers/policy.md).
 
 ## Launch options and combinations

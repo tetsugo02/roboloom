@@ -304,6 +304,8 @@ with InProcessSession.from_components(
 
 実機の収集手順は [Rakuda2 Quick start](../quick-start/rakuda2.md) を参照してください．
 
+`load_config(..., video_codec="av1")` と `Session.launch(..., video_codec="av1")` で，`storage: video` の画像を AV1 で記録します（`"h264"` は H.264，`None` は recorder の YAML の指定．どちらもなければ H.264）．構成済みの `RobotConfig` を渡すときは `load_config` で選びます．既存のデータセットと codec が違うときの扱いは [Video codec](configuration.md#video-codec) を参照してください．
+
 ## センサー選択
 
 `load_config(..., sensors=[...], observe=[...])` と

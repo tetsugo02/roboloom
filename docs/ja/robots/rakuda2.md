@@ -41,6 +41,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 - `observation.leader`，`observation.meta.<node>.*`，`action.valid`，`action.clamped`，`action.meta.follower.*` の意味，欠測の記録のしかた，指令のなかった行の `action` の中身は，[設定](../reference/configuration.md) の「記録と再開」で説明しています．どのロボットでも同じです．
 - 方策（オプション `policy`）は，既定で関節状態と `camera` を観測します．`nodes/policy.yaml` の `observe` でセンサーを選べます（`[]` なら関節状態のみ）．`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．
 - `max_speed` はカウント/sです（テンプレートは `{follower: 1024}`）．
+- `storage: video` の画像は既定で H.264 です．`nodes/recorder.yaml` の `video_codec: av1` か `--video-codec av1` で AV1 にできます（[Video codec](../reference/configuration.md#video-codec)）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．方策の書き方は [方策で動かす](../controllers/policy.md) にあります．
 
 ## 起動オプションと組み合わせ

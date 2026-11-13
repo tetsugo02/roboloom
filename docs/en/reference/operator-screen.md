@@ -8,8 +8,8 @@ Interactive `run`, `record`, `infer`, and `tune-gravity` use Textual. There is a
 
 - Operation: choose `run`, `record`, or `infer`. For `record` and `infer`, enter task, seconds, and episodes; for `record`, "move home before every episode" can also be chosen.
 - Options: lists the configuration's `options:` with their `help` text. Ticking one also enables the options in its `requires` and unticks those in `conflicts`; unticking one also unticks the options that require it. The tooltip shows the reason for a conflict.
-- Devices: "mock devices (no hardware)" uses mock devices.
-- Summary: shows the operation, `mock` or `HARDWARE` (`mock (mode: mock in config.yaml)` when the YAML declares mock without the checkbox), the enabled options, the dataset name, and the node files that are replaced (removals as `(removed)`). For a combination that cannot start or missing input, it shows the reason and disables Launch.
+- Devices: "mock devices (no hardware)" uses mock devices. "Video codec (storage: video)" chooses the video codec; `YAML / dataset` keeps the recorder YAML's choice (when appending, the saved videos' codec; otherwise AV1). See [Video codec](configuration.md#video-codec).
+- Summary: shows the operation, `mock` or `HARDWARE` (`mock (mode: mock in config.yaml)` when the YAML declares mock without the checkbox), the enabled options, the dataset name, the video codec, and the node files that are replaced (removals as `(removed)`). For a combination that cannot start or missing input, it shows the reason and disables Launch.
 
 The next screen is split into the operation pane on the left (Operation, Devices), the options pane on the right (one card per option: green when on, a yellow line and the reason when a conflict would turn it off), and the summary pane at the bottom. On both screens the pane borders adjust like the operator screen's: drag them, or focus them and use the arrow keys; double-click or Ctrl-R resets. Below 90 columns the panes stack vertically.
 

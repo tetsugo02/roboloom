@@ -310,6 +310,56 @@ PNG generally needs more disk space and PNG compression/write work; actual size 
 Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
 
 
+### Video codec
+
+The MP4 codec of `storage: video` image sensors is chosen with `video_codec` in `nodes/recorder.yaml`, the same way for every robot. `storage: image` (PNG), audio, joints and the other features are stored as before.
+
+| `video_codec` | Codec | LeRobot encoder (`vcodec`) |
+| --- | --- | --- |
+| not set | H.264 for a new dataset; when appending, the saved videos' settings | `h264` |
+| `av1` (alias `libsvtav1`) | AV1 | `libsvtav1` |
+| `h264` | H.264 | `h264` (FFmpeg's libx264) |
+
+The default is H.264 because it plays almost everywhere; LeRobot's own default is AV1. Set `video_codec: av1` for smaller files.
+
+```yaml
+# nodes/recorder.yaml
+video_codec: av1
+```
+
+To choose it per launch, use `video_codec` of `load_config` and `Session.launch`, or `--video-codec` on the CLI. `None` (omitted on the CLI) keeps the YAML's choice.
+
+```python
+from roboloom import Session, load_config
+
+cfg = load_config("rakuda2", video_codec="h264")
+with Session.launch("rakuda2", video_codec="h264") as session:
+    ...
+```
+
+```bash
+roboloom record --task "pick" --seconds 30 --video-codec h264
+roboloom validate --video-codec h264   # the summary shows video codec: h264
+```
+
+- When passing a loaded `RobotConfig` to `Session.launch`, choose it in `load_config`; `Session.launch(cfg, video_codec=...)` is an error (as with `sensors` and `observe`).
+- In the launcher, "Video codec (storage: video)" under Devices offers `YAML / dataset`, `AV1` and `H.264`. The choice is saved with the last launch.
+- The dora nodes reload the configuration with the same choice as the launching process.
+- LeRobot does the encoding: roboloom only passes `lerobot.configs.video.RGBEncoderConfig(vcodec=...)` to `LeRobotDataset.create` and `resume`. CRF, GOP and preset stay at LeRobot's defaults (CRF 30, GOP 2) and are not settings.
+- When this environment's FFmpeg (PyAV) lacks the chosen codec's encoder, the launch (including `validate`) stops with the reason instead of switching to another codec. Nothing is recorded.
+
+**Appending to an existing dataset**: LeRobot joins a new episode's video onto the existing MP4, so a dataset's videos keep one codec. Without `video_codec`, the codec and settings (CRF, GOP, ...) of the saved videos are reused. When the chosen codec differs from the saved videos, the launch stops before writing and shows the difference, such as `video_codec: 'av1' (saved videos) -> 'h264' (requested)`. To record with another codec, set another `repo_id` and `output` for a separate dataset. roboloom does not choose another output by itself, and does not convert or overwrite existing videos.
+
+| | AV1 | H.264 (default) |
+| --- | --- | --- |
+| Size | Generally smaller than H.264 at the same quality | Generally larger than AV1 |
+| Speed | With LeRobot's defaults (a fast SVT-AV1 preset), similar to H.264 in the measurement below; decoding can be heavier than H.264 | Fast; many devices have a hardware decoder |
+| Playback compatibility | Needs a recent player; older players, some browsers' and editors' video previews, and devices without a hardware decoder may not play it | Plays in almost every player and browser |
+
+On this machine, recording 90 synthetic 640×480 frames (30 fps) took about 0.9 s to save with either codec; the files were 238 KiB (AV1) and 209 KiB (H.264). This is one measurement and varies with the content and the machine. The same CRF value does not give the same quality across codecs.
+
+If the VS Code LeRobot Viewer shows AV1 videos (the former default) as black, record a separate H.264 dataset and compare. Whether H.264 displays there has not been checked. The codec choice was tested with synthetic frames read back through LeRobot and with the mock dataflow, not with hardware cameras.
+
 ## Managing logs and configuration
 
 Logs are placed in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`); the dataset name tells which options were enabled. When the node ends, the leader's current control is written to `<leader name>_trace.npz`, and each follower's per-tick state (positions, velocities, currents, target, mode) to `<follower name>_trace.npz`. Manage YAML configuration, gravity models, ranges of motion, tuning values, and saved initial poses (`poses/<follower>/`) with Git; raw data `*.npz`, logs, datasets, and FIFOs (`config.fifo`) are excluded by the generated `.roboloom/.gitignore`.

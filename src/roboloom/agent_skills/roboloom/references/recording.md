@@ -45,7 +45,9 @@ per-follower control intervals. Use `keep=lambda ep: ep.ok` to drop warned episo
 
 New episodes append to the same dataset across runs. On resume, FPS and features are
 checked; a mismatch is refused. **Do not delete data to get around it** – change `output`,
-or give the option that changed the features a `dataset` name.
+or give the option that changed the features a `dataset` name. The same holds for the
+video codec: without `video_codec` the saved videos' codec is reused, and a different
+explicit one is refused ([configuration](configuration.md#video-codec)).
 
 ## Training
 
