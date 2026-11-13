@@ -171,6 +171,9 @@ def controller(f: dict) -> tuple[str, Text]:
         detail = Text("no recent leader input", style=WATCH)
     elif state == "follower_fault":
         detail = Text("robot latched FAULT/ESTOP; re-align after recovery", style=BAD)
+    elif f.get("pickup"):  # a policy's teleop takes the joints over one by one
+        far = ", ".join(f"{j} {d:+g}" for j, d in f["pickup"].items())
+        detail = Text(f"teleop: move the leader to the held joints: {far}", style=WATCH)
     elif state in POSE_STATES and "engaged" in f:  # pose_ik: what the operator does
         detail = Text(POSE_STATES[state], style=WATCH)
         if f.get("position_error_mm") is not None:
@@ -179,7 +182,9 @@ def controller(f: dict) -> tuple[str, Text]:
             )
     else:
         detail = Text(
-            key_values(f, ("state", "tolerance", "worst_joint", "worst_diff", "home"))
+            key_values(
+                f, ("state", "tolerance", "worst_joint", "worst_diff", "home", "pickup")
+            )
         )
     if f.get("home"):  # the saved pose `home` moves this pair to
         detail = joined([detail, Text("home pose: ") + Text(f"{f['home']}.yaml", HOME)])

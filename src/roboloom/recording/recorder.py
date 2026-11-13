@@ -31,7 +31,13 @@ import numpy as np
 
 from ..core.protocol import Envelope
 from .metrics import summarize
-from .schema import META_FIELDS, features, observation_frame
+from .schema import (
+    INTERVENTION,
+    META_FIELDS,
+    features,
+    observation_frame,
+    records_intervention,
+)
 from .video import normalize_video_codec, video_encoder
 
 if TYPE_CHECKING:
@@ -327,6 +333,7 @@ class EpisodeRecorder:
         if not self.followers:
             return frame
         parts, all_valid, any_clamped = [], True, False
+        intervened = False
         for name, follower in self.followers.items():
             actions = [
                 x
@@ -348,6 +355,7 @@ class EpisodeRecorder:
                 )
                 parts.append(held or [0.0] * len(follower.joint_names))
             clamped = bool(action and action.payload.get("clamped"))
+            intervened |= bool(action and action.payload.get("intervention"))
             all_valid &= action is not None
             any_clamped |= clamped
             meta = {
@@ -364,6 +372,8 @@ class EpisodeRecorder:
         )
         frame["action.valid"] = np.asarray([float(all_valid)], dtype=np.float32)
         frame["action.clamped"] = np.asarray([float(any_clamped)], dtype=np.float32)
+        if records_intervention(self.cfg):
+            frame[INTERVENTION] = np.asarray([float(intervened)], dtype=np.float32)
         return frame
 
     def frames(self) -> list[dict]:

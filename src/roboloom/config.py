@@ -371,6 +371,9 @@ def read_config(
         tree[role] = {
             name: node(relative, f"{role}.{name}") for name, relative in group.items()
         }
+    for name, controller in tree["controllers"].items():
+        if controller.get("type") == "policy" and "teleop" in controller:
+            controller["teleop"] = _teleop_nodes(controller, f"controllers.{name}")
     if observe is not None:
         observed = list(observe)
         for controller in tree["controllers"].values():
@@ -462,6 +465,61 @@ def resolve_config(
         f"{arg}: no such configuration file, nor {Path(root) / path}/{CONFIG_FILE} "
         "(create one with `roboloom init <robot>`)"
     )
+
+
+def _teleop_nodes(policy: dict, where: str) -> dict[str, dict]:
+    """`teleop: [controller.yaml, ...]` of a policy, paths next to its file -> the
+    controllers' YAML by name (the file's stem)."""
+    paths = policy["teleop"]
+    if (
+        not isinstance(paths, list)
+        or not paths
+        or not all(isinstance(x, str) for x in paths)
+    ):
+        raise ConfigError(f"{where}.teleop: a list of controller YAML paths")
+    out: dict[str, dict] = {}
+    for relative in paths:
+        file = (Path(policy["__dir__"]) / relative).resolve()
+        if file.stem in out:
+            raise ConfigError(f"{where}.teleop: two controllers named {file.stem!r}")
+        out[file.stem] = {
+            **_read(file),
+            "__dir__": str(file.parent),
+            "__file__": str(file),
+            "__robot_dir__": policy.get("__robot_dir__"),
+        }
+    return out
+
+
+def _bind_teleop(
+    name: str, controller: Controller, inputs: dict, followers: dict
+) -> None:
+    """Build the teleop controllers of a policy (`teleop:`) as controllers of their own
+    type, inside the policy (one controller per follower stays the rule)."""
+    nodes = controller.cfg.get("teleop") or {}
+    built = {}
+    for inner, c in nodes.items():
+        cls = CONTROLLERS.get(c.get("type"))
+        targets = c.get("followers")
+        source = inputs.get(c.get("input"))
+        if not cls.uses_input or source is None:
+            raise ConfigError(
+                f"controllers.{name}.teleop.{inner} must follow a configured input "
+                f"(input: {c.get('input')!r})"
+            )
+        if not isinstance(targets, list) or not all(t in followers for t in targets):
+            raise ConfigError(
+                f"controllers.{name}.teleop.{inner}.followers: configured followers"
+            )
+        built[inner] = cls(
+            f"{name}.{inner}", c, source, {x: followers[x] for x in targets}
+        )
+    controller.bind_teleop(built)  # type: ignore[attr-defined]  # a PolicyController
+    for c in built.values():
+        if c.homes and not any(f in controller.homes for f in c.homes):
+            controller.homes.update(
+                c.homes
+            )  # the teleop's home, unless the policy has one
 
 
 def parse_config(tree: dict) -> RobotConfig:
@@ -574,6 +632,8 @@ def parse_config(tree: dict) -> RobotConfig:
         bind = getattr(controller, "bind", None)
         if bind is not None:
             bind({**inputs, **sensors}, fps)
+        if c.get("teleop"):
+            _bind_teleop(name, controller, inputs, followers)
         controller.bind_feedback(estimators)
         controllers[name] = controller
     for follower in followers.values():

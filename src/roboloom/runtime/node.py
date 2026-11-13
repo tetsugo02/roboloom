@@ -25,8 +25,27 @@ from roboloom.recording import ACTION, EpisodeRecorder
 from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
-COMMANDS = ("start", "stop", "save", "discard", "estop", "release", "home", "quit")
-from roboloom.runtime.flow import STATE_PREFIX, STATUS_SUFFIX, command_output
+COMMANDS = (
+    "start",
+    "stop",
+    "save",
+    "discard",
+    "estop",
+    "release",
+    "home",
+    "quit",
+    # a policy with `teleop:`: drive with the leader (before or during an episode), hand
+    # back to the policy during an episode, stop teleoperating outside one
+    "teleop",
+    "policy",
+    "stop_teleop",
+)
+from roboloom.runtime.flow import (
+    INTENT_PREFIX,
+    STATE_PREFIX,
+    STATUS_SUFFIX,
+    command_output,
+)
 from roboloom.trackers.base import Tracker
 
 
@@ -119,6 +138,40 @@ def home_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str 
     return None
 
 
+def _teleop_policy(cfg: RobotConfig) -> str | None:
+    return next(
+        (n for n, c in cfg.controllers.items() if getattr(c, "teleop", None)), None
+    )
+
+
+def teleop_warning(
+    cfg: RobotConfig, command: str, latest: dict[str, dict], now_ns: int
+) -> str | None:
+    """Why `teleop`, `policy` or `stop_teleop` may not run now, or None."""
+    name = _teleop_policy(cfg)
+    if name is None:
+        return "no teleoperation configured (teleop: in the policy YAML)"
+    recording = latest.get("recorder", {}).get("fields", {}).get("state") == "recording"
+    control = latest.get(name, {}).get("fields", {}).get("control")
+    if command == "policy":
+        if not recording:
+            return "no episode running: start one (the policy starts with it)"
+        if control != "teleop":
+            return "the policy is already driving"
+        return None
+    if command == "stop_teleop":
+        if recording:
+            return "during an episode use stop (or policy to hand back)"
+        return None
+    for follower in cfg.followers:
+        fields = latest.get(follower, {}).get("fields", {})
+        if fields.get("mode") in FollowerSafety.LATCHED:
+            return f"{follower} is {fields.get('mode')}; restart to teleoperate"
+        if fields.get("home_state") in ("moving", "settling"):
+            return f"{follower} is moving home; wait, then retry teleop"
+    return None
+
+
 def parse_command(line: str) -> dict:
     """A command line from the FIFO: JSON {"id", "command", "task"} from a Session, or
     plain `start <task>` typed by an operator (no id)."""
@@ -171,8 +224,14 @@ def _session(node, cfg: RobotConfig):
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
+                if cmd in ("teleop", "policy", "stop_teleop"):
+                    warning = teleop_warning(cfg, cmd, latest, time.monotonic_ns())
+                    if warning is not None:
+                        report({**request, "warning": warning})
+                        continue
                 _send(node, "control", p.make("session", request))
-                if cmd == "home":  # progress shows in the robot and leader status
+                # progress shows in the robot, leader and policy status
+                if cmd in ("home", "teleop", "policy", "stop_teleop"):
                     report({**request, "ok": True})
                 if cmd == "quit":
                     return
@@ -415,9 +474,9 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                 safety.accept(msg)
             elif event_id == "session" and msg is not None:
                 command = msg.payload["command"]
-                if command == "start":
-                    safety.arm()
-                elif command in ("stop", "discard"):
+                if command in ("start", "teleop"):
+                    safety.arm()  # teleop: follow the leader without recording
+                elif command in ("stop", "discard", "stop_teleop"):
                     safety.stop()
                 elif command in ("estop", "quit"):
                     safety.stop(estop=True)
@@ -634,6 +693,12 @@ def _policy(node, controller: PolicyController):
         if follower in controller.followers and msg is not None:
             received[follower] = time.monotonic_ns()
             controller.observe(follower, msg)
+            if controller.control == "teleop" and msg.payload.get("mode") in (
+                "FAULT",
+                "ESTOP",
+            ):
+                controller.reset()  # teleop re-aligns after a latched follower
+                stopped = f"{follower} {msg.payload.get('mode')}"
             if follower not in warmed:
                 # The first message on a dora connection stalls the receiving follower
                 # loop about 130 ms (measured in mock). Send it now, while the follower
@@ -650,13 +715,39 @@ def _policy(node, controller: PolicyController):
             event_id is not None and event_id.startswith("observe_") and msg is not None
         ):
             controller.observe(event_id.removeprefix("observe_"), msg)
-        elif event_id == "session" and msg is not None and controller.state != "failed":
+        elif (
+            event_id is not None
+            and event_id.startswith(INTENT_PREFIX)
+            and msg is not None
+        ):
+            sent = controller.teleop_update(event_id.removeprefix(INTENT_PREFIX), msg)
+            for name, command in sent.items():
+                _send(node, command_output(name), command)
+            if sent:
+                commands.append(time.monotonic_ns())
+        elif event_id == "session" and msg is not None:
             command = msg.payload["command"]
-            if command == "start":
-                controller.start(msg.payload.get("task", ""))
-                stopped = ""
-            elif command in ("stop", "discard", "estop", "release"):
-                controller.stop()
+            if controller.state != "failed":
+                controller.error = (
+                    ""  # a refused teleop/policy shows until the next one
+                )
+            try:
+                if command in ("stop", "discard", "estop", "release"):
+                    controller.stop()
+                elif command == "teleop":  # works also when the policy failed to load
+                    controller.begin_teleop()
+                    stopped = ""
+                elif command == "stop_teleop":
+                    controller.end_teleop()
+                elif controller.state == "failed":
+                    pass
+                elif command == "start":
+                    controller.start(msg.payload.get("task", ""))
+                    stopped = ""
+                elif command == "policy":
+                    controller.resume_policy()
+            except RuntimeError as exc:  # shown on the screen; the followers hold
+                controller.error = f"{command}: {exc}"
         elif event_id == "tick":
             now = time.monotonic_ns()
             silent = [
@@ -664,9 +755,9 @@ def _policy(node, controller: PolicyController):
                 for n in controller.followers
                 if n in received and now - received[n] > stale_ns
             ]
-            if silent and controller.running:
+            if silent and (controller.running or controller.control):
                 # a frozen state would make the policy act on a robot that is not there
-                controller.stop()
+                controller.reset()
                 stopped = f"{silent[0]} silent"
             try:
                 sent = controller.tick()

@@ -145,6 +145,7 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
   - `reports()`：未読の報告．robot のモードの変化など．
 - コマンドが拒否されたとき（leader が揃っていないなど）は，`SessionError` になります．
 - `home(timeout=None)`：leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かし，両方が着くまで待ちます．着かないときや拒否されたときは `SessionError` です．`record(..., home=True)` は毎回のエピソードの前にこれを行います．詳しくは [Leader](../controllers/leader.md) の「初期姿勢へ動かす」を参照してください．
+- `teleop()`，`policy()`，`stop_teleop()`：方策に `teleop:` があるとき，leaderに切り替え（エピソードの前，または途中の介入），方策に戻し，エピソードの外のテレオペを終えます．詳しくは [テレオペと介入](../controllers/policy.md) を参照してください．
 
 ```python
 s.start("wipe the table")

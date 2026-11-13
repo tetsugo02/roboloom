@@ -702,6 +702,24 @@ class Session:
                     waiting.append(f"{name} ({fields.get('home_state', 'waiting')})")
         return waiting
 
+    # -- teleoperation of a policy (`teleop:` in the policy YAML) ------------------
+
+    def teleop(self) -> None:
+        """Drive the followers with the leader: before an episode (nothing is recorded)
+        or during one (an intervention, recorded as `action.intervention`). Each joint
+        holds until the leader reaches it, then follows; the policy's status lists the
+        joints still to reach (`pickup`)."""
+        self.wait_report(self.send("teleop"))
+
+    def policy(self) -> None:
+        """Hand the followers back to the policy during an episode (it restarts from
+        where they are, with a fresh history)."""
+        self.wait_report(self.send("policy"))
+
+    def stop_teleop(self) -> None:
+        """Stop teleoperating outside an episode; the followers hold where they are."""
+        self.wait_report(self.send("stop_teleop"))
+
     def estop(self) -> None:
         """Latch the follower in ESTOP (stays until the dataflow restarts)."""
         self.send("estop")

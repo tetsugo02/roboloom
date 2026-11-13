@@ -24,6 +24,7 @@ class Capabilities:
     home: bool = False
     release: bool = False
     hold: bool = False  # some follower keeps holding after quit
+    teleop: bool = False  # a policy can hand the followers to the leader (`teleop:`)
     torqued: bool = False  # some follower has torque: quit may release it
     gravity: bool = False
     reselect: bool = False  # quit can come back to the launcher's option choice

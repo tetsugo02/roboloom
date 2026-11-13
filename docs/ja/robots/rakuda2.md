@@ -30,7 +30,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | --- | --- | --- |
 | `observation.state`，`action` | 17（`follower.torso_yaw`，`follower.head_yaw`，`follower.head_pitch`，右腕 `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`，左腕 `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`） | Dynamixelの位置カウント |
 | `observation.effort` | 17（同じ並び．テンプレートの `record_effort: true`） | mA（電流） |
-| `observation.leader` | 17（leaderの関節位置．同じ並び．名前は接頭辞なしの `torso_yaw` … `l_arm_grip`．leaderを使わないオプション `policy` では記録しない） | Dynamixelの位置カウント |
+| `observation.leader` | 17（leaderの関節位置．同じ並び．名前は接頭辞なしの `torso_yaw` … `l_arm_grip`．leaderを使わないオプション `policy` では記録しない．`policy_teleop` では記録する） | Dynamixelの位置カウント |
 | `observation.images.camera` | 480×640×3（RGB） | [storage](../reference/configuration.md#image-storage) |
 | `observation.images.digit_left`，`observation.images.digit_right` | 320×240×3（RGB．オプション `digit`） | [storage](../reference/configuration.md#image-storage) |
 | `observation.meta.<node>.valid`，`capture_age_ms`，`ready_age_ms` | 各1（float32）．記録するノードごと：`leader`，`follower`，`camera`，`digit` のときは `digit_left`，`digit_right` も | `valid` は0/1，経過時間はms |
@@ -54,6 +54,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `gravity` | leaderの左右腕を重力補償する（`nodes/leader_gravity.yaml`） | | 変えない |
 | `bilateral` | 力の逆送（実機未検証）．leader・controller・robotを置き換え，推定器 `effort` を足す | `gravity` が必要 | `-bilateral` を付ける |
 | `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `gravity` と競合 | `-eval` を付ける |
+| `policy_teleop` | `policy` に加えて，エピソードの前と途中にleaderで動かせる（[テレオペと介入](../controllers/policy.md)）．leaderを戻し，`nodes/policy_teleop.yaml` を使う | `policy` が必要 | `-teleop` を付ける |
 
 | 有効なオプション | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
@@ -64,6 +65,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `gravity`，`bilateral` | 重力補償付き＋力の逆送（実機未検証） | RealSense | `local/rakuda2-bilateral` |
 | `policy` | なし（方策） | RealSense | `local/rakuda2-eval` |
 | `digit`，`policy` | なし（方策） | RealSense + 左右DIGIT | `local/rakuda2-digit-eval` |
+| `policy`，`policy_teleop` | 通常（エピソードの前と介入のとき） | RealSense | `local/rakuda2-eval-teleop` |
 
 制約：
 
@@ -71,6 +73,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 - `gravity` の有無でleaderのOperating Modeが変わります．端末から実機で起動するとき，CLIはEEPROMの差分を表示し，確認してから書きます．
 - `policy` はDIGITなしで使えます．DIGITを方策に渡すときは，`digit` を有効にし，`nodes/policy.yaml` の `observe` を `[camera, digit_left, digit_right]` に変更します．`digit` の有効化だけでは方策の入力は変わりません．学習時の入力と一致させてください．DIGITが必要なLeRobotチェックポイントをDIGITなしで読み込むと，開始前に拒否します．
 - 関節状態のみの方策は `observe: []` にします．センサーを開かない場合は，`config.yaml` の `sensors` から該当ノードも外します．
+- `policy_teleop` の `nodes/policy_teleop.yaml` は，`nodes/policy.yaml` に `teleop: [controller.yaml]` を足したものです．方策の設定を変えるときは，両方を同じにしてください．
 - `policy` はleaderを使わないため `gravity` とは同時に使えません．`gravity` を必要とする `bilateral` とも併用できません．
 - `gravity` はデータセット名を変えません．記録するfeatureが通常leaderと同じためです．通常leaderと重力補償付きleaderのエピソードは同じデータセットに入ります．
 - 画像featureが変わるため，`digit` の有無でデータセットが分かれます．RealSenseだけの既存データセットへDIGITのエピソードは追記しません．

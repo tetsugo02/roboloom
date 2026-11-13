@@ -43,7 +43,7 @@ The log scrolls independently; messages arriving while it is hidden are retained
 
 The input supports cursor movement, Delete, Backspace, and Japanese text. History lasts only for this session. Completion never executes an operation: Enter first accepts the visible candidate, and a second Enter submits it. Multiline paste becomes one space-separated line and is not submitted automatically. Confirmation answers are excluded from history.
 
-Outside input and confirmations, `e`, `q`, `h`, `s`, and `d` request estop, quit, home, save, and discard. These character shortcuts are suppressed while typing and inside dialogs. Ctrl-G remains available in confirmations.
+Outside input and confirmations, `e`, `q`, `h`, `s`, and `d` request estop, quit, home, save, and discard. With `teleop:` in the policy, `t` and `p` request Teleop (hand over to the leader) and Policy (hand back); they work while recording and say why when unavailable ([teleoperation and interventions](../controllers/policy.md)). These character shortcuts are suppressed while typing and inside dialogs. Ctrl-G remains available in confirmations.
 
 F2, F6 / Shift-F6, F12, and Ctrl-End remain aliases for command input, pane movement, emergency stop, and latest log. The footer displays the primary Ctrl combinations.
 

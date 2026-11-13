@@ -16,7 +16,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Protocol, runtime_checkable
 
 from ..control.homing import HomeSpec
 from ..core.checks import positive
@@ -81,6 +81,8 @@ class Controller(ABC):
         self.homes: dict[str, HomeSpec] = {}
         # force feedback to the input (`feedback:`), for controllers that support it
         self.feedback: FeedbackMap | None = None
+        # fields every command carries (a policy marks its teleop commands)
+        self.command_extra: dict[str, object] = {}
 
     @property
     def follower(self) -> Follower:
@@ -122,7 +124,7 @@ class Controller(ABC):
             target=target,
             now_ns=now_ns,
             deadline_ms=self.deadline_ms,
-            **extra,
+            **{**self.command_extra, **extra},
         )
 
     @abstractmethod
@@ -150,3 +152,13 @@ class Controller(ABC):
     def status(self) -> dict:
         """Why the controller is (not) commanding, for the operator screen. Override to add fields."""
         return {}
+
+
+@runtime_checkable
+class Takeover(Protocol):
+    """A teleoperation controller that can take its followers over from where they are
+    held (a policy's `teleop:`): after `begin_takeover` every joint holds until the input
+    reaches it, then follows (`control.takeover.JointPickup`). `status()` then reports
+    `pickup`: joint -> signed distance still to go, for the joints not caught yet."""
+
+    def begin_takeover(self, views: Mapping[str, FollowerView]) -> None: ...

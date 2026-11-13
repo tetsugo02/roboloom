@@ -37,7 +37,7 @@ Real hardware is the default. Commands that open devices accept:
 | `run [robot]` | Collect data with the operation screen |
 | `record [robot] --task <text> --seconds <n>` | Collect fixed-duration episodes (`--episodes` sets the count; `--home` moves to the initial pose before each) |
 | `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task`; `--home` moves to the policy's initial pose before each ([policy home](../controllers/policy.md)) |
-| `session [robot] <operation> [task]` | Send an operation to a running `run` |
+| `session [robot] <operation> [task]` | Send an operation to a running `run` (with `teleop:` in the policy also `teleop`, `policy`, `stop_teleop`) |
 | `convert-handheld [robot] --action delta\|relative-chunk` | Turn a hand-held recording (a configuration without followers) into a training dataset whose actions are relative poses ([in development](../contribution/pika-handheld.md); `--horizon`, `--hands`, `--max-gap`, `--output`, `--repo-id`) |
 | `skills install\|check\|path` | Copy the Agent Skill for coding agents into your project's `.agents/skills/` and `.claude/skills/`, check that the copies match this version (exit status 1 otherwise), or print where the packaged skill is (`--agent all\|agents\|claude`, `--root`, `--force`; "Use with coding agents" in [Installation](../quick-start/installation.md)). Opens no device |
 

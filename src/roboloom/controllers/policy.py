@@ -32,6 +32,15 @@ the slowest follower's `control_hz`; 1 sends each action as is.
       pose: ../poses/follower/ready.yaml  # (roboloom capture-pose ready)
       max_speed: 200                    # <= max_speed; tolerance: measured, per joint
       tolerance: 30
+    teleop: [controller.yaml]           # optional: leader teleoperation before and
+                                        # during an episode (paths next to this file)
+
+With `teleop:` the operator can drive the followers with the leader before an episode
+(session command `teleop`, nothing recorded; `stop_teleop` ends it), let the policy take over at `start`, take
+over again during the episode (`teleop`: an intervention) and hand back (`policy`).
+Each teleop controller takes over joint by joint from where the followers are held
+(`Takeover`, `control.takeover`); every command carries `intervention` (True from the
+teleop controllers), which the recorder stores as `action.intervention`.
 """
 
 from __future__ import annotations
@@ -49,7 +58,7 @@ from ..core.checks import positive
 from ..core.protocol import Envelope
 from ..errors import ConfigError
 from ..robots.base import Follower
-from .base import Controller, FollowerView
+from .base import Controller, FollowerView, Takeover
 
 if TYPE_CHECKING:
     from ..core.source import Recordable
@@ -137,6 +146,102 @@ class PolicyController(Controller):
         self.error = ""
         self.infer_ms: deque[float] = deque(maxlen=20)
         self.last_ns = 0
+        # teleoperation (`teleop:`): set by `bind_teleop`
+        self.teleop: dict[str, Controller] = {}
+        self.control = ""  # who commands the followers: "", "policy" or "teleop"
+        self.received: dict[str, int] = {}  # when each follower's state arrived
+
+    def bind_teleop(self, controllers: Mapping[str, Controller]) -> None:
+        """The teleoperation controllers of `teleop:`; together they drive every
+        follower exactly once, and each takes over from where its followers are held."""
+        owners: dict[str, str] = {}
+        for name, c in controllers.items():
+            if not isinstance(c, Takeover):
+                raise ConfigError(
+                    f"{self.name}.teleop: {name} ({c.cfg.get('type')}) cannot take over "
+                    "from a policy yet; only type: joint controllers can"
+                )
+            if c.feedback is not None:
+                raise ConfigError(f"{self.name}.teleop: {name} must not send feedback")
+            for follower in c.followers:
+                if follower not in self.followers:
+                    raise ConfigError(
+                        f"{self.name}.teleop: {name} drives {follower!r}, which the "
+                        "policy does not"
+                    )
+                if follower in owners:
+                    raise ConfigError(
+                        f"{self.name}.teleop: {follower!r} is driven by both "
+                        f"{owners[follower]} and {name}"
+                    )
+                owners[follower] = name
+        missing = [f for f in self.followers if f not in owners]
+        if missing:
+            raise ConfigError(
+                f"{self.name}.teleop: no teleop controller drives {', '.join(missing)}"
+            )
+        for c in controllers.values():
+            c.publisher = self.publisher  # one command sequence per follower
+            c.command_extra = {"intervention": True}
+        self.command_extra = {"intervention": False}
+        self.teleop = dict(controllers)
+
+    def teleop_inputs(self) -> list[str]:
+        """The inputs the teleop controllers follow (not observed by the policy)."""
+        return [c.source.name for c in self.teleop.values() if c.source is not None]
+
+    def _views(self) -> dict[str, FollowerView]:
+        return {
+            name: FollowerView.of(msg, self.received.get(name, 0))
+            for name, msg in self.latest.items()
+            if name in self.followers
+        }
+
+    def begin_teleop(self) -> None:
+        """Hand the followers to the teleop controllers, joint by joint from where they
+        are held (before an episode, or during one: an intervention)."""
+        if not self.teleop:
+            raise RuntimeError(f"{self.name} has no teleop controllers (teleop:)")
+        views = self._views()
+        missing = [f for f in self.followers if f not in views]
+        if missing:
+            raise RuntimeError(f"no state yet from {', '.join(missing)}")
+        for c in self.teleop.values():
+            c.begin_takeover(views)  # type: ignore[attr-defined]  # Takeover, checked
+        self.queue.clear()
+        self.interpolator.reset()
+        self.control = "teleop"
+
+    def resume_policy(self) -> None:
+        """Hand back to the policy during an episode; it restarts from the held targets
+        with a fresh history (`policy.reset`)."""
+        if not self.running or self.policy is None:
+            raise RuntimeError(
+                "no episode running: start one (the policy starts with it)"
+            )
+        self.policy.reset()
+        self.queue.clear()
+        self.interpolator.reset()
+        self.last_ns = 0
+        self.control = "policy"
+
+    def end_teleop(self) -> None:
+        """End teleoperation outside an episode; the followers hold."""
+        if not self.running:
+            self.control = ""
+
+    def teleop_update(self, input_name: str, intent: Envelope) -> dict[str, Envelope]:
+        """Commands from the teleop controllers following `input_name`, while they drive."""
+        if self.control != "teleop":
+            return {}
+        views = self._views()
+        out: dict[str, Envelope] = {}
+        for c in self.teleop.values():
+            if c.source is None or c.source.name != input_name:
+                continue
+            if all(f in views for f in c.followers):
+                out.update(c.update(intent, {f: views[f] for f in c.followers}))
+        return out
 
     def _parse_homes(self, raw: object) -> None:
         """`home:` the saved pose(s) `home` moves the followers to before an episode: one
@@ -216,9 +321,11 @@ class PolicyController(Controller):
         self.interpolator.reset()
         self.last_ns = 0
         self.state = "running"
+        self.control = "policy"  # also after teleoperation before the episode
 
     def stop(self) -> None:
         self.running = False
+        self.control = ""
         self.queue.clear()
         self.interpolator.reset()
         if self.state == "running":
@@ -226,9 +333,13 @@ class PolicyController(Controller):
 
     def reset(self) -> None:
         self.stop()
+        for c in self.teleop.values():
+            c.reset()
 
     def observe(self, name: str, msg: Envelope) -> None:
         self.latest[name] = msg
+        if name in self.followers:
+            self.received[name] = time.monotonic_ns()
 
     # -- stepping ---------------------------------------------------------------
 
@@ -249,7 +360,7 @@ class PolicyController(Controller):
         toward it in between. Nothing while a follower has no state yet or latched
         FAULT/ESTOP."""
         now = time.monotonic_ns() if now_ns is None else now_ns
-        if not self.running or self.policy is None:
+        if not self.running or self.policy is None or self.control != "policy":
             return {}
         states = {name: self.latest.get(name) for name in self.followers}
         if any(
@@ -335,6 +446,15 @@ class PolicyController(Controller):
         if self.infer_ms:
             out["infer_ms"] = round(self.infer_ms[-1], 1)
             out["infer_max_ms"] = round(max(self.infer_ms), 1)
+        if self.teleop:
+            out["control"] = self.control or "hold"
+            if self.control == "teleop":
+                pickup: dict[str, float] = {}
+                for c in self.teleop.values():
+                    pickup.update(c.status().get("pickup", {}))
+                    out["teleop_state"] = c.status().get("state")
+                if pickup:
+                    out["pickup"] = pickup
         if self.error:
             out["error"] = self.error
         return out

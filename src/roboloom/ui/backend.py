@@ -81,6 +81,8 @@ class SessionBackend:
         self._estop_confirmed = False
         self._log_offset = 0
         self.failure = ""
+        # teleop / policy asked for while an episode of the recording plan runs
+        self._handovers: queue.Queue[str] = queue.Queue()
 
     def start(self, publish: Publish) -> None:
         if self._threads:
@@ -137,8 +139,22 @@ class SessionBackend:
                         int(item.get("t_ns", 0)),
                     )
                 )
+            teleop = next(
+                (
+                    n
+                    for n, c in session.cfg.controllers.items()
+                    if getattr(c, "teleop", None)
+                ),
+                None,
+            )
+            control = (
+                status.get(teleop, {}).get("fields", {}).get("control")
+                if teleop
+                else None
+            )
             caps = Capabilities(
                 home=any(c.homes for c in session.cfg.controllers.values()),
+                teleop=teleop is not None,
                 release=bool(session.torqued or session.actuated),
                 hold=bool(session.held),
                 torqued=bool(session.torqued),
@@ -214,6 +230,7 @@ class SessionBackend:
                     else busy_reason,
                     "release",
                 ),
+                *self._teleop_operations(caps, control, busy_reason),
                 Operation("estop", "Emergency stop"),
                 Operation("quit", "Quit", confirmation="quit"),
             )
@@ -234,6 +251,49 @@ class SessionBackend:
                 warning,
             )
 
+    def _teleop_operations(
+        self, caps: Capabilities, control: object, busy_reason: str
+    ) -> tuple[Operation, ...]:
+        """Teleop / Policy / Stop teleop of a policy with `teleop:` (none otherwise).
+        During an episode they are allowed while the recording runs."""
+        if not caps.teleop:
+            return ()
+        busy = "" if self._recording else busy_reason
+        teleop_reason = (
+            "ESTOP: restart required"
+            if self._estop
+            else busy
+            or ("already teleoperating" if control == "teleop" else "")
+            or (
+                "stopped episode: save or discard first"
+                if self._episode and not self._recording
+                else ""
+            )
+        )
+        policy_reason = (
+            "only during an episode (start begins with the policy)"
+            if not self._recording
+            else "the policy is driving"
+            if control != "teleop"
+            else ""
+        )
+        stop_reason = (
+            "during an episode: Stop, or Policy to hand back"
+            if self._episode
+            else busy_reason or ("not teleoperating" if control != "teleop" else "")
+        )
+        return (
+            Operation(
+                "teleop", "Teleoperate (take over)", not teleop_reason, teleop_reason
+            ),
+            Operation(
+                "policy", "Hand back to policy", not policy_reason, policy_reason
+            ),
+            Operation(
+                "stop_teleop", "Stop teleoperating", not stop_reason, stop_reason
+            ),
+        )
+
     def submit(self, command: str) -> None:
         name = command.split(" ", 1)[0]
         if name == "estop":
@@ -242,6 +302,15 @@ class SessionBackend:
         with self._lock:
             if name == "stop" and self._busy and self._recording:
                 self._finish_recording.set()
+                return
+            if name in ("teleop", "policy") and self._busy and self._recording:
+                operation = next(
+                    (o for o in self._snapshot().operations if o.command == name), None
+                )
+                if operation is None or not operation.enabled:
+                    self._log(operation.reason if operation else name, "warn")
+                    return
+                self._handovers.put(name)  # the recording loop sends it
                 return
             operation = next(
                 (o for o in self._snapshot().operations if o.command == name), None
@@ -296,6 +365,7 @@ class SessionBackend:
                         time.monotonic() < end and not self._finish_recording.is_set()
                     ):
                         session._check_alive()
+                        self._hand_over(session)
                         self._phase = f"episode {self._index + 1}/{plan.episodes}: {max(0.0, end - time.monotonic()):.1f} s remaining"
                         self._finish_recording.wait(
                             min(0.1, max(0.0, end - time.monotonic()))
@@ -340,6 +410,33 @@ class SessionBackend:
         elif name == "release":
             session.release(confirm=True)
             self._phase = "release sent; check node status"
+        elif name == "teleop":
+            session.teleop()
+            self._phase = "teleoperating: joints follow once the leader reaches them"
+        elif name == "policy":
+            session.policy()
+            self._phase = "recording: the policy drives"
+        elif name == "stop_teleop":
+            session.stop_teleop()
+            self._phase = "ready"
+
+    def _hand_over(self, session: Session) -> None:
+        """Send the teleop / policy asked for during the episode (refusals are logged;
+        the episode goes on)."""
+        while True:
+            try:
+                name = self._handovers.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                session.teleop() if name == "teleop" else session.policy()
+                self._log(
+                    "intervention: the leader drives (joints follow once reached)"
+                    if name == "teleop"
+                    else "handed back to the policy"
+                )
+            except Exception as exc:  # noqa: BLE001 - refused: keep recording
+                self._log(str(exc), "warn")
 
     def _work(self) -> None:
         monitor: threading.Thread | None = None
