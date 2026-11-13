@@ -13,6 +13,7 @@ Real hardware is the default. Commands that open devices accept:
 | `--with a,b` | Enable launch options (what they `requires` is enabled too; what `conflicts` is disabled) |
 | `--without a,b` | Disable launch options (also ones with `default: true`; options requiring them are disabled too) |
 | `--mock` | Use mock devices instead of the hardware |
+| `--video-codec av1\|h264` | Codec of `storage: video` images (omitted: the recorder YAML; [Video codec](configuration.md#video-codec)) |
 
 `--hardware` has been removed; passing it is an error that suggests `--mock`. For how launch options are defined and the rules they follow, see "Launch options" in [Configuration](configuration.md).
 
@@ -62,8 +63,8 @@ Running `roboloom` in a terminal (or `roboloom launch`) first opens the robot li
 
 - Choose the operation (`run` / `record` / `infer`). For `record` and `infer`, enter the task, seconds, and episodes; for `record`, also whether to move to the initial pose before every episode.
 - Tick the options. Required options are enabled with them and conflicting options are disabled. Choosing `infer` turns on the option named `policy` when the configuration declares one.
-- Choose whether to use mock devices.
-- The summary shows the operation, mock or hardware, the enabled options, the dataset name, and the node files that are replaced.
+- Choose whether to use mock devices, and the codec of `storage: video` images (`YAML / dataset`, `AV1`, `H.264`).
+- The summary shows the operation, mock or hardware, the enabled options, the dataset name, the video codec, and the node files that are replaced.
 
 Launch (Ctrl-S) starts; Cancel exits without starting anything. When opened from the robot list, Back (Esc) returns to the list; otherwise Esc is the same as Cancel. The previous choice is kept in `.roboloom/<robot>/logs/last_launch.yaml` and becomes the next initial value.
 

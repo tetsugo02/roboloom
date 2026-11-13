@@ -13,6 +13,7 @@
 | `--with a,b` | 起動オプションを有効にする（`requires` も有効になり，`conflicts` は無効になる） |
 | `--without a,b` | 起動オプションを無効にする（`default: true` のものも．これを必要とするオプションも無効になる） |
 | `--mock` | 実機の代わりにmockデバイスを使う |
+| `--video-codec av1\|h264` | `storage: video` の画像の codec（省略時は recorder の YAML．[Video codec](configuration.md#video-codec)） |
 
 `--hardware` は廃止しました．指定すると `--mock` を使うよう促すエラーになります．起動オプションの定義と規則は [設定](configuration.md) の「起動オプション」を参照してください．
 
@@ -62,8 +63,8 @@ uv run roboloom session home
 
 - 操作（`run` / `record` / `infer`）を選びます．`record` と `infer` ではtask・秒数・回数を，`record` では毎回初期姿勢へ動かすかも入力します．
 - オプションにチェックを入れます．必要なオプションは一緒に有効になり，競合するオプションは無効になります．`infer` を選ぶと，`policy` という名前のオプションがあれば自動で有効になります．
-- mockデバイスを使うかを選びます．
-- 要約に，操作・mockか実機か・有効なオプション・データセット名・置き換わるノードファイルが表示されます．
+- mockデバイスを使うかと，`storage: video` の画像の codec（`YAML / dataset`・`AV1`・`H.264`）を選びます．
+- 要約に，操作・mockか実機か・有効なオプション・データセット名・動画の codec・置き換わるノードファイルが表示されます．
 
 Launch（Ctrl-S）で起動し，Cancelで何も起動せずに終わります．ロボットの一覧から開いた場合はBack（Esc）で一覧へ戻り，それ以外ではEscはCancelと同じです．前回の選択は `.roboloom/<robot>/logs/last_launch.yaml` に残り，次回の初期値になります．
 

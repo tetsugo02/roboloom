@@ -12,6 +12,7 @@ Flags of commands that open devices:
 | `--with a,b` | enable options (plus what they `requires`; disables `conflicts`) |
 | `--without a,b` | disable options (also `default: true` ones, and options requiring them) |
 | `--mock` | mock devices instead of hardware (hardware is the default) |
+| `--video-codec av1\|h264` | codec of `storage: video` images (omitted: the recorder YAML; see [configuration](configuration.md#video-codec)) |
 
 `--hardware` was removed; passing it is an error.
 

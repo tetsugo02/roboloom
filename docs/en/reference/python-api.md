@@ -304,6 +304,8 @@ with InProcessSession.from_components(
 
 For the data collection procedure on real hardware, see [Rakuda2 Quick start](../quick-start/rakuda2.md).
 
+`load_config(..., video_codec="av1")` and `Session.launch(..., video_codec="av1")` record `storage: video` images as AV1 (`"h264"` for H.264, `None` for the recorder YAML's choice, else H.264). With a loaded `RobotConfig`, choose it in `load_config`. For appending with a codec that differs from the existing dataset, see [Video codec](configuration.md#video-codec).
+
 ## Sensor selection
 
 `load_config(..., sensors=[...], observe=[...])` and

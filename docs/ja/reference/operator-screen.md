@@ -8,8 +8,8 @@
 
 - Operation：`run`・`record`・`infer` から選びます．`record` と `infer` ではtask・seconds・episodesを入力し，`record` では「move home before every episode」も選べます．
 - Options：設定の `options:` を `help` の説明付きで並べます．チェックを入れると `requires` のオプションも有効になり，`conflicts` のオプションは外れます．外すと，それを必要とするオプションも外れます．競合の理由はツールチップに出ます．
-- Devices：「mock devices (no hardware)」でmockデバイスを使います．
-- 要約：操作，`mock` か `HARDWARE` か（チェックを入れなくても YAML が `mode: mock` なら `mock (mode: mock in config.yaml)`），有効なオプション，データセット名，置き換わるノードファイル（削除は `(removed)`）を表示します．起動できない組み合わせや入力の不足は，理由を表示してLaunchを無効にします．
+- Devices：「mock devices (no hardware)」でmockデバイスを使います．「Video codec (storage: video)」で動画の codec を選びます．`YAML / dataset` は recorder の YAML の指定（追記では保存済みの動画の codec，どちらもなければ H.264）です（[Video codec](configuration.md#video-codec)）．
+- 要約：操作，`mock` か `HARDWARE` か（チェックを入れなくても YAML が `mode: mock` なら `mock (mode: mock in config.yaml)`），有効なオプション，データセット名，動画の codec，置き換わるノードファイル（削除は `(removed)`）を表示します．起動できない組み合わせや入力の不足は，理由を表示してLaunchを無効にします．
 
 次の画面は，左の操作パネル（Operation・Devices），右のオプションパネル（オプションごとのカード．有効は緑，競合で外れるものは黄の線と理由），下の要約パネルに分かれます．どちらの画面もパネルの境界線を操作画面と同じように調整できます．ドラッグするか，フォーカスして矢印キーで動かし，ダブルクリックかCtrl-Rで元に戻します．幅が90桁未満の端末ではパネルを縦に並べます．
 

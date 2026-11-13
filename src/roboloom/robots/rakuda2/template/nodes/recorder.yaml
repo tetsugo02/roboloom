@@ -9,4 +9,7 @@ max_age_ms:
 grace_ms: 500
 image_writer_threads: 4
 streaming_encoding: false
+# Codec of storage: video images: h264 (plays almost everywhere) or av1 (smaller,
+# LeRobot's own default). Unset: H.264, or the saved videos' codec when appending.
+# video_codec: av1
 queue_s: 0.5

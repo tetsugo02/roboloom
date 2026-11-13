@@ -22,4 +22,6 @@ max_age_ms:
 
 The Rakuda2 template already has the entries for `camera`, `digit_left` and `digit_right`. When you add a sensor or rename its node, add or rename its entry as well. Entries for nodes that are not in the configuration are ignored, so the template keeps the entries of every option (such as `digit_left` without the `digit` option); a misspelled name is ignored in the same way, and loading then reports the correctly named node's entry as missing.
 
+The codec of `storage: video` images (AV1 or H.264) is chosen with `video_codec` in the same `nodes/recorder.yaml` ([Video codec](../reference/configuration.md#video-codec)).
+
 [Audio](audio.md): PCM and mel, shared across robots; hardware unverified.

@@ -17,6 +17,9 @@ def launch(  # Session.launch
     *,
     options=None,  # whole set of options to enable; None = defaults
     mock=None,  # True mock devices, False hardware, None = YAML mode (default hardware)
+    sensors=None,  # recorded sensors to start; None = defaults, [] = none
+    observe=None,  # policy inputs; None = YAML
+    video_codec=None,  # "av1" / "h264" for storage: video images; None = recorder YAML
     policy=None,  # "module:callable" replacing the policy controller's factory
     policy_kwargs=None,  # dict of kwargs for it
     log_dir=None,
@@ -27,7 +30,8 @@ def launch(  # Session.launch
 ```
 
 - `options` / `mock` apply only when `config` is a name or path. For a `RobotConfig`,
-  choose them in `load_config(config, options=..., mock=...)`.
+  choose them in `load_config(config, options=..., mock=...)`; `sensors`, `observe`
+  and `video_codec` with a `RobotConfig` are an error (choose them in `load_config`).
 - Use it as a context manager. Leaving the block discards an in-progress episode, asks
   the operator (if any) to support the arms, stops the dataflow. The leader goes limp;
   the follower keeps torque unless release was chosen. From a script decide explicitly:

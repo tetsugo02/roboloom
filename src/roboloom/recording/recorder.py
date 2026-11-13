@@ -32,6 +32,7 @@ import numpy as np
 from ..core.protocol import Envelope
 from .metrics import summarize
 from .schema import META_FIELDS, features, observation_frame
+from .video import normalize_video_codec, video_encoder
 
 if TYPE_CHECKING:
     from ..config import RobotConfig
@@ -53,7 +54,8 @@ class EpisodeRecorder:
         image_writer_threads: int = 4,
         streaming_encoding: bool = False,
         queue_s: float = 0.5,
-    ):  # queue_s: dora input queues, see runtime.flow
+        video_codec: str | None = None,
+    ):  # queue_s: dora input queues, see runtime.flow; video_codec: recording.video
         self.cfg = cfg
         self.sources = cfg.sources
         self.followers = cfg.followers
@@ -64,6 +66,7 @@ class EpisodeRecorder:
             "image_writer_threads": image_writer_threads,
             "streaming_encoding": streaming_encoding,
         }
+        self.video_codec = normalize_video_codec(video_codec)
         self.period_ns = int(1e9 / cfg.dataset_fps)
         self.active = False
         self.stopped = False
@@ -138,7 +141,10 @@ class EpisodeRecorder:
                     + "\nSet another repo_id and output; existing data was not changed."
                 )
             self.dataset = LeRobotDataset.resume(
-                repo_id=cfg.repo_id, root=root, **self.writer_options
+                repo_id=cfg.repo_id,
+                root=root,
+                rgb_encoder=video_encoder(cfg, self.video_codec),
+                **self.writer_options,
             )
         else:
             self.dataset = LeRobotDataset.create(
@@ -150,6 +156,7 @@ class EpisodeRecorder:
                 # LeRobot 0.6.1 preserves each feature dtype; this permits video
                 # keys alongside image keys (and also accepts image-only schemas).
                 use_videos=True,
+                rgb_encoder=video_encoder(cfg, self.video_codec),
                 **self.writer_options,
             )
 

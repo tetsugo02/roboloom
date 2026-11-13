@@ -36,6 +36,7 @@ from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
 from ..recording.metrics import assess
+from ..recording.video import check_video_encoding
 from ..ui.client import SessionClient
 from ..ui.screen import SessionScreen, wanted
 from .flow import write_flow
@@ -135,6 +136,24 @@ def validate_flow(cfg: RobotConfig, directory: Path) -> Path:
     return flow
 
 
+def config_env(cfg: RobotConfig) -> dict[str, str]:
+    """The choices the nodes need to reload `cfg` from `cfg.path` as the parent loaded
+    it (read back by `runtime.node.config_from_env`)."""
+    return {
+        "ROBOLOOM_OPTIONS": ",".join(cfg.options) or NO_OPTIONS,
+        "ROBOLOOM_MODE": cfg.mode,
+        "ROBOLOOM_SENSORS": json.dumps(list(cfg.sensors)),
+        "ROBOLOOM_VIDEO_CODEC": json.dumps(cfg.recorder.get("video_codec")),
+        "ROBOLOOM_OBSERVE": json.dumps(
+            {
+                name: controller.observes()
+                for name, controller in cfg.controllers.items()
+                if hasattr(controller, "observes")
+            }
+        ),
+    }
+
+
 def fifo_for(cfg: RobotConfig) -> Path:
     """The command FIFO of a running dataflow; `roboloom session` writes to it. One per
     configuration file, whatever options the run enabled (they change the dataset name)."""
@@ -179,6 +198,7 @@ class Session:
         mock: bool | None = None,
         sensors: Iterable[str] | None = None,
         observe: Iterable[str] | None = None,
+        video_codec: str | None = None,
         policy: str | None = None,
         policy_kwargs: dict | None = None,
         log_dir: str | Path | None = None,
@@ -191,6 +211,8 @@ class Session:
         - `options`: the launch options to enable (None: their defaults); `mock`:
           True runs mock devices, False real ones (None: the YAML's `mode`, default
           hardware). Both apply only when `config` is a path or name.
+        - `sensors`, `observe`, `video_codec`: as in `load_config` (None: the YAML);
+          with a `RobotConfig`, choose them in `load_config` instead.
         - `policy` ("module:callable") and `policy_kwargs` replace the policy of a
           `type: policy` controller.
         - `screen`: the node-status screen, drawn on a thread ("auto": when stdout is
@@ -199,18 +221,25 @@ class Session:
           go limp ("auto": a TerminalOperator when stdin is a terminal; None: no question).
         """
         if isinstance(config, RobotConfig) and (
-            sensors is not None or observe is not None
+            sensors is not None or observe is not None or video_codec is not None
         ):
             raise ConfigError(
-                "select sensors and observe in load_config before passing RobotConfig"
+                "select sensors, observe and video_codec in load_config before "
+                "passing RobotConfig"
             )
         cfg = (
             config
             if isinstance(config, RobotConfig)
             else load_config(
-                config, options=options, mock=mock, sensors=sensors, observe=observe
+                config,
+                options=options,
+                mock=mock,
+                sensors=sensors,
+                observe=observe,
+                video_codec=video_codec,
             )
         )
+        check_video_encoding(cfg)  # before any node opens the dataset
         if (policy or policy_kwargs) and not any(
             not c.uses_input for c in cfg.controllers.values()
         ):
@@ -240,17 +269,7 @@ class Session:
             "ROBOLOOM_REPORT_PATH": report,
             "ROBOLOOM_STATUS_PATH": status,
             "ROBOLOOM_LOG_DIR": logs,
-            # the nodes reload the configuration from cfg.path with the same choices
-            "ROBOLOOM_OPTIONS": ",".join(cfg.options) or NO_OPTIONS,
-            "ROBOLOOM_MODE": cfg.mode,
-            "ROBOLOOM_SENSORS": json.dumps(list(cfg.sensors)),
-            "ROBOLOOM_OBSERVE": json.dumps(
-                {
-                    name: controller.observes()
-                    for name, controller in cfg.controllers.items()
-                    if hasattr(controller, "observes")
-                }
-            ),
+            **config_env(cfg),
         }
         if policy:
             env["ROBOLOOM_POLICY"] = policy

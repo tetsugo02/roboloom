@@ -27,6 +27,7 @@ from .config import (
     select_options,
 )
 from .errors import Cancelled, ConfigError, RoboloomError
+from .recording.video import check_video_encoding, video_codec_names
 from .runtime.flow import build_flow
 
 if TYPE_CHECKING:
@@ -117,7 +118,14 @@ def main(argv: list[str] | None = None) -> None:
             type=lambda value: [n.strip() for n in value.split(",") if n.strip()],
             default=None,
         )
-
+    devices.add_argument(
+        "--video-codec",
+        default=None,
+        metavar="CODEC",
+        help="codec of storage: video images: "
+        + ", ".join(video_codec_names())
+        + " (default: the recorder YAML, else the saved videos', else h264)",
+    )
     devices.add_argument(
         "--with",
         dest="with_",
@@ -385,6 +393,7 @@ def _load(args: argparse.Namespace) -> RobotConfig:
         options=_selection(args, path),
         sensors=getattr(args, "sensors", None),
         observe=getattr(args, "observe", None),
+        video_codec=getattr(args, "video_codec", None),
         mock=True if getattr(args, "mock", False) else None,
     )
 
@@ -536,10 +545,13 @@ def _dispatch(args: argparse.Namespace) -> None:
         cfg = _load(args)
         with tempfile.TemporaryDirectory(prefix="roboloom-flow-") as directory:
             validate_flow(cfg, Path(directory))
+        codec = check_video_encoding(cfg)
         options = ", ".join(cfg.options) or "none"
         print(
             f"Valid: {cfg.path} ({len(build_flow(cfg)['nodes'])} nodes; "
-            f"options: {options}; dataset: {cfg.repo_id})"
+            f"options: {options}; dataset: {cfg.repo_id}"
+            + (f"; video codec: {codec}" if codec else "")
+            + ")"
         )
         return
     _operate(args)
@@ -583,6 +595,7 @@ def _operate_robot(
         options=given or (),
         sensors=getattr(args, "sensors", None),
         observe=getattr(args, "observe", None),
+        video_codec=getattr(args, "video_codec", None),
         mock=mock,
         task=getattr(args, "task", "") or "",
         seconds=getattr(args, "seconds", 0.0) or 0.0,
@@ -594,7 +607,11 @@ def _operate_robot(
         options = _declared(path)
         last = load_last(path, options)
         if args.command == "launch" and last is not None:
-            plan = replace(last, mock=last.mock or mock)
+            plan = replace(
+                last,
+                mock=last.mock or mock,
+                video_codec=plan.video_codec or last.video_codec,
+            )
         elif given is None:  # the options start as last time, else the defaults
             plan = replace(
                 plan,
@@ -616,6 +633,7 @@ def _operate_robot(
             mock=True if plan.mock else None,
             sensors=plan.sensors,
             observe=plan.observe,
+            video_codec=plan.video_codec,
         )
         if terminal and not cfg.mock:
             _commission(cfg)

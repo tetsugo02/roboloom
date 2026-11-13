@@ -33,4 +33,6 @@ PNG generally needs more disk space and PNG compression/write work; actual size 
 
 Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
 
+The codec of `video` MP4s (H.264 by default, or AV1) is chosen with the recorder's [`video_codec`](../reference/configuration.md#video-codec).
+
 [Configuration](../reference/configuration.md#image-storage)
