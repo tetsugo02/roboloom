@@ -45,6 +45,16 @@ the action executed before each frame (the held targets at the start). `hold:` l
 there (NaN too) is replaced by the target the follower holds. A policy with `options()`
 sets `observation_history`, `hold` and `action_horizon` itself (it wins over the YAML).
 
+`inference: async` runs `policy.infer` on a worker thread: the node keeps sending the
+queued actions meanwhile and asks for the next chunk when `replan_at` actions (auto:
+half of `action_horizon`) are left. The new chunk replaces the queue without its first
+d actions, d being the actions executed since the observation it was computed from, so
+the actions keep their place in time. If the queue runs out first the followers hold
+(`late_inference`). Commands are still sent from the node's own thread.
+
+    inference: async                    # default sync: no command while infer runs
+    replan_at: auto                     # or an integer < action_horizon
+
 An observed input or sensor whose latest sample is older than the recorder's
 `max_age_ms.<node>` stops the policy (`stale_observation`: nothing is sent, the followers
 hold); once it is fresh again the policy restarts with `reset()`.
@@ -59,6 +69,7 @@ teleop controllers), which the recorder stores as `action.intervention`.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import deque
 from collections.abc import Mapping
@@ -78,6 +89,33 @@ if TYPE_CHECKING:
     from ..core.source import Recordable
     from ..inputs.base import InputDevice
     from ..policy import Policy, PolicySpec
+
+
+class _Inference:
+    """One `policy.infer` on a worker thread; the node's thread collects the result."""
+
+    def __init__(self, policy: Policy, observation: dict[str, Any], issued: int):
+        self.issued = issued  # actions executed when the observation was taken
+        self.actions: Any = None
+        self.error: BaseException | None = None
+        self.ms = 0.0
+        self.done = threading.Event()
+        self.thread = threading.Thread(
+            target=self._run, args=(policy, observation), daemon=True, name="infer"
+        )
+        self.thread.start()
+
+    def _run(self, policy: Policy, observation: dict[str, Any]) -> None:
+        t0 = time.perf_counter()
+        try:
+            self.actions = policy.infer(observation)
+        except BaseException as exc:  # noqa: BLE001 - raised again in the node's thread
+            self.error = exc
+        self.ms = (time.perf_counter() - t0) * 1000
+        self.done.set()
+
+
+SETTLE_S = 10.0  # how long a reset waits for an inference that is still running
 
 
 class PolicyController(Controller):
@@ -158,6 +196,20 @@ class PolicyController(Controller):
         self.max_speed = {
             n: positive(v, f"{name}.max_speed.{n}") for n, v in speeds.items()
         }
+        self.inference = cfg.get("inference", "sync")
+        if self.inference not in ("sync", "async"):
+            raise ValueError(f"{name}.inference must be sync or async")
+        replan = cfg.get("replan_at", "auto")
+        if replan != "auto" and (
+            isinstance(replan, bool) or not isinstance(replan, int) or replan < 0
+        ):
+            raise ValueError(f"{name}.replan_at must be auto or an integer >= 0")
+        self.replan = replan
+        self.job: _Inference | None = None  # the inference running (async)
+        self.orphans: list[_Inference] = []  # running, their results no longer wanted
+        self.popped = 0  # actions executed since the episode started
+        self.sampled = False  # this action period's frame is already in the history
+        self.dropped = 0  # actions of the last chunk that came too late
         self._parse_homes(cfg.get("home"))
         self.policy: Policy | None = None
         self.sources: dict[str, Recordable] = {}  # set by `bind`
@@ -208,6 +260,27 @@ class PolicyController(Controller):
         self.interpolator.reset()
         self.frames.clear()
         self.executed = None
+        if self.job is not None:  # its result belongs to what was forgotten
+            self.orphans.append(self.job)
+            self.job = None
+        self.sampled = False
+
+    @property
+    def replan_at(self) -> int:
+        """Queued actions left when the next inference starts (async)."""
+        auto = max(1, self.horizon // 2)
+        return min(self.horizon - 1, auto if self.replan == "auto" else self.replan)
+
+    def _settle(self) -> None:
+        """Wait for a running inference, so `policy.reset` never overlaps `infer`."""
+        self._clear()
+        deadline = time.monotonic() + SETTLE_S
+        for job in self.orphans:
+            if not job.done.wait(max(0.0, deadline - time.monotonic())):
+                raise RuntimeError(
+                    f"{self.name}: an inference is still running after {SETTLE_S:g} s"
+                )
+        self.orphans = []
 
     def bind_teleop(self, controllers: Mapping[str, Controller]) -> None:
         """The teleoperation controllers of `teleop:`; together they drive every
@@ -276,6 +349,7 @@ class PolicyController(Controller):
             raise RuntimeError(
                 "no episode running: start one (the policy starts with it)"
             )
+        self._settle()
         self.policy.reset()
         self._clear()
         self.stale = False
@@ -400,7 +474,9 @@ class PolicyController(Controller):
     def start(self, task: str) -> None:
         if self.policy is None:
             raise RuntimeError("policy not loaded")
+        self._settle()
         self.policy.reset()
+        self.popped = 0
         self.task, self.running = task, True
         self._clear()
         self.stale = False
@@ -484,6 +560,7 @@ class PolicyController(Controller):
                 self.state, self.error = "stale_observation", f"{old[0]} is stale"
                 return {}
             if self.stale:  # fresh again: the policy starts over
+                self._settle()
                 self.policy.reset()
                 self.stale, self.error = False, ""
             held = np.concatenate(
@@ -495,18 +572,35 @@ class PolicyController(Controller):
                     for s in states.values()
                 ]
             )
-            if self.history > 1 or not self.queue:
+            if self.inference == "async":
+                self._collect()
+                wanted = self.job is None and len(self.queue) <= self.replan_at
+            else:
+                wanted = not self.queue
+            if (self.history > 1 and not self.sampled) or wanted:
                 observation = self.observation()
                 if observation is None:
                     self.state = "waiting_observation"
                     return {}
-                if self.history > 1:
+                if self.history > 1 and not self.sampled:
                     self._remember(observation, held)
-                if not self.queue:
-                    self._infer(self._with_history(observation))
+                    self.sampled = True
+                if wanted and self.inference == "async":
+                    self.job = _Inference(
+                        self.policy, self._with_history(observation), self.popped
+                    )
+                elif wanted:
+                    t0 = time.perf_counter()
+                    actions = self.policy.infer(self._with_history(observation))
+                    self._queue(actions, (time.perf_counter() - t0) * 1000)
                     if now_ns is None:  # infer took time
                         now = time.monotonic_ns()
+            if not self.queue:  # async: the chunk is not there yet; the followers hold
+                self.state = "late_inference" if self.popped else "waiting_inference"
+                return {}
             chosen = self.queue.popleft().copy()
+            self.popped += 1
+            self.sampled = False
             chosen[self.hold_index] = held[self.hold_index]  # joints the policy leaves
             self.executed = chosen
             # after a reset the line starts from what the followers hold
@@ -533,12 +627,23 @@ class PolicyController(Controller):
         self.last_ns = now
         return out
 
-    def _infer(self, observation: dict[str, Any]) -> None:
-        """Queue the first `action_horizon` steps of the policy's output."""
-        assert self.policy is not None
-        t0 = time.perf_counter()
-        actions = np.asarray(self.policy.infer(observation), dtype=np.float64)
-        self.infer_ms.append((time.perf_counter() - t0) * 1000)
+    def _collect(self) -> None:
+        """Take over a finished inference (async): its chunk replaces the queue, without
+        the actions whose time has passed while it was computed."""
+        job = self.job
+        if job is None or not job.done.is_set():
+            return
+        self.job = None
+        if job.error is not None:
+            raise job.error
+        self.dropped = self.popped - job.issued
+        self.queue.clear()
+        self._queue(job.actions, job.ms, skip=self.dropped)
+
+    def _queue(self, output: Any, ms: float, skip: int = 0) -> None:
+        """Queue the first `action_horizon` steps of the policy's output (from `skip`)."""
+        actions = np.asarray(output, dtype=np.float64)
+        self.infer_ms.append(ms)
         n = sum(len(f.joint_names) for f in self.followers.values())
         if actions.ndim == 1:
             actions = actions[None, :]
@@ -551,7 +656,7 @@ class PolicyController(Controller):
             raise ValueError(
                 f"policy returned non-finite targets (shape {actions.shape})"
             )
-        self.queue.extend(actions[: self.horizon])
+        self.queue.extend(actions[skip : self.horizon])
         self.state = "running"
 
     def update(
@@ -568,6 +673,9 @@ class PolicyController(Controller):
             "queued": len(self.queue),
             "interpolation": self.multiplier,
         }
+        if self.inference == "async":
+            out["inference"] = "async"
+            out["dropped"] = self.dropped
         if self.infer_ms:
             out["infer_ms"] = round(self.infer_ms[-1], 1)
             out["infer_max_ms"] = round(max(self.infer_ms), 1)

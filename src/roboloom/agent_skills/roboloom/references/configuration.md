@@ -44,7 +44,7 @@ options: {}                     # see below
 | --- | --- | --- |
 | `joint` | exactly one follower | maps leader joints (`joints` table: mapping, sign, offset); `alignment_tolerance`, `max_speed`, `command_deadline_ms`, `input_timeout_ms`, `follower_timeout_ms` (150), optional `couplings`, `home` |
 | `pose_ik` | one arm + optional gripper | hand-held pose → IK (in development) |
-| `policy` | every follower, in configuration order | `factory`, `kwargs`, `observe`, `rate_hz`, `interpolation_multiplier`, `action_horizon`, `max_speed` per follower, `command_deadline_ms`, optional `observation_history` (1), `hold` ([]) |
+| `policy` | every follower, in configuration order | `factory`, `kwargs`, `observe`, `rate_hz`, `interpolation_multiplier`, `action_horizon`, `max_speed` per follower, `command_deadline_ms`, optional `observation_history` (1), `hold` ([]), `inference` (sync\|async), `replan_at` (auto) |
 
 A multi-follower controller sends nothing until every follower reported state, and stops
 commanding all of them when one latches `FAULT`/`ESTOP` or goes stale; it waits to

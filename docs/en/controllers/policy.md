@@ -230,7 +230,24 @@ uv run lerobot-train \
 
 - The policy node takes one action every `1/rate_hz`. When no action is queued, it calls `infer`.
 - Set `rate_hz` to the `dataset_fps` of the dataset the policy was trained on. Raising `rate_hz` to command faster would use up the actions faster than in training.
-- No command is sent during `infer` (synchronous). When inference takes longer than `command_deadline_ms`, the followers go to HOLD and wait. The controller's row on the screen shows the inference time (`infer_ms`, `infer_max_ms`).
+- By default no command is sent during `infer` (synchronous; see [Asynchronous inference](#asynchronous-inference)). When inference takes longer than `command_deadline_ms`, the followers go to HOLD and wait. The controller's row on the screen shows the inference time (`infer_ms`, `infer_max_ms`).
+
+### Asynchronous inference
+
+With a slow model the followers pause at every chunk boundary while `infer` runs. `inference: async` runs `infer` on a worker thread and keeps sending the queued actions meanwhile.
+
+```yaml
+inference: async     # default sync
+replan_at: auto      # start the next inference when this many actions are left
+action_horizon: 16
+```
+
+- The next inference starts when `replan_at` actions are left in the queue (`auto`: half of `action_horizon`; an integer below `action_horizon` otherwise). Choose it so that the remaining actions cover the inference time: `replan_at / rate_hz` seconds.
+- The new chunk replaces the queue without its first d actions, where d is the number of actions executed since the observation it was computed from. Each action keeps its place in time, as LeRobot's asynchronous rollout does. `dropped` on the controller's row shows d.
+- If the queue runs out before the chunk arrives, nothing is sent and the followers hold (`late_inference`); raise `replan_at` or `action_horizon`. At the start of an episode the state is `waiting_inference` until the first chunk is there.
+- Handing over to teleoperation, `stop` and a stale sensor discard the running inference's result; `policy.reset()` waits until that inference has returned, so `reset` and `infer` never overlap.
+- An exception in `infer` stops the episode, as in synchronous mode.
+- The new chunk is not blended with the old one, and real-time chunking (RTC, which conditions a flow-matching model on the old chunk) is not implemented. A policy that returns very different consecutive chunks jumps at the switch (within `max_speed`).
 
 ### Action interpolation
 
@@ -304,7 +321,7 @@ teleop: [controller.yaml]   # the controller the leader drives through (next to 
 
 ## Limitations
 
-- Asynchronous inference (running the previous chunk while inferring) and LeRobot's RTC are not supported.
+- LeRobot's RTC is not supported. Asynchronous inference replaces the queue without blending the chunks.
 - ACT's temporal ensembling (`temporal_ensemble_coeff`) works only with `mode: step`.
 
 ## Steps for PiPER + Pika (mock)

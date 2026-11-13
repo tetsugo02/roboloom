@@ -27,6 +27,9 @@ action_horizon: 8
 #   observation["history"] (arrays [N, ...], oldest first; "action": executed actions).
 # hold: joints of the action the policy does not drive; they keep their held target.
 #   A policy may state both (and action_horizon) itself with options().
+# inference: async runs infer on a worker thread and keeps sending the queued actions;
+#   the next inference starts when replan_at actions are left (auto: half the horizon).
+# inference: sync
 # observation_history: 1
 # hold: []  # e.g. [follower.torso_yaw, follower.head_yaw, follower.head_pitch]
 max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)

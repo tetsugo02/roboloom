@@ -225,7 +225,24 @@ uv run lerobot-train \
 
 - 方策ノードは，`rate_hz` の周期で行動を1手ずつ取り出します．並んでいる行動がなくなると，`infer` を呼びます．
 - `rate_hz` は，学習に使ったデータセットの `dataset_fps` に合わせます．指令を速くするために `rate_hz` を上げると，行動の列を学習時より速く使い切ってしまいます．
-- `infer` の間は指令を送りません（同期）．推論が `command_deadline_ms` より長くかかると，フォロワはHOLDに入り，止まって待ちます．画面のcontrollerの行に，推論の時間（`infer_ms`，`infer_max_ms`）が出ます．
+- 既定では，`infer` の間は指令を送りません（同期．[非同期の推論](#asynchronous-inference)を参照）．推論が `command_deadline_ms` より長くかかると，フォロワはHOLDに入り，止まって待ちます．画面のcontrollerの行に，推論の時間（`infer_ms`，`infer_max_ms`）が出ます．
+
+### 非同期の推論 { #asynchronous-inference }
+
+推論の遅いモデルでは，まとめた行動の境目ごとに，`infer` の間フォロワが止まります．`inference: async` は `infer` を別スレッドで走らせ，その間も並んでいる行動を送り続けます．
+
+```yaml
+inference: async     # 既定は sync
+replan_at: auto      # 残りがこの手数になったら次の推論を始める
+action_horizon: 16
+```
+
+- 並んでいる行動が `replan_at` 手になったら，次の推論を始めます（`auto` は `action_horizon` の半分．数を書くなら `action_horizon` 未満）．残りの行動で推論の時間をまかなえるように決めます（`replan_at / rate_hz` 秒）．
+- 新しい行動の列は，先頭のd手を捨ててから，並んでいる行動と入れ替えます．dは，その推論に使った観測のあとに実行した手数です．行動はそれぞれ本来の時刻に実行されます（LeRobotの非同期のrolloutと同じ考え方です）．controllerの行の `dropped` がdです．
+- 行動の列が届く前に並んでいる行動がなくなると，指令を送らず，フォロワは保持します（`late_inference`）．`replan_at` か `action_horizon` を増やしてください．エピソードの始めは，最初の列が届くまで `waiting_inference` です．
+- テレオペへの切り替え，`stop`，センサーの値が古くなったときは，走っている推論の結果を捨てます．`policy.reset()` はその推論が戻るまで待つので，`reset` と `infer` が重なることはありません．
+- `infer` の例外は，同期のときと同じくエピソードを止めます．
+- 新しい列と古い列は混ぜません．real-time chunking（RTC．flow matchingのモデルに古い列を条件として渡す方法）は実装していません．続けて返す列が大きく違う方策では，入れ替えのときに目標が飛びます（`max_speed` の範囲内）．
 
 ### 行動の補間
 
@@ -299,7 +316,7 @@ teleop: [controller.yaml]   # leaderで動かすときの controller（このフ
 
 ## 限界
 
-- 推論しながら前の行動を実行し続ける非同期の推論と，LeRobotのRTCには対応していません．
+- LeRobotのRTCには対応していません．非同期の推論は，行動の列を混ぜずに入れ替えます．
 - ACTの時間方向の平均（`temporal_ensemble_coeff`）は，`mode: step` のときだけ働きます．
 
 ## PiPER＋Pikaでの手順（模擬）
