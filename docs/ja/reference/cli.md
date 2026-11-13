@@ -36,8 +36,8 @@
 | `gravity-check [robot] leader <group> --with gravity` | 補償の有無による姿勢の変化を測る |
 | `run [robot]` | 操作画面で収集する |
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
-| `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存 |
-| `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る |
+| `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
+| `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る（方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も） |
 | `convert-handheld [robot] --action delta\|relative-chunk` | フォロワのない構成で手に持って記録したデータセットを，相対の姿勢の行動を持つ学習用のデータセットに変換する（[開発中](../contribution/pika-handheld.md)．`--horizon`，`--hands`，`--max-gap`，`--output`，`--repo-id`） |
 | `skills install\|check\|path` | コーディングエージェント向けのスキル（Agent Skill）を自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーする・コピーが今の版と合っているか確かめる（合わなければ終了コード1）・同梱の場所を表示する（`--agent all\|agents\|claude`，`--root`，`--force`．[Installation](../quick-start/installation.md) の「コーディングエージェントで使う」）．デバイスは開かない |
 
@@ -61,7 +61,7 @@ uv run roboloom session home
 
 端末で `roboloom`（または `roboloom launch`）を実行すると，まずロボットの一覧が開きます．`.roboloom/<robot>/config.yaml` を持つロボットを，データセット名と既定で有効なオプションつきで並べます．前回選んだロボットにカーソルがあり，Enterで選び，Escで何も起動せずに終わります．選んだロボットは `.roboloom/logs/last_robot` に残ります．`roboloom rakuda2` のようにロボットを指定すると，一覧を出さずに次の画面を開きます．`run`・`record`・`infer` も，端末では `--with`・`--without`・`--plain` のどれも指定しなければ先にランチャーを開き，コマンドの引数を初期値にします．
 
-- 操作（`run` / `record` / `infer`）を選びます．`record` と `infer` ではtask・秒数・回数を，`record` では毎回初期姿勢へ動かすかも入力します．
+- 操作（`run` / `record` / `infer`）を選びます．`record` と `infer` ではtask・秒数・回数を，毎回初期姿勢へ動かすかも選びます．
 - オプションにチェックを入れます．必要なオプションは一緒に有効になり，競合するオプションは無効になります．`infer` を選ぶと，`policy` という名前のオプションがあれば自動で有効になります．
 - mockデバイスを使うかと，`storage: video` の画像の codec（`YAML / dataset`・`AV1`・`H.264`）を選びます．
 - 要約に，操作・mockか実機か・有効なオプション・データセット名・動画の codec・置き換わるノードファイルが表示されます．

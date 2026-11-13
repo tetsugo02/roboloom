@@ -127,6 +127,7 @@ Current-mode groups of a gravity-compensated leader need a spring that pulls the
   - `free`: only when the motor is in a position mode, torque is on during the move and turns off again after arriving. Otherwise the joint is not moved, and the screen says so.
   - Trigger spring: not moved.
 - Static friction can stop a current-controlled joint's spring short of the pose. Joints farther than `tolerance` are shown after arriving as `short` (yellow) with their difference in counts. Whether an episode may start is decided by the usual alignment check (`alignment_tolerance`). If the differences are large, raise `kp_mA_per_count` or `max_mA`.
+- A follower counts as `reached` once its measured joints are all within `tolerance` after the move; until then it is `settling`. If a joint is still out after 2 s, it is `short` (red) with the joint and its difference: `Session.home()` (including `record --home`) fails and `start` is refused. For a joint that sags under its weight, support it or review `tolerance`, then run `home` again.
 - The leader target is computed by inverting the controller's joint map (signs and offsets) and `couplings`. After arriving, the leader–follower difference is close to 0.
 - `home` is refused while recording or following (after `start`), and `start` is refused while moving home.
 - Keep your hands off the arms while they move. `estop`, `release` and `quit` make the leader limp as before.

@@ -30,7 +30,7 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | --- | --- | --- |
 | `observation.state`, `action` | 17 (`follower.torso_yaw`, `follower.head_yaw`, `follower.head_pitch`, the right arm `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`, the left arm `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`) | Dynamixel position counts |
 | `observation.effort` | 17 (same order; `record_effort: true` in the template) | mA (current) |
-| `observation.leader` | 17 (the leader's joint positions, same order; names without a prefix, `torso_yaw` … `l_arm_grip`; not recorded with option `policy`, which has no leader) | Dynamixel position counts |
+| `observation.leader` | 17 (the leader's joint positions, same order; names without a prefix, `torso_yaw` … `l_arm_grip`; not recorded with option `policy`, which has no leader; recorded with `policy_teleop`) | Dynamixel position counts |
 | `observation.images.camera` | 480×640×3 (RGB) | [storage](../reference/configuration.md#image-storage) |
 | `observation.images.digit_left`, `observation.images.digit_right` | 320×240×3 (RGB; option `digit`) | [storage](../reference/configuration.md#image-storage) |
 | `observation.meta.<node>.valid`, `capture_age_ms`, `ready_age_ms` | 1 each (float32), for every recorded node: `leader`, `follower`, `camera`, and with `digit` also `digit_left`, `digit_right` | `valid` 0/1, ages in ms |
@@ -54,6 +54,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `gravity` | Gravity-compensates the leader's left and right arms (`nodes/leader_gravity.yaml`) | | Unchanged |
 | `bilateral` | Force feedback (not verified on hardware); replaces the leader, controller, and robot and adds the estimator `effort` | Requires `gravity` | Appends `-bilateral` |
 | `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Conflicts with `gravity` | Appends `-eval` |
+| `policy_teleop` | With `policy`, the leader can drive before and during an episode ([teleoperation and interventions](../controllers/policy.md)); brings the leader back and uses `nodes/policy_teleop.yaml` | Requires `policy` | Appends `-teleop` |
 
 | Enabled options | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
@@ -64,6 +65,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `gravity`, `bilateral` | With gravity compensation + force feedback (not verified on hardware) | RealSense | `local/rakuda2-bilateral` |
 | `policy` | None (policy) | RealSense | `local/rakuda2-eval` |
 | `digit`, `policy` | None (policy) | RealSense + left/right DIGIT | `local/rakuda2-digit-eval` |
+| `policy`, `policy_teleop` | Normal (before an episode and for interventions) | RealSense | `local/rakuda2-eval-teleop` |
 
 Limitations:
 
@@ -71,6 +73,7 @@ Limitations:
 - Enabling or disabling `gravity` changes the leader's Operating Mode. On a hardware launch from a terminal, the CLI shows the EEPROM differences and writes them after confirmation.
 - `policy` works without DIGIT. To pass DIGIT images to the policy, enable `digit` and change `observe` in `nodes/policy.yaml` to `[camera, digit_left, digit_right]`. Enabling `digit` alone does not change the policy inputs. Match the inputs used for training. Loading a LeRobot checkpoint that needs DIGIT without DIGIT is refused before starting.
 - For a policy using joint state only, set `observe: []`. To avoid opening sensors, also remove their nodes from `sensors` in `config.yaml`.
+- `nodes/policy_teleop.yaml` of `policy_teleop` is `nodes/policy.yaml` plus `teleop: [controller.yaml]`; keep the policy settings of both the same.
 - `policy` does not use the leader, so it cannot be combined with `gravity`, nor with `bilateral`, which requires `gravity`.
 - `gravity` does not change the dataset name because it records the same features as the standard leader; episodes with the standard and the gravity-compensated leader go into the same dataset.
 - Because the image features change, `digit` separates the dataset; DIGIT episodes are not appended to an existing RealSense-only dataset.

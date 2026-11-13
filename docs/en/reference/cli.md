@@ -36,8 +36,8 @@ Real hardware is the default. Commands that open devices accept:
 | `gravity-check [robot] leader <group> --with gravity` | Measure the change in pose with and without compensation |
 | `run [robot]` | Collect data with the operation screen |
 | `record [robot] --task <text> --seconds <n>` | Collect fixed-duration episodes (`--episodes` sets the count; `--home` moves to the initial pose before each) |
-| `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task` |
-| `session [robot] <operation> [task]` | Send an operation to a running `run` |
+| `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task`; `--home` moves to the policy's initial pose before each ([policy home](../controllers/policy.md)) |
+| `session [robot] <operation> [task]` | Send an operation to a running `run` (with `teleop:` in the policy also `teleop`, `policy`, `stop_teleop`) |
 | `convert-handheld [robot] --action delta\|relative-chunk` | Turn a hand-held recording (a configuration without followers) into a training dataset whose actions are relative poses ([in development](../contribution/pika-handheld.md); `--horizon`, `--hands`, `--max-gap`, `--output`, `--repo-id`) |
 | `skills install\|check\|path` | Copy the Agent Skill for coding agents into your project's `.agents/skills/` and `.claude/skills/`, check that the copies match this version (exit status 1 otherwise), or print where the packaged skill is (`--agent all\|agents\|claude`, `--root`, `--force`; "Use with coding agents" in [Installation](../quick-start/installation.md)). Opens no device |
 
@@ -61,7 +61,7 @@ uv run roboloom session home
 
 Running `roboloom` in a terminal (or `roboloom launch`) first opens the robot list: the robots with a `.roboloom/<robot>/config.yaml`, each with its dataset name and default options. The cursor starts on the robot chosen last time; Enter selects, Esc exits without starting anything. The choice is kept in `.roboloom/logs/last_robot`. Naming the robot, as in `roboloom rakuda2`, skips the list and opens the next screen. In a terminal, `run`, `record`, and `infer` also open the launcher first unless `--with`, `--without`, or `--plain` is given; the command's arguments become its initial values.
 
-- Choose the operation (`run` / `record` / `infer`). For `record` and `infer`, enter the task, seconds, and episodes; for `record`, also whether to move to the initial pose before every episode.
+- Choose the operation (`run` / `record` / `infer`). For `record` and `infer`, enter the task, seconds, and episodes; also whether to move to the initial pose before every episode.
 - Tick the options. Required options are enabled with them and conflicting options are disabled. Choosing `infer` turns on the option named `policy` when the configuration declares one.
 - Choose whether to use mock devices, and the codec of `storage: video` images (`YAML / dataset`, `AV1`, `H.264`).
 - The summary shows the operation, mock or hardware, the enabled options, the dataset name, the video codec, and the node files that are replaced.

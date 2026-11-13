@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import ClassVar
 
 from ..control.homing import HomeSpec, parse_home
+from ..control.takeover import JointPickup
 from ..core.checks import positions, positive
 from ..core.protocol import Envelope
 from ..errors import ConfigError
@@ -94,10 +95,23 @@ class JointController(Controller):
         # Joint farthest from the leader at the last update, also while following: every
         # start is checked against it, not only the first alignment.
         self.worst: tuple[str, float] | None = None
+        # a takeover in progress (`begin_takeover`): joints hold until the leader reaches them
+        self.pickup: JointPickup | None = None
 
     def reset(self) -> None:
         self.aligned = False
+        self.pickup = None
         self.state = "follower_fault"
+
+    def begin_takeover(self, views: Mapping[str, FollowerView]) -> None:
+        """Take the follower over from the target it holds: each joint holds until the
+        leader's mapped value comes within `alignment_tolerance` of it or crosses it."""
+        view = views[self.follower.name]
+        held = list(view.target or view.positions)
+        self.pickup = JointPickup(held, self.cfg["alignment_tolerance"])
+        self.aligned = True
+        self.last_target, self.last_target_ns = held, time.monotonic_ns()
+        self.state = "picking_up"
 
     def leader_pose(self, follower: list[float]) -> dict[str, float]:
         """Leader joint values that map onto `follower` (a pose at rest): the inverse of
@@ -117,6 +131,13 @@ class JointController(Controller):
         out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
         if self.home is not None:
             out["home"] = self.home.pose.name
+        if self.pickup is not None and not self.pickup.done:
+            names = self.follower.joint_names
+            out["pickup"] = {
+                names[i]: float(f"{d:.4g}")
+                for i, d in enumerate(self.pickup.remaining)
+                if not self.pickup.caught[i]
+            }
         if self.worst is not None and self.state in ("aligning", "following"):
             out["worst_joint"], out["worst_diff"] = (
                 self.worst[0],
@@ -160,12 +181,13 @@ class JointController(Controller):
             or now - intent.t_ready_ns > self.cfg["input_timeout_ms"] * 1e6
             or intent.t_ready_ns > now
         ):
-            self.aligned = False
+            # a takeover keeps holding its joints; it resumes when the input is back
+            self.aligned = self.pickup is not None
             self.state = "input_stale"
             return None
         if intent.boot_id != self.last_boot:
             self.last_boot, self.last_seq = intent.boot_id, -1
-            self.aligned = False
+            self.aligned = self.pickup is not None
         if intent.seq <= self.last_seq:
             return None
         self.last_seq = intent.seq
@@ -176,6 +198,10 @@ class JointController(Controller):
         ]
         current = positions(follower, len(self.follower.joint_names))
         target = self.couplings.apply(target, current, follower_velocity)
+        if self.pickup is not None:  # joints not reached yet keep their held value
+            target = self.pickup.apply(target)
+            if self.pickup.done:
+                self.pickup = None
         diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
         worst = max(range(len(diffs)), key=diffs.__getitem__)
         self.worst = (self.follower.joint_names[worst], diffs[worst])
@@ -200,5 +226,5 @@ class JointController(Controller):
             for p, t in zip(previous, target, strict=True)
         ]
         self.last_target, self.last_target_ns = limited, now
-        self.state = "following"
+        self.state = "picking_up" if self.pickup is not None else "following"
         return self.command(self.follower.name, limited, now, input_seq=intent.seq)

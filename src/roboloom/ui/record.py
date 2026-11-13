@@ -3,8 +3,10 @@
 On a terminal the Session's screen (`ui.screen`) shows the nodes; this module adds the
 keys: Enter starts each episode once the controller is ready, `h` moves to the saved home
 pose before it (inactive without one), `q` (or Ctrl-C) discards the episode in progress
-and stops, `e` latches the follower in ESTOP. Without a terminal
-the episodes start as soon as the controller is ready.
+and stops, `e` latches the follower in ESTOP. With a policy that has `teleop:`, `t`
+hands the followers to the leader (before an episode, or during one: an intervention) and
+`p` hands them back to the policy during an episode. Without a terminal the episodes
+start as soon as the controller is ready.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from rich.text import Text
 
 from ..errors import Cancelled
 from ..runtime.node import start_warning
-from ..runtime.session import EpisodeResult, Session, Task
+from ..runtime.session import EpisodeResult, Session, SessionError, Task
 from .live import KeyReader
 from .render import command_line
 
@@ -78,7 +80,10 @@ def _keys(
     screen = session.screen
     assert screen is not None
     has_home = any(c.homes for c in session.cfg.controllers.values())
-    screen.keys = command_line(has_home, KEYS)
+    teleop = any(getattr(c, "teleop", None) for c in session.cfg.controllers.values())
+    screen.keys = command_line(
+        has_home, (*KEYS, *(("t: teleop", "p: policy") if teleop else ()))
+    )
     results: list[EpisodeResult] = []
 
     def prompt(text: str, style: str = "bold") -> None:
@@ -96,6 +101,17 @@ def _keys(
             if ch == "e":
                 session.estop()
                 raise Cancelled("emergency stop: the follower is latched in ESTOP")
+            if teleop and ch in ("t", "p"):
+                try:
+                    session.teleop() if ch == "t" else session.policy()
+                    session.note(
+                        "teleop: the leader drives"
+                        if ch == "t"
+                        else "the policy drives"
+                    )
+                except SessionError as exc:  # refused: say why, go on
+                    session.note(str(exc), "warn")
+                return None
             return ch
 
         def go_home() -> None:

@@ -1,0 +1,36 @@
+# policy.yaml plus teleoperation (option policy_teleop): before an episode drive the
+# follower with the leader (Teleop, nothing recorded), Start hands over to the policy,
+# Teleop during the episode takes over again (an intervention, recorded as
+# action.intervention) and Policy hands back. Each joint holds until the leader reaches
+# it (within alignment_tolerance of controller.yaml, or crossing it), then follows.
+# Keep the policy settings below the same as policy.yaml.
+# A policy as the follower's controller (roboloom.controllers.policy).
+# factory: "module:callable" returning an object with reset() and infer(observation);
+#   the observation has the dataset's keys (observation.state, observation.images.camera,
+#   ..., task) and infer returns joint targets in counts: [17] or a chunk [H, 17].
+# action_horizon: steps of a chunk sent before inferring again (synchronous chunking).
+# While infer runs no command is sent; past command_deadline_ms the follower holds.
+type: policy
+followers: [follower]
+factory: roboloom.policy:hold
+kwargs: {}
+observe: [camera]  # add digit_left/digit_right with the digit option; [] for state only
+rate_hz: 15  # the policy's action rate: the rate it was trained at
+# interpolation_multiplier: N sends rate_hz * N commands per second, the straight line
+#   between consecutive actions (LeRobot's interpolation). Left out (or auto): the
+#   largest N with rate_hz * N whole Hz and at most the follower's control_hz (120),
+#   e.g. 8 at rate_hz 15 (120 Hz), 24 at 5 Hz. 1 sends each action as is (no
+#   interpolation). A number must keep rate_hz * N whole Hz and <= control_hz.
+# interpolation_multiplier: auto
+action_horizon: 8
+max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)
+command_deadline_ms: 300
+# Optional saved start pose: `home` (infer --home, Session.home()) moves the follower
+# there slowly before an episode. Save it with `roboloom capture-pose <name>`.
+# Arrival is measured: every joint within tolerance (counts) within 2 s of the move.
+# home:
+#   pose: ../poses/follower/ready.yaml
+#   max_speed: 200  # counts/s, at most max_speed above
+#   tolerance: 30
+#   timeout_s: 30
+teleop: [controller.yaml]  # the joint controller the leader drives through

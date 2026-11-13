@@ -171,6 +171,48 @@ interpolation_multiplier: 12  # 指令を 60 Hz に抑える（省略すると 2
 - まとめた行動の境目では，`infer` の間だけ補間も止まります．次の行動は，止まる前に着いた行動から続けます．
 - 送る目標は，フォロワが保持している目標から `max_speed` の分までに切り詰め，`FollowerSafety` が可動域と期限を検査します．遠隔操作と同じです．
 
+## 初期姿勢から始める（home）
+
+方策でも，エピソードの前に保存した姿勢へフォロワを動かせます．`roboloom capture-pose <名前>` で姿勢を保存し，`nodes/policy.yaml` に `home:` を書きます．
+
+```yaml
+home:
+  pose: ../poses/follower/ready.yaml  # roboloom capture-pose ready
+  max_speed: 200                      # この max_speed 以下（フォロワの単位/s）
+  tolerance: 30                       # 測った各関節がこの差以内なら到着
+  timeout_s: 30                       # 任意
+```
+
+- フォロワが複数のときは，`home: {left: {...}, right: {...}}` のようにフォロワごとに書きます．書かなかったフォロワは動きません．
+- `roboloom infer --home` は毎回のエピソードの前に動かします．ランチャーの `infer` でも「Move home before every episode」を選べます．操作画面の `home`，Pythonの `Session.home()`・`Session.record(..., home=True)` も同じです．
+- 到着は，送った目標ではなく測った関節で確かめます．移動のあと，すべての関節が `tolerance` 以内に入れば `reached` です．2秒たっても入らなければ `short` として関節名と差を表示し，`home` は失敗，`start` は拒否します．
+- 開始前の検査は `home` と同じく，録画中・追従中は `home` を拒否し，移動中は `start` を拒否します．
+
+## テレオペと介入（teleop）
+
+`teleop:` を書いた方策では，leaderでフォロワを動かせます．エピソードの前に開始姿勢を合わせ，`start` で方策に渡し，エピソードの途中で人が介入して，また方策に戻せます．
+
+```yaml
+# nodes/policy_teleop.yaml（Rakuda2 のオプション policy_teleop）
+teleop: [controller.yaml]   # leaderで動かすときの controller（このファイルの隣）
+```
+
+| 操作（session の命令） | エピソードの外 | エピソード中 |
+| --- | --- | --- |
+| Teleop（`teleop`，キー `t`） | 記録せずに，leaderでフォロワを動かす | 方策を止めて，leaderに切り替える（介入） |
+| Policy（`policy`，キー `p`） | 使えない（`start` で方策が始まる） | leaderから方策に戻す |
+| Stop teleoperating（`stop_teleop`） | leaderでの操作を終え，その場で保持する | 使えない（`stop` を使う） |
+| Start（`start`） | 方策と記録を始める．Teleop の後なら，そこから方策が引き継ぐ | ― |
+
+- **関節ごとにつかまえる**：Teleop を押すと，フォロワの関節はすべて今の目標で止まります．leaderの関節が，その関節の値に `alignment_tolerance`（teleop の controller の値）以内まで近づくか，値をまたぐと，その関節から順にleaderに追従します．操作画面の方策の行に，まだつかまえていない関節と残りの差（`pickup`）が出ます．
+- グリッパーは，トリガーをフォロワの開き具合まで握り込むまで動きません．介入した瞬間に，つかんでいる物を落とすことはありません．
+- 方策に戻すとき（Policy）は，方策の履歴を消し（`policy.reset()`），フォロワが保持している目標から補間を始め直します．
+- 記録では，人が動かした行を `action.intervention`（1）で区別します．`teleop:` のある構成だけにある特徴量です．leaderも入力として記録されるので，データセット名は別になります（Rakuda2 では `-eval-teleop`）．
+- エピソードの外のTeleopは記録しません．エピソードの最初の1〜2行は，`start` の直前の人の指令が残ることがあり，`action.intervention` が1になります．
+- Pythonでは `Session.teleop()`，`Session.policy()`，`Session.stop_teleop()` を使います．
+- 対応する teleop の controller は `type: joint` だけです．`pose_ik`（PiPER＋Pika Sense など）は，読み込み時に「介入に未対応」として断ります．
+- フォロワがESTOP・FAULTになったとき，信号が途絶えたときは，Teleop も止まります．もう一度 Teleop を押すと，その時点から関節ごとにつかまえ直します．
+
 ## 限界
 
 - 推論しながら前の行動を実行し続ける非同期の推論と，LeRobotのRTCには対応していません．

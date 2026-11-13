@@ -518,6 +518,8 @@ class OperatorApp(App[str]):
             "s": "save",
             "d": "discard",
         }
+        if self.snapshot.capabilities.teleop:
+            shortcuts.update({"t": "teleop", "p": "policy"})
         if self.snapshot.capabilities.gravity:
             shortcuts.update(
                 {

@@ -682,14 +682,43 @@ class Session:
                 # A status sent after `home` but before the node handled it still shows
                 # the previous move's result: count only a move that began after sent_ns.
                 began = fields.get("home_since_ns", 0) >= sent_ns
-                # "short": the move ended short of the pose where friction stopped a
-                # spring; the start check (alignment) decides whether that is close enough
+                # a follower whose measured joints stayed out of home.tolerance
+                if (
+                    fresh
+                    and began
+                    and name in self.cfg.followers
+                    and fields.get("home_state") == "short"
+                ):
+                    from .node import home_short
+
+                    raise SessionError(f"{name}: {home_short(fields)}")
+                # a leader's "short": the move ended short of the pose where friction
+                # stopped a spring; the start check (alignment) decides whether that is
+                # close enough
                 if not (fresh and began) or fields.get("home_state") not in (
                     "reached",
                     "short",
                 ):
                     waiting.append(f"{name} ({fields.get('home_state', 'waiting')})")
         return waiting
+
+    # -- teleoperation of a policy (`teleop:` in the policy YAML) ------------------
+
+    def teleop(self) -> None:
+        """Drive the followers with the leader: before an episode (nothing is recorded)
+        or during one (an intervention, recorded as `action.intervention`). Each joint
+        holds until the leader reaches it, then follows; the policy's status lists the
+        joints still to reach (`pickup`)."""
+        self.wait_report(self.send("teleop"))
+
+    def policy(self) -> None:
+        """Hand the followers back to the policy during an episode (it restarts from
+        where they are, with a fresh history)."""
+        self.wait_report(self.send("policy"))
+
+    def stop_teleop(self) -> None:
+        """Stop teleoperating outside an episode; the followers hold where they are."""
+        self.wait_report(self.send("stop_teleop"))
 
     def estop(self) -> None:
         """Latch the follower in ESTOP (stays until the dataflow restarts)."""

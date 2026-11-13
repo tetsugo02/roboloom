@@ -128,10 +128,19 @@ def _home(f: dict) -> Text:
     state = f.get("home_state")
     if state == "moving":
         text.append(f"moving {round(100 * (f.get('home_progress') or 0))}%", WATCH)
-    elif state == "short":  # friction stopped a spring short of the pose
-        text.append("short", WATCH)
+    elif state == "settling":  # the move ended; the joints are not within tolerance yet
+        text.append("settling", WATCH)
+    elif state == "short":  # friction stopped a spring short of the pose (a leader),
+        # or a follower's joints stayed out of tolerance
+        text.append("short", BAD if f.get("home_tolerance") is not None else WATCH)
     else:
         text.append("reached", GOOD)
+    if f.get("home_joint") is not None and state in ("settling", "short"):
+        text.append(
+            f" ({f['home_joint']} off by {f.get('home_diff')}, tolerance "
+            f"{f.get('home_tolerance')})",
+            WATCH,
+        )
     if f.get("home_far"):
         off = ", ".join(f"{j} {d:+d}" for j, d in f["home_far"].items())
         text.append(f" (off by: {off})", WATCH)
@@ -162,6 +171,9 @@ def controller(f: dict) -> tuple[str, Text]:
         detail = Text("no recent leader input", style=WATCH)
     elif state == "follower_fault":
         detail = Text("robot latched FAULT/ESTOP; re-align after recovery", style=BAD)
+    elif f.get("pickup"):  # a policy's teleop takes the joints over one by one
+        far = ", ".join(f"{j} {d:+g}" for j, d in f["pickup"].items())
+        detail = Text(f"teleop: move the leader to the held joints: {far}", style=WATCH)
     elif state in POSE_STATES and "engaged" in f:  # pose_ik: what the operator does
         detail = Text(POSE_STATES[state], style=WATCH)
         if f.get("position_error_mm") is not None:
@@ -170,7 +182,9 @@ def controller(f: dict) -> tuple[str, Text]:
             )
     else:
         detail = Text(
-            key_values(f, ("state", "tolerance", "worst_joint", "worst_diff", "home"))
+            key_values(
+                f, ("state", "tolerance", "worst_joint", "worst_diff", "home", "pickup")
+            )
         )
     if f.get("home"):  # the saved pose `home` moves this pair to
         detail = joined([detail, Text("home pose: ") + Text(f"{f['home']}.yaml", HOME)])
