@@ -105,6 +105,46 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は 
 - `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位）も渡ります．
 - **新しい観測だけを使う**：観測する入力やセンサーの最新の値が，recorderの `max_age_ms.<ノード>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，フォロワは保持します．値が新しくなると，方策を `reset()` して始め直します．
 
+### 記録から自分のモデルまで
+
+roboloomはモデルの形を決めません．方策には，記録と同じ観測，その履歴，実行した行動を渡し，関節の絶対目標を受け取ります．モデルごとに変わる処理は方策の側に書きます．
+
+| 処理 | 書く場所 |
+| --- | --- |
+| モデルが動かす関節の選択 | 方策．ほかの関節には何を返してもよく（NaN），その関節を `hold` に挙げる |
+| 正規化（学習データの統計） | 方策．統計はチェックポイントと一緒に保存する |
+| 画像の縮小や切り出しなどの前処理 | 方策 |
+| 行動の形（状態からの差分，一部の関節だけ） | 方策が `infer` の中で絶対目標に戻す |
+| 観測の履歴，過去の行動 | roboloom（`observation_history`） |
+| 記録より低い行動周期 | k行おきに学習し，`rate_hz` を `dataset_fps / k` にする |
+| 制御周期への補間，速度の制限，安全の検査 | roboloom |
+
+リポジトリの `examples/policies/chunk_mlp.py` は，これらを一通り行う小さなモデルです（関節状態だけを使い，CPUで数秒で学習できます）．記録したデータセットの `observation.state` と `action` の列を読んで学習し，統計・動かす関節・履歴の長さをチェックポイントに保存して，`options()` でroboloomに伝えます．
+
+```bash
+uv run python examples/policies/chunk_mlp.py train \
+    --dataset .roboloom/rakuda2/datasets/rakuda2 --out outputs/chunk_mlp.pt \
+    --history 4 --horizon 8 --stride 3 --exclude torso_yaw head_yaw head_pitch
+PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
+    --policy chunk_mlp:load --policy-kwargs '{"checkpoint": "outputs/chunk_mlp.pt"}'
+```
+
+15 fpsの記録で `--stride 3` なら，方策の周期は5 Hzです．`nodes/policy.yaml` を `rate_hz: 5` にします．学習でデータセットを読むとき，表の列（`observation.state`，`action`，`action.valid`，`episode_index`，`index`）は `LeRobotDataset(...).hf_dataset` にあります．画像は `dataset[i]` で1行ずつ復号します．
+
+### 記録を再生する
+
+`roboloom.policy.replay:load` は，記録した1エピソードの `action` を，観測に関係なくフォロワへ送ります．学習した方策と同じ経路（controller，速度の制限，補間，安全の検査）を通るので，モデルなしでその経路を確かめられます．再生を記録すれば，その `observation.state` を元のエピソードと比べられます．
+
+```bash
+uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
+    --policy roboloom.policy.replay:load \
+    --policy-kwargs '{"path": ".roboloom/rakuda2/datasets/rakuda2", "episode": 0}'
+```
+
+- `path` は，記録したデータセットか，行動を並べた `.npy` ファイル（`[T, n]`）です．`.npy` は，別の道具で記録したデータの関節の並びと単位を確かめるのに使えます．`stride: k` はk行おきに取ります（`rate_hz` は `dataset_fps / k`）．`horizon` はまとめて渡す手数です．
+- データセットの行動の名前と周期を，読み込むときに構成と照らします．
+- 始める前に，エピソードの最初の姿勢へロボットを動かしてください（`home`）．最初は `max_speed` を低くします．最後の行動のあと，フォロワはそこに留まります．
+
 ### 方策を別のプロセスで動かす { #running-the-policy-in-another-process }
 
 roboloomを動かす環境に依存関係が入らないモデル（torchの版が違うなど）や，別のマシンで動かしたいモデルは，自分のプロセスから提供します．方策ノードは `roboloom.policy.remote:connect` でそこへつなぎます．`bind`，`reset`，`infer`，`options` はそのまま渡るので，方策の書き方は上と同じです．

@@ -107,6 +107,46 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
 - `bind(spec)` also receives `spec.history`, `spec.hold` and `spec.units` (the unit of each action entry).
 - **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold. Once the sample is fresh again, the policy starts over with `reset()`.
 
+### From a recording to your own model
+
+roboloom fixes no model form. It hands the policy the recorded observation, its history and the executed actions, and takes absolute joint targets back; everything specific to a model belongs to the policy:
+
+| Step | Where |
+| --- | --- |
+| Which joints the model drives | the policy returns anything (NaN) for the others and names them in `hold` |
+| Normalization (statistics from the training data) | the policy; keep the statistics with the checkpoint |
+| Resizing or cropping images, other preprocessing | the policy |
+| Action form: offsets from the state, a subset of joints | the policy turns it back into absolute targets in `infer` |
+| Observation history, past actions | roboloom (`observation_history`) |
+| A lower action rate than the recording | train on every k-th row and set `rate_hz` to `dataset_fps / k` |
+| Interpolation to the control rate, speed limit, safety checks | roboloom |
+
+`examples/policies/chunk_mlp.py` in the repository is a small model that does each of these steps (joint state only, trains on a CPU in seconds): it reads the recorded dataset's `observation.state` and `action` columns, trains, keeps the statistics, the kept joints and the history length in the checkpoint, and states them to roboloom with `options()`.
+
+```bash
+uv run python examples/policies/chunk_mlp.py train \
+    --dataset .roboloom/rakuda2/datasets/rakuda2 --out outputs/chunk_mlp.pt \
+    --history 4 --horizon 8 --stride 3 --exclude torso_yaw head_yaw head_pitch
+PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
+    --policy chunk_mlp:load --policy-kwargs '{"checkpoint": "outputs/chunk_mlp.pt"}'
+```
+
+With `--stride 3` on a 15 fps recording the policy's rate is 5 Hz: set `rate_hz: 5` in `nodes/policy.yaml`. Reading the dataset for training: the table columns (`observation.state`, `action`, `action.valid`, `episode_index`, `index`) are in `LeRobotDataset(...).hf_dataset`; images are decoded per row with `dataset[i]`.
+
+### Replaying a recording
+
+`roboloom.policy.replay:load` sends the recorded `action` rows of one episode to the followers, whatever is observed. It runs the same path as a learned policy (controller, speed limit, interpolation, safety checks), so it checks that path without a model, and the replay's recorded `observation.state` can be compared with the original episode.
+
+```bash
+uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
+    --policy roboloom.policy.replay:load \
+    --policy-kwargs '{"path": ".roboloom/rakuda2/datasets/rakuda2", "episode": 0}'
+```
+
+- `path` is a recorded dataset or a `.npy` file `[T, n]` of actions (to check the joint order and units of data from another tool). `stride: k` takes every k-th row (`rate_hz` must be `dataset_fps / k`); `horizon` is the chunk length.
+- The dataset's action names and rate are checked against the configuration at load.
+- Move the robot to the episode's first pose before starting (`home`), and keep `max_speed` low on the first try. After the last action the followers stay there.
+
 ### Running the policy in another process
 
 A model whose dependencies do not fit the environment roboloom runs in (another torch

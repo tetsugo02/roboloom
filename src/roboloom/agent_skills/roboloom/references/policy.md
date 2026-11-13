@@ -69,6 +69,17 @@ command_deadline_ms: 300
   forwarded; policy errors show on the controller line. Not encrypted: loopback or a
   trusted network only.
 
+- roboloom fixes no model form: joint selection (`hold`), normalization, image
+  preprocessing and decoding the model's action form (deltas) into absolute targets are
+  the policy's; history, interpolation, speed limit and safety are roboloom's. A lower
+  action rate: train on every k-th row, `rate_hz = dataset_fps / k`. A worked example
+  (train script + policy with `options()`) is `examples/policies/chunk_mlp.py` in the
+  roboloom repository. For training, table columns are in `LeRobotDataset(...).hf_dataset`.
+- `roboloom.policy.replay:load` (`kwargs: {path, episode: 0, horizon: 8, stride: 1}`)
+  replays one recorded episode's `action` (or a `.npy` `[T, n]`) open loop through the
+  policy path: checks the path without a model. Names and rate are checked at load;
+  `home` to the first pose first, low `max_speed`.
+
 ## Writing a policy
 
 Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint
