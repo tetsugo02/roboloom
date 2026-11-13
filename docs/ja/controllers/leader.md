@@ -1,17 +1,15 @@
 # Leader
 
-Rakuda2の遠隔操作では，`inputs` の `leader` ノード（機器は `type: rakuda_mini`，Rakuda-mini）が関節位置を読み，`controllers` の `joint` ノードがfollowerの目標へ変換します．leaderの関節とfollowerの関節の対応・符号・オフセットは `nodes/controller.yaml` の `joints` で指定します．
+Rakuda2の遠隔操作では，`inputs` の `leader` ノード（機器は `type: rakuda_mini`，Rakuda-mini）が関節位置を読み，`controllers` の `joint` ノードがfollowerの目標へ変換します．leaderはfollowerと同じ関節名と単位を持つので，followerの各関節は同じ名前のleaderの関節に追従します．ほかに書くことはありません．
 
 ```yaml
 type: joint
 input: leader
 followers: [follower]
-unit: dynamixel_count
 alignment_tolerance: 300
 max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
-# 実際の設定には17関節のjoints対応表も必要です．
 ```
 
 `leader` は設定の中での役割の名前で，`type` は使う機器の名前です．別のアームをleaderに使う場合は，`type` だけを変えます．
@@ -21,7 +19,8 @@ input_timeout_ms: 150
 | 項目 | 意味 |
 | --- | --- |
 | `alignment_tolerance` | 追従を始める前と，毎回のエピソード開始（`start`）の前に許すleaderとfollowerの関節差（counts）．超えていると `start` を拒否します |
-| `unit` | 関節の位置の単位．leaderとfollowerの単位と一致させる（Rakuda2は `dynamixel_count`） |
+| `joints` | 任意．書かなければ，followerの各関節は同じ名前の入力の関節に追従する（入力がfollowerの関節をすべて持つこと）．書くときは，followerの関節ごとに `{leader, follower, sign, offset}` を，followerの順に並べる．名前が違う，向きが逆（`sign: -1`），ずれがある（目標＝leader × sign ＋ offset）場合に使う |
+| `unit` | 任意．入力とfollowerの単位は同じでなければならない（Rakuda2は `dynamixel_count`）．書いた場合は両方と一致させる |
 | `max_speed` | 目標値の変化速度の上限（followerの単位/s．Rakuda2はcounts/s） |
 | `followers` | 動かすフォロワ．`joint` controllerはちょうど1台です |
 | `command_deadline_ms` | followerへ送る指令の有効期限 |

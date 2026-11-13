@@ -13,7 +13,7 @@ convert them. `roboloom init rakuda2` copies the template (the only packaged one
 | `nodes/follower.yaml` | `follower` / `rakuda2_follower` | `port`, `motor_ids`, `control_hz: 120`, `torque: true`, `record_effort: true`, `bus_watchdog_ms: null`, `registers`, `health`, `limits` |
 | `nodes/leader.yaml` | `leader` / `rakuda_mini` | `poll_hz: 120`; body and arms `law: free`, triggers `law: spring` (`rest: 2500`, `goal_current_mA: 30`) |
 | `nodes/leader_gravity.yaml` | `leader` / `rakuda_mini` | arms `law: gravity_comp` (reads `calibration/gravity_<side>.yaml`, `travel_<side>.yaml`, `gravity_tuning_<side>.yaml`), `bus_watchdog_ms: 500` |
-| `nodes/controller.yaml` | `controller` / `joint` | identity map of 17 joints, `unit: dynamixel_count`, `alignment_tolerance: 300`, `max_speed: 2048`, `couplings: []`, `home` commented out |
+| `nodes/controller.yaml` | `controller` / `joint` | joints follow the leader joints of the same name (no `joints` table), `alignment_tolerance: 300`, `max_speed: 2048`, `couplings: []`, `home` commented out |
 | `nodes/camera.yaml` | `camera` / `realsense_rgb` | 640×480, `fps: 30` |
 | `nodes/digit_left.yaml`, `digit_right.yaml` | `digit` | QVGA, `height: 320`, `width: 240`, `fps: 30` |
 | `nodes/policy.yaml` | `policy` / `policy` | `factory: roboloom.policy:hold`, `observe: [camera]`, `rate_hz: 15`, `action_horizon: 8`, `max_speed: {follower: 1024}` |
