@@ -1,0 +1,21 @@
+# Stand-ins for the SET_ values of this configuration, used only with mock devices
+# (`--mock`, `mock=True` or `mode: mock`), so the project can be tried before anything
+# was measured. With the hardware they are never read: a SET_ value left in a node file
+# still stops `run` and `validate`, with its location.
+#
+# Do not put measured values here; fill them in where the SET_ value stands.
+SET_LEADER_PORT: mock://leader
+SET_FOLLOWER_PORT: mock://follower
+SET_REALSENSE_SERIAL: mock-camera
+SET_DIGIT_LEFT_SERIAL: mock-digit-left
+SET_DIGIT_RIGHT_SERIAL: mock-digit-right
+SET_AUDIO_DEVICE: mock-audio
+SET_FOLLOWER_ARM_GOAL_CURRENT_mA: 1000
+SET_RIGHT_SENSE_PORT: mock://right_sense
+SET_LEFT_SENSE_PORT: mock://left_sense
+SET_RIGHT_TRACKER_SERIAL: LHR-MOCK0002
+SET_LEFT_TRACKER_SERIAL: LHR-MOCK0001
+SET_RIGHT_GRIPPER_COUNTS_PER_RAD: 800
+SET_LEFT_GRIPPER_COUNTS_PER_RAD: 800
+SET_RIGHT_GRIPPER_CLOSED_COUNT: 1000
+SET_LEFT_GRIPPER_CLOSED_COUNT: 1000

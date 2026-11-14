@@ -1,0 +1,137 @@
+# Leader for bilateral teleoperation (option `bilateral` of ../config.yaml): leader_gravity.yaml with
+# `feedback:` on the arm groups, so they take the force the controller returns from the
+# follower. NOT verified on hardware. The controller's feedback.gain picks the joints.
+# The feedback shares max_current_mA and the EEPROM Current Limit with gravity: near the
+#   limit it is clipped. Raising the Current Limit for more feedback raises the force left on
+#   the arm if the host stops (XC330 keeps the last current when the Bus Watchdog fires).
+# Actuated leader: arms gravity-compensated (current mode), triggers are the return spring.
+# Same motors and EEPROM checks as leader.yaml; differences: the arm joints run gravity_comp in
+# current mode (Operating Mode 0) with the low Current Limits below.
+# Current Limit (EEPROM) is the only guard that holds when the host goes silent: on XC330 a fired
+#   Bus Watchdog freezes Goal Current instead of zeroing it. Keep it just above need (gravity at
+#   full gain, the hold, up to 50 mA of range barrier). The control loop also checks the watchdog
+#   every tick and releases the arm if it fired.
+# Files this node reads, each written by one step of ../README.md:
+#   gravity_model  ../calibration/gravity_<side>.yaml         roboloom identify-gravity
+#   range          ../calibration/travel_<side>.yaml          roboloom measure-travel
+#   tuning         ../calibration/gravity_tuning_<side>.yaml  roboloom tune-gravity (gain, hold)
+# drive_mode: r_arm_grip reversed (5), l_arm_grip not (0) ON PURPOSE (symmetric triggers).
+type: rakuda_mini
+port: SET_LEADER_PORT  # /dev/serial/by-id/... of the leader U2D2
+motor_ids:
+- 27
+- 28
+- 29
+- 1
+- 3
+- 5
+- 7
+- 9
+- 11
+- 31
+- 2
+- 4
+- 6
+- 8
+- 10
+- 12
+- 30
+# poll_hz: 120 Hz verified on Rakuda2 (2026-10-27: work max 6.8 ms of 8.3 ms). Needs the FTDI
+#   latency_timer at 1 ms and firmware v45+ (Fast Sync Read); if `roboloom probe` shows a lower
+#   limit, lower it (e.g. 60) together with the follower control_hz. Docs: Reference > Configuration.
+poll_hz: 120
+registers:
+  drive_mode:
+    default: 0
+    r_arm_grip: 5
+  homing_offset:
+    default: 0  # add per-joint offsets from `roboloom probe`
+  current_limit:
+    r_arm_sh_pitch1: 150
+    r_arm_sh_roll: 150
+    r_arm_sh_pitch2: 100
+    r_arm_el_yaw: 100
+    r_arm_wr_roll: 60
+    r_arm_wr_yaw: 60
+    l_arm_sh_pitch1: 150
+    l_arm_sh_roll: 150
+    l_arm_sh_pitch2: 100
+    l_arm_el_yaw: 100
+    l_arm_wr_roll: 60
+    l_arm_wr_yaw: 60
+    r_arm_grip: 30
+    l_arm_grip: 30
+  return_delay:
+    default: 0
+  shutdown:
+    default: 52
+control:
+- group: body
+  law: free
+  # To lock selected joints at startup, split this group and use law: position for them.
+  # Remove those joints from this free group; every joint must occur exactly once.
+  joints:
+  - torso_yaw
+  - head_yaw
+  - head_pitch
+- group: right_arm
+  law: gravity_comp
+  joints:
+  - r_arm_sh_pitch1
+  - r_arm_sh_roll
+  - r_arm_sh_pitch2
+  - r_arm_el_yaw
+  - r_arm_wr_roll
+  - r_arm_wr_yaw
+  gravity_model: ../calibration/gravity_right.yaml
+  tuning: ../calibration/gravity_tuning_right.yaml  # gain and hold per joint
+  max_current_mA: [150, 150, 100, 100, 60, 60]
+  kd: 0.0
+  ramp_s: 2.0
+  max_velocity: 3000
+  range: ../calibration/travel_right.yaml
+  range_margin: 100
+  barrier_mA_per_count: 0.5
+  homing:  # `home` pulls the arm with this spring (on top of gravity), capped at max_mA
+    kp_mA_per_count: 0.5
+    max_mA: 40
+  feedback:  # force from the follower (controller_bilateral.yaml feedback.gain picks joints)
+    max_mA: 20  # feedback alone; the total is still clipped at max_current_mA (and EEPROM)
+    ramp_s: 0.3  # the feedback fades in and out over this time, never jumps
+    kd: 0.0  # extra damping while the feedback is on, mA per count/s
+- group: left_arm
+  law: gravity_comp
+  joints:
+  - l_arm_sh_pitch1
+  - l_arm_sh_roll
+  - l_arm_sh_pitch2
+  - l_arm_el_yaw
+  - l_arm_wr_roll
+  - l_arm_wr_yaw
+  gravity_model: ../calibration/gravity_left.yaml
+  tuning: ../calibration/gravity_tuning_left.yaml  # gain and hold per joint
+  max_current_mA: [150, 150, 100, 100, 60, 60]
+  kd: 0.0
+  ramp_s: 2.0
+  max_velocity: 3000
+  range: ../calibration/travel_left.yaml
+  range_margin: 100
+  barrier_mA_per_count: 0.5
+  homing:  # `home` pulls the arm with this spring (on top of gravity), capped at max_mA
+    kp_mA_per_count: 0.5
+    max_mA: 40
+  feedback:  # force from the follower (controller_bilateral.yaml feedback.gain picks joints)
+    max_mA: 20  # feedback alone; the total is still clipped at max_current_mA (and EEPROM)
+    ramp_s: 0.3  # the feedback fades in and out over this time, never jumps
+    kd: 0.0  # extra damping while the feedback is on, mA per count/s
+- group: trigger
+  law: spring
+  joints:
+  - r_arm_grip
+  - l_arm_grip
+  rest: 2500
+  goal_current_mA: 30
+# bus_watchdog_ms: on XC330 a fired watchdog freezes the current and refuses new goals, so it
+#   does not stop the arm; the control loop only detects it and releases. 100 ms tripped on a
+#   single 128 ms stall (2026-10-26); 500 ms still catches a hung loop.
+bus_watchdog_ms: 500

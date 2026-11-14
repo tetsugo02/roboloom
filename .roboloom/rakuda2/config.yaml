@@ -38,3 +38,18 @@ options:
       sensors.digit_left: nodes/digit_left.yaml
       sensors.digit_right: nodes/digit_right.yaml
     dataset: digit
+  policy:
+    help: a learned policy drives the follower (`roboloom infer` turns this on)
+    conflicts: [gravity]
+    set:
+      inputs.leader: null
+      controllers.controller: null
+      controllers.policy: nodes/policy.yaml
+    dataset: eval
+  policy_teleop:
+    help: with policy, the leader can drive before and during an episode (Teleop / Policy)
+    requires: [policy]
+    set:
+      inputs.leader: nodes/leader.yaml
+      controllers.policy: nodes/policy_teleop.yaml
+    dataset: teleop
