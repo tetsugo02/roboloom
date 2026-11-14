@@ -16,6 +16,8 @@ recorded with another tool: move the robot to the episode's first pose first (`h
 and keep `max_speed` low.
 
 After the last action the policy keeps returning it (the followers stay there).
+`inference: async` is refused: a replay's chunks follow one another, they are not
+computed from the observation's time, so replacing a queued chunk would skip rows.
 """
 
 from __future__ import annotations
@@ -68,6 +70,13 @@ class Replay:
             problems.append(
                 f"its actions are {self.rate_hz:g} Hz apart, rate_hz is "
                 f"{spec.rate_hz:g} (set rate_hz, or stride)"
+            )
+        if spec.inference != "sync":
+            # each call returns the rows after the last call's; replacing a chunk and
+            # dropping the actions whose time passed would skip recorded rows
+            problems.append(
+                "a replay hands out its rows in order whatever is observed: set "
+                f"inference: sync (not {spec.inference})"
             )
         if problems:
             raise ConfigError(

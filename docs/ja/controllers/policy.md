@@ -102,7 +102,7 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は 
         return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
     ```
 
-- `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位）も渡ります．
+- `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位），`spec.inference`（`sync` か `async`）も渡ります．
 - **新しい観測だけを使う**：観測する入力やセンサーの最新の値が，recorderの `max_age_ms.<ノード>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，フォロワは保持します．補間の途中でも止めます．値が新しくなると，方策を `reset()` して始め直します．
 
 ### 記録から自分のモデルまで
@@ -143,6 +143,7 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 - `path` は，記録したデータセットか，行動を並べた `.npy` ファイル（`[T, n]`）です．`.npy` は，別の道具で記録したデータの関節の並びと単位を確かめるのに使えます．`stride: k` はk行おきに取ります（`rate_hz` は `dataset_fps / k`）．`horizon` はまとめて渡す手数です．
 - データセットの行動の名前と周期を，読み込むときに構成と照らします．
+- `inference: async` とは組み合わせられません（読み込むときに断ります）．再生は観測に関係なく行を順に返すので，並んでいる行動を入れ替えると，記録した行が飛びます．
 - 始める前に，エピソードの最初の姿勢へロボットを動かしてください（`home`）．最初は `max_speed` を低くします．最後の行動のあと，フォロワはそこに留まります．
 
 ### 方策を別のプロセスで動かす { #running-the-policy-in-another-process }
@@ -242,6 +243,7 @@ action_horizon: 16
 - 行動の列が届く前に並んでいる行動がなくなると，指令を送らず，フォロワは保持します（`late_inference`）．`replan_at` か `action_horizon` を増やしてください．エピソードの始めは，最初の列が届くまで `waiting_inference` です．
 - テレオペへの切り替え，`stop`，センサーの値が古くなったときは，走っている推論の結果を捨てます．`policy.reset()` はその推論が戻るまで待つので，`reset` と `infer` が重なることはありません．
 - `infer` の例外は，同期のときと同じくエピソードを止めます．
+- 方策は，観測した時刻から始まる行動の列を返すものとして扱います．呼ばれるたびに続きを返す方策（記録の再生など）では，先頭を捨てると行動が飛びます．そういう方策は，`bind(spec)` で `spec.inference` を見て `async` を断ってください．
 - 新しい列と古い列は混ぜません．real-time chunking（RTC．flow matchingのモデルに古い列を条件として渡す方法）は実装していません．続けて返す列が大きく違う方策では，入れ替えのときに目標が飛びます（`max_speed` の範囲内）．
 
 ### 行動の補間

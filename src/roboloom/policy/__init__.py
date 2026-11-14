@@ -49,7 +49,7 @@ class PolicySpec:
     shapes of the observation `infer` receives (besides `task`); images are [h, w, 3].
     `action`: the names of the action's entries, `<follower>.<joint>` in order; `units`
     their units. `history` and `hold` are the controller's `observation_history` and
-    `hold` (see `controllers.policy`)."""
+    `hold`, `inference` its `inference` (see `controllers.policy`)."""
 
     observation: Mapping[str, Mapping[str, Any]]
     action: tuple[str, ...]
@@ -58,6 +58,8 @@ class PolicySpec:
     history: int = 1  # frames in observation["history"] (1: no history)
     hold: tuple[str, ...] = ()  # action entries the policy does not drive
     units: tuple[str, ...] = ()  # the unit of each action entry (its follower's)
+    # "async": a chunk replaces the queued one, without the actions whose time passed
+    inference: str = "sync"
 
 
 class Policy(Protocol):

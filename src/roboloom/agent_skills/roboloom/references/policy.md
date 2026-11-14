@@ -41,7 +41,8 @@ command_deadline_ms: 300
   actions keep going; the next inference starts when `replan_at` actions are left (`auto`:
   half of `action_horizon`); the new chunk replaces the queue minus the d actions executed
   since its observation (`dropped`). Queue empty first: followers hold (`late_inference`).
-  No blending of chunks; LeRobot RTC: not supported.
+  No blending of chunks; LeRobot RTC: not supported. A chunk must start at its
+  observation's time: `roboloom.policy.replay:load` refuses async (`spec.inference`).
 - `home: {pose, max_speed, tolerance[, timeout_s]}` (several followers: `{follower: {...}}`)
   moves the followers to a `capture-pose` pose with `home` / `Session.home()` /
   `infer --home`. Arrival is measured: every joint within `tolerance` within 2 s after the

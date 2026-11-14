@@ -469,6 +469,7 @@ class PolicyController(Controller):
             history=self.history,
             hold=self.hold,
             units=tuple(f.unit for f in self.followers.values() for _ in f.joint_names),
+            inference=self.inference,
         )
 
     def start(self, task: str) -> None:
