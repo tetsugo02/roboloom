@@ -351,6 +351,7 @@ class SessionBackend:
         if name == "start":
             plan = self.recording
             if plan is None:
+                session.wait_ready(10)  # e.g. the last episode is still being saved
                 session.start(task)
                 self._episode = self._recording = True
                 self._phase = "recording"
@@ -364,7 +365,7 @@ class SessionBackend:
                     while (
                         time.monotonic() < end and not self._finish_recording.is_set()
                     ):
-                        session._check_alive()
+                        session._check_running()
                         self._hand_over(session)
                         self._phase = f"episode {self._index + 1}/{plan.episodes}: {max(0.0, end - time.monotonic()):.1f} s remaining"
                         self._finish_recording.wait(

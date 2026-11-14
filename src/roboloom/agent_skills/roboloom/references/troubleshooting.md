@@ -45,7 +45,10 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | `torque is on; another process may own this bus` / `torque is on; stop the dataflow first` | A setup step while a dataflow or another tool owns the bus | Quit the running dataflow first |
 | `torque is on for some of these motors; support the arm, release it, then retry` | `commission` refuses torqued motors | User supports the arm and releases it |
 | `PiPER on <can>: ...` / `Pika Gripper on <port>: no ... feedback` / `Pika Sense on <port>:` | CAN interface down, power, USB path | Hints in the message; creating CAN interfaces needs an administrator. In development, mock only |
-| `session FIFO already exists:` | Another run of this robot, or a stale FIFO after a crash | Make sure no run is alive, then the user deletes that FIFO file |
+| `another run of this robot is using <fifo>` | A dataflow of this robot is running (or one started within the last 30 s) | End it: `roboloom session quit`. A FIFO left by a run that died is removed automatically |
+| `start not started: the stopped episode is neither saved nor discarded` / `still being saved` / `already being recorded` | The recorder is not idle | `save` or `discard` the stopped episode, or wait for the save; then retry `start` |
+| `EpisodeFailed: <controller> failed during the episode: ...` | The policy raised in `infer`/`reset` (or a follower latched FAULT/ESTOP); the episode was discarded | Read the error. The policy is ready again after the episode ended: no restart. A policy that did not *load* needs a restart |
+| `the operator's process is gone: ...` (in `logs/<run>/reports.jsonl`) | The launching process died while the dataflow ran; the followers were left holding | Nothing to clean up; start a new run |
 
 ## Session and start
 

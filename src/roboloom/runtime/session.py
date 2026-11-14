@@ -13,6 +13,8 @@ stop, save, ...) and reads the nodes' reports and status. The CLI (`run`, `recor
 
 from __future__ import annotations
 
+import contextlib
+import errno
 import itertools
 import json
 import os
@@ -70,6 +72,11 @@ class SessionError(RoboloomError):
     def __init__(self, message: str, report: dict | None = None):
         super().__init__(message)
         self.report = report or {}
+
+
+class EpisodeFailed(SessionError):
+    """The episode could not go on (a controller failed, a follower latched FAULT or
+    ESTOP); it was discarded. A failed policy is ready again for the next episode."""
 
 
 @dataclass
@@ -165,6 +172,22 @@ def fifo_for(cfg: RobotConfig) -> Path:
     return Path(cfg.path).resolve().with_suffix(".fifo")
 
 
+STARTING_S = 30.0  # a FIFO this young without a reader belongs to a run still starting
+
+
+def _fifo_in_use(fifo: Path) -> bool:
+    """Whether a running dataflow reads `fifo` (or one is just starting). A FIFO nobody
+    reads was left by a run that did not end properly."""
+    try:
+        fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError as exc:
+        if exc.errno != errno.ENXIO:  # not "no reader": do not touch it
+            return True
+        return time.time() - fifo.stat().st_mtime < STARTING_S
+    os.close(fd)
+    return True
+
+
 class Session:
     def __init__(
         self,
@@ -191,6 +214,8 @@ class Session:
         self.operator: Operator | None = (
             None  # asked before an actuated leader goes limp
         )
+        # the FIFO held open for writing; see `_attach`
+        self._lifeline: int | None = None
 
     # -- lifecycle --------------------------------------------------------------
 
@@ -253,10 +278,12 @@ class Session:
         fifo = fifo_for(cfg)
         fifo.parent.mkdir(parents=True, exist_ok=True)
         if fifo.exists():
-            raise SessionError(
-                f"session FIFO already exists: {fifo} (another run of this robot, "
-                "or a stale file to delete)"
-            )
+            if _fifo_in_use(fifo):
+                raise SessionError(
+                    f"another run of this robot is using {fifo}; end it first "
+                    "(`roboloom session quit`)"
+                )
+            fifo.unlink()  # left by a run that did not end properly
         workdir = tempfile.TemporaryDirectory(prefix="roboloom-flow-")
         directory = Path(workdir.name)
         try:
@@ -316,11 +343,28 @@ class Session:
                 )
                 session.screen.start()
             session._wait_nodes(timeout)
+            session._attach()
         except BaseException:
             session.close()
             raise
         session._cancel_local.event = None
         return session
+
+    def _attach(self) -> None:
+        """Hold the FIFO open for writing for as long as this process lives. When its
+        last writer is gone, however this process ended (killed, crashed, its terminal
+        closed), the session node discards the episode, lets the followers hold and
+        ends the dataflow: a robot never keeps following a policy nobody watches."""
+        for attempt in range(50):
+            try:
+                held = os.open(self.fifo, os.O_WRONLY | os.O_NONBLOCK)
+                break
+            except OSError:  # the session node has not opened it yet
+                if attempt == 49:
+                    raise
+                time.sleep(0.1)
+        self._lifeline = held
+        os.write(held, b'{"command": "attach"}\n')
 
     @property
     def alive(self) -> bool:
@@ -406,6 +450,10 @@ class Session:
         finally:
             if self.screen is not None:
                 self.screen.stop()
+            if self._lifeline is not None:  # kept until the dataflow has ended
+                with contextlib.suppress(OSError):
+                    os.close(self._lifeline)
+                self._lifeline = None
             self.fifo.unlink(missing_ok=True)
             self._workdir.cleanup()
 
@@ -520,6 +568,7 @@ class Session:
         from .node import start_warning
 
         deadline = time.monotonic() + timeout
+        failed_since: float | None = None
         while True:
             self._check_alive()
             status = self.status()
@@ -530,7 +579,11 @@ class Session:
                 status.get(name, {}).get("fields", {}).get("state") == "failed"
                 for name in self.cfg.controllers
             )
-            if failed:  # a controller that failed does not recover by waiting
+            # A policy that failed in the last episode is ready again once that
+            # episode was stopped or discarded (its status follows within a moment);
+            # one that did not load stays failed, and waiting does not help.
+            failed_since = (failed_since or time.monotonic()) if failed else None
+            if failed_since is not None and time.monotonic() - failed_since > 1.5:
                 raise SessionError(warning)
             if time.monotonic() > deadline:
                 raise SessionError(f"not ready after {timeout:g} s: {warning}")
@@ -568,10 +621,40 @@ class Session:
                 raise SessionError(f"no answer to command {ident} within {timeout:g} s")
             time.sleep(0.05)
 
+    def _check_running(self) -> None:
+        """While an episode runs: the dataflow is alive, no controller failed and no
+        follower latched. Raises EpisodeFailed when the episode cannot go on."""
+        self._check_alive()
+        status = self.status()
+        for name in self.cfg.controllers:
+            fields = status.get(name, {}).get("fields", {})
+            if fields.get("state") == "failed":
+                raise EpisodeFailed(
+                    f"{name} failed during the episode: "
+                    f"{fields.get('error') or 'see its log'}"
+                )
+        for name in self.cfg.followers:
+            fields = status.get(name, {}).get("fields", {})
+            if fields.get("mode") in ("FAULT", "ESTOP"):
+                raise EpisodeFailed(
+                    f"{name} is {fields['mode']}"
+                    + (f" ({fields['reason']})" if fields.get("reason") else "")
+                )
+
     def start(self, task: str) -> None:
         if not task.strip():
             raise ValueError("task is required")
-        self.wait_report(self.send("start", task))
+        ident = self.send("start", task)
+        try:
+            self.wait_report(ident)
+        except SessionError as exc:
+            # A warning means the session node sent `start` to nobody. Otherwise some
+            # nodes took it and the recorder did not (or did not answer): the followers
+            # and the policy must not run an episode nobody records.
+            if "warning" not in exc.report:
+                with contextlib.suppress(OSError, SessionError):
+                    self.send("stop")
+            raise
         self._episode = task
 
     def stop(self) -> EpisodeResult:
@@ -734,8 +817,11 @@ class Session:
         self.wait_report(self.send("stop_teleop"))
 
     def estop(self) -> None:
-        """Latch the follower in ESTOP (stays until the dataflow restarts)."""
-        self.send("estop")
+        """Latch the follower in ESTOP (stays until the dataflow restarts). Written
+        straight to the FIFO: it must also go out when a node has failed, which every
+        other command refuses."""
+        command = {"id": next(self._ids), "command": "estop", "task": ""}
+        self.client.send(json.dumps(command), attempts=3)
 
     def release(self, *, confirm: bool = False) -> None:
         """Torque off the actuated inputs and the followers after stopping; first do what
@@ -773,7 +859,9 @@ class Session:
         result either way).
 
         `task` is a string or a function of `EpisodeInfo`. `on_tick(status)` is called
-        every `tick_s` while recording. An exception or Ctrl-C discards the episode.
+        every `tick_s` while recording. An exception or Ctrl-C discards the episode, and
+        so does a controller that fails or a follower that latches FAULT or ESTOP while
+        it runs (EpisodeFailed): an episode that broke off is not saved.
         `home=True` first moves to the saved home pose (`home`), so every episode starts
         from the same pose.
         """
@@ -787,7 +875,7 @@ class Session:
         try:
             end = time.monotonic() + seconds
             while time.monotonic() < end:
-                self._check_alive()
+                self._check_running()
                 if on_tick is not None:
                     on_tick(self.status())
                 time.sleep(min(tick_s, max(0.0, end - time.monotonic())))
