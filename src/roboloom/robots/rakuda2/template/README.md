@@ -2,7 +2,10 @@
 
 Created by `roboloom init rakuda2`. Everything measured on *this* robot is written into
 these files; values still to fill are `SET_...` and every command refuses to run until
-they are set. Commit the YAML files; `.roboloom/.gitignore` keeps out the raw
+they are set. With mock devices (`--mock`) the project runs before that: `mock.yaml`
+holds a stand-in for each `SET_...` value, never used with the hardware. A key a node
+does not read is refused when the configuration is loaded, so a misspelled key is not
+ignored in silence. Commit the YAML files; `.roboloom/.gitignore` keeps out the raw
 measurements (`*.npz`), logs and datasets.
 
 ## Installation and project directory
@@ -17,6 +20,10 @@ uv run roboloom --help
 
 This README and the robot configuration are copied from the installed package by
 `uv run roboloom init rakuda2`. Package updates do not overwrite existing configuration.
+`uv run roboloom init rakuda2 --update` brings this project up to the installed
+template: it adds files the project lacks, replaces files still as they were copied,
+and lists what the template has that your edited files do not (they are never
+overwritten; `.template.json` records how each file was copied).
 
 The [Rakuda2 Quick start](https://tetsugo02.github.io/roboloom/en/quick-start/rakuda2/)
 ([日本語](https://tetsugo02.github.io/roboloom/ja/quick-start/rakuda2/)) walks through setup,
@@ -221,8 +228,9 @@ from `sensors` in `config.yaml`. LeRobot checkpoints requiring missing inputs ar
 refused before an episode starts. Use `action_horizon: 1` with LeRobot `mode: step`.
 
 Existing project files are not overwritten by package updates. To migrate an older
-configuration, remove `requires: [digit]` from `options.policy` in `config.yaml` and
-set `observe: [camera]` in `nodes/policy.yaml`.
+configuration, run `uv run roboloom init rakuda2 --update` (it adds `nodes/policy.yaml`
+and lists the options `config.yaml` lacks), remove `requires: [digit]` from
+`options.policy` in `config.yaml` and set `observe: [camera]` in `nodes/policy.yaml`.
 
 ## Operator screen
 

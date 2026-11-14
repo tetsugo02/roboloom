@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
 from ..control.homing import HomeSpec, parse_home
 from ..control.takeover import JointPickup
-from ..core.checks import positions, positive
+from ..core.checks import positions, positive, unknown_keys
 from ..core.protocol import Envelope
 from ..errors import ConfigError
 from ..inputs.base import InputDevice, JointInput
@@ -38,6 +38,18 @@ class JointController(Controller):
     """One leader's joints onto one follower's joints."""
 
     max_followers: ClassVar[int | None] = 1
+    keys = (
+        *Controller.keys,
+        "input",
+        "unit",
+        "joints",
+        "alignment_tolerance",
+        "max_speed",
+        "input_timeout_ms",
+        "couplings",
+        "home",
+        "feedback",
+    )
 
     def __init__(
         self,
@@ -75,6 +87,8 @@ class JointController(Controller):
             raise ValueError(
                 f"{name} needs a complete, ordered, one-to-one joint mapping"
             )
+        for j in mapping:
+            unknown_keys(j, ("leader", "follower", "sign", "offset"), f"{name}.joints")
         leaders = [j.get("leader") for j in mapping]
         if (
             [j.get("follower") for j in mapping] != list(robot.joint_names)
@@ -149,6 +163,13 @@ class JointController(Controller):
             j["leader"]: j["sign"] * (f - j["offset"] - extra)
             for j, f, extra in zip(self.mapping, follower, added, strict=True)
         }
+
+    def follower_pose(self, leader: Sequence[float]) -> list[float]:
+        """The follower pose the joint map gives for the leader's readings (couplings
+        aside): where the follower is aligned with a leader at rest."""
+        values = positions(list(leader), len(self.source_joints))
+        by_name = dict(zip(self.source_joints, values, strict=True))
+        return [by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.mapping]
 
     @property
     def home(self) -> HomeSpec | None:

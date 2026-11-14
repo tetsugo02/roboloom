@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -15,6 +15,8 @@ class PcmAudio(Source):
     """Mono int16 PCM, one fixed-length chunk per dataset frame."""
 
     kind = "audio"
+    # no `fps`: one chunk per dataset frame
+    keys: ClassVar[tuple[str, ...]] = ("type", "sample_rate")
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)

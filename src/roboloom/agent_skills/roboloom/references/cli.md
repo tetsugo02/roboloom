@@ -21,7 +21,7 @@ Flags of commands that open devices:
 | Command | Purpose | Opens devices |
 | --- | --- | --- |
 | `roboloom [robot]` / `roboloom launch [robot]` | launcher: pick robot, operation, options, mock | on Launch |
-| `roboloom init <robot> [--root DIR]` | create `.roboloom/<robot>/` from the template | no |
+| `roboloom init <robot> [--root DIR] [--update]` | create `.roboloom/<robot>/` from the template; `--update` brings an existing project up to the installed template without overwriting edited or measured files | no |
 | `roboloom validate [robot]` | check configuration + dataflow; print options and dataset | no |
 | `roboloom probe <port> [--device dynamixel\|pika\|pika_sense] [--ids 1,2] [--baudrate N]` | read-only bus inspection (a CAN name reads a PiPER) | reads |
 | `roboloom commission [robot] <node>` | diff and write Dynamixel EEPROM after confirmation | writes |

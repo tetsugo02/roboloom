@@ -127,6 +127,23 @@ SETTLE_S = 10.0  # how long a reset waits for an inference that is still running
 class PolicyController(Controller):
     uses_input: ClassVar[bool] = False
     drives_all_followers: ClassVar[bool] = True
+    keys = (
+        *Controller.keys,
+        "factory",
+        "kwargs",
+        "observe",
+        "rate_hz",
+        "interpolation_multiplier",
+        "interpolation",
+        "observation_history",
+        "hold",
+        "action_horizon",
+        "max_speed",
+        "inference",
+        "replan_at",
+        "home",
+        "teleop",
+    )
 
     def __init__(
         self,

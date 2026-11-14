@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -35,6 +35,7 @@ class ImageSensor(Source):
     """HWC RGB frames stored as a LeRobot image or video feature."""
 
     kind = "image"
+    keys: ClassVar[tuple[str, ...]] = ("type", "fps", "storage", "height", "width")
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)

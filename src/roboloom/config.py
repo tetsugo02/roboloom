@@ -18,7 +18,7 @@ import yaml
 
 from .controllers import CONTROLLERS
 from .controllers.base import Controller
-from .core.checks import identity, positive
+from .core.checks import identity, positive, unknown_keys
 from .core.source import Recordable, Source
 from .errors import ConfigError
 from .estimators import ESTIMATORS
@@ -47,6 +47,17 @@ RENAMED = {
     "robot_type": "the dataset's robot type is the robot's directory name; remove it",
     "robots": "renamed to followers",
 }
+# the keys of the recorder's and the session's node files
+RECORDER_KEYS = (
+    "max_age_ms",
+    "grace_ms",
+    "image_writer_threads",
+    "streaming_encoding",
+    "queue_s",
+    "video_codec",
+    "quality",
+)
+SESSION_KEYS = ("type",)
 CONFIG_FILE = "config.yaml"
 INFER_OPTION = "policy"  # `infer` turns on the option of this name when one is declared
 NO_OPTIONS = (
@@ -398,11 +409,43 @@ def read_config(
             problems.append(f"unknown keys {others} (allowed: {allowed})")
         raise ConfigError(f"{path}: " + "; ".join(problems))
     tree["settings"] = raw
+    if raw.get("mode") == "mock":
+        table = mock_values(path.parent)
+        for part in (*ROLES, *SERVICES):
+            tree[part] = _stand_in(tree[part], table)
     return tree
 
 
 PLACEHOLDER = "SET_"
 PROJECT_ROOT = ".roboloom"
+MOCK_VALUES = "mock.yaml"  # next to the configuration
+
+
+def mock_values(directory: Path) -> dict:
+    """`mock.yaml`: a stand-in for each SET_ value, used with mock devices only, so a
+    project runs in mock before its robot was measured. With the hardware a SET_ value
+    is refused as ever."""
+    path = directory / MOCK_VALUES
+    if not path.exists():
+        return {}
+    table = _read(path)
+    wrong = [str(k) for k in table if not str(k).startswith(PLACEHOLDER)]
+    if wrong:
+        raise ConfigError(f"{path}: its keys are {PLACEHOLDER} names, not {wrong}")
+    return table
+
+
+def _stand_in(value: object, table: dict) -> object:
+    if isinstance(value, str):
+        return table.get(value, value)
+    if isinstance(value, dict):
+        return {
+            k: v if str(k).startswith("__") else _stand_in(v, table)
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_stand_in(v, table) for v in value]
+    return value
 
 
 def placeholders(value: object, where: str = "") -> list[str]:
@@ -520,6 +563,7 @@ def _bind_teleop(
         built[inner] = cls(
             f"{name}.{inner}", c, source, {x: followers[x] for x in targets}
         )
+        _check_keys(built[inner], c, f"controllers.{name}.teleop.{inner}")
     controller.bind_teleop(built)  # type: ignore[attr-defined]  # a PolicyController
     for c in built.values():
         if c.homes and not any(f in controller.homes for f in c.homes):
@@ -554,7 +598,17 @@ def _bind_parts(name: str, controller: Controller, inputs: dict) -> None:
             )
         parts = {t: follower.part(t.removeprefix(prefix)) for t in targets}
         built[inner] = cls(f"{name}.{inner}", c, source, parts)
+        _check_keys(built[inner], c, where)
     controller.bind_parts(built)  # type: ignore[attr-defined]  # a PartsController
+
+
+def _check_keys(owner: object, cfg: dict, where: str) -> None:
+    """Refuse the keys of a node file its class does not read. A class says what it
+    reads in `keys`; one that does not declare `keys` itself (an extension written
+    before this check, or one that leaves it out) is not checked."""
+    declared = vars(type(owner)).get("keys")
+    if declared is not None:
+        unknown_keys(cfg, declared, where)
 
 
 def parse_config(tree: dict) -> RobotConfig:
@@ -594,7 +648,8 @@ def parse_config(tree: dict) -> RobotConfig:
         name: FOLLOWERS.get(c.get("type"))(name, c)
         for name, c in tree["followers"].items()
     }
-    for model in followers.values():
+    for name, model in followers.items():
+        _check_keys(model, tree["followers"][name], f"followers.{name}")
         model.traits()  # a measured `unattended` must fill in an unknown one
     trackers = {
         name: TRACKERS.get(c.get("type"))(name, c)
@@ -604,6 +659,7 @@ def parse_config(tree: dict) -> RobotConfig:
         name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
     }
     for name, held in inputs.items():
+        _check_keys(held, tree["inputs"][name], f"inputs.{name}")
         system = getattr(held, "tracker_system", lambda: None)()
         if system is not None and system not in trackers:
             raise ValueError(
@@ -613,9 +669,12 @@ def parse_config(tree: dict) -> RobotConfig:
     sensors = {
         name: SENSORS.get(c.get("type"))(name, c) for name, c in tree["sensors"].items()
     }
+    for name, sensor in sensors.items():
+        _check_keys(sensor, tree["sensors"][name], f"sensors.{name}")
     estimators = {}
     for name, c in tree["estimators"].items():
         estimator = ESTIMATORS.get(c.get("type"))(name, c)
+        _check_keys(estimator, c, f"estimators.{name}")
         follower = followers.get(estimator.follower)
         if follower is None:
             raise ValueError(f"estimators.{name} must reference a configured follower")
@@ -659,6 +718,7 @@ def parse_config(tree: dict) -> RobotConfig:
             source if cls.uses_input else None,
             {x: followers[x] for x in targets},
         )
+        _check_keys(controller, c, f"controllers.{name}")
         unknown = set(controller.observes()) - {*inputs, *sensors}
         if unknown:
             raise ValueError(
@@ -709,6 +769,8 @@ def parse_config(tree: dict) -> RobotConfig:
     if len(set(devices)) != len(devices):
         raise ValueError("duplicate port or sensor ID")
 
+    unknown_keys(tree["recorder"], RECORDER_KEYS, "recorder")
+    unknown_keys(tree["session"], SESSION_KEYS, "session")
     ages = tree["recorder"].get("max_age_ms", {})
     cfg = RobotConfig(
         robot=robot,

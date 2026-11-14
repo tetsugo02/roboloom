@@ -5,7 +5,7 @@ from __future__ import annotations
 from ...core.checks import identity, positive
 from ...drivers.mock import MockBus
 from ...kinematics.spec import KinematicSpec
-from ..base import Follower, JointBus, SafetyTraits
+from ..base import FOLLOWER_KEYS, Follower, JointBus, SafetyTraits
 from .spec import JOINTS, MODEL, REST, UNIT, check_within_range
 
 
@@ -19,6 +19,7 @@ class PiperFollower(Follower):
     """
 
     model = "piper"
+    keys = (*FOLLOWER_KEYS, "can", "speed_percent", "stale_ms")
     effort_signal = ("efforts_Nm", "N·m")
     # The arm falls when its motors are disabled (no brakes). Whether it keeps its target
     # once nothing commands it (process gone, CAN closed) is not established: measure it

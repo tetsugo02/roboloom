@@ -9,6 +9,8 @@ from pathlib import Path
 import yaml
 
 from ..config import RobotConfig
+from ..control.interpolation import whole_hz
+from ..errors import ConfigError
 from ..recording import ACTION, action_stream
 
 STATUS_SUFFIX = "_status"  # session input ids; runtime.node reads the same suffix
@@ -23,13 +25,28 @@ def command_output(follower: str) -> str:
     return f"command_{follower}"
 
 
+def timer(rate_hz: float, name: str) -> str:
+    """The dora timer that ticks `name` at `rate_hz`. dora takes a whole number of Hz or
+    of milliseconds per tick; any other rate is refused (it used to be cut to whole Hz
+    in silence: 12.5 Hz ran at 12)."""
+    if whole_hz(rate_hz):
+        return f"dora/timer/hz/{round(rate_hz)}"
+    period_ms = 1000 / rate_hz
+    if round(period_ms) >= 1 and abs(period_ms - round(period_ms)) < 1e-6:
+        return f"dora/timer/millis/{round(period_ms)}"
+    raise ConfigError(
+        f"{name}: {rate_hz:g} Hz is neither a whole number of Hz nor a whole number of "
+        "milliseconds per tick (e.g. 30, or 12.5 = 80 ms); choose such a rate"
+    )
+
+
 def build_flow(cfg: RobotConfig) -> dict:
     script = str(Path(__file__).with_name("node.py").resolve())
     fps = cfg.dataset_fps
 
     def node(name, inputs, outputs, tick=None):
         if tick is not None:
-            inputs = {**inputs, "tick": f"dora/timer/hz/{int(tick)}"}
+            inputs = {**inputs, "tick": timer(tick, name)}
         return {
             "id": name,
             # this interpreter, so nodes import the same roboloom without an activated venv

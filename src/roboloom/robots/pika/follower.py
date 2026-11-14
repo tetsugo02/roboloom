@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ...core.checks import identity, positive
 from ...drivers.mock import MockBus
-from ..base import Follower, JointBus, SafetyTraits
+from ..base import FOLLOWER_KEYS, Follower, JointBus, SafetyTraits
 from .spec import JOINTS, MAX_CURRENT_A, REST, UNIT, check_within_range
 
 
@@ -19,6 +19,7 @@ class PikaGripperFollower(Follower):
     """
 
     model = "pika_gripper"
+    keys = (*FOLLOWER_KEYS, "port", "current_limit_A", "stale_ms")
     effort_signal = ("currents_mA", "mA")
     # Without torque the gripper lets go of what it holds (assumed: it has no brake).
     # Whether it keeps its target once nothing commands it is not established: measure

@@ -2,7 +2,7 @@
 
 ## Specifying the configuration
 
-`roboloom init rakuda2` creates configuration, node, and calibration YAML in `.roboloom/rakuda2/`. It does not overwrite an existing directory. Each robot has one configuration (`config.yaml`); combinations of features are chosen with launch options. The robot name `rakuda2` refers to `.roboloom/rakuda2/config.yaml`. When `.roboloom/` holds a single robot it can be omitted; you can also specify a file path.
+`roboloom init rakuda2` creates configuration, node, and calibration YAML in `.roboloom/rakuda2/`. It does not overwrite an existing directory. To bring a project up to a newer template, run `roboloom init rakuda2 --update`: it adds the files the project lacks and replaces files that are still as they were copied. Files you edited and files holding measured values are left alone; for those it lists the keys and options only the template has, to copy by hand. Each robot has one configuration (`config.yaml`); combinations of features are chosen with launch options. The robot name `rakuda2` refers to `.roboloom/rakuda2/config.yaml`. When `.roboloom/` holds a single robot it can be omitted; you can also specify a file path.
 
 ## Configuration YAML
 
@@ -34,7 +34,7 @@ The only top-level keys are `repo_id`, `output`, `dataset_fps`, `mode`, the role
 
 Node names are used as dora IDs and as dataset feature names. Use letters, digits, `-` and `_` only. `recorder`, `session`, `action` and `tick`, names starting with `action_` and names ending in `_status` are used by the dataflow and cannot be node names.
 
-Each node's `type` selects the implementation. `SET_...` are robot-specific unset values; execution is refused if any remain in a referenced configuration. `validate` checks the consistency of the configuration and dataflow without opening devices. It does not check that EEPROM matches the hardware, image capture, or stopping behavior.
+Each node's `type` selects the implementation. A key the node does not read is refused on loading, so a misspelled key is not ignored in silence with the default used instead (for example `followers.follower: unknown keys torqe (did you mean torque?)`). A `control` group likewise takes only the keys its law reads. `SET_...` are robot-specific unset values; execution is refused if any remain in a referenced configuration. With `--mock` it validates and runs before any `SET_...` value is filled (with mock devices only, the stand-ins in the project's `mock.yaml` are used; the files keep their `SET_...` values, and the hardware refuses them as ever). `validate` checks the consistency of the configuration and dataflow without opening devices. It does not check that EEPROM matches the hardware, image capture, or stopping behavior.
 
 ## Followers and controllers
 
@@ -275,6 +275,8 @@ At load time, roboloom checks that references exist, that the estimator and the 
 ## Control rate
 
 `control_hz` in `follower.yaml` and the leader's `poll_hz` are the rates at which those nodes read and write their bus. The work of one period (reading the state, computing control laws, writing goals) must fit in the period. A higher rate makes the leader's current control and the follower's tracking finer.
+
+A node's rate (`control_hz`, `poll_hz`, a sensor's `fps`, a policy's `rate_hz`) is a whole number of Hz, or a rate whose period is a whole number of milliseconds (30, 120, 12.5 = 80 ms). dora's timers tick nothing else, so a value such as 29.97 is refused by `validate` and at launch.
 
 Choose the rate as follows.
 

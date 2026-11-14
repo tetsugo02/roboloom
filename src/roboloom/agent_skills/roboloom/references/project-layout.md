@@ -54,6 +54,15 @@ this order (template README): `probe` → edit node YAML → `validate` → `com
 (see [setup.md](setup.md)). Option-specific files are only checked when the option is on
 (e.g. DIGIT serials only with `--with digit`).
 
+With mock devices only (`--mock`, `mock=True`, `mode: mock`), `mock.yaml` next to
+`config.yaml` supplies a stand-in for each `SET_...` name, so a project runs in mock
+before anything was measured. Never write those stand-ins into node files, and never
+put measured values into `mock.yaml`.
+
+`.template.json` records the roboloom version and the hash of each file as `init` copied
+it; `roboloom init <robot> --update` uses it to tell untouched files (replaced when the
+template changed) from edited ones (kept; what they lack is listed).
+
 ## What to commit
 
 Commit `pyproject.toml`, `uv.lock` and every YAML under `.roboloom/` (configuration,

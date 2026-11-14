@@ -137,6 +137,22 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
     return None
 
 
+def recorder_state_after(report: dict) -> str | None:
+    """The recorder's state once it sent `report`, or None when the report does not
+    tell. Its status follows up to a quarter of a second later; without this a `start`
+    right after `save` or `discard` would be refused on the old one."""
+    command = report.get("command")
+    if command == "save" and ("saved_frames" in report or report.get("dropped")):
+        return "idle"
+    if command == "discard" and report.get("ok"):
+        return "idle"
+    if command == "stop" and report.get("ok"):
+        return "stopped"
+    if command == "start" and report.get("ok"):
+        return "recording"
+    return None
+
+
 def home_short(fields: dict) -> str:
     """Why a follower's home move ended out of tolerance, and what to do."""
     return (
@@ -295,15 +311,19 @@ def _session(node, cfg: RobotConfig):
             event_id, msg = _event(node)
             if event_id == "report" and msg is not None:
                 report(msg.payload)
+                state = recorder_state_after(msg.payload)
+                if state is not None and "recorder" in latest:
+                    latest["recorder"]["fields"]["state"] = state
+                    latest["recorder"]["t_ns"] = msg.t_ready_ns
             elif (
                 event_id is not None
                 and event_id.endswith(STATUS_SUFFIX)
                 and msg is not None
             ):
-                latest[event_id.removesuffix(STATUS_SUFFIX)] = {
-                    **msg.payload,
-                    "t_ns": msg.t_ready_ns,
-                }
+                name = event_id.removesuffix(STATUS_SUFFIX)
+                # a status made before the report that set the state says the old one
+                if msg.t_ready_ns >= latest.get(name, {}).get("t_ns", 0):
+                    latest[name] = {**msg.payload, "t_ns": msg.t_ready_ns}
             now = time.monotonic_ns()
             if (
                 status_path and latest and now - written_ns > 200_000_000
@@ -515,8 +535,32 @@ def _home_fields(safety: FollowerSafety) -> dict:
     return out
 
 
+def _mock_start(bus, robot: Follower, cfg: RobotConfig) -> None:
+    """Mock devices only: the mock follower starts where its mock leader rests. Nobody
+    can move a mock leader to align it with the follower, so where the leader's laws
+    hold it away from the mock's first pose (a trigger spring's `rest`) `start` would
+    wait for an alignment that never comes."""
+    controller = cfg.controller_for(robot.name)
+    source = controller.source
+    pose = getattr(controller, "follower_pose", None)
+    inner = getattr(bus, "bus", bus)  # the mock bus inside a JointDevice
+    if source is None or pose is None or not hasattr(inner, "values"):
+        return
+    reader = source.open(True, cfg.dataset_fps)
+    try:
+        sample = None
+        for _ in range(3):  # its laws need a tick to pull the mock joints to rest
+            sample = reader.read() or sample
+    finally:
+        reader.close()
+    if sample is not None:
+        inner.values = pose([float(x) for x in sample.value])
+
+
 def _follower(node, robot: Follower, cfg: RobotConfig):
     bus = robot.open_device(cfg.mock)
+    if cfg.mock:
+        _mock_start(bus, robot, cfg)
     safety = FollowerSafety(robot.safety_config(), bus)
     traits = robot.traits()
     status = StatusReporter(Publisher(robot.name), "follower")
@@ -1029,7 +1073,10 @@ def config_from_env(path: str, env: Mapping[str, str]) -> RobotConfig:
         else None,
     )
     for controller, selected in json.loads(env.get("ROBOLOOM_OBSERVE", "{}")).items():
-        tree["controllers"][controller]["observe"] = selected
+        node = tree["controllers"][controller]
+        # only where the parent could have changed it: a controller that observes
+        if node.get("type") == "policy" or "observe" in node:
+            node["observe"] = selected
     if "ROBOLOOM_VIDEO_CODEC" in env:  # the parent's choice, None included
         tree["recorder"]["video_codec"] = json.loads(env["ROBOLOOM_VIDEO_CODEC"])
     return parse_config(tree)

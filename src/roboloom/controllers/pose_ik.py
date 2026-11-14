@@ -42,7 +42,7 @@ from typing import Any
 import numpy as np
 
 from ..control.homing import parse_home
-from ..core.checks import positive
+from ..core.checks import positive, unknown_keys
 from ..core.protocol import Envelope
 from ..inputs.base import InputDevice, PoseInput
 from ..kinematics.spec import (
@@ -76,14 +76,39 @@ def _vector(value: Any, size: int, where: str) -> list[float]:
     return [float(v) for v in value]
 
 
+# the mappings of fixed shape and what each holds
+MAPPINGS = {
+    "tool_offset": ("xyz", "rpy"),
+    "workspace": ("min", "max"),
+    "max_input_jump": ("position_m", "rotation_rad"),
+}
+
+
 def _mapping(cfg: dict, key: str, where: str) -> dict:
     value = cfg.get(key)
     if not isinstance(value, dict):
         raise TypeError(f"{where}.{key}: expected a mapping")
+    if key in MAPPINGS:
+        unknown_keys(value, MAPPINGS[key], f"{where}.{key}")
     return value
 
 
 class PoseIkController(Controller):
+    keys = (
+        *Controller.keys,
+        "input",
+        "arm",
+        "gripper",
+        "tool_offset",
+        "workspace",
+        "max_input_jump",
+        "ik",
+        "gripper_map",
+        "max_speed",
+        "input_timeout_ms",
+        "home",
+    )
+
     def __init__(
         self,
         name: str,
@@ -144,6 +169,7 @@ class PoseIkController(Controller):
             positive(ik[key], f"{name}.ik.{key}")
         self.ik = {**ik, "iterations": int(ik["iterations"])}
         grip = cfg.get("gripper_map") or {}
+        unknown_keys(grip, ("scale", "offset"), f"{name}.gripper_map")
         self.grip_scale = float(grip.get("scale", 1.0))
         self.grip_offset = float(grip.get("offset", 0.0))
         speeds = _mapping(cfg, "max_speed", name)
