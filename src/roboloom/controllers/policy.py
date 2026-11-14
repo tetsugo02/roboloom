@@ -476,13 +476,15 @@ class PolicyController(Controller):
             for s in states.values()
         ):
             return {}
+        # checked on every command, also between two actions: the steps toward an
+        # action inferred from a sample that has since gone stale are not sent either
+        old = self._stale_sources(now)
+        if old:  # e.g. a frozen camera: never act on what is no longer there
+            self._clear()
+            self.stale = True
+            self.state, self.error = "stale_observation", f"{old[0]} is stale"
+            return {}
         if self.interpolator.needs_new_action():
-            old = self._stale_sources(now)
-            if old:  # e.g. a frozen camera: never act on what is no longer there
-                self._clear()
-                self.stale = True
-                self.state, self.error = "stale_observation", f"{old[0]} is stale"
-                return {}
             if self.stale:  # fresh again: the policy starts over
                 self.policy.reset()
                 self.stale, self.error = False, ""
@@ -508,7 +510,6 @@ class PolicyController(Controller):
                         now = time.monotonic_ns()
             chosen = self.queue.popleft().copy()
             chosen[self.hold_index] = held[self.hold_index]  # joints the policy leaves
-            self.executed = chosen
             # after a reset the line starts from what the followers hold
             self.interpolator.add(chosen, previous=held)
         action = self.interpolator.get()
@@ -517,6 +518,7 @@ class PolicyController(Controller):
         dt = max((now - self.last_ns) / 1e9, 1e-6) if self.last_ns else period
         span = min(dt, 2 * period)
         out: dict[str, Envelope] = {}
+        sent: list[float] = []
         start = 0
         for name, follower in self.followers.items():
             part = action[start : start + len(follower.joint_names)]
@@ -530,6 +532,10 @@ class PolicyController(Controller):
                 for p, x in zip(previous, part, strict=True)
             ]
             out[name] = self.command(name, limited, now)
+            sent += limited
+        # the history's action is the command that went out (what the recorder writes
+        # as `action`), not the policy's target before the speed limit
+        self.executed = np.asarray(sent, dtype=np.float64)
         self.last_ns = now
         return out
 

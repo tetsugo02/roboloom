@@ -52,14 +52,14 @@ command_deadline_ms: 300
 
 - `observation_history: N` (default 1): the observation is sampled once per action and
   `infer` also gets `observation["history"]`: every array stacked `[N, ...]`, oldest first,
-  current frame last (the first frame fills it), plus `"action"` `[N, n]`, the action
-  executed before each frame. `hold: [<follower>.<joint>, ...]`: action entries the policy
+  current frame last (the first frame fills it), plus `"action"` `[N, n]`, the command
+  sent before each frame (after `max_speed`, as recorded in `action`). `hold: [<follower>.<joint>, ...]`: action entries the policy
   does not drive; whatever it returns there (NaN too) becomes the held target, other
   entries must be finite. A policy may return both (and `action_horizon`) from an optional
   `options()`; it wins over the YAML. `bind(spec)` sees `spec.history`, `spec.hold`,
   `spec.units`. Normalization, resizing and decoding deltas stay in the policy.
 - An observed input or sensor older than `recorder.max_age_ms.<node>` stops the policy
-  (`stale_observation`, followers hold); when fresh again it restarts with `reset()`.
+  (`stale_observation`, followers hold, also mid-interpolation); when fresh again it restarts with `reset()`.
 
 - A model that cannot share roboloom's environment (other torch) or runs elsewhere:
   serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or
