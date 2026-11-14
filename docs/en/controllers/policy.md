@@ -95,7 +95,7 @@ observation_history: 4                       # default 1: only the latest frame
 hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
 ```
 
-- **`observation_history: N`**: the observation is sampled once per action (every `1/rate_hz`), also for the actions of a chunk that need no inference. `infer` then also gets `observation["history"]`: every array of the observation stacked `[N, ...]`, oldest first, the current frame last. At the start of an episode the first frame fills the history. `history["action"]` (float32 `[N, n]`) is the action executed before each frame (the targets the followers held at the start), for models that read their past actions. With `N = 1` the observation is unchanged.
+- **`observation_history: N`**: the observation is sampled once per action (every `1/rate_hz`), also for the actions of a chunk that need no inference. `infer` then also gets `observation["history"]`: every array of the observation stacked `[N, ...]`, oldest first, the current frame last. At the start of an episode the first frame fills the history. `history["action"]` (float32 `[N, n]`) is the action executed before each frame (the targets the followers held at the start): the command sent to the followers, as the recorder writes it to `action`, so a policy output cut by `max_speed` appears as the cut value. It is for models that read their past actions. With `N = 1` the observation is unchanged.
 - **`hold`**: entries of the action (`<follower>.<joint>`) the policy does not drive. Whatever the policy returns there, NaN included, is replaced by the target the follower holds, so a model trained on some of the joints still returns `[n]` or `[H, n]`. Every other entry must be finite, or the episode stops.
 - **`options()` (optional)**: a policy states these itself, and its values win over the YAML. Swapping the model then needs no edited configuration.
 
@@ -104,8 +104,8 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
         return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
     ```
 
-- `bind(spec)` also receives `spec.history`, `spec.hold` and `spec.units` (the unit of each action entry).
-- **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold. Once the sample is fresh again, the policy starts over with `reset()`.
+- `bind(spec)` also receives `spec.history`, `spec.hold`, `spec.units` (the unit of each action entry) and `spec.inference` (`sync` or `async`).
+- **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold, also between two actions of an interpolation. Once the sample is fresh again, the policy starts over with `reset()`.
 
 ### From a recording to your own model
 
@@ -145,6 +145,7 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 - `path` is a recorded dataset or a `.npy` file `[T, n]` of actions (to check the joint order and units of data from another tool). `stride: k` takes every k-th row (`rate_hz` must be `dataset_fps / k`); `horizon` is the chunk length.
 - The dataset's action names and rate are checked against the configuration at load.
+- It cannot be combined with `inference: async` (refused at load): a replay returns its rows in order whatever is observed, so replacing the queued actions would skip recorded rows.
 - Move the robot to the episode's first pose before starting (`home`), and keep `max_speed` low on the first try. After the last action the followers stay there.
 
 ### Running the policy in another process
@@ -247,6 +248,7 @@ action_horizon: 16
 - If the queue runs out before the chunk arrives, nothing is sent and the followers hold (`late_inference`); raise `replan_at` or `action_horizon`. At the start of an episode the state is `waiting_inference` until the first chunk is there.
 - Handing over to teleoperation, `stop` and a stale sensor discard the running inference's result; `policy.reset()` waits until that inference has returned, so `reset` and `infer` never overlap.
 - An exception in `infer` stops the episode, as in synchronous mode.
+- The policy is taken to return a chunk that starts at the time of its observation. A policy that returns the continuation of its previous chunk on each call (a replay, for one) would lose actions when the first ones are dropped; such a policy should read `spec.inference` in `bind(spec)` and refuse `async`.
 - The new chunk is not blended with the old one, and real-time chunking (RTC, which conditions a flow-matching model on the old chunk) is not implemented. A policy that returns very different consecutive chunks jumps at the switch (within `max_speed`).
 
 ### Action interpolation
@@ -287,8 +289,9 @@ interpolation: pchip   # default linear
 
 - The targets still pass through every action at its own time, so the curve adds no lag to the line (a low-pass filter would).
 - Between two consecutive actions the targets stay within their range: no overshoot, also when the policy's actions are noisy.
-- The speed is continuous at the actions. From the held pose the first action starts at rest. Halfway between two actions the speed can be up to 1.5 times the line's; `max_speed` still limits it.
+- The speed is continuous at the actions, as long as the action that was looked ahead to is the one executed next (see below). From the held pose the first action starts at rest. Halfway between two actions the speed can be up to 1.5 times the line's; `max_speed` still limits it.
 - The curve needs the action after the one being approached, taken from the queued chunk. For the last action of a chunk (synchronous inference, or `action_horizon: 1`) there is none, and the segment ends at the line's slope. With `inference: async` the next chunk usually arrives before the queue is empty.
+- The speed is not continuous in two cases. One: after a segment that had no next action to look at, when the next action reverses or differs much (a chunk boundary, `action_horizon: 1`). Two: when `inference: async` replaces the queued actions and the action that was looked ahead to changes. In both, the slope at the start of the next segment is limited again, so there is still no overshoot, but the speed jumps at that action.
 - `linear` stays the default: it is LeRobot's scheme and what the checks so far were done with. Neither has been compared on hardware; replay a recorded episode ([Replaying a recording](#replaying-a-recording)) with each and compare the recorded `observation.state`.
 
 ## Starting from a saved pose (home)

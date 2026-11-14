@@ -18,7 +18,10 @@ targets still pass through every action at its own time, so nothing lags behind 
 line, and they never leave the range between two consecutive actions (no overshoot),
 but the speed no longer jumps at each action. It needs the action after the one being
 approached (`next`), which the caller takes from its queue; without it (the end of a
-chunk) the segment ends at the line's slope.
+chunk) the segment ends at the line's slope. The speed is continuous at an action only
+if the action given as `next` is the one added next: when it is missing or replaced
+(asynchronous inference), the slope the next segment starts with is limited again and
+the speed can jump there (still without overshoot).
 """
 
 from __future__ import annotations

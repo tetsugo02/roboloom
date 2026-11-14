@@ -38,13 +38,16 @@ command_deadline_ms: 300
   must be whole Hz and <= every follower's `control_hz`. Followers lag one action period;
   the recorded `action` is the interpolated target.
 - `interpolation: pchip` (default `linear`): a monotone cubic through the same actions
-  (each reached at its own time, no overshoot between two actions, continuous speed;
-  uses the next queued action, falls back to the line's slope at a chunk's last action).
+  (each reached at its own time, no overshoot between two actions; uses the next queued
+  action, falls back to the line's slope at a chunk's last action). Speed is continuous
+  at an action only while that lookahead holds: it can jump at a chunk boundary,
+  with `action_horizon: 1`, and when `inference: async` replaces the queue.
 - `inference: async` (default `sync`): `infer` runs on a worker thread while queued
   actions keep going; the next inference starts when `replan_at` actions are left (`auto`:
   half of `action_horizon`); the new chunk replaces the queue minus the d actions executed
   since its observation (`dropped`). Queue empty first: followers hold (`late_inference`).
-  No blending of chunks; LeRobot RTC: not supported.
+  No blending of chunks; LeRobot RTC: not supported. A chunk must start at its
+  observation's time: `roboloom.policy.replay:load` refuses async (`spec.inference`).
 - `home: {pose, max_speed, tolerance[, timeout_s]}` (several followers: `{follower: {...}}`)
   moves the followers to a `capture-pose` pose with `home` / `Session.home()` /
   `infer --home`. Arrival is measured: every joint within `tolerance` within 2 s after the
@@ -60,14 +63,14 @@ command_deadline_ms: 300
 
 - `observation_history: N` (default 1): the observation is sampled once per action and
   `infer` also gets `observation["history"]`: every array stacked `[N, ...]`, oldest first,
-  current frame last (the first frame fills it), plus `"action"` `[N, n]`, the action
-  executed before each frame. `hold: [<follower>.<joint>, ...]`: action entries the policy
+  current frame last (the first frame fills it), plus `"action"` `[N, n]`, the command
+  sent before each frame (after `max_speed`, as recorded in `action`). `hold: [<follower>.<joint>, ...]`: action entries the policy
   does not drive; whatever it returns there (NaN too) becomes the held target, other
   entries must be finite. A policy may return both (and `action_horizon`) from an optional
   `options()`; it wins over the YAML. `bind(spec)` sees `spec.history`, `spec.hold`,
   `spec.units`. Normalization, resizing and decoding deltas stay in the policy.
 - An observed input or sensor older than `recorder.max_age_ms.<node>` stops the policy
-  (`stale_observation`, followers hold); when fresh again it restarts with `reset()`.
+  (`stale_observation`, followers hold, also mid-interpolation); when fresh again it restarts with `reset()`.
 
 - A model that cannot share roboloom's environment (other torch) or runs elsewhere:
   serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or

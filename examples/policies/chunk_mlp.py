@@ -57,6 +57,11 @@ def unscale(x: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
     return (x + 1) / 2 * span + low
 
 
+# the model reads the executed actions, which roboloom gives only with a history
+# (`observation["history"]` is there from observation_history: 2)
+HISTORY = "history must be at least 2: the model reads the actions executed before"
+
+
 class ChunkMlp:
     """state history + executed-action history -> a chunk of joint targets."""
 
@@ -65,6 +70,8 @@ class ChunkMlp:
         self.cfg = saved["config"]
         self.stats = {k: np.asarray(v) for k, v in saved["stats"].items()}
         self.keep = list(self.cfg["keep"])  # action entries the model drives
+        if self.cfg["history"] < 2:
+            raise ValueError(HISTORY)
         n, history, horizon = len(self.keep), self.cfg["history"], self.cfg["horizon"]
         self.model = build(2 * n * history, n * horizon).to(device).eval()
         self.model.load_state_dict(saved["model"])
@@ -175,6 +182,8 @@ def train(
     batch_size: int = 64,
     seed: int = 0,
 ) -> Path:
+    if history < 2:
+        raise ValueError(HISTORY)
     torch.manual_seed(seed)
     data, names, rate_hz = episodes(dataset, stride)
     drop = [n for n in names if n.split(".")[-1] in exclude or n in exclude]
