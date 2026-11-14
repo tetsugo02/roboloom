@@ -169,3 +169,53 @@ def test_a_parts_controller_teleoperates_in_the_dataflow(tmp_path):
         fields = s.status()["controller"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert fields["state"] == "following" and fields["command_hz"] > 50, fields
+
+
+def test_a_part_whose_input_stopped_is_not_commanded_again(tmp_path):
+    """Another input's updates must not renew a part's old target: the follower may
+    have been short of it (speed-limited), and would keep moving without an input."""
+    path = _project(
+        tmp_path,
+        {
+            "right": {**JOINT, "followers": ["follower.right_arm"]},
+            "left": {**JOINT, "input": "other", "followers": ["follower.left_arm"]},
+        },
+    )
+    node = yaml.safe_load((path.parent / "nodes" / "leader.yaml").read_text())
+    node["port"] = str(node["port"]) + "-other"
+    (path.parent / "nodes" / "other.yaml").write_text(yaml.safe_dump(node))
+    config = yaml.safe_load(path.read_text())
+    config["inputs"]["other"] = "nodes/other.yaml"
+    path.write_text(yaml.safe_dump(config))
+    recorder = path.parent / "nodes" / "recorder.yaml"
+    settings = yaml.safe_load(recorder.read_text())
+    settings["max_age_ms"]["other"] = settings["max_age_ms"]["leader"]
+    recorder.write_text(yaml.safe_dump(settings))
+    cfg = load_config(path)
+    controller = cfg.controllers["controller"]
+    follower = cfg.followers["follower"]
+    right = [follower.joint_names.index(j) for j in follower.parts()["right_arm"]]
+    left = [follower.joint_names.index(j) for j in follower.parts()["left_arm"]]
+    held = [2048.0] * 17
+    view = {"follower": FollowerView(held, held, None, "ACTIVE", 0)}
+    t = 1_000_000_000
+
+    def intent(source: str, seq: int, at: int) -> Envelope:
+        payload = {"positions": [2100.0] * 17, "unit": "dynamixel_count"}
+        return Envelope("joint_intent", source, "boot", seq, at, at, payload)
+
+    out = controller.update_from("leader", intent("leader", 1, t), view, t)
+    assert all(out["follower"].payload["positions"][i] != 2048.0 for i in right)
+    # 50 ms later the other input moves the left arm: the right target is still valid
+    t += 50_000_000
+    sent = controller.update_from("other", intent("other", 1, t), view, t)[
+        "follower"
+    ].payload["positions"]
+    assert all(sent[i] != 2048.0 for i in right + left)
+    # the right input is silent past its deadline: the right arm gets what is held
+    t += 100_000_000
+    sent = controller.update_from("other", intent("other", 2, t), view, t)[
+        "follower"
+    ].payload["positions"]
+    assert [sent[i] for i in right] == [2048.0] * len(right)
+    assert all(sent[i] != 2048.0 for i in left)

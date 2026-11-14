@@ -19,9 +19,12 @@ written for a part as if the part were a follower of its own:
 
 The follower still gets one command with all its joints, from one controller, so its
 safety checks, the recorded `action` and the dataset stay as with any other controller.
-Each inner controller steps from what the follower holds for its own joints; the joints
-of the other parts keep the targets last commanded, and joints no part drives stay
-where the follower holds them.
+Each inner controller steps from what the follower holds for its own joints. A part's
+target is repeated in the commands the other inputs cause only while it is valid: for
+its controller's `command_deadline_ms` after it was commanded, and not after that
+controller has withheld a command (input lost, not engaged, unreachable). After that,
+and for joints no part drives, the command carries what the follower holds, so a part
+whose input stopped does not keep moving toward an old target.
 
 Inner controllers have no `home` and no `feedback` of their own yet.
 """
@@ -52,7 +55,8 @@ class PartsController(Controller):
         super().__init__(name, cfg, source, followers)
         self.inner: dict[str, Controller] = {}  # set by `bind_parts`
         self.index: dict[str, list[int]] = {}  # part name -> the follower's joints
-        self.merged: list[float] | None = None  # the targets last commanded, all joints
+        # part name -> (the targets last commanded, when): valid for a deadline
+        self.commanded: dict[str, tuple[list[float], int]] = {}
 
     def bind_parts(self, controllers: Mapping[str, Controller]) -> None:
         """The inner controllers; together they drive every joint at most once."""
@@ -115,23 +119,36 @@ class PartsController(Controller):
     ) -> dict[str, Envelope]:
         follower = self.follower.name
         view = views[follower]
-        if self.merged is None:  # start from what the follower holds
-            self.merged = list(view.target or view.positions)
+        now = time.monotonic_ns() if now_ns is None else now_ns
         moved = False
         for c in self.inner.values():
             if c.source is None or c.source.name != input_name:
                 continue
             parts = {p: self._part_view(view, p) for p in c.followers}
-            for part, command in c.update(intent, parts, now_ns).items():
-                for i, value in zip(
-                    self.index[part], command.payload["positions"], strict=True
-                ):
-                    self.merged[i] = float(value)
-                moved = True
+            commands = c.update(intent, parts, now_ns)
+            for part in c.followers:
+                if part in commands:
+                    positions = [float(x) for x in commands[part].payload["positions"]]
+                    self.commanded[part] = (positions, now)
+                    moved = True
+                else:  # withheld: the part's joints go back to what the follower holds
+                    self.commanded.pop(part, None)
         if not moved:
             return {}
-        now = time.monotonic_ns() if now_ns is None else now_ns
-        return {follower: self.command(follower, list(self.merged), now)}
+        # the other parts: their target while it is valid, else what the follower holds
+        # (never an old request the follower may not have reached)
+        merged = [float(x) for x in view.target or view.positions]
+        for c in self.inner.values():
+            for part in c.followers:
+                if part not in self.commanded:
+                    continue
+                positions, at = self.commanded[part]
+                if now - at > c.deadline_ms * 1e6:
+                    del self.commanded[part]
+                    continue
+                for i, value in zip(self.index[part], positions, strict=True):
+                    merged[i] = value
+        return {follower: self.command(follower, merged, now)}
 
     def update(
         self,
@@ -144,7 +161,7 @@ class PartsController(Controller):
     def reset(self) -> None:
         for c in self.inner.values():
             c.reset()
-        self.merged = None
+        self.commanded.clear()
 
     def status(self) -> dict:
         states = {name: c.status() for name, c in self.inner.items()}

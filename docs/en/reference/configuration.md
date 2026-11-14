@@ -78,6 +78,7 @@ input_timeout_ms: 150
 
 - Each inner controller sees its part as a follower of its own (the same unit and rate, its joints' limits) and follows its own input. Several inner controllers may follow the same input.
 - A joint is driven by at most one inner controller. Joints no part drives stay where the follower holds them.
+- The follower gets one command with all its joints, so a command caused by one input also carries the other parts' targets. It does so only while such a target is valid: within the inner controller's `command_deadline_ms` after it was commanded, and not after that controller has withheld a command. A part whose input stopped, was released or could not be reached by the IK gets the target the follower holds, so it never keeps moving toward an old target.
 - When the follower latches `FAULT` or `ESTOP`, every part re-aligns before it commands again.
 - Inner controllers cannot set `home` or `feedback` yet, and a parts controller cannot be a policy's `teleop:` controller.
 - The controller's row shows `following` once any part commands; `parts` lists each inner controller's state.
