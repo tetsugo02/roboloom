@@ -15,17 +15,36 @@ from ..control.device import (
     check_hardware,
     parse_groups,
 )
-from ..core.checks import finite, names, positive
+from ..core.checks import finite, names, positive, unknown_keys
 from ..core.protocol import Envelope
 from ..core.source import Features, Joined
 from ..core.traits import WORST_CASE, SafetyTraits, Unattended
 from ..drivers.base import JointBus
 from ..kinematics.spec import KinematicSpec
 
-__all__ = ["Follower", "FollowerPart", "JointBus", "SafetyTraits", "check_limits"]
+__all__ = [
+    "FOLLOWER_KEYS",
+    "Follower",
+    "FollowerPart",
+    "JointBus",
+    "SafetyTraits",
+    "check_limits",
+]
 
 
 LIMIT_KEYS = ("min", "max", "max_speed", "max_jump")
+HEALTH_KEYS = ("every_ticks", "max_temperature_c", "max_current_mA", "over_current_s")
+# the keys every follower model reads from its YAML (`Follower.keys`)
+FOLLOWER_KEYS = (
+    "type",
+    "limits",
+    "control_hz",
+    "health",
+    "record_effort",
+    "torque",
+    "parts",
+    "unattended",
+)
 
 
 def check_limits(joint_names: Sequence[str], limits: object, name: str) -> list[dict]:
@@ -33,6 +52,7 @@ def check_limits(joint_names: Sequence[str], limits: object, name: str) -> list[
     if not isinstance(limits, list) or len(limits) != len(joint_names):
         raise ValueError(f"{name}.limits needs {len(joint_names)} explicit bounds")
     for joint, limit in zip(joint_names, limits, strict=True):
+        unknown_keys(limit, ("name", *LIMIT_KEYS), f"{name}.limits ({joint})")
         if (
             not isinstance(limit, dict)
             or limit.get("name") != joint
@@ -56,6 +76,7 @@ def check_health(cfg: object, dimension: int, name: str) -> dict:
         return {}
     if not isinstance(cfg, dict):
         raise TypeError(f"{name}.health must be a mapping")
+    unknown_keys(cfg, HEALTH_KEYS, f"{name}.health")
     out: dict[str, Any] = {
         "every_ticks": int(
             positive(cfg.get("every_ticks", 10), f"{name}.health.every_ticks")
@@ -85,6 +106,17 @@ class Follower:
     """
 
     model = "external"
+    # The keys of its YAML this class reads; any other key is refused when the
+    # configuration is loaded (config.parse_config), so a misspelled one is not ignored
+    # in silence. A model lists its own: `keys = (*FOLLOWER_KEYS, "port", ...)`. A
+    # subclass that does not declare `keys` itself is not checked.
+    keys: ClassVar[tuple[str, ...]] = (
+        *FOLLOWER_KEYS,
+        "joints",
+        "unit",
+        "control",
+        "bus_watchdog_ms",
+    )
     # (follower_state field, unit) of the effort the robot measures, for effort estimators;
     # None when it measures none
     effort_signal: ClassVar[tuple[str, str] | None] = None

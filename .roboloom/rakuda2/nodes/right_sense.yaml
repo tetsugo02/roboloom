@@ -1,0 +1,6 @@
+# Pika Sense for the right arm (option pika): its /dev/serial/by-path/... port and the
+# serial number of its tracker (LHR-...). Not verified on hardware.
+type: pika_sense
+port: SET_RIGHT_SENSE_PORT
+tracker: {system: lighthouse, serial: SET_RIGHT_TRACKER_SERIAL}
+stale_ms: 100

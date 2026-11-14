@@ -58,7 +58,7 @@ To use a specific commit, replace `<commit-sha>` with an actual commit SHA. This
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commit-sha>
 ```
 
-Updating the package does not overwrite existing configuration under `.roboloom/`.
+Updating the package does not overwrite existing configuration under `.roboloom/`. To bring a project up to a newer template, run `roboloom init rakuda2 --update`: it adds the files the project lacks and replaces files that are still as they were copied. Files you edited and files holding measured values are left alone; for those it lists the keys and options only the template has, to copy by hand.
 
 ## Use with coding agents
 

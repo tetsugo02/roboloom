@@ -43,7 +43,7 @@ Enabling `digit` alone does not change the policy inputs. Sensors added to `obse
 
 A policy trained with DIGIT inputs cannot simply run unchanged without them. Use a policy trained without DIGIT inputs. The LeRobot loader refuses missing required inputs before starting. Custom policies can implement the same check with `bind(spec)`.
 
-Package updates do not overwrite existing project configurations. To migrate an older template, remove `requires: [digit]` from `options.policy` in `config.yaml` and set `observe: [camera]` in `nodes/policy.yaml`. Evaluation runs save to `datasets/rakuda2-eval` without DIGIT, or `datasets/rakuda2-digit-eval` with `digit` enabled.
+Package updates do not overwrite existing project configurations. `roboloom init rakuda2 --update` adds the files a project lacks (`nodes/policy.yaml` and the like) and lists the options its `config.yaml` lacks. To migrate an older template, remove `requires: [digit]` from `options.policy` in `config.yaml` and set `observe: [camera]` in `nodes/policy.yaml`. Evaluation runs save to `datasets/rakuda2-eval` without DIGIT, or `datasets/rakuda2-digit-eval` with `digit` enabled.
 
 ## Your own policy
 

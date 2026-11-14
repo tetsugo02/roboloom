@@ -1,0 +1,7 @@
+# Option pika: each arm is driven by its own Pika Sense (roboloom.controllers.parts).
+# The follower still gets one command with all 17 joints from this controller; the
+# torso and head (part `body`) are driven by no part and stay where they are held.
+type: parts
+followers: [follower]
+command_deadline_ms: 100
+parts: [pika_right.yaml, pika_left.yaml]

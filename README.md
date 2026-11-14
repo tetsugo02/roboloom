@@ -214,6 +214,8 @@ follower の安全判定：
 ```bash
 uv run roboloom init rakuda2      # .roboloom/rakuda2/ と .roboloom/.gitignore を作る
 uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所つきで一覧にする
+uv run roboloom run rakuda2 --mock # 模擬デバイスなら，何も埋めずに動く（mock.yaml の代用値）
+uv run roboloom init rakuda2 --update  # 既存のプロジェクトを新しいテンプレートに追いつかせる
 ```
 
 - 機体ごとに測る値は，テンプレートでは `SET_…` になっています．ポート，センサーのシリアル番号などです．

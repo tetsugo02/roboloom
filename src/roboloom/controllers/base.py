@@ -59,6 +59,15 @@ class Controller(ABC):
     # True for a controller that must drive every follower, in configuration order (a
     # policy: its action is the recorded one, which joins them all)
     drives_all_followers: ClassVar[bool] = False
+    # The keys of its YAML this class reads; any other key is refused when the
+    # configuration is loaded (a misspelled one would otherwise be ignored in silence).
+    # A subclass that does not declare `keys` itself is not checked.
+    keys: ClassVar[tuple[str, ...]] = (
+        "type",
+        "followers",
+        "command_deadline_ms",
+        "follower_timeout_ms",
+    )
 
     def __init__(
         self,

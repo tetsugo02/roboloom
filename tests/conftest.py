@@ -40,6 +40,8 @@ def mock_project(root: Path) -> Path:
     }
     used: set[str] = set()
     for path in (root / "rakuda2").rglob("*.yaml"):
+        if path.name == "mock.yaml":
+            continue  # the template's mock stand-ins are keyed by the SET_ names
         text = path.read_text()
         for old, new in filled.items():
             if old in text:

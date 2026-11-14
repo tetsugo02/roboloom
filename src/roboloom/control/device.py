@@ -25,6 +25,7 @@ from pathlib import Path
 import yaml
 
 from ..core.checks import names as check_names
+from ..core.checks import unknown_keys
 from ..drivers.base import Health, JointState, read_health, read_state
 from ..drivers.dynamixel_table import OPERATING_MODES
 from ..dynamics.base import GravityModel, load_gravity_model
@@ -60,6 +61,11 @@ def parse_groups(
             raise ValueError(
                 f"{owner}.control: each group needs a name and law in {sorted(LAWS)}"
             )
+        unknown_keys(
+            item,
+            law_class(item["law"]).keys,
+            f"{owner}.control.{item['group']} (law {item['law']})",
+        )
         joints = check_names(
             item.get("joints"), f"{owner}.control.{item['group']}.joints"
         )

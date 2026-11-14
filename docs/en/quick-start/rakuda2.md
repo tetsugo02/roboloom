@@ -9,7 +9,7 @@ uv run roboloom init rakuda2
 ls /dev/serial/by-id/
 ```
 
-If `.roboloom/rakuda2/` already exists, `init` does not overwrite it. Review the existing robot configuration and use it.
+If `.roboloom/rakuda2/` already exists, `init` does not overwrite it. Review the existing robot configuration and use it. To bring a project up to a newer template, run `roboloom init rakuda2 --update`: it adds the files the project lacks and replaces files that are still as they were copied. Files you edited and files holding measured values are left alone; for those it lists the keys and options only the template has, to copy by hand.
 
 Identify the leader / follower U2D2 ports and read them while no other process is using them. Replace the `<...>` below with the actual ports.
 
@@ -42,7 +42,7 @@ With no option enabled, the configuration uses only the standard leader and the 
 uv run roboloom validate
 ```
 
-If `SET_...` remains in a referenced configuration, its location is shown. Fill it in and validate again. `validate` does not open devices, so the hardware EEPROM and stop behavior must be checked separately.
+If `SET_...` remains in a referenced configuration, its location is shown. Fill it in and validate again. To try the flow before connecting the hardware, `uv run roboloom validate rakuda2 --mock` and `uv run roboloom run rakuda2 --mock` work without filling anything. `validate` does not open devices, so the hardware EEPROM and stop behavior must be checked separately.
 
 If the EEPROM differs from the intended configuration, stop the dataflow and run `commission` while supporting both arms. Review the displayed changes before approving. This operation writes the EEPROM and reads it back.
 

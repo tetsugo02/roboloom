@@ -158,6 +158,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     init.add_argument("robot")
     init.add_argument("--root", default=".roboloom")
+    init.add_argument(
+        "--update",
+        action="store_true",
+        help="bring an existing project up to the installed template: add missing "
+        "files, replace unchanged copies, list what edited files lack (measured and "
+        "edited files are never overwritten)",
+    )
     probe_cmd = sub.add_parser(
         "probe",
         help=(
@@ -478,9 +485,10 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         return
     if args.command == "init":
-        from .project import init_project
+        from .project import init_project, update_project
 
-        print(init_project(args.robot, args.root))
+        make = update_project if args.update else init_project
+        print(make(args.robot, args.root))
         return
     if args.command == "probe":
         from .probe import probe

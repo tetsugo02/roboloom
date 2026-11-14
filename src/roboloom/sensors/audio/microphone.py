@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from importlib import import_module
 from threading import Lock
+from typing import ClassVar
 
 import numpy as np
 
@@ -68,6 +69,8 @@ class SoundDeviceReader:
 
 
 class SoundDeviceMic(PcmAudio):
+    keys: ClassVar[tuple[str, ...]] = (*PcmAudio.keys, "device", "channels")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         self.device = identity(cfg.get("device"), f"{name}.device")
@@ -112,6 +115,15 @@ class MelReader:
 
 class MelMono(SoundDeviceMic):
     """Low-to-high frequency log mel power; no display transform."""
+
+    keys = (
+        *SoundDeviceMic.keys,
+        "window_seconds",
+        "n_fft",
+        "hop_length",
+        "n_mels",
+        "fmax",
+    )
 
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, {"sample_rate": 44100, **cfg})
