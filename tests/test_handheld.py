@@ -238,6 +238,12 @@ def test_rows_recorded_without_a_sample_count_as_untracked():
     assert np.isclose(filled[2, 0, 3], 0.2) and np.allclose(
         filled[2, :3, :3], np.eye(3)
     )
+    # a row that repeats the last sample (no fresh one) is told by its `valid`
+    valid = np.asarray([1, 1, 1, 0, 1, 1])
+    assert recorded_poses(rows, valid)[1].tolist() == [True, True, False, False] + [
+        False,
+        True,
+    ]
     rows[1:5] = 0.0
     _, _, problem = P.fill_gaps(*recorded_poses(rows), max_gap=3)
     assert problem == "tracking lost for 4 rows from row 1"

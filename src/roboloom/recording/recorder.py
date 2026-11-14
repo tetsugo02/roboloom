@@ -15,11 +15,18 @@ Rows are finalized while the episode runs, so memory stays bounded:
   features, and a row is final once t_{k+1} has passed.
 
 Samples no later row can select are dropped. The newest sample received before
-`start` is kept as pre-roll so row 0 is not empty.
+`start` is kept as pre-roll so row 0 is not empty. A row without a fresh sample of a
+source repeats that source's last valid one (`observation.meta.<source>.valid` is 0;
+zeros only before its first sample), so a gap does not pull the statistics to zero.
+
+Every saved episode is closed on disk at once (`recording.journal`): what `save`
+reported is readable whatever happens to the process afterwards, and a save that fails
+or is interrupted is undone instead of leaving half an episode.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import time
@@ -30,6 +37,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ..core.protocol import Envelope
+from . import journal, manifest
 from .metrics import summarize
 from .schema import (
     INTERVENTION,
@@ -51,6 +59,10 @@ def action_stream(follower: str) -> str:
     return f"{ACTION}_{follower}"
 
 
+class SaveFailed(RuntimeError):
+    """The episode could not be saved and is gone; the dataset is as before the save."""
+
+
 class EpisodeRecorder:
     def __init__(
         self,
@@ -67,6 +79,12 @@ class EpisodeRecorder:
         self.followers = cfg.followers
         self.streams = {action_stream(name): name for name in self.followers}
         self.dataset: Any = dataset  # LeRobotDataset 0.6.1 has no py.typed marker.
+        # where `open_dataset` opened it; None for a dataset the caller passed in
+        self.root: Path | None = None
+        # episodes in the dataset; kept here because a failed save replaces `dataset`
+        self.episodes = int(getattr(dataset, "num_episodes", 0) or 0)
+        self.recovered = False  # opening it undid a save an earlier process left
+        self.noted = False  # this run is listed in the dataset's manifest
         self.grace_ns = int(grace_ms * 1e6)
         self.writer_options = {
             "image_writer_threads": image_writer_threads,
@@ -78,6 +96,9 @@ class EpisodeRecorder:
         self.stopped = False
         self.samples: dict[str, list[Envelope]] = self._empty()
         self.preroll: dict[str, Envelope] = {}
+        # each source's last valid sample: what a row without a fresh one repeats
+        self.last: dict[str, Envelope] = {}
+        self.first: dict[str, Envelope] = {}  # `last` when the episode started
         self.t0_ns = 0
         self.end_ns = 0
         self.task = ""
@@ -110,7 +131,8 @@ class EpisodeRecorder:
         cfg = self.cfg
         root = Path(cfg.output).resolve()
         expected = features(cfg)
-        if (root / "meta" / "info.json").exists():
+        new = not (root / "meta" / "info.json").exists()
+        if not new:
             info = json.loads((root / "meta" / "info.json").read_text())
             defaults = import_module("lerobot.utils.constants").DEFAULT_FEATURES
             actual = {k: v for k, v in info["features"].items() if k not in defaults}
@@ -130,12 +152,7 @@ class EpisodeRecorder:
                 if info.get(key) != value:
                     differences.append(f"{key}: {info.get(key)!r} -> {value!r}")
             signature = self._audio_signature()
-            manifest = root / "meta" / "roboloom.json"
-            previous = (
-                json.loads(manifest.read_text()).get("audio")
-                if manifest.exists()
-                else None
-            )
+            previous = manifest.read(root).get("audio")
             if signature and previous != signature:
                 differences.append(
                     "audio processing settings differ or old metadata is missing"
@@ -146,6 +163,9 @@ class EpisodeRecorder:
                     + "\n".join(differences)
                     + "\nSet another repo_id and output; existing data was not changed."
                 )
+            # a save an earlier process did not finish, and frames it left staged
+            self.recovered = journal.recover(root) or self.recovered
+            journal.clean(root)
             self.dataset = LeRobotDataset.resume(
                 repo_id=cfg.repo_id,
                 root=root,
@@ -165,12 +185,9 @@ class EpisodeRecorder:
                 rgb_encoder=video_encoder(cfg, self.video_codec),
                 **self.writer_options,
             )
-
-        manifest = root / "meta" / "roboloom.json"
-        if self._audio_signature() and not manifest.exists():
-            manifest.write_text(
-                json.dumps({"audio": self._audio_signature()}, indent=2)
-            )
+        self.root = root
+        self.episodes = int(self.dataset.num_episodes)
+        manifest.create(root, cfg, self._audio_signature(), new)
 
     def _audio_signature(self) -> dict:
         return {
@@ -191,6 +208,8 @@ class EpisodeRecorder:
         self.samples = self._empty()
         for source, msg in self.preroll.items():
             self.samples[source].append(msg)
+        self.first = dict(self.preroll)
+        self.last = dict(self.first)
         self.task = task
         self.t0_ns = time.monotonic_ns() if now_ns is None else now_ns
         self.next_row = 0
@@ -247,19 +266,68 @@ class EpisodeRecorder:
         self.samples = self._empty()
 
     def save(self) -> int:
+        """Write the stopped episode; returns its rows. Raises SaveFailed when it could
+        not be written: the episode is dropped and the recorder is idle again."""
         if not self.stopped:
             raise RuntimeError("stop the episode first")
         if not self.written:
             raise ValueError("empty episode")
-        self.dataset.save_episode()
+        if self.root is None:  # a dataset the caller passed in saves as it likes
+            self.dataset.save_episode()
+            self.episodes = int(
+                getattr(self.dataset, "num_episodes", self.episodes + 1)
+            )
+        else:
+            self._save_closed(self.root)
         count = self.written
         self.discard()
         return count
 
+    def _save_closed(self, root: Path) -> None:
+        """Save the episode and close its files (`recording.journal`), or undo it."""
+        journal.begin(root)
+        try:
+            self.dataset.save_episode()
+            wrong = journal.video_mismatches(self.dataset)
+            if wrong:
+                raise ValueError("; ".join(wrong))
+            closed = journal.checkpoint(self.dataset)
+            if not closed:  # another LeRobot: its own way to close the files
+                self.dataset.finalize()
+        except BaseException as exc:
+            self._drop(root)
+            if not isinstance(exc, Exception):  # Ctrl-C, exit: as they are
+                raise
+            raise SaveFailed(
+                f"the episode was not saved and is dropped ({type(exc).__name__}: "
+                f"{exc}); the episodes saved before it are intact"
+            ) from exc
+        journal.commit(root)
+        self.episodes = int(self.dataset.num_episodes)
+        if not self.noted:  # only runs that saved something are listed
+            with contextlib.suppress(Exception):  # a note; the episode is saved
+                manifest.note_session(root, self.cfg, self.episodes - 1)
+            self.noted = True
+        if not closed:
+            self.dataset = None
+            self.open_dataset()
+
+    def _drop(self, root: Path) -> None:
+        """After a failed save: the dataset as it was before it, opened again."""
+        failed, self.dataset = self.dataset, None
+        self.active = self.stopped = False
+        self.samples = self._empty()
+        journal.abandon(failed)
+        # still failing (e.g. the disk is full): the next `start` opens and recovers it
+        with contextlib.suppress(Exception):
+            journal.recover(root)
+            self.open_dataset()
+
     def close(self) -> None:
         if self.dataset is not None:
-            if self.dataset.has_pending_frames():
-                self.dataset.clear_episode_buffer()
+            with contextlib.suppress(Exception):  # an unsaved episode is dropped
+                if self.dataset.has_pending_frames():
+                    self.dataset.clear_episode_buffer()
             self.dataset.finalize()
 
     # -- rows ---------------------------------------------------------------
@@ -329,7 +397,10 @@ class EpisodeRecorder:
                 frame[f"observation.meta.{name}.{key}"] = np.asarray(
                     [values[key]], dtype=dtype
                 )
-        frame.update(observation_frame(self.sources, selected, self.cfg.dataset_fps))
+        # a source without a fresh sample repeats its last valid one (valid stays 0)
+        self.last.update({n: m for n, m in selected.items() if m is not None})
+        shown = {name: msg or self.last.get(name) for name, msg in selected.items()}
+        frame.update(observation_frame(self.sources, shown, self.cfg.dataset_fps))
         if not self.followers:
             return frame
         parts, all_valid, any_clamped = [], True, False
@@ -347,7 +418,7 @@ class EpisodeRecorder:
             if action is not None:
                 parts.append(action.payload["positions"])
             else:  # the target it held (else where it was): what it actually did
-                state = selected.get(name)
+                state = shown.get(name)
                 held = (
                     state.payload.get("target") or state.payload.get("positions")
                     if state is not None
@@ -380,6 +451,7 @@ class EpisodeRecorder:
         """All rows of a stopped episode recorded with `write=False` (no pruning has happened)."""
         if not self.stopped:
             raise RuntimeError("stop the episode first")
+        self.last = dict(self.first)
         return [
             self._frame(
                 self.t0_ns + i * self.period_ns, self.t0_ns + (i + 1) * self.period_ns

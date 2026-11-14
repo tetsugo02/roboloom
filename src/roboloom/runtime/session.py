@@ -64,7 +64,12 @@ def _ui_launch(
 
 
 class SessionError(RoboloomError):
-    """The dataflow refused a command or stopped."""
+    """The dataflow refused a command or stopped. `report` is the node's answer, when
+    one caused it."""
+
+    def __init__(self, message: str, report: dict | None = None):
+        super().__init__(message)
+        self.report = report or {}
 
 
 @dataclass
@@ -554,7 +559,8 @@ class Session:
                 if "warning" in found or "error" in found:
                     raise SessionError(
                         f"{found.get('command')}: "
-                        f"{found.get('warning') or found.get('error')}"
+                        f"{found.get('warning') or found.get('error')}",
+                        found,
                     )
                 return found
             self._check_alive()
@@ -582,9 +588,16 @@ class Session:
         )
 
     def save(self, timeout: float = 300.0) -> EpisodeResult:
-        """Write the stopped episode (video encoding can take a while)."""
+        """Write the stopped episode (video encoding can take a while). When the
+        write fails the episode is dropped (SessionError); the dataset keeps the
+        episodes saved before it and the next one can be recorded."""
         task = self._episode or ""
-        report = self.wait_report(self.send("save"), timeout)
+        try:
+            report = self.wait_report(self.send("save"), timeout)
+        except SessionError as exc:
+            if exc.report.get("dropped"):  # nothing left to save or discard
+                self._episode = None
+            raise
         self._episode = None
         self._recorded.append(task)
         self._saved = int(report.get("episodes", 0))
