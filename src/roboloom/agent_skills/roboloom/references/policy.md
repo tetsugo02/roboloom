@@ -38,8 +38,10 @@ command_deadline_ms: 300
   must be whole Hz and <= every follower's `control_hz`. Followers lag one action period;
   the recorded `action` is the interpolated target.
 - `interpolation: pchip` (default `linear`): a monotone cubic through the same actions
-  (each reached at its own time, no overshoot between two actions, continuous speed;
-  uses the next queued action, falls back to the line's slope at a chunk's last action).
+  (each reached at its own time, no overshoot between two actions; uses the next queued
+  action, falls back to the line's slope at a chunk's last action). Speed is continuous
+  at an action only while that lookahead holds: it can jump at a chunk boundary,
+  with `action_horizon: 1`, and when `inference: async` replaces the queue.
 - `inference: async` (default `sync`): `infer` runs on a worker thread while queued
   actions keep going; the next inference starts when `replan_at` actions are left (`auto`:
   half of `action_horizon`); the new chunk replaces the queue minus the d actions executed

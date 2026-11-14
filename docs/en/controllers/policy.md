@@ -289,8 +289,9 @@ interpolation: pchip   # default linear
 
 - The targets still pass through every action at its own time, so the curve adds no lag to the line (a low-pass filter would).
 - Between two consecutive actions the targets stay within their range: no overshoot, also when the policy's actions are noisy.
-- The speed is continuous at the actions. From the held pose the first action starts at rest. Halfway between two actions the speed can be up to 1.5 times the line's; `max_speed` still limits it.
+- The speed is continuous at the actions, as long as the action that was looked ahead to is the one executed next (see below). From the held pose the first action starts at rest. Halfway between two actions the speed can be up to 1.5 times the line's; `max_speed` still limits it.
 - The curve needs the action after the one being approached, taken from the queued chunk. For the last action of a chunk (synchronous inference, or `action_horizon: 1`) there is none, and the segment ends at the line's slope. With `inference: async` the next chunk usually arrives before the queue is empty.
+- The speed is not continuous in two cases. One: after a segment that had no next action to look at, when the next action reverses or differs much (a chunk boundary, `action_horizon: 1`). Two: when `inference: async` replaces the queued actions and the action that was looked ahead to changes. In both, the slope at the start of the next segment is limited again, so there is still no overshoot, but the speed jumps at that action.
 - `linear` stays the default: it is LeRobot's scheme and what the checks so far were done with. Neither has been compared on hardware; replay a recorded episode ([Replaying a recording](#replaying-a-recording)) with each and compare the recorded `observation.state`.
 
 ## Starting from a saved pose (home)
