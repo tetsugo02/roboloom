@@ -229,7 +229,7 @@ uv run roboloom validate rakuda2  # 埋めていない SET_ の値を，場所�
 
 leader の重力補償の調整（gain と hold の意味，`tune-gravity` の使い方）は，[docs/ja/reference/gravity-tuning.md](docs/ja/reference/gravity-tuning.md) を参照してください．
 
-recorder は取得，利用可能，受信，送信の単調時計時刻を区別します．各フレーム時刻までに recorder が受信済みの観測を選び，`action[t]` はその後最初に送信成功した tick の指令を保存します．欠損はゼロ値と有効フラグで表します．保存後も同じ dataset へ次のエピソードを追記し，再起動時は既存 dataset のスキーマと FPS を確認して再開します．
+recorder は取得，利用可能，受信，送信の単調時計時刻を区別します．各フレーム時刻までに recorder が受信済みの観測を選び，`action[t]` はその後最初に送信成功した tick の指令を保存します．欠損は直前の有効な値と有効フラグで表します．保存のたびにエピソードのファイルを閉じるので，保存できたエピソードはプロセスが強制終了されても読めます．保存後も同じ dataset へ次のエピソードを追記し，再起動時は既存 dataset のスキーマと FPS を確認して再開します．`roboloom check-dataset` で，記録した dataset を読むだけで検査できます．
 
 ## パッケージ構成
 

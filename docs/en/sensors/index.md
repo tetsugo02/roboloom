@@ -9,7 +9,7 @@ Supported combinations are listed in [Rakuda2](../robots/rakuda2.md). Images are
 
 ## Recorder entry
 
-Every sensor needs an entry under `max_age_ms` in `nodes/recorder.yaml`, keyed by its node name. It is the oldest a sample may be, in ms, to be used for a dataset row; an older one is recorded as missing (zeros, `valid` 0). Inputs and followers need one too. Without it, loading the configuration fails with `max_age_ms.<name>: expected positive finite number` (for example `max_age_ms.digit_left: expected positive finite number`).
+Every sensor needs an entry under `max_age_ms` in `nodes/recorder.yaml`, keyed by its node name. It is the oldest a sample may be, in ms, to be used for a dataset row; an older one is recorded as missing (`valid` 0; the value repeats the last valid sample, zeros only before the first one). Inputs and followers need one too. Without it, loading the configuration fails with `max_age_ms.<name>: expected positive finite number` (for example `max_age_ms.digit_left: expected positive finite number`).
 
 ```yaml
 max_age_ms:

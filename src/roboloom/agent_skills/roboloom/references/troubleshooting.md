@@ -66,6 +66,8 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | Message fragment | Cause | Fix |
 | --- | --- | --- |
 | `existing dataset schema or FPS differs from the configuration:` (recorder log) | Features or `dataset_fps` changed against an existing `output` | New `output`, or a `dataset:` name on the option. The message also offers moving the old dataset away; that is the user's decision, so ask first. **Never delete or overwrite the dataset** |
+| `save failed: the episode was not saved and is dropped (...)` | The write failed (disk full, a video that does not match the rows) | That episode is gone; the earlier ones are intact and recording goes on. Fix the cause (free disk space) before the next episode |
+| `the dataset was put back to its last saved episode: a save had been interrupted` | The recorder was killed while saving; the half-written episode was removed on opening | Nothing to do. `roboloom check-dataset` confirms the dataset is whole |
 | `No module named 'lerobot'` (recorder) / `converting needs lerobot` | `record` extra missing | `uv add 'roboloom[record]'` |
 | `No module named 'cv2'` | Core dependencies missing | Run `uv sync` or reinstall roboloom |
 | `No module named 'pyrealsense2'` / `'sounddevice'` | `hardware` extra missing | `uv add 'roboloom[hardware]'` |

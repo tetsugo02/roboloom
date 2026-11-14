@@ -139,6 +139,7 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
 ### 細かく操作する
 
 - `start(task)`，`stop()`，`save()`，`discard()`，`estop()`，`release(confirm=True)` を，1 つずつ呼べます．
+- `save()` が返ったエピソードは，そのあとプロセスが止まっても読めます．書き込みに失敗すると `SessionError` を上げ，そのエピソードを破棄します（それまでのエピソードは残り，次を録れます．[記録と再開](configuration.md#recording-and-resuming)）．
   - 例：外部の合図で開始と終了を決めるとき．
 - 状態を見る：
   - `status()`：各ノードの最新の状態．

@@ -48,7 +48,7 @@ uv run roboloom run pika-handheld-mock        # with the operator screen
 
 Each Sense gives `observation.<sense>` (10, `float32`): `x y z` (m, tracker world frame),
 `qx qy qz qw`, `gripper` (jaw, rad), `tracking` (0/1; when 0 the pose is the last tracked
-one), `engaged` (0/1). A row with no fresh sample is recorded as all zeros. Images are
+one), `engaged` (0/1). A row with no fresh sample has `observation.meta.<sense>.valid` 0 and repeats the last sample (all zeros before the first one). Images are
 `observation.images.<camera>`. Needs the `record` extra.
 
 ## Conversion
