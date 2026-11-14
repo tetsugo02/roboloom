@@ -95,7 +95,7 @@ observation_history: 4                       # default 1: only the latest frame
 hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
 ```
 
-- **`observation_history: N`**: the observation is sampled once per action (every `1/rate_hz`), also for the actions of a chunk that need no inference. `infer` then also gets `observation["history"]`: every array of the observation stacked `[N, ...]`, oldest first, the current frame last. At the start of an episode the first frame fills the history. `history["action"]` (float32 `[N, n]`) is the action executed before each frame (the targets the followers held at the start), for models that read their past actions. With `N = 1` the observation is unchanged.
+- **`observation_history: N`**: the observation is sampled once per action (every `1/rate_hz`), also for the actions of a chunk that need no inference. `infer` then also gets `observation["history"]`: every array of the observation stacked `[N, ...]`, oldest first, the current frame last. At the start of an episode the first frame fills the history. `history["action"]` (float32 `[N, n]`) is the action executed before each frame (the targets the followers held at the start): the command sent to the followers, as the recorder writes it to `action`, so a policy output cut by `max_speed` appears as the cut value. It is for models that read their past actions. With `N = 1` the observation is unchanged.
 - **`hold`**: entries of the action (`<follower>.<joint>`) the policy does not drive. Whatever the policy returns there, NaN included, is replaced by the target the follower holds, so a model trained on some of the joints still returns `[n]` or `[H, n]`. Every other entry must be finite, or the episode stops.
 - **`options()` (optional)**: a policy states these itself, and its values win over the YAML. Swapping the model then needs no edited configuration.
 
@@ -105,7 +105,7 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
     ```
 
 - `bind(spec)` also receives `spec.history`, `spec.hold` and `spec.units` (the unit of each action entry).
-- **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold. Once the sample is fresh again, the policy starts over with `reset()`.
+- **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold, also between two actions of an interpolation. Once the sample is fresh again, the policy starts over with `reset()`.
 
 ### From a recording to your own model
 

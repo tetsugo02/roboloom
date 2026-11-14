@@ -225,3 +225,34 @@ def test_a_stale_sensor_stops_the_policy_until_it_is_fresh_again(tmp_path):
     assert (
         controller.status()["state"] == "running" and "error" not in controller.status()
     )
+
+
+def test_the_history_holds_the_commands_sent_not_the_policy_output(tmp_path):
+    # 10 counts per action asked, 40 counts/s allowed at 10 Hz: 4 counts are sent
+    _, controller = _controller(
+        tmp_path, observation_history=2, max_speed={"follower": 40.0}
+    )
+    controller.policy = policy = Recorder()
+    controller.start("task")
+    sent = _run(controller, 3)
+    assert sent[0][0] == pytest.approx(2052.0)
+    actions = policy.seen[2]["history"]["action"][:, 0]
+    assert np.allclose(actions, [sent[0][0], sent[1][0]])
+
+
+def test_a_sensor_going_stale_stops_the_steps_between_two_actions(tmp_path):
+    cfg, controller = _controller(
+        tmp_path, observe=["camera"], rate_hz=1, interpolation_multiplier=10
+    )
+    controller.policy = Recorder()
+    controller.start("task")
+    pose = [2048.0] * 17
+    t0 = 1_000_000_000
+    controller.observe("camera", _image(cfg, t0))
+    out = []
+    for k in range(5):  # 100 ms apart; the camera is 200 ms fresh
+        t = t0 + k * PERIOD_NS
+        controller.observe("follower", _state(t, pose, pose))
+        out.append(bool(controller.tick(t)))
+    assert out == [True, True, True, False, False]
+    assert controller.status()["state"] == "stale_observation"

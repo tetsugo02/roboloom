@@ -104,6 +104,8 @@ def test_the_example_model_trains_on_a_recording_and_runs(recorded, tmp_path):
         import chunk_mlp
     finally:
         sys.path.remove(EXAMPLES)
+    with pytest.raises(ValueError, match="at least 2"):  # no history, no past actions
+        chunk_mlp.train(str(root), str(tmp_path / "single.pt"), history=1)
     checkpoint = chunk_mlp.train(
         str(root),
         str(tmp_path / "model.pt"),
