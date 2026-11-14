@@ -56,6 +56,9 @@ class Controller(ABC):
     uses_input: ClassVar[bool] = True
     # how many followers one controller of this type drives (None: any number)
     max_followers: ClassVar[int | None] = None
+    # True for a controller that must drive every follower, in configuration order (a
+    # policy: its action is the recorded one, which joins them all)
+    drives_all_followers: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -144,6 +147,26 @@ class Controller(ABC):
     @abstractmethod
     def reset(self) -> None:
         """Require re-alignment before any further command (see the module docstring)."""
+
+    def nested(self) -> list[Controller]:
+        """Controllers this one owns and steps itself (a policy's teleop controllers,
+        the parts of a `type: parts` controller); they follow inputs too."""
+        return []
+
+    def intent_inputs(self) -> list[str]:
+        """Inputs whose samples its nested controllers follow; the node receives each
+        as `intent_<input>`."""
+        return []
+
+    def update_from(
+        self,
+        input_name: str,
+        intent: Envelope,
+        views: Mapping[str, FollowerView],
+        now_ns: int | None = None,
+    ) -> dict[str, Envelope]:
+        """`update` for a sample of `input_name` (controllers with several inputs)."""
+        return self.update(intent, views, now_ns)
 
     def observes(self) -> list[str]:
         """Inputs and sensors whose samples this controller reads besides its input."""

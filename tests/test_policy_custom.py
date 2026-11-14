@@ -48,6 +48,9 @@ def test_actions_that_do_not_fit_are_refused(tmp_path):
         Replay(np.zeros((3, 1)), rate_hz=5.0).bind(_spec(("a.x",), rate_hz=10.0))
     with pytest.raises(ConfigError, match="finite actions"):
         Replay(np.full((3, 1), np.nan))
+    asynchronous = PolicySpec({}, ("a.x",), 10.0, 10.0, inference="async")
+    with pytest.raises(ConfigError, match="inference: sync"):  # rows would be skipped
+        Replay(np.zeros((3, 1))).bind(asynchronous)
     with pytest.raises(ConfigError, match="not a LeRobot dataset"):
         load(str(tmp_path))
     with pytest.raises(ConfigError, match="stride"):

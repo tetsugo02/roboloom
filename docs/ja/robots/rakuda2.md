@@ -58,6 +58,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `bilateral` | 力の逆送（実機未検証）．leader・controller・robotを置き換え，推定器 `effort` を足す | `gravity` が必要 | `-bilateral` を付ける |
 | `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `gravity` と競合 | `-eval` を付ける |
 | `policy_teleop` | `policy` に加えて，エピソードの前と途中にleaderで動かせる（[テレオペと介入](../controllers/policy.md)）．leaderを戻し，`nodes/policy_teleop.yaml` を使う | `policy` が必要 | `-teleop` を付ける |
+| `pika` | leaderの代わりに，腕ごとのPika SenseとIKで動かす（[開発中・模擬のみ](../contribution/rakuda2-pika.md)） | `gravity`，`policy` と競合 | `-pika` を付ける |
 
 | 有効なオプション | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |

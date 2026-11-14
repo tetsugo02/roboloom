@@ -575,7 +575,11 @@ def _controller(node, controller: Controller):
             )
             if feedback is not None:
                 _send(node, "feedback", feedback)
-        elif event_id == "intent" and msg is not None:
+        elif (
+            event_id is not None
+            and (event_id == "intent" or event_id.startswith(INTENT_PREFIX))
+            and msg is not None
+        ):
             last_intent_ns = now
             missing = [n for n in controller.followers if n not in views]
             silent = [n for n, v in views.items() if now - v.t_ns > stale_ns]
@@ -586,7 +590,13 @@ def _controller(node, controller: Controller):
                 stopped = ""
             latched = [n for n, v in views.items() if v.mode in ("FAULT", "ESTOP")]
             if not missing and not silent and not latched:
-                sent = controller.update(msg, views)
+                sent = (
+                    controller.update(msg, views)
+                    if event_id == "intent"
+                    else controller.update_from(
+                        event_id.removeprefix(INTENT_PREFIX), msg, views
+                    )
+                )
                 for name, command in sent.items():
                     _send(node, command_output(name), command)
                 if sent:

@@ -45,10 +45,8 @@ def build_flow(cfg: RobotConfig) -> dict:
     # input: through its controllers), or else at the fastest follower of the robot (a
     # configuration without followers gives every source its own rate, see config)
     fastest = max((f.control_hz for f in cfg.followers.values()), default=fps)
-    # a policy's teleop controllers (`teleop:`) follow inputs too
-    teleop = [
-        t for c in cfg.controllers.values() for t in getattr(c, "teleop", {}).values()
-    ]
+    # controllers owned by another (a policy's `teleop:`, `parts:`) follow inputs too
+    teleop = [t for c in cfg.controllers.values() for t in c.nested()]
     driven = {
         n: max(
             (
@@ -125,8 +123,7 @@ def build_flow(cfg: RobotConfig) -> dict:
         # a policy reads the newest sample of what it observes, on its own timer
         inputs.update({f"observe_{n}": latest(f"{n}/sample") for n in c.observes()})
         # ... and steps its teleop controllers on every sample of their inputs
-        teleop_inputs: list[str] = getattr(c, "teleop_inputs", list)()
-        inputs.update({f"{INTENT_PREFIX}{n}": f"{n}/sample" for n in teleop_inputs})
+        inputs.update({f"{INTENT_PREFIX}{n}": f"{n}/sample" for n in c.intent_inputs()})
         if c.feedback is not None:
             inputs["estimate"] = latest(f"{c.feedback.estimator_name}/estimate")
             outputs.append("feedback")

@@ -58,6 +58,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `bilateral` | Force feedback (not verified on hardware); replaces the leader, controller, and robot and adds the estimator `effort` | Requires `gravity` | Appends `-bilateral` |
 | `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Conflicts with `gravity` | Appends `-eval` |
 | `policy_teleop` | With `policy`, the leader can drive before and during an episode ([teleoperation and interventions](../controllers/policy.md)); brings the leader back and uses `nodes/policy_teleop.yaml` | Requires `policy` | Appends `-teleop` |
+| `pika` | A Pika Sense per arm through IK instead of the leader ([in development, mock only](../contribution/rakuda2-pika.md)) | conflicts with `gravity`, `policy` | appends `-pika` |
 
 | Enabled options | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
