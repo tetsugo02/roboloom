@@ -11,6 +11,7 @@ CONTROLLERS: Registry[Controller] = Registry(
     "controller",
     {
         "joint": "roboloom.controllers.joint:JointController",
+        "parts": "roboloom.controllers.parts:PartsController",
         "policy": "roboloom.controllers.policy:PolicyController",
         "pose_ik": "roboloom.controllers.pose_ik:PoseIkController",
     },

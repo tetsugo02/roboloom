@@ -25,6 +25,57 @@ class KinematicSpec:
     base: str
     tip: str
     joints: tuple[str, ...]
+    # The follower's own names of these joints, in the same order (None: as `joints`).
+    follower_joints: tuple[str, ...] | None = None
+    # The follower's joint unit -> rad of the URDF joint: rad = scale * (q - offset),
+    # per joint (None: the follower already speaks rad with the URDF's zero and sign).
+    # A negative scale is a joint that turns the other way.
+    scale: tuple[float, ...] | None = None
+    offset: tuple[float, ...] | None = None
+    # False while the map above is a guess not yet checked on the robot: controllers
+    # refuse to move hardware with it.
+    confirmed: bool = True
+
+    def __post_init__(self) -> None:
+        n = len(self.joints)
+        for name, values in (
+            ("follower_joints", self.follower_joints),
+            ("scale", self.scale),
+            ("offset", self.offset),
+        ):
+            if values is not None and len(values) != n:
+                raise ValueError(f"{name}: one value per joint ({n})")
+        if self.scale is not None and not all(
+            np.isfinite(s) and s != 0 for s in self.scale
+        ):
+            raise ValueError("scale: finite and not zero")
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """The joints as the follower names them."""
+        return self.follower_joints or self.joints
+
+    def to_model(self, q: Sequence[float]) -> list[float]:
+        """Follower joint values -> URDF joint angles (rad)."""
+        scale = self.scale or (1.0,) * len(self.joints)
+        offset = self.offset or (0.0,) * len(self.joints)
+        return [s * (float(x) - o) for x, s, o in zip(q, scale, offset, strict=True)]
+
+    def from_model(self, rad: Sequence[float]) -> list[float]:
+        """URDF joint angles (rad) -> follower joint values."""
+        scale = self.scale or (1.0,) * len(self.joints)
+        offset = self.offset or (0.0,) * len(self.joints)
+        return [float(x) / s + o for x, s, o in zip(rad, scale, offset, strict=True)]
+
+    def model_limits(
+        self, low: Sequence[float], high: Sequence[float]
+    ) -> tuple[list[float], list[float]]:
+        """The follower's joint range in rad (a flipped joint swaps its ends)."""
+        a, b = self.to_model(low), self.to_model(high)
+        return (
+            [min(x, y) for x, y in zip(a, b, strict=True)],
+            [max(x, y) for x, y in zip(a, b, strict=True)],
+        )
 
 
 def quaternion_matrix(q: Sequence[float]) -> np.ndarray:

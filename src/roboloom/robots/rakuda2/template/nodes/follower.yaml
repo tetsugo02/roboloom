@@ -10,6 +10,11 @@
 # torque: set false for the first run to record states and sensors without moving the follower.
 # bus_watchdog_ms: leave null until the watchdog behaviour is bench-tested on these motors.
 type: rakuda2_follower
+# kinematics: the joint map of each arm (URDF joint, zero count, direction), for
+#   controllers that command poses (option pika). Unused by leader teleoperation.
+kinematics:
+  right_arm: ../calibration/follower_right.yaml
+  left_arm: ../calibration/follower_left.yaml
 port: SET_FOLLOWER_PORT  # /dev/serial/by-id/... of the follower U2D2
 motor_ids:
 - 27

@@ -11,6 +11,22 @@ itself (upstream).
 | Another camera/sensor of a supported `type`, another node layout | Downstream: own options and node YAML in `config.yaml` |
 | New robot, leader, hand-held input, sensor, controller or bus `type` | **Upstream** (a change to roboloom) |
 
+## What a new type has to provide (upstream)
+
+- **Follower model**: joints, unit, safety traits, `open_bus` returning a `JointBus`
+  (`read_positions`, `write_positions`, `enable_torque`, `close`; optional `read_state`,
+  `read_health`). Optional: `PARTS` (joint groups several controllers may share, driven
+  through `type: parts`) and `kinematics(part)` returning a `KinematicSpec` with the map
+  from the follower's unit to the URDF's rad (`scale`, `offset`, `confirmed`).
+- **Simulator**: another `JointBus` behind the same follower model; speak the real
+  follower's unit so datasets and policies are shared. Controllers, IK, safety and
+  recording do not change.
+- **Pose device (VR, UMI-like)**: a `PoseInput` subclass; `pose_ik` works unchanged.
+- **Joint leader**: a `JointInput`; with the follower's joint names and unit
+  `type: joint` needs no table.
+- `control:` laws (`roboloom.control`) assume a Dynamixel-like bus (counts, mA, operating
+  modes); robots with their own position control (PiPER, Pika Gripper) refuse `control:`.
+
 ## Why new device types cannot be added downstream
 
 Each role maps `type:` to a class through a `Registry` (`roboloom.core.registry`):

@@ -31,6 +31,14 @@ JOINTS = (
     "l_arm_grip",
 )
 MOTOR_IDS = (27, 28, 29, 1, 3, 5, 7, 9, 11, 31, 2, 4, 6, 8, 10, 12, 30)
+# joints several controllers can drive separately (`type: parts`)
+PARTS = {
+    "body": JOINTS[0:3],
+    "right_arm": JOINTS[3:9],
+    "right_gripper": JOINTS[9:10],
+    "left_arm": JOINTS[10:16],
+    "left_gripper": JOINTS[16:17],
+}
 UNIT = "dynamixel_count"
 
 _SHOULDER = (
@@ -57,6 +65,13 @@ REGISTERS = (
     "return_delay",
     "shutdown",
 )
+
+
+COUNTS_PER_TURN = 4096  # Dynamixel X series position resolution
+# the tip link of each arm in model/assembly_2.urdf (the fixed gripper mount), and the
+# joint frame both arms hang from
+ARM_TIP = {"right_arm": "gripper_right_dof", "left_arm": "gripper_left_dof"}
+ARM_BASE = "torso_yaw_dof"
 
 
 def check_motor_ids(cfg: dict, name: str) -> None:

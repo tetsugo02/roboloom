@@ -111,8 +111,9 @@ class PoseIkController(Controller):
         spec = arm.kinematics()
         if spec is None:
             raise ValueError(f"{name}.arm: {arm.model} has no kinematic model")
-        if spec.joints != arm.joint_names:
+        if spec.names != tuple(arm.joint_names):
             raise ValueError(f"{name}.arm: the model's joints differ from {arm.name}'s")
+        self.spec = spec
         if (
             self.gripper is not None
             and len(self.followers[self.gripper].joint_names) != 1
@@ -187,6 +188,15 @@ class PoseIkController(Controller):
         self.errors: tuple[float, float] | None = None
 
     # -- state ------------------------------------------------------------------------
+
+    def check_hardware(self) -> None:
+        """Refuse real hardware while the arm's joint map is not confirmed."""
+        if not self.spec.confirmed:
+            raise ValueError(
+                f"{self.name}.arm: the kinematic joint map of {self.arm} is not "
+                "confirmed (zeros and directions; set confirmed: true in its "
+                "calibration file after checking each joint on the robot)"
+            )
 
     def _stop(self, state: str) -> dict[str, Envelope]:
         """Stop following; the operator engages again to continue."""
@@ -269,7 +279,7 @@ class PoseIkController(Controller):
         if self.anchor is None:
             if not rising:
                 return {}  # stopped while engaged: wait for the operator to engage again
-            start = self.model.fk(self._held(views[arm]))
+            start = self.model.fk(self.spec.to_model(self._held(views[arm])))
             self.anchor = start @ invert(sense)
             self.last_ns = {}
         elif self.previous is not None:
@@ -284,8 +294,10 @@ class PoseIkController(Controller):
         if np.any(target[:3, 3] < self.low) or np.any(target[:3, 3] > self.high):
             self.state = "out_of_workspace"
             return self._withhold(now)
-        low, high = self.limits[arm]
-        result = self.model.solve(target, self._held(views[arm]), low, high, **self.ik)
+        # the IK works in the URDF's rad; the follower's unit only at its two ends
+        low, high = self.spec.model_limits(*self.limits[arm])
+        seed = self.spec.to_model(self._held(views[arm]))
+        result = self.model.solve(target, seed, low, high, **self.ik)
         self.errors = (result.position_error_m, result.rotation_error_rad)
         if not result.reached:
             self.state = "unreachable"
@@ -293,7 +305,7 @@ class PoseIkController(Controller):
         out = {
             arm: self.command(
                 arm,
-                self._limited(arm, result.q, views[arm], now),
+                self._limited(arm, self.spec.from_model(result.q), views[arm], now),
                 now,
                 input_seq=intent.seq,
             )

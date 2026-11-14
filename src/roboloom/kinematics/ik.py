@@ -11,12 +11,34 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from xml.etree import ElementTree
 
 import numpy as np
 
 from .spec import KinematicSpec, Pose
 
 TOOL_FRAME = "roboloom_tool"
+
+
+def _bounded(urdf: str) -> str:
+    """The URDF with its `continuous` joints as revolute ones (one angle each, as the
+    follower reports them); their range is the follower's limits, given to `solve`."""
+    root = ElementTree.fromstring(urdf)
+    for joint in root.iter("joint"):
+        if joint.get("type") == "continuous":
+            joint.set("type", "revolute")
+            if joint.find("limit") is None:
+                ElementTree.SubElement(
+                    joint,
+                    "limit",
+                    {
+                        "lower": "-6.2832",
+                        "upper": "6.2832",
+                        "effort": "0",
+                        "velocity": "0",
+                    },
+                )
+    return ElementTree.tostring(root, encoding="unicode")
 
 
 @dataclass(frozen=True)
@@ -39,7 +61,7 @@ class ArmModel:
                 "in a roboloom checkout: uv sync --extra ik)"
             ) from exc
         self.pin = pin
-        full = pin.buildModelFromUrdf(str(spec.urdf))
+        full = pin.buildModelFromXML(_bounded(spec.urdf.read_text(encoding="utf-8")))
         names = list(full.names)[1:]  # 0 is the universe
         missing = [j for j in spec.joints if j not in names]
         if missing:
@@ -54,7 +76,7 @@ class ArmModel:
         for frame in (spec.base, spec.tip):
             if not model.existFrame(frame):
                 raise ValueError(f"{spec.urdf.name}: no link {frame!r}")
-        tip = model.frames[model.getFrameId(spec.tip)]
+        tip = model.frames[self._frame(model, spec.tip)]
         placement = tip.placement * pin.SE3(
             np.eye(3) if tool is None else tool[:3, :3],
             np.zeros(3) if tool is None else tool[:3, 3],
@@ -62,9 +84,18 @@ class ArmModel:
         self.tool = model.addFrame(
             pin.Frame(TOOL_FRAME, tip.parentJoint, placement, pin.FrameType.OP_FRAME)
         )
-        self.base = model.getFrameId(spec.base)
+        self.base = self._frame(model, spec.base)
         self.model, self.data = model, model.createData()
         self.joints = spec.joints
+
+    def _frame(self, model, name: str) -> int:
+        """The frame called `name`: the link when a joint has the same name (CAD
+        exports name both alike), else the joint's own frame."""
+        kinds = self.pin.FrameType
+        for kind in (kinds.BODY, kinds.FIXED_JOINT, kinds.JOINT):
+            if model.existFrame(name, kind):
+                return model.getFrameId(name, kind)
+        return model.getFrameId(name)
 
     def _q(self, joints: Sequence[float]) -> np.ndarray:
         q = np.zeros(self.model.nq)

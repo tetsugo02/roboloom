@@ -51,7 +51,7 @@ class PiperFollower(Follower):
     def device_ids(self) -> tuple[str, ...]:
         return (self.can,)
 
-    def kinematics(self) -> KinematicSpec:
+    def kinematics(self, part: str | None = None) -> KinematicSpec:
         return MODEL
 
     def open_bus(self, mock: bool) -> JointBus:
