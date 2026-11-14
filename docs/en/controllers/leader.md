@@ -1,17 +1,15 @@
 # Leader
 
-For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_mini`, the Rakuda-mini arm) reads joint positions, and the `joint` node in `controllers` converts them into follower targets. The mapping, signs, and offsets between leader joints and follower joints are specified in `joints` in `nodes/controller.yaml`.
+For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_mini`, the Rakuda-mini arm) reads joint positions, and the `joint` node in `controllers` converts them into follower targets. The leader has the follower's joint names and unit, so each follower joint follows the leader joint of the same name; nothing else has to be written.
 
 ```yaml
 type: joint
 input: leader
 followers: [follower]
-unit: dynamixel_count
 alignment_tolerance: 300
 max_speed: 2048
 command_deadline_ms: 100
 input_timeout_ms: 150
-# The actual configuration also needs the joints mapping table for all 17 joints.
 ```
 
 `leader` is the node's role in the configuration and `type` names the device. To use another arm as the leader, change only `type`.
@@ -21,7 +19,8 @@ These are the values from the distributed template. Set them after checking the 
 | Key | Meaning |
 | --- | --- |
 | `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
-| `unit` | Unit of the joint positions; must equal the leader's and the follower's (Rakuda2: `dynamixel_count`) |
+| `joints` | Optional. Left out: each follower joint follows the input joint of the same name (the input must have every follower joint). Written: one `{leader, follower, sign, offset}` per follower joint, in the follower's order, for other names, flipped directions (`sign: -1`) or offsets (target = leader × sign + offset) |
+| `unit` | Optional. The input's and the follower's unit must be the same (Rakuda2: `dynamixel_count`); when written it must equal both |
 | `max_speed` | Upper limit on the rate of change of the target (follower unit/s; counts/s on Rakuda2) |
 | `followers` | The followers it drives; a `joint` controller drives exactly one |
 | `command_deadline_ms` | Validity period of commands sent to the follower |

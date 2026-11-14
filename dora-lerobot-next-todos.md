@@ -123,3 +123,52 @@
 - [ ] **未着手** 必要な利用者・期間を確認して旧 API 互換層の範囲を決め，学習パイプラインで新旧データの差を説明する．
 
 **通過条件：** 研究に必要なデータを移行でき，実験と学習の手順で新旧の差が説明できる．
+
+## 6．自作方策の推論と，入力・フォロワの抽象化（2026-11-14 追加）
+
+PR #26〜#30 で入れたものの残りです．入れたものはすべて模擬でしか確かめていません．方策の使い方は `docs/ja/controllers/policy.md`，部分と運動学は `docs/ja/reference/configuration.md`（フォロワの部分を別々に動かす）と `docs/ja/contribution/rakuda2-pika.md` にあります．
+
+### 6.1 実機での確認
+
+- [ ] **未実施** 記録の再生（`roboloom.policy.replay:load`）を実機で行い，再生時の `observation.state` を元のエピソードと比べる．方策の経路（速度制限，補間，安全の検査）の遅れを測る．
+- [ ] **未実施** robopy で記録した古いエピソードの行動を `.npy` にして低速で再生し，関節の並び・零点（homing offset）が roboloom と同じか確かめる．`master_proj/scripts/test/diffusion_policy/common.py` の `leader_action_to_follower_order` は，leader と follower で並びが違う可能性を示している．
+- [ ] **未実施** `interpolation: linear` と `pchip` を，同じエピソードの再生で比べる（追従誤差，振動）．既定を変えるかはこの結果で決める．
+- [ ] **未実施** `inference: async` を実機で使い，`replan_at` と `action_horizon` を推論時間から決める．列の入れ替えで目標が飛ばないか（`action.clamped`，`max_speed`）を見る．
+- [ ] **未実施** `master_proj` の方策を実機で動かす．手順と，その前に確かめること（DIGIT の色の並びと背景，カメラの画角，最初のフレームの過去行動）は `~/workspace/master_proj/docs/roboloom_integration.md`．模擬では `dp_raw_vision_dynaflip_transfer_marker_To_4_Tp_32` が通っている（2026-11-14）．
+- [ ] **未実施** 観測の鮮度検査（recorder の `max_age_ms` を方策でも使う）が，実機のカメラの揺らぎで誤って止まらないか確かめる．止まるなら `max_age_ms` を見直す．
+
+### 6.2 方策まわりの未実装
+
+- [ ] **未実装** 非同期推論で，新しい行動の列と古い列を混ぜる（重なる手の加重平均など）．今は入れ替えるだけ．LeRobot の RTC（flow matching の方策に古い列を条件として渡す）も未対応．
+- [ ] **未実装** 推論の遅れを観測の時刻から求めて行動を捨てる方法．今は「観測のあとに実行した手数」で数えており，列が届く前に行動が尽きた間（`late_inference`）の時間は数えていない．
+- [ ] **未実装** 記録したデータセットの検査と行の選別（`action.valid`，`action.intervention`，`observation.meta.*.valid` で選んで新しいデータセットを書き出す）．`handheld/convert.py` と同じ形で書ける．欠測の行の `observation.state` は 0 埋めのまま学習に入る．
+- [ ] **未実装** roboloom の記録から，LeRobot 以外の学習形式（`master_proj` の HDF5 など）への変換．
+- [ ] **未実装** 方策の観測に，フォロワが保持している目標（`target`）そのものを渡す口．今は `history["action"]`（実行した行動）で代用している．
+- [ ] **未確認** `master_proj` の触覚を使う方策（`dp_raw_multimodal_*`，`dp_raw_tactile_mopoe`）と latent の方策（`dp_latent_mopoe_posterior`）．アダプターは raw 観測の拡散方策だけを想定して書いた．
+
+### 6.3 入力・フォロワの抽象化の未実装
+
+- [ ] **未実装** `type: parts` の内側の controller の `home` と `feedback`．今は読み込み時に拒否する．`home` は parts の controller 自身にも書けない．
+- [ ] **未実装** parts の controller を方策の `teleop:`（介入）に使う．`Takeover` を parts に実装する必要がある．
+- [ ] **未実装** 位置を優先する IK，または5自由度のタスク．Rakuda2 の腕では必要（下の 6.4）．
+- [ ] **未実装** 胴体の yaw を腕の鎖に入れる（7自由度）．両腕が胴体を共有するので，1つの関節を複数の部分が動かす仕組みが要る．
+- [ ] **設計のみ** VR（Meta Quest など）と UMI 型の入力（`PoseInput` のサブクラス），シミュレーターのバス（`JointBus`）．方針は `docs/ja/contribution/rakuda2-pika.md` の「ほかの入力とシミュレーター」．`open_bus(mock: bool)` は mock と実機の2択なので，シミュレーターを足すときに見直す．
+- [ ] **そのまま** `control/laws.py`・`control/device.py` は Dynamixel 系のバス（カウント，mA，Operating Mode）を前提にしている．`ControlLaw.needs` で使えるバスを限定しているので今回は触っていない．別の系統のモーターで制御則を使うときに単位を一般化する．
+
+### 6.4 Rakuda2 の腕の逆運動学（`pika` オプション）
+
+詳しい数値と再現方法は `docs/ja/contribution/rakuda2-pika.md` の「腕の逆運動学の条件の詳細」，再現は `uv run python scripts/ik_conditioning.py rakuda2`．
+
+- [ ] **未実施・最優先** 実機で follower の関節の対応表（`calibration/follower_<side>.yaml` の `urdf`，`zero`，`direction`）を確かめる．URDF の零点の姿勢は左右で鏡像になっておらず，「全関節 `zero: 2048`」は関節ごとに疑う必要がある．モーター名と URDF の関節名の種類も食い違っている（例：`r_arm_sh_pitch2` ↔ `elbow_yaw_right_dof`）．
+- [ ] **未実施** 対応表を直したあと，`scripts/ik_conditioning.py` を流し直し，条件が変わるかを見る．
+- [ ] **未実施** グリッパーの換算（`SET_<SIDE>_GRIPPER_COUNTS_PER_RAD`，`SET_<SIDE>_GRIPPER_CLOSED_COUNT`），`tool_offset`，`workspace` を実機で決める．
+- [ ] **未試行** `ik.rotation_tolerance_rad`・`ik.damping` を緩めたときに `unreachable` がどれだけ減るか．
+
+### 6.5 片付け
+
+- [ ] PR #26〜#30 のレビューとマージ（#27 以降は前の PR のブランチが base．#26 から順に）．
+- [ ] PR にしていない中間のローカルブランチ（`feat/policy-observation-history`，`feat/policy-remote`，`feat/follower-parts`，`feat/rakuda2-kinematics`）の削除．
+- [ ] `~/workspace/master_proj` の未コミットの2ファイル（`scripts/deploy/roboloom_policy.py`，`docs/roboloom_integration.md`）のコミットと，roboloom を依存に足すこと．
+- [ ] 文書の道具の癖：見出しに英字が入っていると，`{ #id }` で付けた id へのページ内リンクが strict ビルドで「anchor does not exist」になる（英語版では自動の id を使い，日本語版では英字のない見出しにして回避した）．原因は調べていない．
+
+**通過条件：** Rakuda2 の実機で「収集 → 学習 → 自作方策で推論」が通り，再生で経路の遅れが測れている．`pika` オプションは，関節の対応表を確かめ，位置優先の IK を入れたうえで実機で試す．

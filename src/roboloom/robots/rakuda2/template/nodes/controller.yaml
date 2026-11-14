@@ -1,9 +1,9 @@
-# Identity mapping in raw counts, as robopy used. alignment_tolerance: max leader-follower
+# The leader has the follower's joints and unit, so every follower joint follows the
+# leader joint of the same name (raw counts, as robopy used). alignment_tolerance: max leader-follower
 # difference (counts) before the follower starts following and before every episode start.
 type: joint
 input: leader
 followers: [follower]
-unit: dynamixel_count
 alignment_tolerance: 300
 max_speed: 2048
 command_deadline_ms: 100
@@ -25,72 +25,7 @@ couplings: []
 #   max_speed: 200
 #   tolerance: 30
 #   timeout_s: 30
-joints:
-- leader: torso_yaw
-  follower: torso_yaw
-  sign: 1
-  offset: 0
-- leader: head_yaw
-  follower: head_yaw
-  sign: 1
-  offset: 0
-- leader: head_pitch
-  follower: head_pitch
-  sign: 1
-  offset: 0
-- leader: r_arm_sh_pitch1
-  follower: r_arm_sh_pitch1
-  sign: 1
-  offset: 0
-- leader: r_arm_sh_roll
-  follower: r_arm_sh_roll
-  sign: 1
-  offset: 0
-- leader: r_arm_sh_pitch2
-  follower: r_arm_sh_pitch2
-  sign: 1
-  offset: 0
-- leader: r_arm_el_yaw
-  follower: r_arm_el_yaw
-  sign: 1
-  offset: 0
-- leader: r_arm_wr_roll
-  follower: r_arm_wr_roll
-  sign: 1
-  offset: 0
-- leader: r_arm_wr_yaw
-  follower: r_arm_wr_yaw
-  sign: 1
-  offset: 0
-- leader: r_arm_grip
-  follower: r_arm_grip
-  sign: 1
-  offset: 0
-- leader: l_arm_sh_pitch1
-  follower: l_arm_sh_pitch1
-  sign: 1
-  offset: 0
-- leader: l_arm_sh_roll
-  follower: l_arm_sh_roll
-  sign: 1
-  offset: 0
-- leader: l_arm_sh_pitch2
-  follower: l_arm_sh_pitch2
-  sign: 1
-  offset: 0
-- leader: l_arm_el_yaw
-  follower: l_arm_el_yaw
-  sign: 1
-  offset: 0
-- leader: l_arm_wr_roll
-  follower: l_arm_wr_roll
-  sign: 1
-  offset: 0
-- leader: l_arm_wr_yaw
-  follower: l_arm_wr_yaw
-  sign: 1
-  offset: 0
-- leader: l_arm_grip
-  follower: l_arm_grip
-  sign: 1
-  offset: 0
+# Other names, directions or offsets: one entry per follower joint, in its order.
+# joints:
+# - {leader: torso_yaw, follower: torso_yaw, sign: 1, offset: 0}
+# - ...

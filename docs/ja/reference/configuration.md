@@ -44,11 +44,44 @@ options:
 | --- | --- |
 | `joint` | ちょうど1台（leaderの関節を1台のフォロワの関節へ対応させる） |
 | `pose_ik` | 腕1台と，任意でグリッパ1台（手に持った機器の姿勢をIKで腕の関節へ．[開発中](../contribution/pika-sense.md)） |
+| `parts` | ちょうど1台．内側のcontrollerがそれぞれ一部の関節を動かす（[フォロワの部分を別々に動かす](#parts)） |
 | `policy` | 全フォロワを設定の順に．記録した `action` と `observation.state` が全フォロワをつないだ形なので，方策の出力も同じ形です．出力を並び順に分けて各フォロワへ送ります |
 
 フォロワが複数あるcontrollerは，全フォロワの状態がそろうまで指令を送りません．どれかのフォロワが `FAULT` や `ESTOP` になるか，状態が `follower_timeout_ms` より古くなると，そのcontrollerは全フォロワへの指令を止めます．指令が途切れたフォロワは，保持している目標を保ちます．controllerは，位置を合わせ直すまで次の指令を送りません．`policy` controllerは，フォロワの状態が古くなると，その回のエピソードの方策の実行を止めます．画面のcontrollerの行に，止めた理由（`stopped_by`）と，状態を待っているフォロワ（`waiting_state`）が出ます．
 
 `feedback`（力の逆送）は，フォロワが1台のcontrollerでだけ使えます．
+
+### フォロワの部分を別々に動かす { #parts }
+
+`type: parts` のcontrollerを使うと，Rakuda2（1本のバスに17関節）のように関節の多いフォロワを，複数の入力で，それぞれ別の関節について動かせます．腕ごとに手持ちのデバイスを使う，片腕だけleaderで動かす，といった構成です．フォロワが受け取る指令は，今までどおり1つのcontrollerからの1本です．安全の検査，記録する `action`，データセットは変わりません．確かめたのは模擬のデバイスだけです．
+
+フォロワは自分の部分に名前を付けます．Rakuda2は `body`（胴体と頭），`right_arm`，`right_gripper`，`left_arm`，`left_gripper` を持ちます．どのフォロワのYAMLでも `parts: {名前: [関節]}` で足せます．部分のないフォロワは何も書かなくてよく，全体で動かします．
+
+```yaml
+# nodes/controller.yaml
+type: parts
+followers: [follower]
+command_deadline_ms: 100
+parts: [right_hand.yaml, left_hand.yaml]   # このファイルの隣のcontrollerのファイル
+```
+
+```yaml
+# nodes/right_hand.yaml：controllerの種類は自由．followers は部分（<フォロワ>.<部分>）
+type: joint
+input: leader
+followers: [follower.right_arm]
+alignment_tolerance: 300
+max_speed: 2048
+command_deadline_ms: 100
+input_timeout_ms: 150
+```
+
+- 内側のcontrollerは，自分の部分を1台のフォロワとして扱います（単位と周期は同じ，可動域はその関節のもの）．それぞれ自分の入力に追従します．同じ入力に複数の内側のcontrollerが追従しても構いません．
+- 1つの関節を動かせる内側のcontrollerは1つまでです．どの部分も動かさない関節は，フォロワが保持している位置に留まります．
+- フォロワへの指令は全関節の1本なので，ある入力の指令には，ほかの部分の目標も入ります．入れるのは，その部分の目標がまだ有効な間だけです（指令してから内側のcontrollerの `command_deadline_ms` 以内で，そのcontrollerがそのあと指令を止めていないこと）．入力が止まった部分，手を離した部分，IKが届かなかった部分には，フォロワが保持している目標を入れます．古い目標へ動き続けることはありません．
+- フォロワが `FAULT` か `ESTOP` になると，すべての部分が揃え直してから指令を再開します．
+- 内側のcontrollerには，まだ `home` と `feedback` を書けません．partsのcontrollerを方策の `teleop:` に使うこともできません．
+- controllerの行は，どれかの部分が指令を送っていれば `following` です．`parts` に内側のcontrollerごとの状態が出ます．
 
 ## 単位
 

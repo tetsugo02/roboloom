@@ -241,7 +241,7 @@ class Session:
         )
         check_video_encoding(cfg)  # before any node opens the dataset
         if (policy or policy_kwargs) and not any(
-            not c.uses_input for c in cfg.controllers.values()
+            c.drives_all_followers for c in cfg.controllers.values()
         ):
             raise ConfigError(f"{cfg.path} has no `type: policy` controller")
         dora = _dora()

@@ -102,7 +102,7 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は 
         return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
     ```
 
-- `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位）も渡ります．
+- `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位），`spec.inference`（`sync` か `async`）も渡ります．
 - **新しい観測だけを使う**：観測する入力やセンサーの最新の値が，recorderの `max_age_ms.<ノード>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，フォロワは保持します．補間の途中でも止めます．値が新しくなると，方策を `reset()` して始め直します．
 
 ### 記録から自分のモデルまで
@@ -131,7 +131,7 @@ PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
 
 15 fpsの記録で `--stride 3` なら，方策の周期は5 Hzです．`nodes/policy.yaml` を `rate_hz: 5` にします．学習でデータセットを読むとき，表の列（`observation.state`，`action`，`action.valid`，`episode_index`，`index`）は `LeRobotDataset(...).hf_dataset` にあります．画像は `dataset[i]` で1行ずつ復号します．
 
-### 記録を再生する
+### 記録を再生する { #replaying-a-recording }
 
 `roboloom.policy.replay:load` は，記録した1エピソードの `action` を，観測に関係なくフォロワへ送ります．学習した方策と同じ経路（controller，速度の制限，補間，安全の検査）を通るので，モデルなしでその経路を確かめられます．再生を記録すれば，その `observation.state` を元のエピソードと比べられます．
 
@@ -143,6 +143,7 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 - `path` は，記録したデータセットか，行動を並べた `.npy` ファイル（`[T, n]`）です．`.npy` は，別の道具で記録したデータの関節の並びと単位を確かめるのに使えます．`stride: k` はk行おきに取ります（`rate_hz` は `dataset_fps / k`）．`horizon` はまとめて渡す手数です．
 - データセットの行動の名前と周期を，読み込むときに構成と照らします．
+- `inference: async` とは組み合わせられません（読み込むときに断ります）．再生は観測に関係なく行を順に返すので，並んでいる行動を入れ替えると，記録した行が飛びます．
 - 始める前に，エピソードの最初の姿勢へロボットを動かしてください（`home`）．最初は `max_speed` を低くします．最後の行動のあと，フォロワはそこに留まります．
 
 ### 方策を別のプロセスで動かす { #running-the-policy-in-another-process }
@@ -225,7 +226,25 @@ uv run lerobot-train \
 
 - 方策ノードは，`rate_hz` の周期で行動を1手ずつ取り出します．並んでいる行動がなくなると，`infer` を呼びます．
 - `rate_hz` は，学習に使ったデータセットの `dataset_fps` に合わせます．指令を速くするために `rate_hz` を上げると，行動の列を学習時より速く使い切ってしまいます．
-- `infer` の間は指令を送りません（同期）．推論が `command_deadline_ms` より長くかかると，フォロワはHOLDに入り，止まって待ちます．画面のcontrollerの行に，推論の時間（`infer_ms`，`infer_max_ms`）が出ます．
+- 既定では，`infer` の間は指令を送りません（同期．[非同期の推論](#asynchronous-inference)を参照）．推論が `command_deadline_ms` より長くかかると，フォロワはHOLDに入り，止まって待ちます．画面のcontrollerの行に，推論の時間（`infer_ms`，`infer_max_ms`）が出ます．
+
+### 非同期の推論 { #asynchronous-inference }
+
+推論の遅いモデルでは，まとめた行動の境目ごとに，`infer` の間フォロワが止まります．`inference: async` は `infer` を別スレッドで走らせ，その間も並んでいる行動を送り続けます．
+
+```yaml
+inference: async     # 既定は sync
+replan_at: auto      # 残りがこの手数になったら次の推論を始める
+action_horizon: 16
+```
+
+- 並んでいる行動が `replan_at` 手になったら，次の推論を始めます（`auto` は `action_horizon` の半分．数を書くなら `action_horizon` 未満）．残りの行動で推論の時間をまかなえるように決めます（`replan_at / rate_hz` 秒）．
+- 新しい行動の列は，先頭のd手を捨ててから，並んでいる行動と入れ替えます．dは，その推論に使った観測のあとに実行した手数です．行動はそれぞれ本来の時刻に実行されます（LeRobotの非同期のrolloutと同じ考え方です）．controllerの行の `dropped` がdです．
+- 行動の列が届く前に並んでいる行動がなくなると，指令を送らず，フォロワは保持します（`late_inference`）．`replan_at` か `action_horizon` を増やしてください．エピソードの始めは，最初の列が届くまで `waiting_inference` です．
+- テレオペへの切り替え，`stop`，センサーの値が古くなったときは，走っている推論の結果を捨てます．`policy.reset()` はその推論が戻るまで待つので，`reset` と `infer` が重なることはありません．
+- `infer` の例外は，同期のときと同じくエピソードを止めます．
+- 方策は，観測した時刻から始まる行動の列を返すものとして扱います．呼ばれるたびに続きを返す方策（記録の再生など）では，先頭を捨てると行動が飛びます．そういう方策は，`bind(spec)` で `spec.inference` を見て `async` を断ってください．
+- 新しい列と古い列は混ぜません．real-time chunking（RTC．flow matchingのモデルに古い列を条件として渡す方法）は実装していません．続けて返す列が大きく違う方策では，入れ替えのときに目標が飛びます（`max_speed` の範囲内）．
 
 ### 行動の補間
 
@@ -254,6 +273,21 @@ interpolation_multiplier: 12  # 指令を 60 Hz に抑える（省略すると 2
 - 評価で記録するデータセットの `action` は，フォロワに実際に送った補間後の目標です．
 - まとめた行動の境目では，`infer` の間だけ補間も止まります．次の行動は，止まる前に着いた行動から続けます．
 - 送る目標は，フォロワが保持している目標から `max_speed` の分までに切り詰め，`FollowerSafety` が可動域と期限を検査します．遠隔操作と同じです．
+
+#### 直線の代わりに滑らかな曲線を使う（`interpolation: pchip`）
+
+直線では，行動のたびに速度が急に変わります．`interpolation: pchip` は，同じ行動を通る単調な3次曲線（Fritsch–Carlson）を送ります．
+
+```yaml
+interpolation: pchip   # 既定は linear
+```
+
+- 目標は，どの行動もその本来の時刻に通ります．直線に対する遅れは増えません（ローパスフィルタでは遅れます）．
+- 隣り合う2つの行動の間では，目標はその範囲から出ません．方策の行動に雑音があっても，行き過ぎません．
+- 行動の時刻で速度が連続します．ただし，先に読んだ次の行動が，実際に次に実行する行動と同じ場合に限ります（下の項目）．保持している姿勢からの最初の行動は，速度0から始まります．2つの行動の中間では，速度が直線の1.5倍まで上がることがあります．`max_speed` の制限は同じく効きます．
+- 曲線には，向かっている行動の次の行動が要ります．並んでいる行動から取ります．まとめた行動の最後の手（同期の推論，または `action_horizon: 1`）には次がないので，その区間は直線の傾きで終わります．`inference: async` なら，並んでいる行動がなくなる前に次の列が届くのがふつうです．
+- 速度が連続しない場合が2つあります．1つは，次の行動を読めなかった区間のあとで，次の行動が逆向きか，大きく違う場合です（まとめた行動の境目，`action_horizon: 1`）．もう1つは，`inference: async` で並んでいる行動が入れ替わり，先に読んだ次の行動が変わった場合です．どちらでも，次の区間の始めの傾きを範囲に収め直すので，行き過ぎはしませんが，その行動の時刻で速度が飛びます．
+- 既定は `linear` のままです．LeRobotと同じ方法で，これまでの確認はこちらで行っています．どちらも実機で比べてはいません．記録したエピソードをそれぞれで再生し（[記録を再生する](#replaying-a-recording)），記録された `observation.state` を比べてください．
 
 ## 初期姿勢から始める（home）
 
@@ -299,7 +333,7 @@ teleop: [controller.yaml]   # leaderで動かすときの controller（このフ
 
 ## 限界
 
-- 推論しながら前の行動を実行し続ける非同期の推論と，LeRobotのRTCには対応していません．
+- LeRobotのRTCには対応していません．非同期の推論は，行動の列を混ぜずに入れ替えます．
 - ACTの時間方向の平均（`temporal_ensemble_coeff`）は，`mode: step` のときだけ働きます．
 
 ## PiPER＋Pikaでの手順（模擬）

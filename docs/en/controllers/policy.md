@@ -104,7 +104,7 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
         return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
     ```
 
-- `bind(spec)` also receives `spec.history`, `spec.hold` and `spec.units` (the unit of each action entry).
+- `bind(spec)` also receives `spec.history`, `spec.hold`, `spec.units` (the unit of each action entry) and `spec.inference` (`sync` or `async`).
 - **Fresh samples only**: an observed input or sensor whose latest sample is older than the recorder's `max_age_ms.<node>` stops the policy (`stale_observation` on the controller's line): nothing is sent and the followers hold, also between two actions of an interpolation. Once the sample is fresh again, the policy starts over with `reset()`.
 
 ### From a recording to your own model
@@ -145,6 +145,7 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 - `path` is a recorded dataset or a `.npy` file `[T, n]` of actions (to check the joint order and units of data from another tool). `stride: k` takes every k-th row (`rate_hz` must be `dataset_fps / k`); `horizon` is the chunk length.
 - The dataset's action names and rate are checked against the configuration at load.
+- It cannot be combined with `inference: async` (refused at load): a replay returns its rows in order whatever is observed, so replacing the queued actions would skip recorded rows.
 - Move the robot to the episode's first pose before starting (`home`), and keep `max_speed` low on the first try. After the last action the followers stay there.
 
 ### Running the policy in another process
@@ -230,7 +231,25 @@ uv run lerobot-train \
 
 - The policy node takes one action every `1/rate_hz`. When no action is queued, it calls `infer`.
 - Set `rate_hz` to the `dataset_fps` of the dataset the policy was trained on. Raising `rate_hz` to command faster would use up the actions faster than in training.
-- No command is sent during `infer` (synchronous). When inference takes longer than `command_deadline_ms`, the followers go to HOLD and wait. The controller's row on the screen shows the inference time (`infer_ms`, `infer_max_ms`).
+- By default no command is sent during `infer` (synchronous; see [Asynchronous inference](#asynchronous-inference)). When inference takes longer than `command_deadline_ms`, the followers go to HOLD and wait. The controller's row on the screen shows the inference time (`infer_ms`, `infer_max_ms`).
+
+### Asynchronous inference
+
+With a slow model the followers pause at every chunk boundary while `infer` runs. `inference: async` runs `infer` on a worker thread and keeps sending the queued actions meanwhile.
+
+```yaml
+inference: async     # default sync
+replan_at: auto      # start the next inference when this many actions are left
+action_horizon: 16
+```
+
+- The next inference starts when `replan_at` actions are left in the queue (`auto`: half of `action_horizon`; an integer below `action_horizon` otherwise). Choose it so that the remaining actions cover the inference time: `replan_at / rate_hz` seconds.
+- The new chunk replaces the queue without its first d actions, where d is the number of actions executed since the observation it was computed from. Each action keeps its place in time, as LeRobot's asynchronous rollout does. `dropped` on the controller's row shows d.
+- If the queue runs out before the chunk arrives, nothing is sent and the followers hold (`late_inference`); raise `replan_at` or `action_horizon`. At the start of an episode the state is `waiting_inference` until the first chunk is there.
+- Handing over to teleoperation, `stop` and a stale sensor discard the running inference's result; `policy.reset()` waits until that inference has returned, so `reset` and `infer` never overlap.
+- An exception in `infer` stops the episode, as in synchronous mode.
+- The policy is taken to return a chunk that starts at the time of its observation. A policy that returns the continuation of its previous chunk on each call (a replay, for one) would lose actions when the first ones are dropped; such a policy should read `spec.inference` in `bind(spec)` and refuse `async`.
+- The new chunk is not blended with the old one, and real-time chunking (RTC, which conditions a flow-matching model on the old chunk) is not implemented. A policy that returns very different consecutive chunks jumps at the switch (within `max_speed`).
 
 ### Action interpolation
 
@@ -259,6 +278,21 @@ interpolation_multiplier: 12  # cap the commands at 60 Hz (left out: 24, 120 Hz)
 - The `action` recorded in an evaluation dataset is the interpolated target actually sent to the follower.
 - At a chunk boundary the interpolation also pauses while `infer` runs; the next action continues from the action reached before the pause.
 - Targets are cut to `max_speed` from what each follower holds, and `FollowerSafety` checks the joint limits and the deadline, as in teleoperation.
+
+#### A smooth curve instead of the line (`interpolation: pchip`)
+
+The straight line changes its speed abruptly at every action. `interpolation: pchip` sends a monotone cubic curve (Fritsch–Carlson) through the same actions instead:
+
+```yaml
+interpolation: pchip   # default linear
+```
+
+- The targets still pass through every action at its own time, so the curve adds no lag to the line (a low-pass filter would).
+- Between two consecutive actions the targets stay within their range: no overshoot, also when the policy's actions are noisy.
+- The speed is continuous at the actions, as long as the action that was looked ahead to is the one executed next (see below). From the held pose the first action starts at rest. Halfway between two actions the speed can be up to 1.5 times the line's; `max_speed` still limits it.
+- The curve needs the action after the one being approached, taken from the queued chunk. For the last action of a chunk (synchronous inference, or `action_horizon: 1`) there is none, and the segment ends at the line's slope. With `inference: async` the next chunk usually arrives before the queue is empty.
+- The speed is not continuous in two cases. One: after a segment that had no next action to look at, when the next action reverses or differs much (a chunk boundary, `action_horizon: 1`). Two: when `inference: async` replaces the queued actions and the action that was looked ahead to changes. In both, the slope at the start of the next segment is limited again, so there is still no overshoot, but the speed jumps at that action.
+- `linear` stays the default: it is LeRobot's scheme and what the checks so far were done with. Neither has been compared on hardware; replay a recorded episode ([Replaying a recording](#replaying-a-recording)) with each and compare the recorded `observation.state`.
 
 ## Starting from a saved pose (home)
 
@@ -304,7 +338,7 @@ teleop: [controller.yaml]   # the controller the leader drives through (next to 
 
 ## Limitations
 
-- Asynchronous inference (running the previous chunk while inferring) and LeRobot's RTC are not supported.
+- LeRobot's RTC is not supported. Asynchronous inference replaces the queue without blending the chunks.
 - ACT's temporal ensembling (`temporal_ensemble_coeff`) works only with `mode: step`.
 
 ## Steps for PiPER + Pika (mock)

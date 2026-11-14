@@ -1,4 +1,19 @@
-"""Joint-to-joint mapping with start-up alignment and a speed limit."""
+"""Joint-to-joint mapping with start-up alignment and a speed limit.
+
+    type: joint
+    input: leader
+    followers: [follower]
+    alignment_tolerance: 300
+    max_speed: 2048                # the follower's unit/s
+    command_deadline_ms: 100
+    input_timeout_ms: 150
+
+An input shaped like the follower (the same joint names and unit, e.g. Rakuda-mini and
+Rakuda2) needs no more: each follower joint follows the input joint of the same name.
+`joints: [{leader, follower, sign, offset}, ...]` maps other names, flips directions or
+adds offsets (one entry per follower joint, in the follower's order); `unit:` may be
+written to state the unit, and must then be the input's and the follower's.
+"""
 
 from __future__ import annotations
 
@@ -37,11 +52,23 @@ class JointController(Controller):
             raise TypeError(
                 f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}"
             )
-        if not cfg.get("unit") == source.unit == robot.unit:
+        # `unit` may be left out; the input and the follower must speak the same one
+        if not cfg.get("unit", source.unit) == source.unit == robot.unit:
             raise ValueError(
                 f"{name}: unit must match input {source.unit!r} and robot {robot.unit!r}"
             )
         mapping = cfg.get("joints")
+        if mapping is None:  # an input shaped like the follower: joint to same joint
+            missing = [j for j in robot.joint_names if j not in source.joint_names]
+            if missing:
+                raise ValueError(
+                    f"{name}: input {source.name!r} has no joints {missing}; write the "
+                    "mapping as joints: [{leader, follower, sign, offset}, ...]"
+                )
+            mapping = [
+                {"leader": j, "follower": j, "sign": 1, "offset": 0}
+                for j in robot.joint_names
+            ]
         if not isinstance(mapping, list) or not all(
             isinstance(j, dict) for j in mapping
         ):
@@ -71,6 +98,7 @@ class JointController(Controller):
             )
         for field in ("alignment_tolerance", "max_speed", "input_timeout_ms"):
             positive(cfg.get(field), f"{name}.{field}")
+        self.mapping: list[dict] = mapping
         self.source_joints = source.joint_names
         self.couplings = JointCouplings(
             cfg.get("couplings", []), robot.joint_names, name
@@ -119,7 +147,7 @@ class JointController(Controller):
         added = self.couplings.apply([0.0] * len(follower), follower)
         return {
             j["leader"]: j["sign"] * (f - j["offset"] - extra)
-            for j, f, extra in zip(self.cfg["joints"], follower, added, strict=True)
+            for j, f, extra in zip(self.mapping, follower, added, strict=True)
         }
 
     @property
@@ -193,9 +221,7 @@ class JointController(Controller):
         self.last_seq = intent.seq
         incoming = positions(intent.payload["positions"], len(self.source_joints))
         by_name = dict(zip(self.source_joints, incoming, strict=True))
-        target = [
-            by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.cfg["joints"]
-        ]
+        target = [by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.mapping]
         current = positions(follower, len(self.follower.joint_names))
         target = self.couplings.apply(target, current, follower_velocity)
         if self.pickup is not None:  # joints not reached yet keep their held value

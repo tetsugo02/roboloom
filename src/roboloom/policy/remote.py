@@ -137,6 +137,7 @@ def _spec(fields: dict) -> PolicySpec:
         history=fields.get("history", 1),
         hold=tuple(fields.get("hold", ())),
         units=tuple(fields.get("units", ())),
+        inference=fields.get("inference", "sync"),
     )
 
 

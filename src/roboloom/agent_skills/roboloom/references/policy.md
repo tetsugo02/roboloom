@@ -36,7 +36,18 @@ command_deadline_ms: 300
   `ActionInterpolator`; roboloom also ramps the first action from the held target).
   Keep `rate_hz` at the training fps; never raise it to command faster. `rate_hz * N`
   must be whole Hz and <= every follower's `control_hz`. Followers lag one action period;
-  the recorded `action` is the interpolated target. RTC/async inference: not supported.
+  the recorded `action` is the interpolated target.
+- `interpolation: pchip` (default `linear`): a monotone cubic through the same actions
+  (each reached at its own time, no overshoot between two actions; uses the next queued
+  action, falls back to the line's slope at a chunk's last action). Speed is continuous
+  at an action only while that lookahead holds: it can jump at a chunk boundary,
+  with `action_horizon: 1`, and when `inference: async` replaces the queue.
+- `inference: async` (default `sync`): `infer` runs on a worker thread while queued
+  actions keep going; the next inference starts when `replan_at` actions are left (`auto`:
+  half of `action_horizon`); the new chunk replaces the queue minus the d actions executed
+  since its observation (`dropped`). Queue empty first: followers hold (`late_inference`).
+  No blending of chunks; LeRobot RTC: not supported. A chunk must start at its
+  observation's time: `roboloom.policy.replay:load` refuses async (`spec.inference`).
 - `home: {pose, max_speed, tolerance[, timeout_s]}` (several followers: `{follower: {...}}`)
   moves the followers to a `capture-pose` pose with `home` / `Session.home()` /
   `infer --home`. Arrival is measured: every joint within `tolerance` within 2 s after the
@@ -151,10 +162,9 @@ with Session.launch(
         s.record(f"pick up the cup (eval {k})", seconds=30)
 ```
 
-Inference is synchronous: no command is sent during `infer`; if it exceeds
-`command_deadline_ms` the followers HOLD and wait. Targets are clipped to `max_speed` and
-checked by `FollowerSafety` as in teleoperation. Asynchronous inference and LeRobot RTC
-are not supported. `InProcessSession.step(policy=fn)` is the in-process alternative
+By default inference is synchronous: no command is sent during `infer`; if it exceeds
+`command_deadline_ms` the followers HOLD and wait (`inference: async` avoids the pause). Targets are clipped to `max_speed` and
+checked by `FollowerSafety` as in teleoperation. LeRobot RTC is not supported. `InProcessSession.step(policy=fn)` is the in-process alternative
 (see [in-process.md](in-process.md)).
 
 ## LeRobot checkpoints

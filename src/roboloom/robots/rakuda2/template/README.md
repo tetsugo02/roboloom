@@ -53,6 +53,7 @@ dataset:
 | `bilateral` | off | force feedback to the leader; requires `gravity`; **not verified on hardware** | `local/rakuda2-bilateral` |
 | `policy` | off | a policy drives the follower; DIGIT optional, conflicts with `gravity`; `infer` turns it on | `local/rakuda2-eval` (`-digit-eval` with `digit`) |
 | `policy_teleop` | off | with `policy`: drive with the leader before an episode and intervene during one; requires `policy` | `local/rakuda2-eval-teleop` |
+| `pika` | off | a Pika Sense per arm through inverse kinematics instead of the leader; **in development, mock only** (`nodes/pika_*.yaml`, `nodes/controller_pika.yaml`, `nodes/*_sense.yaml`, `nodes/lighthouse.yaml`); conflicts with `gravity`, `policy` | `local/rakuda2-pika` |
 
 Real hardware is the default; `--mock` uses mock devices (`--hardware` is gone and errors).
 `uv run roboloom` alone opens the launcher: pick the robot (from the robots under

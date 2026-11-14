@@ -36,6 +36,7 @@ nav:
       - PiPERフォロワ（開発中）: contribution/piper.md
       - Pika Gripperフォロワ（開発中）: contribution/pika-gripper.md
       - Pika SenseとIKによる遠隔操作（開発中）: contribution/pika-sense.md
+      - Rakuda2をPika SenseとIKで動かす（開発中）: contribution/rakuda2-pika.md
       - Pikaの手首カメラ（開発中）: contribution/pika-cameras.md
       - Webカメラ（開発中）: contribution/webcam.md
       - Pika Senseを手に持った収集（開発中）: contribution/pika-handheld.md

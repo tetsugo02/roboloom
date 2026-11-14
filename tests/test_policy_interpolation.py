@@ -247,3 +247,98 @@ def test_the_node_commands_at_the_interpolated_rate(tmp_path):
     # read while recording: after stop the policy sends nothing, so a count read after
     # save falls with the time save takes (measured 47 after a 0.35 s save)
     assert 50 <= max(rates) <= 65, rates
+
+
+def _curve(actions, multiplier=10, start=0.0):
+    """The pchip steps through `actions` (each knows the action after it), with the
+    action boundaries: [0, a1, a2, ...] at every `multiplier`-th step."""
+    interp = ActionInterpolator(multiplier, "pchip")
+    out = [np.asarray([start])]
+    for i, action in enumerate(actions):
+        following = actions[i + 1] if i + 1 < len(actions) else None
+        interp.add(
+            np.asarray([action]),
+            previous=np.asarray([start]),
+            next=None if following is None else np.asarray([following]),
+        )
+        out += _drain(interp)
+    return np.concatenate(out)
+
+
+def test_pchip_passes_through_every_action_at_its_time():
+    actions = [1.0, 3.0, 3.5, 2.0, 2.0, 6.0]
+    curve = _curve(actions)
+    assert np.allclose(curve[10::10], actions)  # no lag behind the straight line
+
+
+def test_pchip_never_leaves_the_range_between_two_actions():
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        actions = list(rng.normal(size=8).cumsum())
+        curve = _curve(actions, multiplier=16)
+        knots = [0.0, *actions]
+        for k in range(len(actions)):
+            segment = curve[16 * k : 16 * (k + 1) + 1]
+            low, high = sorted((knots[k], knots[k + 1]))
+            assert segment.min() >= low - 1e-9 and segment.max() <= high + 1e-9
+
+
+def test_pchip_keeps_the_speed_continuous_where_the_line_jumps():
+    actions = [1.0, 4.0, 5.0, 9.0]  # the line's speed changes 1 -> 3 -> 1 -> 4
+    smooth = np.diff(_curve(actions, multiplier=50))
+    line = ActionInterpolator(50)
+    steps = [np.zeros(1)]
+    for action in actions:
+        line.add(np.asarray([action]), previous=np.zeros(1))
+        steps += _drain(line)
+    straight = np.diff(np.concatenate(steps))
+    assert np.abs(np.diff(straight)).max() > 0.03  # a jump at every action
+    assert np.abs(np.diff(smooth)).max() < 0.01
+    assert smooth[0] < straight[0] / 5  # it leaves the held pose from rest
+
+
+def test_pchip_without_the_next_action_ends_on_the_lines_slope():
+    interp = ActionInterpolator(4, "pchip")
+    interp.add(np.asarray([2.0]), previous=np.asarray([0.0]))
+    first = np.concatenate(_drain(interp))
+    assert first[-1] == 2.0 and np.all(np.diff([0.0, *first]) > 0)
+    interp.add(np.asarray([4.0]))  # arrives with slope 2 per action, leaves with it
+    second = np.concatenate(_drain(interp))
+    assert np.allclose(second, [2.5, 3.0, 3.5, 4.0])
+
+
+def test_the_interpolation_method_is_checked(tmp_path):
+    with pytest.raises(ValueError, match="method"):
+        ActionInterpolator(2, "spline")
+    with pytest.raises(ValueError, match="interpolation must be one of"):
+        load_config(_project(tmp_path, interpolation="spline"), options=["policy"])
+
+
+def test_a_policy_with_pchip_reaches_each_action_and_looks_ahead(tmp_path):
+    cfg = load_config(
+        _project(
+            tmp_path,
+            rate_hz=5,
+            interpolation_multiplier=20,
+            interpolation="pchip",
+            action_horizon=4,
+            observe=[],
+        ),
+        options=["policy"],
+    )
+    controller = cfg.controllers["policy"]
+    controller.policy = Ramp(4)
+    controller.start("ramp")
+    pose = [2048.0] * len(cfg.followers["follower"].joint_names)
+    sent = []
+    for k in range(80):  # one chunk: 4 actions, +10 each
+        t = 1_000_000_000 + k * 10_000_000
+        controller.observe("follower", _state(t, pose, pose))
+        pose = list(controller.tick(t)["follower"].payload["positions"])
+        sent.append(pose[0])
+    assert [sent[19], sent[39], sent[59], sent[79]] == pytest.approx(
+        [2058.0, 2068.0, 2078.0, 2088.0]
+    )
+    steps = np.diff([2048.0, *sent])
+    assert steps[0] < 0.1 and np.all(steps >= 0)  # from rest, never backwards
+    assert steps[30] == pytest.approx(0.5, abs=0.02)  # the line's speed in the middle

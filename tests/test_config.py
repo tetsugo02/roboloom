@@ -107,3 +107,65 @@ def test_the_node_knows_the_robot_directory():
     policy = cfg.controllers["policy"]
     assert policy.cfg["__robot_dir__"].endswith(".roboloom/piper-mock")
     assert set(cfg.followers) == {"left", "right", "left_gripper", "right_gripper"}
+
+
+def test_a_leader_shaped_like_the_follower_needs_no_joint_table():
+    from conftest import rakuda2_tree
+
+    tree = rakuda2_tree()
+    node = tree["controllers"]["controller"]
+    assert "joints" not in node and "unit" not in node  # the shipped template
+    controller = parse_config(tree).controllers["controller"]
+    follower = controller.follower
+    assert [j["leader"] for j in controller.mapping] == list(follower.joint_names)
+    assert all(j["sign"] == 1 and j["offset"] == 0 for j in controller.mapping)
+    pose = [2000.0 + i for i in range(len(follower.joint_names))]
+    assert list(controller.leader_pose(pose).values()) == pose
+
+    written = rakuda2_tree()
+    written["controllers"]["controller"]["unit"] = "rad"
+    with pytest.raises(ValueError, match="unit must match"):
+        parse_config(written)
+    explicit = rakuda2_tree()
+    explicit["controllers"]["controller"]["unit"] = "dynamixel_count"
+    explicit["controllers"]["controller"]["joints"] = [
+        {"leader": j, "follower": j, "sign": -1 if j == "head_yaw" else 1, "offset": 0}
+        for j in follower.joint_names
+    ]
+    mapped = parse_config(explicit).controllers["controller"].mapping
+    assert [j["sign"] for j in mapped if j["leader"] == "head_yaw"] == [-1]
+
+
+def test_an_input_without_the_followers_joints_needs_the_table():
+    from roboloom.controllers.joint import JointController
+    from roboloom.inputs.base import JointInput
+    from roboloom.robots.base import Follower
+
+    limits = [
+        {"name": j, "min": -1, "max": 1, "max_speed": 1, "max_jump": 1}
+        for j in ("a", "b")
+    ]
+    follower = Follower(
+        "arm", {"joints": ["a", "b"], "unit": "rad", "control_hz": 50, "limits": limits}
+    )
+
+    class Knob(JointInput):
+        safety_traits = Follower.safety_traits
+
+    cfg = {
+        "alignment_tolerance": 0.1,
+        "max_speed": 1.0,
+        "command_deadline_ms": 100,
+        "input_timeout_ms": 150,
+    }
+    source = Knob("knob", {"joints": ["a", "wheel"], "unit": "rad"})
+    with pytest.raises(ValueError, match=r"has no joints \['b'\]"):
+        JointController("c", cfg, source, {"arm": follower})
+    table = [
+        {"leader": "a", "follower": "a", "sign": 1, "offset": 0},
+        {"leader": "wheel", "follower": "b", "sign": 1, "offset": 0.5},
+    ]
+    controller = JointController(
+        "c", {**cfg, "joints": table}, source, {"arm": follower}
+    )
+    assert controller.leader_pose([0.0, 0.75]) == {"a": 0.0, "wheel": 0.25}
