@@ -84,6 +84,90 @@ def load(checkpoint: str) -> MyPolicy:
 
   学習したときと違う構成なら例外を出してください．controllerは `failed` になり，理由を画面に出して，エピソードを始めません．`roboloom infer` と `Session.wait_ready` は，待たずに理由を示して終わります．`bind` を書かない方策も，これまでどおり動きます．
 
+### 履歴，動かさない関節，新しい観測
+
+最新のフレーム以外にモデルが要るものは，controllerに頼みます．モデルを作り替えるたびに書き直す必要はありません．正規化，画像の縮小，モデル独自の行動（差分，一部の関節だけ）を関節の目標へ直す処理は，方策の側に書きます．
+
+```yaml
+observation_history: 4                       # 既定は1：最新のフレームだけ
+hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は []
+```
+
+- **`observation_history: N`**：観測を行動1手ごと（`1/rate_hz` ごと）に1回採ります．まとめた行動のうち推論しない手でも採ります．`infer` には `observation["history"]` も渡ります．観測の各配列を `[N, ...]` に重ねたもので，古い順に並び，最後が今のフレームです．エピソードの始めは，最初のフレームで履歴を埋めます．`history["action"]`（float32 `[N, n]`）は，各フレームの前に実行した行動です（始めはフォロワが保持していた目標）．値はフォロワへ送った指令で，recorderが `action` に書くものと同じです．方策の出力が `max_speed` を超えて削られたときは，削られたあとの値が入ります．過去の行動を読むモデルに使います．`N = 1` なら観測は今までと同じです．
+- **`hold`**：行動のうち方策が動かさない要素（`<フォロワ>.<関節>`）です．方策がそこに何を返しても（NaNでも），フォロワが保持している目標に置き換えます．一部の関節だけで学習したモデルも，`[n]` か `[H, n]` を返せば済みます．ほかの要素は有限でなければならず，そうでなければエピソードを止めます．
+- **`options()`（任意）**：方策が自分でこれらを指定できます．YAMLより優先します．モデルを差し替えても設定を書き換えずに済みます．
+
+    ```python
+    def options(self) -> dict:
+        return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
+    ```
+
+- `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位）も渡ります．
+- **新しい観測だけを使う**：観測する入力やセンサーの最新の値が，recorderの `max_age_ms.<ノード>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，フォロワは保持します．補間の途中でも止めます．値が新しくなると，方策を `reset()` して始め直します．
+
+### 記録から自分のモデルまで
+
+roboloomはモデルの形を決めません．方策には，記録と同じ観測，その履歴，実行した行動を渡し，関節の絶対目標を受け取ります．モデルごとに変わる処理は方策の側に書きます．
+
+| 処理 | 書く場所 |
+| --- | --- |
+| モデルが動かす関節の選択 | 方策．ほかの関節には何を返してもよく（NaN），その関節を `hold` に挙げる |
+| 正規化（学習データの統計） | 方策．統計はチェックポイントと一緒に保存する |
+| 画像の縮小や切り出しなどの前処理 | 方策 |
+| 行動の形（状態からの差分，一部の関節だけ） | 方策が `infer` の中で絶対目標に戻す |
+| 観測の履歴，過去の行動 | roboloom（`observation_history`） |
+| 記録より低い行動周期 | k行おきに学習し，`rate_hz` を `dataset_fps / k` にする |
+| 制御周期への補間，速度の制限，安全の検査 | roboloom |
+
+リポジトリの `examples/policies/chunk_mlp.py` は，これらを一通り行う小さなモデルです（関節状態だけを使い，CPUで数秒で学習できます）．記録したデータセットの `observation.state` と `action` の列を読んで学習し，統計・動かす関節・履歴の長さをチェックポイントに保存して，`options()` でroboloomに伝えます．
+
+```bash
+uv run python examples/policies/chunk_mlp.py train \
+    --dataset .roboloom/rakuda2/datasets/rakuda2 --out outputs/chunk_mlp.pt \
+    --history 4 --horizon 8 --stride 3 --exclude torso_yaw head_yaw head_pitch
+PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
+    --policy chunk_mlp:load --policy-kwargs '{"checkpoint": "outputs/chunk_mlp.pt"}'
+```
+
+15 fpsの記録で `--stride 3` なら，方策の周期は5 Hzです．`nodes/policy.yaml` を `rate_hz: 5` にします．学習でデータセットを読むとき，表の列（`observation.state`，`action`，`action.valid`，`episode_index`，`index`）は `LeRobotDataset(...).hf_dataset` にあります．画像は `dataset[i]` で1行ずつ復号します．
+
+### 記録を再生する
+
+`roboloom.policy.replay:load` は，記録した1エピソードの `action` を，観測に関係なくフォロワへ送ります．学習した方策と同じ経路（controller，速度の制限，補間，安全の検査）を通るので，モデルなしでその経路を確かめられます．再生を記録すれば，その `observation.state` を元のエピソードと比べられます．
+
+```bash
+uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
+    --policy roboloom.policy.replay:load \
+    --policy-kwargs '{"path": ".roboloom/rakuda2/datasets/rakuda2", "episode": 0}'
+```
+
+- `path` は，記録したデータセットか，行動を並べた `.npy` ファイル（`[T, n]`）です．`.npy` は，別の道具で記録したデータの関節の並びと単位を確かめるのに使えます．`stride: k` はk行おきに取ります（`rate_hz` は `dataset_fps / k`）．`horizon` はまとめて渡す手数です．
+- データセットの行動の名前と周期を，読み込むときに構成と照らします．
+- 始める前に，エピソードの最初の姿勢へロボットを動かしてください（`home`）．最初は `max_speed` を低くします．最後の行動のあと，フォロワはそこに留まります．
+
+### 方策を別のプロセスで動かす { #running-the-policy-in-another-process }
+
+roboloomを動かす環境に依存関係が入らないモデル（torchの版が違うなど）や，別のマシンで動かしたいモデルは，自分のプロセスから提供します．方策ノードは `roboloom.policy.remote:connect` でそこへつなぎます．`bind`，`reset`，`infer`，`options` はそのまま渡るので，方策の書き方は上と同じです．
+
+```bash
+# モデルのある側：そのモデルの環境．roboloomはextraなしで入れる
+export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
+uv run roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
+# roboloomのコマンドを使わない場合：python -m roboloom.policy.remote my_lab.policies:load
+```
+
+```yaml
+# nodes/policy.yaml（roboloomを動かす環境にも同じ ROBOLOOM_POLICY_AUTHKEY が要る）
+factory: roboloom.policy.remote:connect
+kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 は infer 1回の上限
+```
+
+- サーバーはモデルを1回だけ読み込み，方策ノードを1つずつ相手にします．エピソードやセッションをまたいで使えます．`roboloom infer` より先に起動してください．ノードは `connect_timeout_s`（30秒）まで待ちます．
+- サーバー側に要るのは，numpyとextraなしのroboloomだけです（LeRobotも，roboloomが入れるtorchも要りません）．
+- 方策が出した例外は，同じプロセスの方策と同じく，controllerの行に出ます．
+- 共有する秘密の文字列で両側を認証します．通信は暗号化しません．アドレスはループバックか，信頼できるネットワークにしてください．メッセージはJSONのヘッダと配列の生のバイト列です（pickleは使いません）．
+- ネットワーク越しでは，`infer` のたびに観測を送ります（480×640の画像1枚で約0.9 MB，`observation_history` の枚数分）．
+
 ## LeRobotの方策
 
 `roboloom.policy.lerobot:load` は，LeRobotで学習したチェックポイントを読み込む，既製の方策です．

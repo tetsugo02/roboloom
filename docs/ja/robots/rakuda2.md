@@ -19,6 +19,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | --- | --- | --- | --- |
 | [RealSense](../sensors/realsense.md) | `camera` | `nodes/camera.yaml` | RGB画像（深度は取得しません） |
 | [DIGIT](../sensors/digit.md) | `digit_left`, `digit_right` | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | 左右の触覚RGB画像 |
+| [音声](../sensors/audio.md) | `audio` | `nodes/audio.yaml` | マイク1本のメルスペクトログラム（既定は無効．`--sensors` で選ぶ） |
 
 センサーのシリアル番号は実機に合わせて設定します．センサー名はデータセットのfeature名にも使われます．
 
@@ -37,6 +38,8 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `observation.meta.<node>.seq`，`capture_ns`，`ready_ns`，`receive_ns` | 各1（int64）．同じノード | 通し番号，単調時計のns |
 | `action.valid`，`action.clamped` | 各1（float32） | 0/1 |
 | `action.meta.follower.valid`，`clamped`，`seq`，`sent_ns` | 各1（`valid`，`clamped` はfloat32，`seq`，`sent_ns` はint64） | 0/1，指令の番号，単調時計のns |
+| `action.intervention` | 1（float32．オプション `policy_teleop` のときだけ） | 人がleaderで動かした行は1 |
+| `observation.audio.audio` | センサー `audio` を選んだときだけ．大きさは[音声](../sensors/audio.md)を参照 | メルスペクトログラム |
 
 - `observation.leader`，`observation.meta.<node>.*`，`action.valid`，`action.clamped`，`action.meta.follower.*` の意味，欠測の記録のしかた，指令のなかった行の `action` の中身は，[設定](../reference/configuration.md) の「記録と再開」で説明しています．どのロボットでも同じです．
 - 方策（オプション `policy`）は，既定で関節状態と `camera` を観測します．`nodes/policy.yaml` の `observe` でセンサーを選べます（`[]` なら関節状態のみ）．`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．

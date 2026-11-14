@@ -31,11 +31,13 @@ and shutdown. Set `torque: true` only after validating the follower's limits and
 | --- | --- | --- |
 | `config.yaml` | the one configuration: leader teleop + RealSense, and the launch `options:` below | — |
 | `nodes/policy.yaml` | the policy that drives the follower (option `policy`) | your policy |
+| `nodes/policy_teleop.yaml` | `policy.yaml` plus leader teleoperation and interventions (option `policy_teleop`) | keep it the same as `policy.yaml` |
+| `nodes/audio.yaml` | the microphone (sensor `audio`, off by default) | step 1 |
 | `nodes/follower.yaml`, `nodes/leader*.yaml` | port, EEPROM registers | step 1 |
 | `nodes/camera.yaml`, `nodes/digit_*.yaml` | sensor serials | step 1 |
-| `calibration/leader_<side>.yaml` | joint map for gravity identification | step 4 |
-| `calibration/gravity_<side>.yaml` | identified gravity model | step 4 |
-| `calibration/travel_<side>.yaml` | joint travel (runaway check) | step 5 |
+| `calibration/leader_<side>.yaml` | joint map for gravity identification | step 3 |
+| `calibration/travel_<side>.yaml` | joint travel (runaway check) | step 4 |
+| `calibration/gravity_<side>.yaml` | identified gravity model | step 5 |
 | `calibration/gravity_tuning_<side>.yaml` | gain and hold per joint | step 7 |
 
 Options in `config.yaml` add, replace or remove node files. Enabling one also enables what
@@ -50,6 +52,7 @@ dataset:
 | `gravity` | off | gravity-compensated leader (after steps 3-7) | same as without it |
 | `bilateral` | off | force feedback to the leader; requires `gravity`; **not verified on hardware** | `local/rakuda2-bilateral` |
 | `policy` | off | a policy drives the follower; DIGIT optional, conflicts with `gravity`; `infer` turns it on | `local/rakuda2-eval` (`-digit-eval` with `digit`) |
+| `policy_teleop` | off | with `policy`: drive with the leader before an episode and intervene during one; requires `policy` | `local/rakuda2-eval-teleop` |
 
 Real hardware is the default; `--mock` uses mock devices (`--hardware` is gone and errors).
 `uv run roboloom` alone opens the launcher: pick the robot (from the robots under

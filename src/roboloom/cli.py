@@ -351,6 +351,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     sess.add_argument("operation", choices=SESSION_OPERATIONS)
     sess.add_argument("task", nargs="?", default="")
+    serve = sub.add_parser(
+        "serve-policy",
+        help="serve a policy to a policy node (factory: roboloom.policy.remote:connect)",
+    )
+    serve.add_argument("policy", help="module:callable returning the policy")
+    serve.add_argument(
+        "--kwargs", type=json.loads, default={}, help="JSON arguments of the callable"
+    )
+    serve.add_argument("--address", default="127.0.0.1:18765", help="host:port")
+    serve.add_argument(
+        "--authkey-env",
+        default="ROBOLOOM_POLICY_AUTHKEY",
+        help="environment variable holding the shared secret",
+    )
     skills = sub.add_parser(
         "skills", help="the Agent Skill for coding agents (Claude Code, Codex, ...)"
     )
@@ -429,6 +443,18 @@ def _dispatch(args: argparse.Namespace) -> None:
     operator = TerminalOperator()
     if args.command == "skills":
         _skills(args)
+        return
+    if args.command == "serve-policy":
+        from .policy import remote
+
+        print(f"policy server: loading {args.policy}")
+        remote.serve(
+            args.policy,
+            args.address,
+            kwargs=args.kwargs,
+            authkey_env=args.authkey_env,
+            ready=lambda: print(f"policy server: listening on {args.address}"),
+        )
         return
     if args.command == "init":
         from .project import init_project

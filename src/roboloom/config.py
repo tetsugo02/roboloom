@@ -631,7 +631,7 @@ def parse_config(tree: dict) -> RobotConfig:
             )
         bind = getattr(controller, "bind", None)
         if bind is not None:
-            bind({**inputs, **sensors}, fps)
+            bind({**inputs, **sensors}, fps, tree["recorder"].get("max_age_ms", {}))
         if c.get("teleop"):
             _bind_teleop(name, controller, inputs, followers)
         controller.bind_feedback(estimators)

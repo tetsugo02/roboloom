@@ -50,6 +50,36 @@ command_deadline_ms: 300
   trigger reaches it). Rows a person drove: `action.intervention` = 1. Only `type: joint`
   teleop controllers (pose_ik refused). Handing back calls `policy.reset()`.
 
+- `observation_history: N` (default 1): the observation is sampled once per action and
+  `infer` also gets `observation["history"]`: every array stacked `[N, ...]`, oldest first,
+  current frame last (the first frame fills it), plus `"action"` `[N, n]`, the command
+  sent before each frame (after `max_speed`, as recorded in `action`). `hold: [<follower>.<joint>, ...]`: action entries the policy
+  does not drive; whatever it returns there (NaN too) becomes the held target, other
+  entries must be finite. A policy may return both (and `action_horizon`) from an optional
+  `options()`; it wins over the YAML. `bind(spec)` sees `spec.history`, `spec.hold`,
+  `spec.units`. Normalization, resizing and decoding deltas stay in the policy.
+- An observed input or sensor older than `recorder.max_age_ms.<node>` stops the policy
+  (`stale_observation`, followers hold, also mid-interpolation); when fresh again it restarts with `reset()`.
+
+- A model that cannot share roboloom's environment (other torch) or runs elsewhere:
+  serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or
+  `python -m roboloom.policy.remote ...`; needs only numpy + roboloom without extras) and
+  set `factory: roboloom.policy.remote:connect`, `kwargs: {address: "127.0.0.1:18765"}`.
+  Both sides need the same `ROBOLOOM_POLICY_AUTHKEY`. `bind`/`reset`/`infer`/`options` are
+  forwarded; policy errors show on the controller line. Not encrypted: loopback or a
+  trusted network only.
+
+- roboloom fixes no model form: joint selection (`hold`), normalization, image
+  preprocessing and decoding the model's action form (deltas) into absolute targets are
+  the policy's; history, interpolation, speed limit and safety are roboloom's. A lower
+  action rate: train on every k-th row, `rate_hz = dataset_fps / k`. A worked example
+  (train script + policy with `options()`) is `examples/policies/chunk_mlp.py` in the
+  roboloom repository. For training, table columns are in `LeRobotDataset(...).hf_dataset`.
+- `roboloom.policy.replay:load` (`kwargs: {path, episode: 0, horizon: 8, stride: 1}`)
+  replays one recorded episode's `action` (or a `.npy` `[T, n]`) open loop through the
+  policy path: checks the path without a model. Names and rate are checked at load;
+  `home` to the first pose first, low `max_speed`.
+
 ## Writing a policy
 
 Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint

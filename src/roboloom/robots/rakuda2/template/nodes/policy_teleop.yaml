@@ -23,6 +23,12 @@ rate_hz: 15  # the policy's action rate: the rate it was trained at
 #   interpolation). A number must keep rate_hz * N whole Hz and <= control_hz.
 # interpolation_multiplier: auto
 action_horizon: 8
+# observation_history: N gives infer the last N frames (one per action) as
+#   observation["history"] (arrays [N, ...], oldest first; "action": executed actions).
+# hold: joints of the action the policy does not drive; they keep their held target.
+#   A policy may state both (and action_horizon) itself with options().
+# observation_history: 1
+# hold: []  # e.g. [follower.torso_yaw, follower.head_yaw, follower.head_pitch]
 max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)
 command_deadline_ms: 300
 # Optional saved start pose: `home` (infer --home, Session.home()) moves the follower

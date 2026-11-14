@@ -38,6 +38,7 @@
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る（方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も） |
+| `serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | この環境の方策を，`roboloom.policy.remote:connect` を読み込む方策ノードへ提供する（[別のプロセス](../controllers/policy.md#running-the-policy-in-another-process)）．秘密の文字列は `ROBOLOOM_POLICY_AUTHKEY` から読む |
 | `convert-handheld [robot] --action delta\|relative-chunk` | フォロワのない構成で手に持って記録したデータセットを，相対の姿勢の行動を持つ学習用のデータセットに変換する（[開発中](../contribution/pika-handheld.md)．`--horizon`，`--hands`，`--max-gap`，`--output`，`--repo-id`） |
 | `skills install\|check\|path` | コーディングエージェント向けのスキル（Agent Skill）を自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーする・コピーが今の版と合っているか確かめる（合わなければ終了コード1）・同梱の場所を表示する（`--agent all\|agents\|claude`，`--root`，`--force`．[Installation](../quick-start/installation.md) の「コーディングエージェントで使う」）．デバイスは開かない |
 

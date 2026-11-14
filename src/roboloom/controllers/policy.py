@@ -34,6 +34,20 @@ the slowest follower's `control_hz`; 1 sends each action as is.
       tolerance: 30
     teleop: [controller.yaml]           # optional: leader teleoperation before and
                                         # during an episode (paths next to this file)
+    observation_history: 1              # N > 1: the policy also gets the last N frames
+    hold: []                            # joints the policy does not drive (they stay)
+
+`observation_history: N` samples the observation once per action (at `rate_hz`) and gives
+`infer` `observation["history"]`: every observation stacked `[N, ...]`, oldest first and
+the current frame last (the first frame fills the history), plus `"action"` `[N, n]`,
+the action executed before each frame (the held targets at the start). `hold:` lists
+`<follower>.<joint>` entries of the action the policy leaves alone: whatever it returns
+there (NaN too) is replaced by the target the follower holds. A policy with `options()`
+sets `observation_history`, `hold` and `action_horizon` itself (it wins over the YAML).
+
+An observed input or sensor whose latest sample is older than the recorder's
+`max_age_ms.<node>` stops the policy (`stale_observation`: nothing is sent, the followers
+hold); once it is fresh again the policy restarts with `reset()`.
 
 With `teleop:` the operator can drive the followers with the leader before an episode
 (session command `teleop`, nothing recorded; `stop_teleop` ends it), let the policy take over at `start`, take
@@ -116,8 +130,18 @@ class PolicyController(Controller):
                     f"Hz exceeds the follower control_hz {slowest:g}; lower "
                     "interpolation_multiplier"
                 )
-        self.horizon = int(
-            positive(cfg.get("action_horizon", 1), f"{name}.action_horizon")
+        self.names = [
+            f"{n}.{j}" for n, f in self.followers.items() for j in f.joint_names
+        ]
+        self.history = 1
+        self.hold: tuple[str, ...] = ()
+        self.hold_index: list[int] = []
+        self.horizon = 1
+        self.frames: deque[dict[str, Any]] = deque(maxlen=1)  # the last frames
+        self.configure(
+            cfg.get("observation_history", 1),
+            cfg.get("hold", []),
+            cfg.get("action_horizon", 1),
         )
         if "max_speed_counts_per_s" in cfg:
             raise ConfigError(
@@ -138,6 +162,9 @@ class PolicyController(Controller):
         self.policy: Policy | None = None
         self.sources: dict[str, Recordable] = {}  # set by `bind`
         self.dataset_fps = 30.0  # set by `bind`
+        self.max_age_ms: dict[str, float] = {}  # per observed source, set by `bind`
+        self.executed: np.ndarray | None = None  # the action of the previous period
+        self.stale = False  # an observed source went stale: restart with reset()
         self.latest: dict[str, Envelope] = {}
         self.queue: deque[np.ndarray] = deque()
         self.task = ""
@@ -150,6 +177,37 @@ class PolicyController(Controller):
         self.teleop: dict[str, Controller] = {}
         self.control = ""  # who commands the followers: "", "policy" or "teleop"
         self.received: dict[str, int] = {}  # when each follower's state arrived
+
+    def configure(self, history: object, hold: object, horizon: object) -> None:
+        """`observation_history`, `hold` and `action_horizon`, from the YAML or from the
+        policy's `options()`."""
+        name = self.name
+        if isinstance(history, bool) or not isinstance(history, int) or history < 1:
+            raise ValueError(
+                f"{name}.observation_history must be an integer >= 1, not {history!r}"
+            )
+        if not isinstance(hold, (list, tuple)) or not all(
+            isinstance(x, str) for x in hold
+        ):
+            raise ValueError(f"{name}.hold must be a list of <follower>.<joint> names")
+        unknown = [x for x in hold if x not in self.names]
+        if unknown or len(set(hold)) != len(hold):
+            raise ValueError(
+                f"{name}.hold: {unknown or 'repeated names'}; the action's entries are "
+                f"{', '.join(self.names)}"
+            )
+        self.history = history
+        self.hold = tuple(hold)
+        self.hold_index = [self.names.index(x) for x in self.hold]
+        self.horizon = int(positive(horizon, f"{name}.action_horizon"))
+        self.frames = deque(maxlen=history)
+
+    def _clear(self) -> None:
+        """Forget queued actions, the interpolation and the observation history."""
+        self.queue.clear()
+        self.interpolator.reset()
+        self.frames.clear()
+        self.executed = None
 
     def bind_teleop(self, controllers: Mapping[str, Controller]) -> None:
         """The teleoperation controllers of `teleop:`; together they drive every
@@ -208,8 +266,7 @@ class PolicyController(Controller):
             raise RuntimeError(f"no state yet from {', '.join(missing)}")
         for c in self.teleop.values():
             c.begin_takeover(views)  # type: ignore[attr-defined]  # Takeover, checked
-        self.queue.clear()
-        self.interpolator.reset()
+        self._clear()
         self.control = "teleop"
 
     def resume_policy(self) -> None:
@@ -220,8 +277,8 @@ class PolicyController(Controller):
                 "no episode running: start one (the policy starts with it)"
             )
         self.policy.reset()
-        self.queue.clear()
-        self.interpolator.reset()
+        self._clear()
+        self.stale = False
         self.last_ns = 0
         self.control = "policy"
 
@@ -275,11 +332,22 @@ class PolicyController(Controller):
     def observes(self) -> list[str]:
         return list(self.cfg.get("observe", []))
 
-    def bind(self, sources: dict[str, Recordable], dataset_fps: float) -> None:
+    def bind(
+        self,
+        sources: dict[str, Recordable],
+        dataset_fps: float,
+        max_age_ms: Mapping[str, object] | None = None,
+    ) -> None:
         """The specs of the observed sources and the dataset rate, so observations have
-        exactly the keys and shapes of the recorded rows (`recording.schema`)."""
+        exactly the keys and shapes of the recorded rows (`recording.schema`), and the
+        recorder's `max_age_ms` of each: a sample older than that is not inferred on."""
         self.sources = {name: sources[name] for name in self.observes()}
         self.dataset_fps = dataset_fps
+        self.max_age_ms = {
+            name: positive(age, f"max_age_ms.{name}")
+            for name, age in (max_age_ms or {}).items()
+            if name in self.sources
+        }
 
     # -- lifecycle (the policy node calls these) --------------------------------
 
@@ -292,6 +360,20 @@ class PolicyController(Controller):
             self.cfg.get("kwargs", {}) if kwargs is None else kwargs,
             search=[str(self.cfg.get("__robot_dir__") or "")],
         )
+        options = getattr(policy, "options", None)
+        if callable(options):  # what the model needs, stated by the policy itself
+            wanted = options()
+            known = {"observation_history", "hold", "action_horizon"}
+            if not isinstance(wanted, Mapping) or not set(wanted) <= known:
+                raise ValueError(
+                    f"{self.name}: the policy's options() must be a mapping with keys "
+                    f"from {sorted(known)}"
+                )
+            self.configure(
+                wanted.get("observation_history", self.history),
+                wanted.get("hold", list(self.hold)),
+                wanted.get("action_horizon", self.horizon),
+            )
         bind = getattr(policy, "bind", None)
         if callable(bind):  # the policy checks it gets what it was trained on
             bind(self.spec())
@@ -310,6 +392,9 @@ class PolicyController(Controller):
             action=tuple(state_names(self.followers)),
             rate_hz=self.rate_hz,
             dataset_fps=self.dataset_fps,
+            history=self.history,
+            hold=self.hold,
+            units=tuple(f.unit for f in self.followers.values() for _ in f.joint_names),
         )
 
     def start(self, task: str) -> None:
@@ -317,8 +402,8 @@ class PolicyController(Controller):
             raise RuntimeError("policy not loaded")
         self.policy.reset()
         self.task, self.running = task, True
-        self.queue.clear()
-        self.interpolator.reset()
+        self._clear()
+        self.stale = False
         self.last_ns = 0
         self.state = "running"
         self.control = "policy"  # also after teleoperation before the episode
@@ -326,8 +411,7 @@ class PolicyController(Controller):
     def stop(self) -> None:
         self.running = False
         self.control = ""
-        self.queue.clear()
-        self.interpolator.reset()
+        self._clear()
         if self.state == "running":
             self.state = "ready"
 
@@ -354,6 +438,30 @@ class PolicyController(Controller):
         out["task"] = self.task
         return out
 
+    def _stale_sources(self, now: int) -> list[str]:
+        """Observed inputs and sensors whose latest sample is older than `max_age_ms`."""
+        return [
+            name
+            for name, age in self.max_age_ms.items()
+            if name in self.latest and now - self.latest[name].t_capture_ns > age * 1e6
+        ]
+
+    def _remember(self, observation: dict[str, Any], held: np.ndarray) -> None:
+        """Add this action period's frame to the history (the first one fills it)."""
+        frame = {k: v for k, v in observation.items() if isinstance(v, np.ndarray)}
+        frame["action"] = np.asarray(
+            held if self.executed is None else self.executed, dtype=np.float32
+        )
+        for _ in range(1 if self.frames else self.history):
+            self.frames.append(frame)
+
+    def _with_history(self, observation: dict[str, Any]) -> dict[str, Any]:
+        if self.history == 1:
+            return observation
+        frames = list(self.frames)
+        history = {key: np.stack([f[key] for f in frames]) for key in frames[0]}
+        return {**observation, "history": history}
+
     def tick(self, now_ns: int | None = None) -> dict[str, Envelope]:
         """The next command per follower while an episode runs: a new action every
         `interpolation_multiplier` ticks (inferring when none is queued) and the steps
@@ -368,13 +476,18 @@ class PolicyController(Controller):
             for s in states.values()
         ):
             return {}
+        # checked on every command, also between two actions: the steps toward an
+        # action inferred from a sample that has since gone stale are not sent either
+        old = self._stale_sources(now)
+        if old:  # e.g. a frozen camera: never act on what is no longer there
+            self._clear()
+            self.stale = True
+            self.state, self.error = "stale_observation", f"{old[0]} is stale"
+            return {}
         if self.interpolator.needs_new_action():
-            if not self.queue:
-                if not self._infer():
-                    return {}
-                if now_ns is None:  # infer took time
-                    now = time.monotonic_ns()
-            # after a reset the line starts from what the followers hold
+            if self.stale:  # fresh again: the policy starts over
+                self.policy.reset()
+                self.stale, self.error = False, ""
             held = np.concatenate(
                 [
                     np.asarray(
@@ -384,13 +497,28 @@ class PolicyController(Controller):
                     for s in states.values()
                 ]
             )
-            self.interpolator.add(self.queue.popleft(), previous=held)
+            if self.history > 1 or not self.queue:
+                observation = self.observation()
+                if observation is None:
+                    self.state = "waiting_observation"
+                    return {}
+                if self.history > 1:
+                    self._remember(observation, held)
+                if not self.queue:
+                    self._infer(self._with_history(observation))
+                    if now_ns is None:  # infer took time
+                        now = time.monotonic_ns()
+            chosen = self.queue.popleft().copy()
+            chosen[self.hold_index] = held[self.hold_index]  # joints the policy leaves
+            # after a reset the line starts from what the followers hold
+            self.interpolator.add(chosen, previous=held)
         action = self.interpolator.get()
         assert action is not None  # an action was just added if the steps ran out
         period = 1 / self.command_hz
         dt = max((now - self.last_ns) / 1e9, 1e-6) if self.last_ns else period
         span = min(dt, 2 * period)
         out: dict[str, Envelope] = {}
+        sent: list[float] = []
         start = 0
         for name, follower in self.followers.items():
             part = action[start : start + len(follower.joint_names)]
@@ -404,30 +532,33 @@ class PolicyController(Controller):
                 for p, x in zip(previous, part, strict=True)
             ]
             out[name] = self.command(name, limited, now)
+            sent += limited
+        # the history's action is the command that went out (what the recorder writes
+        # as `action`), not the policy's target before the speed limit
+        self.executed = np.asarray(sent, dtype=np.float64)
         self.last_ns = now
         return out
 
-    def _infer(self) -> bool:
-        """Queue the first `action_horizon` steps of the policy's output; False while an
-        observed source has no sample yet."""
+    def _infer(self, observation: dict[str, Any]) -> None:
+        """Queue the first `action_horizon` steps of the policy's output."""
         assert self.policy is not None
-        observation = self.observation()
-        if observation is None:
-            self.state = "waiting_observation"
-            return False
         t0 = time.perf_counter()
         actions = np.asarray(self.policy.infer(observation), dtype=np.float64)
         self.infer_ms.append((time.perf_counter() - t0) * 1000)
         n = sum(len(f.joint_names) for f in self.followers.values())
         if actions.ndim == 1:
             actions = actions[None, :]
-        if actions.ndim != 2 or actions.shape[1] != n or not np.isfinite(actions).all():
+        if actions.ndim != 2 or actions.shape[1] != n:
             raise ValueError(
-                f"policy returned shape {actions.shape}; expected [{n}] or [H, {n}], finite"
+                f"policy returned shape {actions.shape}; expected [{n}] or [H, {n}]"
+            )
+        driven = np.delete(actions, self.hold_index, axis=1)
+        if not np.isfinite(driven).all():  # `hold` entries may be anything
+            raise ValueError(
+                f"policy returned non-finite targets (shape {actions.shape})"
             )
         self.queue.extend(actions[: self.horizon])
         self.state = "running"
-        return True
 
     def update(
         self,
