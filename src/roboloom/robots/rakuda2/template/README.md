@@ -219,6 +219,9 @@ is **not verified on hardware**; check every step with the arms supported. Files
    Then pass yours: `--policy my_lab.policies:load --policy-kwargs '{"checkpoint": "..."}'`
    (or set `factory`/`kwargs` in `nodes/policy.yaml`). Add `--task` to record the run into
    `datasets/rakuda2-eval` (`datasets/rakuda2-digit-eval` with `--with digit`).
+   Keep each run's verdict with `uv run roboloom label --with policy <episode> success`
+   (or `failure`; typing `save success` in the operator screen does it while saving);
+   `uv run roboloom check-dataset --with policy` counts them.
 
 Set `observe` in `nodes/policy.yaml` to the sources used during training: `[camera]`
 (default), `[camera, digit_left, digit_right]` with the `digit` option, or `[]` for

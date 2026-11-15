@@ -30,7 +30,11 @@ KEYS = ("Enter: start", "h: home", "q: discard and quit", "e: emergency stop")
 def describe(result: EpisodeResult) -> str:
     if not result.saved:
         return f"discarded '{result.task}' ({result.frames} rows)"
-    return f"saved episode {result.index}: '{result.task}', {result.frames} frames"
+    verdict = f", labelled {result.label}" if result.label else ""
+    return (
+        f"saved episode {result.index}: '{result.task}', {result.frames} frames"
+        f"{verdict}"
+    )
 
 
 def record(

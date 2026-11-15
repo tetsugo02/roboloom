@@ -163,8 +163,16 @@ with Session.launch(
 ) as s:
     s.wait_ready()
     for k in range(10):
-        s.record(f"pick up the cup (eval {k})", seconds=30)
+        # judge(ep: EpisodeResult) -> "success" | "failure" | None: your own check
+        s.record(f"pick up the cup (eval {k})", seconds=30, label=judge)
 ```
+
+`label`: `"success"` / `"failure"`, or a function of the stopped `EpisodeResult`
+returning one (None: no verdict). The verdict, the policy's status (`infer_max_ms`,
+`dropped`, `error`) and the metrics go to the evaluation dataset's
+`meta/roboloom_episodes.jsonl`; `roboloom label [robot] --with policy <episode>
+success|failure` sets it afterwards and `roboloom check-dataset --with policy` counts
+them. From the operator screen: type `save success` / `save failure`.
 
 By default inference is synchronous: no command is sent during `infer`; if it exceeds
 `command_deadline_ms` the followers HOLD and wait (`inference: async` avoids the pause). Targets are clipped to `max_speed` and

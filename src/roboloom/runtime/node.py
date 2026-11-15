@@ -23,6 +23,7 @@ from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.estimators.base import Estimate, Estimator
 from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed
+from roboloom.recording.episodes import check_label
 from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
@@ -212,21 +213,29 @@ def teleop_warning(
 
 
 def parse_command(line: str) -> dict:
-    """A command line from the FIFO: JSON {"id", "command", "task"} from a Session, or
-    plain `start <task>` typed by an operator (no id)."""
+    """A command line from the FIFO: JSON {"id", "command", "task"} from a Session
+    (`save` may carry "label" and "note"), or plain `start <task>` / `save <label>`
+    typed by an operator (no id)."""
     line = line.strip()
     if line.startswith("{"):
         try:
             data = json.loads(line)
         except json.JSONDecodeError:
             return {"command": line, "task": ""}
-        return {
+        request = {
             "id": data.get("id"),
             "command": str(data.get("command", "")),
             "task": str(data.get("task", "")),
         }
+        for key in ("label", "note"):
+            if data.get(key):
+                request[key] = str(data[key])
+        return request
     command, _, task = line.partition(" ")
-    return {"command": command, "task": task.strip()}
+    request = {"command": command, "task": task.strip()}
+    if command == "save" and request["task"]:  # `save success`
+        request["label"], request["task"] = request["task"], ""
+    return request
 
 
 def _session(node, cfg: RobotConfig):
@@ -302,6 +311,21 @@ def _session(node, cfg: RobotConfig):
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
+                if cmd == "save":
+                    # nothing is saved under a mistyped verdict
+                    try:
+                        check_label(request.get("label"))
+                    except ValueError as exc:
+                        refused = {"id": request.get("id"), "command": cmd}
+                        report({**refused, "error": str(exc)})
+                        continue
+                    # what the controllers say now goes into the episode's record: a
+                    # policy's inference time, the chunks it dropped, its error
+                    request["controllers"] = {
+                        name: latest[name].get("fields", {})
+                        for name in cfg.controllers
+                        if name in latest
+                    }
                 _send(node, "control", p.make("session", request))
                 # progress shows in the robot, leader and policy status
                 if cmd in ("home", "teleop", "policy", "stop_teleop"):
@@ -937,17 +961,23 @@ def _recorder(node, cfg: RobotConfig):
             }
         )
 
-    def save(metrics: dict, ident: object) -> None:
+    def save(metrics: dict, request: dict) -> None:
+        ident = request.get("id")
         try:
-            done.put(
-                {
-                    "command": "save",
-                    "id": ident,
-                    "saved_frames": writer.save(),
-                    "episodes": writer.episodes,
-                    "metrics": metrics,
-                }
-            )
+            saved = {
+                "command": "save",
+                "id": ident,
+                "saved_frames": writer.save(
+                    request.get("label"),
+                    request.get("note"),
+                    request.get("controllers"),
+                ),
+                "episodes": writer.episodes,
+                "metrics": metrics,
+            }
+            if request.get("label"):
+                saved["label"] = request["label"]
+            done.put(saved)
         except Exception as exc:  # noqa: BLE001 - report session failure to operator
             failed = {"command": "save", "id": ident, "error": str(exc)}
             if isinstance(exc, SaveFailed):  # the episode is gone: nothing to retry
@@ -1025,9 +1055,10 @@ def _recorder(node, cfg: RobotConfig):
                     elif command == "save":
                         if not writer.stopped:
                             raise RuntimeError("stop the episode first")
+                        check_label(msg.payload.get("label"))
                         saving = threading.Thread(
                             target=save,
-                            args=(writer.metrics(), ident),
+                            args=(writer.metrics(), dict(msg.payload)),
                             name="save-episode",
                         )
                         saving.start()

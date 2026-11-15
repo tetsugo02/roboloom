@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ..core.protocol import Envelope
-from . import journal, manifest
+from . import episodes, journal, manifest
 from .metrics import summarize
 from .schema import (
     INTERVENTION,
@@ -265,13 +265,23 @@ class EpisodeRecorder:
         self.active = self.stopped = False
         self.samples = self._empty()
 
-    def save(self) -> int:
+    def save(
+        self,
+        label: str | None = None,
+        note: str | None = None,
+        controllers: dict | None = None,
+    ) -> int:
         """Write the stopped episode; returns its rows. Raises SaveFailed when it could
-        not be written: the episode is dropped and the recorder is idle again."""
+        not be written: the episode is dropped and the recorder is idle again.
+
+        `label` ("success" / "failure"), `note` and `controllers` (what each controller
+        reported when the episode ended) go into the episode's record
+        (`recording.episodes`), next to its task and metrics."""
         if not self.stopped:
             raise RuntimeError("stop the episode first")
         if not self.written:
             raise ValueError("empty episode")
+        label = episodes.check_label(label)  # before anything is written
         if self.root is None:  # a dataset the caller passed in saves as it likes
             self.dataset.save_episode()
             self.episodes = int(
@@ -279,6 +289,17 @@ class EpisodeRecorder:
             )
         else:
             self._save_closed(self.root)
+            with contextlib.suppress(Exception):  # a note; the episode is saved
+                episodes.saved(
+                    self.root,
+                    self.episodes - 1,
+                    self.task,
+                    self.written,
+                    self.metrics(),
+                    label,
+                    note,
+                    controllers,
+                )
         count = self.written
         self.discard()
         return count

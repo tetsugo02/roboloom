@@ -16,6 +16,8 @@ uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
 
+On pull requests and pushes to `main`, GitHub Actions (`.github/workflows/test.yml`) runs `ruff check .`, `mypy src` and `pytest`. The dataflow tests start dora processes with mock devices; no hardware is used.
+
 Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/config.yaml` and `uv run roboloom run examples/mock/config.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
 
 The mock configuration saves to `datasets/rakuda-mock` (`datasets/rakuda-mock-bilateral` with the option `bilateral`). After a change to the recorded layout (feature names or shapes), old data cannot be appended to; move it or change `output`. Do not delete existing data to check the screen.

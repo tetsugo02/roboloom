@@ -47,7 +47,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
     print(r.index, r.frames, r.warnings, r.ok)
 ```
 
-`record(task, seconds, *, keep=None, on_tick=None, tick_s=0.2, ready_timeout=60.0, home=False) -> EpisodeResult`
+`record(task, seconds, *, keep=None, on_tick=None, tick_s=0.2, ready_timeout=60.0, home=False, label=None, note=None) -> EpisodeResult`
 
 - Waits until start is allowed (alignment), starts, records, stops, saves unless
   `keep(result)` returns `False`. Exception or Ctrl-C discards the episode.
@@ -61,7 +61,11 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   `EpisodeInfo(index, number, dataset, previous)`: dataset episode index, number in this
   session, dataset name (e.g. `rakuda2-digit`), tasks saved in this session.
 - `home=True` moves leader and follower to the controller's `home` pose first.
-- `EpisodeResult(task, saved, frames, index, metrics, warnings)`, `.ok` = no warnings.
+- `label`: an evaluation verdict, `"success"` / `"failure"`, or a function of the
+  stopped `EpisodeResult` returning one (None: none); `note`: free text. Both go to
+  the dataset's `meta/roboloom_episodes.jsonl` ([recording.md](recording.md)).
+- `EpisodeResult(task, saved, frames, index, metrics, warnings, label)`, `.ok` = no
+  warnings.
 
 ```python
 import itertools
@@ -76,7 +80,7 @@ s.record(lambda info: f"pick up the {next(objects)}", seconds=20, keep=lambda ep
 | --- | --- |
 | `start(task)` | start following + recording; `SessionError` if not aligned |
 | `stop() -> EpisodeResult` | stop; not saved yet (inspect metrics/warnings) |
-| `save(timeout=300.0) -> EpisodeResult` / `discard()` | write the episode (readable from then on, whatever happens to the process) or drop it; a failed write raises `SessionError` and drops the episode |
+| `save(timeout=300.0, *, label=None, note=None) -> EpisodeResult` / `discard()` | write the episode (readable from then on, whatever happens to the process) or drop it; a failed write raises `SessionError` and drops the episode; `label` / `note` as in `record` (another string: `ValueError`, nothing saved) |
 | `home(timeout=None)` | slow move to the home pose; refused while recording |
 | `estop()` | emergency stop (latched); goes out even after a node failed |
 | `release(confirm=False)` | torque off; with `confirm=False` raises `HardwareError` carrying `release_note()` |

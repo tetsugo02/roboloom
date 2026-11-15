@@ -384,6 +384,8 @@ def describe_report(report: dict) -> Text:
         text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {p99:.1f} ms max {worst:.1f} ms"
         if missing:
             text += f"  missing % {missing}"
+        if report.get("label"):
+            text += f"  labelled {report['label']}"
         return Text(text, style="green")
     if report.get("ok"):
         command = report.get("command", "")

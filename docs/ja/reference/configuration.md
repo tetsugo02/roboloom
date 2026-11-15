@@ -349,6 +349,24 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 `recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．`control_interval_ms` と `action_missing_rate`（指令のなかった行の割合）はフォロワごとで，警告にはフォロワの名前が出ます．
 
+### エピソードごとの記録と評価の成否 { #episode-records }
+
+保存のたびに，データセットの `meta/roboloom_episodes.jsonl` に1行（JSON）を追記します．
+
+| キー | 内容 |
+| --- | --- |
+| `episode` | データセットの中のエピソードの番号 |
+| `saved` | 保存した時刻 |
+| `task`，`frames` | task と行数 |
+| `metrics` | recorderの指標（欠損率，有効な行動の割合，制御周期の分布） |
+| `controllers` | 保存したときの各controllerの状態．方策では `infer_ms`・`infer_max_ms`（推論時間），`dropped`（非同期の推論で遅れて捨てた手数），`error` など |
+| `label`，`note` | 評価の成否（`success`・`failure`．付けなければ `null`）とメモ |
+
+- 成否は保存のときに付けます：Pythonの `save(label=...)`・`record(..., label=...)`（[Python API](python-api.md)），操作画面のコマンド欄や `--plain` の行入力で `save success`・`save failure`，別端末から `roboloom session save success`．
+- あとから付ける・付け直すときは `roboloom label [robot] <エピソード番号> success|failure` を使います．`{"episode", "label", "labelled", "note"}` の行を追記し，読むときは同じエピソードの行をあとのものを優先して重ねます．行を書き換えることはありません．
+- `roboloom check-dataset` が，成否の数を表示します．
+- LeRobotはこのファイルを読みません．学習には影響しません．保存に失敗したエピソードと破棄したエピソードの行はありません．
+
 ### Image storage
 
 画像センサーのノード YAML に `storage: video | image` を指定します（RealSense、DIGIT、Pika 手首カメラを含む V4L2）。既定は `video` で、従来の非可逆 MP4 です。`image` は可逆 PNG フレームを Parquet に埋め込みます。DIGIT と背景の微小な画素差を使う場合に推奨します。同じデータセット内で混在できます。不正な値は `validate` を含む設定読み込み時に拒否します。

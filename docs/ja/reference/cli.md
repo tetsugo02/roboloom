@@ -37,9 +37,10 @@
 | `run [robot]` | 操作画面で収集する |
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
-| `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る（方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も） |
+| `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る：`start <task>`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も．`save success`・`save failure` は，成否を付けて保存する |
 | `serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | この環境の方策を，`roboloom.policy.remote:connect` を読み込む方策ノードへ提供する（[別のプロセス](../controllers/policy.md#running-the-policy-in-another-process)）．秘密の文字列は `ROBOLOOM_POLICY_AUTHKEY` から読む |
-| `check-dataset [robot]` | 記録したデータセットを読むだけで検査する：エピソード数とファイルの整合，動画の長さと行数，`valid` が0の行の割合．問題があれば終了コード1．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ．`--recover` は保存の途中で止まったエピソードを取り除く（[記録と再開](configuration.md#recording-and-resuming)） |
+| `check-dataset [robot]` | 記録したデータセットを読むだけで検査する：エピソード数とファイルの整合，動画の長さと行数，`valid` が0の行の割合，成否の数．問題があれば終了コード1．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ．`--recover` は保存の途中で止まったエピソードを取り除く（[記録と再開](configuration.md#recording-and-resuming)） |
+| `label [robot] <episode> success\|failure` | 保存済みのエピソードに，評価の成否を付ける・付け直す（`--note <text>` でメモ）．データセットの `meta/roboloom_episodes.jsonl` に追記し，成否の数を表示する．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ（[評価の成否](configuration.md#episode-records)） |
 | `convert-handheld [robot] --action delta\|relative-chunk` | フォロワのない構成で手に持って記録したデータセットを，相対の姿勢の行動を持つ学習用のデータセットに変換する（[開発中](../contribution/pika-handheld.md)．`--horizon`，`--hands`，`--max-gap`，`--output`，`--repo-id`） |
 | `skills install\|check\|path` | コーディングエージェント向けのスキル（Agent Skill）を自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーする・コピーが今の版と合っているか確かめる（合わなければ終了コード1）・同梱の場所を表示する（`--agent all\|agents\|claude`，`--root`，`--force`．[Installation](../quick-start/installation.md) の「コーディングエージェントで使う」）．デバイスは開かない |
 
@@ -55,6 +56,8 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --home
 uv run roboloom infer --seconds 20 --policy my_lab.policies:load
 uv run roboloom validate --with digit
 uv run roboloom session home
+uv run roboloom session save success               # 別端末から，成否を付けて保存
+uv run roboloom label --with policy 3 failure     # 評価のデータセットのエピソード3
 ```
 
 `calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．同じバスは，同時に1つのプロセスしか開けません．dataflowが使っているバスを `probe` や `tune-gravity` で開くと（逆も同じ），あとから開いた方が `... is in use by another process` で止まります．`commission`，`watchdog-test`，`check-hold`，`gravity-check` はmockの設定を拒否します．

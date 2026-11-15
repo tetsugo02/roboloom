@@ -345,6 +345,20 @@ teleop: [controller.yaml]   # the controller the leader drives through (next to 
 - Only `type: joint` teleop controllers are supported. `pose_ik` (PiPER + Pika Sense and the like) is refused at load as not supporting takeover yet.
 - An ESTOP or FAULT of a follower, or a follower going silent, also ends Teleop. Pressing Teleop again takes the joints over from there.
 
+## Recording an evaluation's verdicts
+
+Runs saved with `roboloom infer --task <text>` (`record` in Python) go into the evaluation dataset. Whether each run succeeded can be kept in the episode records (`meta/roboloom_episodes.jsonl` in the dataset).
+
+```bash
+uv run roboloom infer --seconds 30 --episodes 10 --task "pick up the cup"
+uv run roboloom label --with policy 3 failure --note "missed the grasp"   # afterwards, for episode 3
+uv run roboloom check-dataset --with policy                                # labels: 7 success, 3 failure, ...
+```
+
+- A verdict can also be given when saving: `save success` or `save failure` in the operator screen's input, `record(..., label=...)` or `save(label=...)` in Python ([Python API](../reference/python-api.md)).
+- The record also holds what the policy reported for the run (inference time `infer_max_ms`, the steps asynchronous inference dropped as late `dropped`, its error) and the recorder's metrics. The keys are listed in [Episode records and evaluation verdicts](../reference/configuration.md#episode-records).
+- A run in which the policy failed is not saved, so it has no record.
+
 ## Limitations
 
 - LeRobot's RTC is not supported. Asynchronous inference replaces the queue without blending the chunks.

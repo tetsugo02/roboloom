@@ -16,6 +16,8 @@ uv run pytest
 uv run --group docs python scripts/docs.py build
 ```
 
+Pull Requestと `main` へのpushでは，GitHub Actions（`.github/workflows/test.yml`）が `ruff check .`・`mypy src`・`pytest` を実行します．dataflowのテストはmockデバイスでdoraのプロセスを起動するもので，実機は使いません．
+
 checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
 模擬の設定の保存先は `datasets/rakuda-mock` です（オプション `bilateral` では `datasets/rakuda-mock-bilateral`）．記録の形（featureの名前や形）を変えた後は，古いデータへ追記できません．古いデータは移すか，`output` を変えてください．画面確認のために既存データを削除しないでください．

@@ -400,8 +400,8 @@ class SessionBackend:
             self._log(describe(session.stop()))
             self._recording = False
             self._phase = "stopped: save or discard"
-        elif name == "save":
-            self._log(describe(session.save()))
+        elif name == "save":  # `save success` / `save failure`: with the verdict
+            self._log(describe(session.save(label=task.strip() or None)))
             self._episode = False
             self._phase = "saved"
         elif name == "discard":

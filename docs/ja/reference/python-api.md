@@ -136,6 +136,32 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
 ```
 
+### 評価の成否を残す
+
+- `record(..., label="success")` と `save(label="failure", note="...")` で，保存するエピソードに成否（`success` か `failure`）とメモを付けられます．
+  - `record` の `label` には，停止したエピソード（`result`）を受け取って成否を返す関数も渡せます．`None` を返すと成否を付けません．
+  - `success`・`failure` 以外の文字列は，保存の前に `ValueError` になります．
+- 保存のたびに，データセットの `meta/roboloom_episodes.jsonl` に1行を書きます．成否を付けなくても書きます．入るもの：
+  - エピソードの番号，task，行数，指標（`metrics`）
+  - 保存したときの各controllerの状態（方策の推論時間 `infer_max_ms`，非同期の推論で遅れて捨てた手数 `dropped`，エラーなど）
+  - 成否（`label`）とメモ（`note`）
+- あとから付ける・付け直すときは，`roboloom label [robot] <エピソード番号> success|failure`（[CLI](cli.md)）か `roboloom.recording.episodes.label(...)` を使います．`roboloom check-dataset` が成否の数を表示します．
+- このファイルをLeRobotは読みません．学習には影響しません．
+
+```python
+from roboloom.recording import episodes
+
+for k in range(10):
+    s.record(
+        "pick up the cup",
+        seconds=30,
+        label=lambda ep: "success" if cup_lifted() else "failure",  # 利用者の判定
+    )
+records = episodes.read(s.cfg.output)  # {エピソード番号: 記録}
+print(episodes.summary(s.cfg.output, s.episodes))
+# labels: 7 success, 3 failure, 0 not labelled (70% of the labelled)
+```
+
 ### 細かく操作する
 
 - `start(task)`，`stop()`，`save()`，`discard()`，`estop()`，`release(confirm=True)` を，1 つずつ呼べます．
@@ -155,7 +181,7 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
 ```python
 s.start("wipe the table")
 while not task_done():  # 利用者の判定
-    print(s.status()["robot"]["fields"]["mode"])
+    print(s.status()["follower"]["fields"]["mode"])
     time.sleep(0.5)
 stopped = s.stop()  # まだ保存していない．metrics と warnings を見られる
 s.save() if stopped.ok else s.discard()
@@ -211,9 +237,9 @@ with Session.launch(
 ```
 
 **注意**
-- `infer` の間は，command を送りません．
+- 既定（同期）では，`infer` の間は command を送りません．
   - 推論が `command_deadline_ms` より長くかかると，robot は HOLD に入ります．止まって待つ動きになります．
-  - 推論中も前のまとめた行動を実行し続ける非同期型は，今後の課題です．
+  - `nodes/policy.yaml` の `inference: async` にすると，推論中も前のまとめた行動を実行し続けます（[非同期の推論](../controllers/policy.md#asynchronous-inference)）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．
   - 実機で，推論の経路を初めて確かめるときに使います．
 

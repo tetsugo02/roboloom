@@ -48,7 +48,7 @@
   - 対策：方策ノードは，robot が武装していない（command を無視する）うちに 1 回 command を送る．これで最初の episode の最大値も 18 ms 以下になった．
   - 未確認：実機の leader で見た 128 ms の停止（Watchdog 作動）が同じ原因か．leader は起動直後から sample を送り続けているので，別の原因の可能性が高い．`gc_max_ms`（状態表示）と，episode ごとの `control_interval_ms` で切り分ける．
 - 未検証：利用者のプロセスで方策オブジェクトを直接動かす（dora の dynamic node）．`dora run`（coordinator なし）で使えるか確かめていない．
-- 未実装：非同期の行動チャンク（推論中も前のチャンクを実行し，重なりを混ぜる）．今は同期型で，推論中は command が止まり，期限を過ぎると robot は HOLD に入る．
+- 非同期の行動チャンク：既定は同期型で，推論中は command が止まり，期限を過ぎると robot は HOLD に入る．**2026-11-14 更新：** `inference: async` を入れた（推論中も前の列を実行し，新しい列が届いたら入れ替える．模擬のみ）．重なりを混ぜる処理は未実装（6.2）．
 
 **現在地：段階 1〜3 の模擬構成と LeRobot 保存を試作中．段階 0 の実測，実機安全試験，段階 2 の既知軌道での往復検証は未完了．段階 4〜5 は構想段階．** `README.md` の使用例と `tests/` は模擬・単体の根拠であり，実機試験の根拠ではない．
 
@@ -57,7 +57,7 @@
 | 9 ノードの模擬 dataflow | dora で責務と周期を分ける構成 | プロセスを通した安定動作と実機での周期改善 |
 | Rakuda joint controller と `FollowerSafety` | 関節対応，期限・値の基本検査，模擬バスでの停止 | 実機の HOLD／停止の安全性と通信断時の動作 |
 | `EpisodeRecorder` と LeRobot writer | 因果的な行の選択，欠損表示，模擬データの保存・再開 | 既知軌道での観測・指令対応，実機カメラと音声の収録品質 |
-| `Session`（dataflow の指揮）と `Experiment`（1 プロセス） | task の自動命名，1 episode の収録，方策ノードによる推論（模擬で end-to-end 試験） | 実機での収録・推論，非同期チャンク，dynamic node |
+| `Session`（dataflow の指揮）と `Experiment`（1 プロセス） | task の自動命名，1 episode の収録，方策ノードによる推論（模擬で end-to-end 試験） | 実機での推論，非同期推論の実機確認と列を混ぜる処理，dynamic node |
 
 ## 0．基準測定と目標値
 
@@ -108,7 +108,7 @@
 
 ## 4．入力源・ロボットの拡張
 
-- [ ] **一部汎用 API のみ** `JointIntent`／`PoseIntent`／`TwistIntent`，単位・座標系・期限を持つ `RobotCommand` の契約を定義する．現状の dora dataflow は Rakuda の生カウント関節入力専用（`src/roboloom/config.py`，`src/roboloom/controllers/`）．
+- [ ] **一部実装** `JointIntent`／`PoseIntent`／`TwistIntent`，単位・座標系・期限を持つ `RobotCommand` の契約を定義する．関節の入力（`JointInput`）と姿勢の入力（`PoseInput`），機体ごとの単位（`unit`）の申告，入力と follower の換算（`type: joint` の `scale`）はある（`src/roboloom/inputs/base.py`，`src/roboloom/controllers/`）．速度（twist）の入力と，座標系を持つ指令の契約は未実装．
 - [ ] **未実装** SpaceMouse→SO-101，Koch，xArm のデバイス所有ノードと変換を，組合せごとに追加する．未対応組合せは起動前に拒否し，機体別の安全契約を試験する．
 - [ ] **未実装** 入力源切替，相対入力の基準姿勢，クラッチ，`ALIGNING`，停止後の復帰手順を状態遷移として実装・試験する．
 - [ ] **未実装** 複数ロボットの `robot_id` 別ノード・固定順の複合スキーマを追加し，物理バスを重複して開かないことを確認する．
@@ -141,7 +141,7 @@ PR #26〜#30 で入れたものの残りです．入れたものはすべて模�
 
 - [ ] **未実装** 非同期推論で，新しい行動の列と古い列を混ぜる（重なる手の加重平均など）．今は入れ替えるだけ．LeRobot の RTC（flow matching の方策に古い列を条件として渡す）も未対応．
 - [ ] **未実装** 推論の遅れを観測の時刻から求めて行動を捨てる方法．今は「観測のあとに実行した手数」で数えており，列が届く前に行動が尽きた間（`late_inference`）の時間は数えていない．
-- [ ] **未実装** 記録したデータセットの検査と行の選別（`action.valid`，`action.intervention`，`observation.meta.*.valid` で選んで新しいデータセットを書き出す）．`handheld/convert.py` と同じ形で書ける．欠測の行の `observation.state` は 0 埋めのまま学習に入る．
+- [ ] **一部実装** 記録したデータセットの検査と行の選別．検査は `roboloom check-dataset` で読むだけでできる（2026-11-15）．行を選んで新しいデータセットを書き出す処理（`action.valid`，`action.intervention`，`observation.meta.*.valid` で選ぶ）は未実装で，`handheld/convert.py` と同じ形で書ける．欠測の行は直前の有効な値で埋めるようにした．それより前に記録したデータセットには 0 埋めの行が残っている（`check-dataset` が割合を表示する）．
 - [ ] **未実装** roboloom の記録から，LeRobot 以外の学習形式（`master_proj` の HDF5 など）への変換．
 - [ ] **未実装** 方策の観測に，フォロワが保持している目標（`target`）そのものを渡す口．今は `history["action"]`（実行した行動）で代用している．
 - [ ] **未確認** `master_proj` の触覚を使う方策（`dp_raw_multimodal_*`，`dp_raw_tactile_mopoe`）と latent の方策（`dp_latent_mopoe_posterior`）．アダプターは raw 観測の拡散方策だけを想定して書いた．
@@ -166,9 +166,40 @@ PR #26〜#30 で入れたものの残りです．入れたものはすべて模�
 
 ### 6.5 片付け
 
-- [ ] PR #26〜#30 のレビューとマージ（#27 以降は前の PR のブランチが base．#26 から順に）．
-- [ ] PR にしていない中間のローカルブランチ（`feat/policy-observation-history`，`feat/policy-remote`，`feat/follower-parts`，`feat/rakuda2-kinematics`）の削除．
+- [x] PR #26〜#30 のレビューとマージ（#26 と，#27〜#30 をまとめた #31 が main に入った）．
+- [x] PR にしていない中間のローカルブランチ（`feat/policy-observation-history`，`feat/policy-remote`，`feat/follower-parts`，`feat/rakuda2-kinematics`）の削除．
 - [ ] `~/workspace/master_proj` の未コミットの2ファイル（`scripts/deploy/roboloom_policy.py`，`docs/roboloom_integration.md`）のコミットと，roboloom を依存に足すこと．
-- [ ] 文書の道具の癖：見出しに英字が入っていると，`{ #id }` で付けた id へのページ内リンクが strict ビルドで「anchor does not exist」になる（英語版では自動の id を使い，日本語版では英字のない見出しにして回避した）．原因は調べていない．
+- [x] 文書の道具の癖：見出しに英字が入っていると，`{ #id }` で付けた id へのページ内リンクが strict ビルドで「anchor does not exist」になる（英語版では自動の id を使い，日本語版では英字のない見出しにして回避した）．原因は，`docs/base.yml` で `attr_list` を有効にしていなかったこと（`{ #id }` が見出しの文字としてそのまま出ていた）．有効にしたので，英字の入った見出しにも `{ #id }` を付けられる．
 
 **通過条件：** Rakuda2 の実機で「収集 → 学習 → 自作方策で推論」が通り，再生で経路の遅れが測れている．`pika` オプションは，関節の対応表を確かめ，位置優先の IK を入れたうえで実機で試す．
+
+## 7．評価で見つかった問題の修正（2026-11-15 追加）
+
+main（`beabebf`）を評価して見つけた問題を，PR #32〜#36 と，評価の記録・文書・CI の PR で直しました．確かめたのはすべて模擬です．
+
+入れたもの：
+
+- 保存したエピソードは，プロセスが強制終了されても読める．保存の失敗と中断は巻き戻す（#32）．`roboloom check-dataset`．
+- 操作側のプロセスが落ちたら，dataflow が記録を破棄してフォロワを保持させ，終わる．方策の例外でエピソードを破棄し，再起動なしで次を走らせる（#33）．
+- 設定の未知のキーを拒否する．作りたての `init rakuda2` が `--mock` で動く．`init --update`（#34）．
+- 自分のパッケージから型（`type: module:Class`）とテンプレート（`init --template`）を足す（#35）．
+- シリアルポートの排他，Dynamixel の読み取りの再試行，遠隔方策の応答の番号，`type: joint` の `scale`（#36）．
+- 評価の成否をエピソードごとに残す（`meta/roboloom_episodes.jsonl`，`roboloom label`），テストの CI．
+
+### 7.1 実機での確認
+
+- [ ] **未実施** dataflow の実行中に `roboloom probe <port>` が `is in use by another process` で止まること．USB シリアル変換器で `flock`・`TIOCEXCL` が効くこと．
+- [ ] **未実施** 読み取りの再試行で FAULT が減ること（状態表示の `bus reads repeated` が増えても FAULT にならない）．増え続けるなら配線か `control_hz` を見直す．
+- [ ] **未実施** 方策で動かしている最中に操作側を `kill -9` し，フォロワが保持して dataflow が終わること．次の `run` がそのまま起動すること．
+- [ ] **未実施** `.roboloom/rakuda2/nodes/policy.yaml` の `max_speed`（`follower: 1024`）と `command_deadline_ms`（300）が実機に合うか．テンプレートの値のままで，測って決めた値ではない．
+- [ ] **未実施** 実機で記録 → `roboloom check-dataset rakuda2` → 学習 → `roboloom infer` → `roboloom label` まで通す．
+
+### 7.2 見送ったもの
+
+- [ ] **未実装** 方策の生の出力を行ごとに記録する．データセットの形が変わる．指令との差は速度制限だけで，`action.clamped` で分かる．
+- [ ] **未実装** `pose_ik` の座標の対応の切り替えと，自己衝突の検査．トラッカーと台座の向きの校正が要るので，Pika の実機確認を始めるときに決める．
+- [ ] **未実装** `type: joint` 以外の controller への介入の引き継ぎ．
+- [ ] **未実装** 遠隔方策で，現在の画像を2回送らないようにする（節約は約 1/3）．
+- [ ] **未実装** recorder の取りこぼしの直接の計数．今は欠測率と行動の欠測率に現れる．
+- [ ] **未実装** 操作画面で，保存のたびに成否をキー1つで付ける．今は入力欄に `save success`・`save failure` と書くか，あとから `roboloom label` で付ける．
+- [ ] **未着手** 既存の実機データ（`rakuda2-camera`，`rakuda2-head-compensation`）の修復．古い特徴量の配置で，全 0 の行動の行と，保存されなかったエピソードの画像が残っている．`check-dataset` で選別はできる．
