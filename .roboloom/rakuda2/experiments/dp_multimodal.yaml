@@ -7,6 +7,6 @@ set:
   inputs.leader: nodes/leader_fixed_camera.yaml  # torso and head held at the home pose
 dataset: dp-multimodal  # episodes go to datasets/rakuda2-digit-eval-teleop-dp-multimodal
 task: transfer the marker
-seconds: 100  # master_proj's rollout_steps 500 at 5 Hz
-episodes: 1
+steps: 500  # master_proj's rollout_steps: 500 actions of the policy (100 s at 5 Hz)
+episodes: 1  # a goal, not a limit: after it, Home / Teleop / Start run further episodes
 home: true  # to poses/follower/camera_transfer_marker.yaml before every episode
