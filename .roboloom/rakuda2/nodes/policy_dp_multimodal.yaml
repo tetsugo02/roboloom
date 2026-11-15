@@ -1,12 +1,22 @@
 # master_proj's raw multimodal diffusion policy (camera + both DIGITs + joint state),
 # dp_raw_multimodal_dynaflip_mopoe_transfer_marker_To_8_Tp_32, served from master_proj's
-# own environment (torch 2.5.1): start it there first with
+# own environment (torch 2.5.1; roboloom needs 2.7, so backend: process cannot load it):
+# start the server there first with
 #   scripts/deploy/serve_roboloom_policy.sh dp_multimodal
+# which serves this file's factory and kwargs (roboloom serve-policy --from <this file>).
 # Both sides need the same ROBOLOOM_POLICY_AUTHKEY. Checked with mock devices only.
 type: policy
 followers: [follower]
-factory: roboloom.policy.remote:connect
-kwargs: {address: "127.0.0.1:18765", timeout_s: 30}
+factory: scripts.deploy.roboloom_policy:load  # imported in master_proj, from its root
+kwargs:
+  config: inference/closed_loop_raw_multimodal_dynaflip_mopoe
+  experiment: dp_raw_multimodal_dynaflip_mopoe_transfer_marker_To_8_Tp_32
+  checkpoint: checkpoints/dp_raw_multimodal_dynaflip_mopoe_transfer_marker_To_8_Tp_32/2026-07-29_14-46-34/best-epoch-111.ckpt
+  # the pretrained encoder file of configs/pretrained/default.yaml is gone; the policy
+  # checkpoint holds the encoders' weights and is loaded strictly
+  overrides: [pretrained.mopoe_rssm.checkpoint_path=null]
+backend: server  # process (the default): this node loads the policy itself
+server: {address: "127.0.0.1:18765", timeout_s: 30}
 observe: [camera, digit_left, digit_right]
 rate_hz: 5  # the policy's data was recorded at 5 Hz
 action_horizon: 16  # the policy's action_horizon (configs/inference/closed_loop_raw_multimodal_dynaflip_mopoe.yaml)
