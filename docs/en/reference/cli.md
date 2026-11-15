@@ -22,7 +22,7 @@ Real hardware is the default. Commands that open devices accept:
 | Command | Purpose |
 | --- | --- |
 | `roboloom [robot]` | Open the launcher (same as `roboloom launch [robot]`) |
-| `init rakuda2` | Generate the robot configuration |
+| `init rakuda2 [--update]` | Generate the robot configuration. `--update` brings an existing project up to the installed template: it adds missing files, replaces files still as they were copied, and leaves edited and measured files alone, listing the keys and options only the template has |
 | `probe <port>` | Read Dynamixel IDs, models, registers, and read times (a rough rate limit). Given a CAN interface such as `can_left`, read the PiPER ([in development](../contribution/piper.md)) there: firmware, joint angles, state, enabling, temperatures and faults (enables and moves nothing). With `--device pika`, read the Pika Gripper ([in development](../contribution/pika-gripper.md)) on a serial port: version, angle, status bits, temperatures and feedback rates. With `--device pika_sense`, read a Pika Sense's ([in development](../contribution/pika-sense.md)) serial link: version, jaw angle, `Command` and feedback rates |
 | `validate [robot]` | Validate the configuration and dataflow without opening devices (prints the enabled options and the dataset name) |
 | `calibrate-joints <calibration>` | Save measured counts at the URDF zero pose to the calibration |

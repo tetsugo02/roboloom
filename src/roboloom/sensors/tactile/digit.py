@@ -29,6 +29,8 @@ class DigitReader:
 
 
 class DigitSensor(TactileImageSensor):
+    keys = (*TactileImageSensor.keys, "resolution", "serial", "name")
+
     def __init__(self, name: str, cfg: dict):
         resolution = cfg.get("resolution", "QVGA")
         if resolution not in RESOLUTIONS:

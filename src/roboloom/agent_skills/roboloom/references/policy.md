@@ -100,8 +100,9 @@ inputs. All observed sensors must exist in `sensors`. To avoid opening unused se
 also remove their nodes from `config.yaml`. A checkpoint requiring DIGIT cannot run
 unchanged without it; LeRobot checks this at load, custom policies can use `bind`.
 
-Existing project files are not overwritten on update. Migrate older Rakuda2 configs by
-removing `options.policy.requires: [digit]` and setting `observe: [camera]` in
+Existing project files are not overwritten on update. Migrate older Rakuda2 configs
+with `roboloom init rakuda2 --update` (adds `nodes/policy.yaml`, lists the options
+`config.yaml` lacks), then by removing `options.policy.requires: [digit]` and setting `observe: [camera]` in
 `nodes/policy.yaml`. Evaluation datasets are `rakuda2-eval` without DIGIT and
 `rakuda2-digit-eval` with the `digit` option.
 

@@ -20,6 +20,8 @@ from .base import Estimator
 
 
 class ModelResidual(Estimator):
+    keys = (*Estimator.keys, "models")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         paths = cfg.get("models")

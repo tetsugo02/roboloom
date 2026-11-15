@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from ...core.checks import identity, positive
+from ...core.checks import identity, positive, unknown_keys
 from ...core.protocol import Envelope
 from ...core.source import Reader, Sample
 from ...drivers.pika_serial import PikaSerial
@@ -154,6 +154,8 @@ class PikaSense(PoseInput):
     its Vive tracker, and the tracker's serial number), `stale_ms` (optional, default
     100: older pose or serial feedback counts as lost), `poll_hz` (optional)."""
 
+    keys = ("type", "poll_hz", "port", "tracker", "stale_ms")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         self.rate_hz(0)
@@ -170,6 +172,7 @@ class PikaSense(PoseInput):
                 "`serial` and its tracking system by `system`, a node under `trackers:` "
                 "(libsurvive's `args` go there); see the Pika Sense page of the docs"
             )
+        unknown_keys(tracker, ("system", "serial"), f"{name}.tracker")
         self.system = identity(tracker.get("system"), f"{name}.tracker.system")
         self.serial = identity(tracker.get("serial"), f"{name}.tracker.serial")
         self.world_frame = self.system

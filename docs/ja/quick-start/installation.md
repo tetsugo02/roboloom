@@ -58,7 +58,7 @@ uv sync --locked
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commit-sha>
 ```
 
-パッケージを更新しても，生成済みの `.roboloom/` の設定は書き換わりません．
+パッケージを更新しても，生成済みの `.roboloom/` の設定は書き換わりません．新しい版のテンプレートに追いつかせるときは `roboloom init rakuda2 --update` を使います．プロジェクトにないファイルを足し，コピーしたまま触っていないファイルを置き換えます．編集したファイルと測定値の入ったファイルは変えず，テンプレートだけにあるキーとオプションを一覧にします（手で写します）．
 
 ## コーディングエージェントで使う
 

@@ -68,6 +68,10 @@ class Source(ABC):
     """Validated description of one sampled node. Constructing it never opens a device."""
 
     kind: ClassVar[str]  # Envelope.kind of published samples
+    # The keys of its YAML this class reads; any other key is refused when the
+    # configuration is loaded (a misspelled one would otherwise be ignored in silence).
+    # A subclass that does not declare `keys` itself is not checked.
+    keys: ClassVar[tuple[str, ...]] = ("type", "fps")
 
     def __init__(self, name: str, cfg: dict):
         self.name, self.cfg = name, cfg

@@ -1,0 +1,22 @@
+# The right Pika Sense on the right arm and gripper through inverse kinematics (a part
+# of controller_pika.yaml). The hand's motion moves the tool relative to where the arm
+# was when the operator engaged; nothing is sent outside workspace or when the IK does
+# not reach the pose. Poses are in the frame that turns with the torso (the torso and
+# head stay where they are held). NOT verified on hardware: every value below is a
+# first guess. The arm's joint map (zeros, directions) comes from
+# calibration/follower_right.yaml (nodes/follower.yaml, kinematics:); hardware refuses to
+# start until that file says confirmed: true.
+type: pose_ik
+input: right_sense
+followers: [follower.right_arm, follower.right_gripper]
+arm: follower.right_arm
+gripper: follower.right_gripper
+tool_offset: {xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}  # tool frame on the gripper mount
+workspace: {min: [-0.3, -0.6, -0.6], max: [0.6, 0.6, 0.4]}  # m
+max_input_jump: {position_m: 0.05, rotation_rad: 0.5}
+ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}
+# gripper counts = scale * jaw angle (rad) + offset: measure both ends on this robot
+gripper_map: {scale: SET_RIGHT_GRIPPER_COUNTS_PER_RAD, offset: SET_RIGHT_GRIPPER_CLOSED_COUNT}
+max_speed: {follower.right_arm: 512, follower.right_gripper: 1024}  # counts/s
+command_deadline_ms: 100
+input_timeout_ms: 150

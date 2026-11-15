@@ -40,7 +40,11 @@ outdated, run `uv run roboloom skills install --force`.
 - **Real hardware is the default.** `--mock` (CLI) / `mock=True` (Python) runs mock
   devices. `mode: mock` in YAML also works; the flag wins.
 - `SET_...` values in the template are per-robot measurements (ports, serials, limits).
-  Nothing runs while one remains; `roboloom validate` lists them with their location.
+  Nothing runs on hardware while one remains; `roboloom validate` lists them with their
+  location. With `--mock` the project's `mock.yaml` stands in for them, so a fresh
+  `init` runs in mock at once.
+- A key a node does not read is refused on loading (`unknown keys torqe (did you mean
+  torque?)`): fix the spelling or remove the key, do not look for a way around it.
 - Three entry points:
   - `roboloom.Session` – launches the dataflow and sends start/stop/save/task. Control
     loops run in their own processes, so a slow user script never disturbs them.

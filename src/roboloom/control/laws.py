@@ -46,6 +46,11 @@ class ControlLaw(ABC):
     # bus methods the law needs; JointDevice refuses a bus without them, so a robot whose
     # motors lack e.g. current commands cannot select the law
     needs: ClassVar[tuple[str, ...]] = ()
+    # The keys of a `control:` group this law reads; any other key is refused
+    # (`parse_groups`), so e.g. a damping gain on a position group is not ignored in
+    # silence. `feedback` is listed for every law: one without current mode refuses it
+    # with a message of its own.
+    keys: ClassVar[tuple[str, ...]] = ("group", "law", "joints", "feedback")
 
     def __init__(
         self,
@@ -101,6 +106,7 @@ class CurrentPosition(Position):
 
     mode = "current_position"
     needs = (*Position.needs, "write_goal_currents")
+    keys = (*Position.keys, "goal_current_mA", "target")
 
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         super().__init__(name, joints, joint_names, cfg, gravity)
@@ -130,6 +136,8 @@ class Spring(CurrentPosition):
     capped by `goal_current_mA`, so the operator can always overpower it.
     """
 
+    keys = (*Position.keys, "goal_current_mA", "rest")
+
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         if cfg.get("rest") is None:
             raise ValueError(
@@ -147,6 +155,20 @@ class CurrentLaw(ControlLaw):
     mode = "current"
     current_mode = True
     needs = ("write_goal_currents", "set_torque", "read_register")
+    keys = (
+        *ControlLaw.keys,
+        "gravity_model",
+        "range",
+        "tuning",
+        "max_current_mA",
+        "kd",
+        "gravity_gain",
+        "ramp_s",
+        "max_velocity",
+        "range_margin",
+        "barrier_mA_per_count",
+        "homing",
+    )
 
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         super().__init__(name, joints, joint_names, cfg, gravity)
@@ -284,6 +306,8 @@ class GravityComp(CurrentLaw):
     `hold_mA`, and moves once the operator pushes with more than that (like friction).
     """
 
+    keys = (*CurrentLaw.keys, "hold_mA", "hold_kp")
+
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         if gravity is None:
             raise ValueError(f"{name}: gravity_comp needs a gravity model")
@@ -320,6 +344,7 @@ class Impedance(CurrentLaw):
     """Joint impedance around the target: kp (q* - q) - kd qdot + gain g(q). Not validated on hardware."""
 
     hardware_validated = False
+    keys = (*CurrentLaw.keys, "kp", "allow_unvalidated")
 
     def __init__(self, name, joints, joint_names, cfg, gravity=None):
         super().__init__(name, joints, joint_names, cfg, gravity)

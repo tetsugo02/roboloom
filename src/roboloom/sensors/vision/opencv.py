@@ -45,6 +45,8 @@ class OpenCVRGB(ImageSensor):
     Constructing or opening in mock mode never imports OpenCV or opens a camera.
     """
 
+    keys = (*ImageSensor.keys, "device", "backend", "format")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         device = cfg.get("device")

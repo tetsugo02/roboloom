@@ -9,7 +9,7 @@ uv run roboloom init rakuda2
 ls /dev/serial/by-id/
 ```
 
-既に `.roboloom/rakuda2/` がある場合，`init` は上書きしません．既存の機体設定を確認して使います．
+既に `.roboloom/rakuda2/` がある場合，`init` は上書きしません．既存の機体設定を確認して使います．新しい版のテンプレートに追いつかせるときは `roboloom init rakuda2 --update` を使います．プロジェクトにないファイルを足し，コピーしたまま触っていないファイルを置き換えます．編集したファイルと測定値の入ったファイルは変えず，テンプレートだけにあるキーとオプションを一覧にします（手で写します）．
 
 leader / followerのU2D2ポートを識別し，別のプロセスが使っていない状態で読み取ります．次の `<...>` は実際のポートに置き換えます．
 
@@ -42,7 +42,7 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 uv run roboloom validate
 ```
 
-参照する設定に `SET_...` が残っていれば，場所が表示されます．埋めてから再検証します．`validate` はデバイスを開かないので，実機のEEPROMや停止挙動の照合は別途必要です．
+参照する設定に `SET_...` が残っていれば，場所が表示されます．埋めてから再検証します．実機をつなぐ前に流れを試すだけなら，`uv run roboloom validate rakuda2 --mock` と `uv run roboloom run rakuda2 --mock` が，何も埋めずに動きます．`validate` はデバイスを開かないので，実機のEEPROMや停止挙動の照合は別途必要です．
 
 EEPROMが意図した設定と違う場合は，dataflowを止め，両腕を支えた状態で `commission` を実行します．表示された変更を確認してから承認します．EEPROMを書き込み，読み戻す操作です．
 

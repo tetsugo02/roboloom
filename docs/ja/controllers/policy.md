@@ -43,7 +43,7 @@ Rakuda2のテンプレートは，DIGITなしで関節状態とRealSenseを方�
 
 DIGITを入力とする学習済み方策を，DIGITなしでそのまま使えるわけではありません．DIGITなしの入力で学習した方策を使います．LeRobotの読み込みは，必要な入力が足りなければ開始前に拒否します．自作の方策では `bind(spec)` で同じ検査を書けます．
 
-既存プロジェクトの設定は，パッケージ更新では上書きされません．以前のテンプレートから移行するときは，`config.yaml` の `options.policy` から `requires: [digit]` を削除し，`nodes/policy.yaml` を `observe: [camera]` に変更します．評価の保存先はDIGITなしなら `datasets/rakuda2-eval`，`digit` も有効なら `datasets/rakuda2-digit-eval` です．
+既存プロジェクトの設定は，パッケージ更新では上書きされません．`roboloom init rakuda2 --update` が，足りないファイル（`nodes/policy.yaml` など）を足し，`config.yaml` に足りないオプションを一覧にします．以前のテンプレートから移行するときは，`config.yaml` の `options.policy` から `requires: [digit]` を削除し，`nodes/policy.yaml` を `observe: [camera]` に変更します．評価の保存先はDIGITなしなら `datasets/rakuda2-eval`，`digit` も有効なら `datasets/rakuda2-digit-eval` です．
 
 ## 自作の方策
 

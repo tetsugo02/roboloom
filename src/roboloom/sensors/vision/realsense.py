@@ -30,6 +30,8 @@ class RealSenseReader:
 
 
 class RealSenseRGB(ImageSensor):
+    keys = (*ImageSensor.keys, "serial")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         self.serial = identity(cfg.get("serial"), f"{name}.serial")

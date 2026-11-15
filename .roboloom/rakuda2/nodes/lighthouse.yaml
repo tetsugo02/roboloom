@@ -1,0 +1,4 @@
+# Lighthouse tracking through libsurvive, for the Pika Senses (option pika). One node
+# serves every Sense. Not verified on hardware; see docs contribution/rakuda2-pika.md
+type: libsurvive
+args: []  # extra libsurvive arguments, e.g. [--lighthouse-gen, "2"]

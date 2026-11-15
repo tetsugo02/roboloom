@@ -67,7 +67,10 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commi
 ```
 
 Updating roboloom never overwrites `.roboloom/`. It may change this skill: run
-`uv run roboloom skills check` afterwards.
+`uv run roboloom skills check` afterwards. `uv run roboloom init <robot> --update` brings
+a project up to the installed template: it adds missing files, replaces files still as
+they were copied, and for edited or measured files only lists what the template has that
+they lack (copy those by hand, with the user).
 
 The repository's top-level `examples/`, `scripts/` and `.roboloom/` (the `piper-mock` and
 `pika-handheld-mock` configurations) are **not** installed with the package. Copy them from

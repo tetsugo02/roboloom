@@ -16,6 +16,8 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | Message fragment | Cause | Fix |
 | --- | --- | --- |
 | `template values still to fill (see the README next to the configuration)` | A referenced file still has a `SET_...` value; each line is `<location>: SET_...` | Ask the user or name the measurement step that produces it ([project-layout.md](project-layout.md), [setup.md](setup.md)). Option files are checked only with that option on |
+| `<node>: unknown keys <key> (did you mean <name>?); it reads ...` | A key the node (or a `control` group's law, a `limits` entry, ...) does not read: misspelled, or meant for another node type | Fix the spelling or remove the key. A downstream class lists its keys in `keys` ([extending.md](extending.md)) |
+| `<node>: <rate> Hz is neither a whole number of Hz nor a whole number of milliseconds per tick` | dora's timers cannot tick that rate (`control_hz`, `poll_hz`, `fps`, `rate_hz`) | Use e.g. 30, 120 or 12.5 (80 ms) |
 | `no .roboloom/<robot>/config.yaml here (create one with` | No configuration under the project root (`.roboloom/`) | Run from the project root; `roboloom init rakuda2` (only template) or write one by hand |
 | `several robots under .roboloom: ...; name one` | More than one robot directory | Pass the robot name or a `config.yaml` path |
 | `unknown robot 'x'; available: rakuda2` | `init` has a template only for `rakuda2` | Other robots: copy a configuration by hand ([robots/piper-pika.md](robots/piper-pika.md)) |

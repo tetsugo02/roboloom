@@ -22,7 +22,7 @@
 | コマンド | 用途 |
 | --- | --- |
 | `roboloom [robot]` | ランチャーを開く（`roboloom launch [robot]` と同じ） |
-| `init rakuda2` | 機体設定を生成する |
+| `init rakuda2 [--update]` | 機体設定を生成する．`--update` は，既存のプロジェクトを今の版のテンプレートに追いつかせる：ないファイルを足し，コピーしたままのファイルを置き換え，編集済み・測定済みのファイルは変えずに，テンプレートだけにあるキーとオプションを一覧にする |
 | `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る．`can_left` のようなCANインターフェースを渡すと，PiPER（[開発中](../contribution/piper.md)）のファームウェア・関節角・状態・有効化・温度・異常を読む（有効化も移動もしない）．`--device pika` を付けると，シリアルポートのPika Gripper（[開発中](../contribution/pika-gripper.md)）の版・角度・状態のビット・温度・フィードバックの周期を読む．`--device pika_sense` では，Pika Sense（[開発中](../contribution/pika-sense.md)）のシリアルの版・挟みの角度・`Command`・フィードバックの周期を読む |
 | `validate [robot]` | デバイスを開かず設定とdataflowを検証する（有効なオプションとデータセット名を表示） |
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |

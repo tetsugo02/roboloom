@@ -44,6 +44,7 @@ from .base import Controller, FollowerView
 class PartsController(Controller):
     uses_input: ClassVar[bool] = False  # its inner controllers follow the inputs
     max_followers: ClassVar[int | None] = 1
+    keys = (*Controller.keys, "parts", "input_timeout_ms")
 
     def __init__(
         self,
