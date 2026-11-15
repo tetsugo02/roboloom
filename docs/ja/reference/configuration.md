@@ -125,6 +125,38 @@ input_timeout_ms: 150
 - `ESTOP` は性質に依らず，その場で保持してラッチします．
 - 機種が `unknown` と宣言した `unattended` だけは，フォロワのYAMLに実測した値（`unattended: holds` か `torque_off`）を書けます．値は `roboloom check-hold`（[CLI](cli.md)）が測り，確認の後に書きます．機種が宣言した値と違う値を書くと，設定の読み込みで拒否します．
 
+## ノードファイルの継承（extends） { #extends }
+
+機能の組み合わせごとにノードファイルを写すと，ポートや測定値を直すたびに全部を直すことになります．土台のファイルを1つ決め，ほかのファイルは `extends` で土台を指して，違うところだけを書きます．
+
+```yaml
+# nodes/leader_gravity.yaml
+extends: leader.yaml                  # 土台．同じディレクトリのノードファイル
+without: [registers.operating_mode]   # 土台から外すキー（点区切り）．任意
+registers:
+  current_limit: {r_arm_sh_pitch1: 150}   # 足す・上書きするものだけ
+control:
+- group: right_arm                    # 土台の同じ名前のグループに重ねる
+  law: gravity_comp
+  gravity_model: ../calibration/gravity_right.yaml
+bus_watchdog_ms: 500
+```
+
+| 値の種類 | 重ね方 |
+| --- | --- |
+| マッピング | キーごとに重ねる（入れ子も同じ） |
+| `group` か `name` で名前が付いたマッピングのリスト（`control`，`limits`） | 同じ名前の要素に重ねる．新しい名前の要素は末尾に足す |
+| それ以外（数値，文字列，ふつうのリスト） | 置き換える |
+
+- 土台は同じディレクトリのファイルに限ります．ファイルの中の相対パス（`../calibration/...`）の基準が変わらないようにするためです．
+- 土台がさらに `extends` を持てます．循環は拒否します．
+- 土台の要素を消す・並べ替えるときは，`without: [control]` でリストごと外して書き直します．`without` に書いたキーが土台になければ拒否します．
+- 未知のキーの検査は，重ねたあとの内容に対して行います．
+- 保存したデータセットの `meta/roboloom.json` には，重ねたあとの値と，土台のファイル名（`extends`）が残ります．
+- `check-hold` が書く `unattended` は，そのキーが書いてあるファイルに書きます．どこにもなければ，そのノードのファイルに書きます．
+
+Rakuda2のテンプレートでは，`leader_gravity.yaml` が `leader.yaml` を，`policy_teleop.yaml` が `policy.yaml` を土台にしています．
+
 ## 起動オプション
 
 `options:` は，起動時に選ぶ機能（重力補償，追加のセンサーなど）を名前で定義します．各オプションはノードファイルを置き換え・追加・削除します．`nodes/` の下のノードファイルは機能ごとに分かれたままで，オプションはどれを使うかを選ぶだけです．

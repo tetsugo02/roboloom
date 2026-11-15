@@ -69,6 +69,8 @@ def snapshot(cfg: RobotConfig) -> dict[str, Any] | None:
         for key, value in values.items():
             if key == "__file__":
                 out["file"] = _relative(Path(value), base)
+            elif key == "__extends__":  # the files this one was built on
+                out["extends"] = [_relative(Path(v), base) for v in value]
             elif key.startswith("__"):
                 continue
             elif isinstance(value, dict) and "__file__" in value:
