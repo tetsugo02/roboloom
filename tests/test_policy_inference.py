@@ -249,7 +249,7 @@ def test_a_lerobot_policy_drives_the_mock(act_checkpoint, tmp_path):
         result = s.record("pick", 2.0)
         status = s.status()["policy"]["fields"]
     assert result.saved, result
-    assert result.metrics["action_valid_rate"] > 0.5, result.metrics
+    assert result.metrics["action_valid_rate"] > 0.5, (status, result.metrics)
     assert status["state"] in ("running", "ready") and "infer_ms" in status, status
 
 

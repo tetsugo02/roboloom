@@ -388,6 +388,33 @@ def _quit(event_id, msg) -> bool:
     )
 
 
+def _prepare(node, work) -> bool:
+    """Run `work()` (slow start-up: importing torch, loading a model, opening a
+    dataset) on a thread while this one keeps taking the node's events and drops them.
+    Returns False when `quit` came meanwhile.
+
+    A node that does not read for seconds gets everything queued for it in one reply;
+    with camera frames that passes dora's 64 MB limit, the reply is lost and the node's
+    timer never ticks again (seen on a machine with two cores, where loading is slow).
+    An exception of `work` is raised here."""
+    failure: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            work()
+        except BaseException as exc:  # noqa: BLE001 - raised below, on the node's thread
+            failure.append(exc)
+
+    worker = threading.Thread(target=run, name="prepare", daemon=True)
+    worker.start()
+    while worker.is_alive():
+        if _quit(*_event(node)):
+            return False
+    if failure:
+        raise failure[0]
+    return True
+
+
 def _source(node, source: Source, cfg: RobotConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
@@ -820,10 +847,15 @@ def _policy(node, controller: PolicyController):
     status = StatusReporter(Publisher(controller.name), "controller")
     kwargs = os.environ.get("ROBOLOOM_POLICY_KWARGS")
     try:
-        controller.load(
-            os.environ.get("ROBOLOOM_POLICY") or None,
-            json.loads(kwargs) if kwargs else None,
+        loaded = _prepare(
+            node,
+            lambda: controller.load(
+                os.environ.get("ROBOLOOM_POLICY") or None,
+                json.loads(kwargs) if kwargs else None,
+            ),
         )
+        if not loaded:  # quit while loading
+            return
     except Exception as exc:  # noqa: BLE001 - shown on the operator screen; start refused
         controller.state, controller.error = "failed", f"loading the policy: {exc}"
     commands: deque[int] = deque(
@@ -947,7 +979,10 @@ def _recorder(node, cfg: RobotConfig):
     draining dora events; otherwise queued frames exceed dora's per-reply size limit and are lost."""
     p = Publisher("recorder")
     writer = EpisodeRecorder(cfg, **cfg.recorder)
-    writer.open_dataset()  # creating/resuming takes ~1 s; never inside an episode
+    # creating/resuming takes ~1 s (more with the first import of LeRobot); never
+    # inside an episode
+    if not _prepare(node, writer.open_dataset):
+        return
     follower_modes: dict[str, str | None] = {}
     saving: threading.Thread | None = None
     done: queue.Queue[dict] = queue.Queue()
