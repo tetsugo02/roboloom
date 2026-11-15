@@ -27,6 +27,9 @@ jobs:
           version: "0.8.15"
           python-version: "3.12"
           enable-cache: true
+      - name: Install FFmpeg's shared libraries
+        # LeRobot decodes dataset videos with torchcodec, which loads the system's FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Install the locked test and development dependencies
         run: uv sync --locked --extra rakuda2 --extra test --group dev
       - name: Lint
