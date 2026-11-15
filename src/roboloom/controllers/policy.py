@@ -22,6 +22,10 @@ the slowest follower's `control_hz`; 1 sends each action as is.
     factory: my_lab.policies:load_act   # "module:callable" returning a Policy (also
                                         # found in the robot's directory)
     kwargs: {checkpoint: ...}
+    backend: process                    # who loads the policy: this node (process, the
+                                        # default) or a policy server (server) started
+                                        # with `roboloom serve-policy --from <this file>`
+    server: {address: "127.0.0.1:18765"}  # read with backend: server (policy.remote)
     observe: [camera, digit_left]      # inputs or sensors; follower states are always seen
     rate_hz: 15
     interpolation_multiplier: auto      # commands at rate_hz * N (auto: up to control_hz)
@@ -131,6 +135,8 @@ class PolicyController(Controller):
         *Controller.keys,
         "factory",
         "kwargs",
+        "backend",
+        "server",
         "observe",
         "rate_hz",
         "interpolation_multiplier",
@@ -158,6 +164,15 @@ class PolicyController(Controller):
             raise ValueError(f"{name}.factory must be 'module:callable'")
         if not isinstance(cfg.get("kwargs", {}), dict):
             raise TypeError(f"{name}.kwargs must be a mapping")
+        from ..policy.remote import BACKENDS, server_settings
+
+        self.backend = cfg.get("backend", "process")
+        if self.backend not in BACKENDS:
+            raise ValueError(
+                f"{name}.backend must be one of {', '.join(BACKENDS)}, not "
+                f"{self.backend!r}"
+            )
+        self.server = server_settings(cfg.get("server"), f"{name}.server")
         observe = cfg.get("observe", [])
         if not isinstance(observe, list) or not all(
             isinstance(x, str) for x in observe
@@ -464,11 +479,21 @@ class PolicyController(Controller):
     def load(self, factory: str | None = None, kwargs: dict | None = None) -> None:
         """Import and build the policy; `factory`/`kwargs` override the configuration."""
         from ..policy import load_policy
+        from ..policy.remote import connect
 
-        policy = load_policy(
-            factory or self.cfg["factory"],
-            self.cfg.get("kwargs", {}) if kwargs is None else kwargs,
-            search=[str(self.cfg.get("__robot_dir__") or "")],
+        if self.backend == "server" and (factory or kwargs is not None):
+            raise ConfigError(
+                f"{self.name}: with backend: server the policy server loads the "
+                "policy; --policy and --policy-kwargs have nothing to replace here"
+            )
+        policy = (
+            connect(**self.server)
+            if self.backend == "server"
+            else load_policy(
+                factory or self.cfg["factory"],
+                self.cfg.get("kwargs", {}) if kwargs is None else kwargs,
+                search=[str(self.cfg.get("__robot_dir__") or "")],
+            )
         )
         options = getattr(policy, "options", None)
         if callable(options):  # what the model needs, stated by the policy itself

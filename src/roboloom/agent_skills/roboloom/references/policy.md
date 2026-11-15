@@ -73,9 +73,14 @@ command_deadline_ms: 300
   (`stale_observation`, followers hold, also mid-interpolation); when fresh again it restarts with `reset()`.
 
 - A model that cannot share roboloom's environment (other torch) or runs elsewhere:
-  serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or
-  `python -m roboloom.policy.remote ...`; needs only numpy + roboloom without extras) and
-  set `factory: roboloom.policy.remote:connect`, `kwargs: {address: "127.0.0.1:18765"}`.
+  keep the policy's own `factory`/`kwargs` in the YAML and add `backend: server`
+  (default `backend: process`: the policy node loads it) with
+  `server: {address: "127.0.0.1:18765"}` (also `timeout_s`, `connect_timeout_s`,
+  `authkey_env`). Start the server in the model's environment and directory with
+  `roboloom serve-policy --from <that YAML>` (or `python -m roboloom.policy.remote --from
+  ...`; needs only numpy + roboloom without extras). `--policy`/`--policy-kwargs` are
+  refused with `backend: server`. The older `factory: roboloom.policy.remote:connect`
+  with `kwargs: {address: ...}` still works.
   Both sides need the same `ROBOLOOM_POLICY_AUTHKEY`. `bind`/`reset`/`infer`/`options` are
   forwarded; policy errors show on the controller line. Not encrypted: loopback or a
   trusted network only.

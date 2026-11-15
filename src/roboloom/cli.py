@@ -428,18 +428,11 @@ def main(argv: list[str] | None = None) -> None:
     lab.add_argument("--note", help="free text kept with the verdict")
     serve = sub.add_parser(
         "serve-policy",
-        help="serve a policy to a policy node (factory: roboloom.policy.remote:connect)",
+        help="serve a policy to a policy node with backend: server (--from its YAML)",
     )
-    serve.add_argument("policy", help="module:callable returning the policy")
-    serve.add_argument(
-        "--kwargs", type=json.loads, default={}, help="JSON arguments of the callable"
-    )
-    serve.add_argument("--address", default="127.0.0.1:18765", help="host:port")
-    serve.add_argument(
-        "--authkey-env",
-        default="ROBOLOOM_POLICY_AUTHKEY",
-        help="environment variable holding the shared secret",
-    )
+    from .policy.remote import add_arguments as serve_arguments
+
+    serve_arguments(serve)
     skills = sub.add_parser(
         "skills", help="the Agent Skill for coding agents (Claude Code, Codex, ...)"
     )
@@ -546,14 +539,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "serve-policy":
         from .policy import remote
 
-        print(f"policy server: loading {args.policy}")
-        remote.serve(
-            args.policy,
-            args.address,
-            kwargs=args.kwargs,
-            authkey_env=args.authkey_env,
-            ready=lambda: print(f"policy server: listening on {args.address}"),
-        )
+        remote.run(args)
         return
     if args.command == "init":
         from .project import init_project, update_project

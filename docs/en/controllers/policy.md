@@ -159,23 +159,41 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 ### Running the policy in another process
 
-A model whose dependencies do not fit the environment roboloom runs in (another torch
-version, for example), or that should run on another machine, is served from its own
-process. The policy node connects to it with `roboloom.policy.remote:connect`; `bind`,
-`reset`, `infer` and `options` are forwarded, so the policy itself is written as above.
+A policy is loaded in one of two places, chosen with `backend` in the policy's YAML. The policy itself (`bind`, `reset`, `infer`, `options`) is written the same for both.
+
+| `backend` | Process that loads the policy | When |
+| --- | --- | --- |
+| `process` (default) | The policy node itself | The policy's dependencies fit roboloom's environment; no server to start |
+| `server` | A policy server started separately | A model whose dependencies do not fit (another torch version, for example), or that runs on another machine |
+
+```yaml
+# nodes/policy.yaml
+factory: my_lab.policies:load        # the policy itself, with either backend
+kwargs: {checkpoint: "..."}
+backend: server                      # left out: process
+server: {address: "127.0.0.1:18765"} # read only with backend: server
+```
+
+With `backend: server` the policy node does not load `factory`; it connects to `server.address`. The server starts from the same YAML: it reads `factory`, `kwargs` and `server.address`.
 
 ```bash
 # where the model lives: its own environment, with roboloom installed without extras
 export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
-uv run roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
-# the same, without roboloom's command line: python -m roboloom.policy.remote my_lab.policies:load
+uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
+# without roboloom's command line: python -m roboloom.policy.remote --from <the same file>
+# without the YAML: roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
 ```
 
-```yaml
-# nodes/policy.yaml (the environment roboloom runs in needs the same ROBOLOOM_POLICY_AUTHKEY)
-factory: roboloom.policy.remote:connect
-kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 bounds one infer
-```
+| Key of `server` | Meaning |
+| --- | --- |
+| `address` | `host:port` (default `127.0.0.1:18765`) |
+| `timeout_s` | Bound of one `infer` (default 30 s) |
+| `connect_timeout_s` | Bound of the wait for the server to come up (default 30 s) |
+| `authkey_env` | Environment variable holding the shared secret (default `ROBOLOOM_POLICY_AUTHKEY`); the environment roboloom runs in needs the same value |
+
+- The module of `factory` and relative paths in `kwargs` are resolved in the directory and environment the server was started in.
+- With `backend: server`, `roboloom infer --policy` and `--policy-kwargs` are refused (the server loads the policy).
+- The earlier form, `factory: roboloom.policy.remote:connect` with `kwargs: {address: ...}`, still works.
 
 - The server loads the model once and serves one policy node at a time, across episodes and sessions. Start it before `roboloom infer`; the node waits up to `connect_timeout_s` (30 s) for it. A second node that connects while one is served is told so (`the policy server is serving another policy node`) instead of waiting.
 - A call that gets no answer within `timeout_s` fails that episode (`TimeoutError`). Its answer, when it comes later, is dropped: every call carries a number and only the answer with that number is taken.
