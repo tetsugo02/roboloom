@@ -96,6 +96,10 @@ command_deadline_ms: 300
   policy path: checks the path without a model. Names and rate are checked at load;
   `home` to the first pose first, low `max_speed`.
 
+- With `teleop:` and `home:`, `home` moves the teleop leader to the pose as well; leader
+  joints in a `law: position` group stay there afterwards (e.g. torso and head, to keep
+  the camera angle while Teleop moves the arms). Order: `home`, Teleop if needed, `start`.
+
 ## Writing a policy
 
 Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint

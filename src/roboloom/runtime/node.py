@@ -419,11 +419,16 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
     set_home = getattr(reader, "set_home", None)
-    for pair in cfg.controllers.values():  # the pair this input leads, if it has a home
-        home = getattr(pair, "home", None)  # a leader moves home with its follower
-        leader_pose = getattr(pair, "leader_pose", None)
-        if set_home is not None and pair.source is source and home and leader_pose:
-            set_home(leader_pose(home.target(pair.follower.joint_names)), home)
+    # A leader moves home with the follower it leads: through its own controller, or
+    # through a teleop controller of a policy (the policy's `home:` for that follower).
+    for owner in cfg.controllers.values():
+        for pair in (owner, *owner.nested()):
+            leader_pose = getattr(pair, "leader_pose", None)
+            if set_home is None or pair.source is not source or leader_pose is None:
+                continue
+            home = owner.homes.get(pair.follower.name)
+            if home is not None:
+                set_home(leader_pose(home.target(pair.follower.joint_names)), home)
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     start_trace = getattr(reader, "start_trace", None)
     if log_dir and start_trace is not None:

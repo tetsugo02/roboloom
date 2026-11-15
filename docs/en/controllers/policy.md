@@ -360,6 +360,16 @@ teleop: [controller.yaml]   # the controller the leader drives through (next to 
 - Handing back (Policy) clears the policy's history (`policy.reset()`) and restarts the interpolation from the targets the followers hold.
 - The recording marks the rows a person drove with `action.intervention` (1). The feature exists only in configurations with `teleop:`. The leader is recorded as an input too, so the dataset name differs (Rakuda2: `-eval-teleop`).
 - Teleop outside an episode records nothing. The first one or two rows of an episode may still carry the person's command from just before `start` and then have `action.intervention` 1.
+- **`home` takes the leader along**: when the policy has `home:`, `home` moves the leader of the teleop controller to the same pose as the follower. A leader joint in a position group (`law: position`) goes to the `home` pose and is held there. Put the torso and head, which set the camera's direction, into such a group, and the camera angle stays while Teleop moves only the arms.
+
+  ```yaml
+  # control of nodes/leader.yaml (the leader used for teleop)
+  - group: camera
+    law: position
+    joints: [torso_yaw, head_yaw, head_pitch]
+  ```
+
+  The order is `home`, then Teleop to bring the arms to the start pose when needed, then `start`.
 - In Python: `Session.teleop()`, `Session.policy()`, `Session.stop_teleop()`.
 - Only `type: joint` teleop controllers are supported. `pose_ik` (PiPER + Pika Sense and the like) is refused at load as not supporting takeover yet.
 - An ESTOP or FAULT of a follower, or a follower going silent, also ends Teleop. Pressing Teleop again takes the joints over from there.

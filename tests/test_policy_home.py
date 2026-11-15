@@ -189,3 +189,37 @@ def test_the_policy_moves_home_then_infers_from_there(tmp_path):
         assert robot["home_diff"] <= 30
         result = s.record("from home", 1.0, home=True)
     assert result.saved and result.frames > 5
+
+
+@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
+def test_home_takes_the_teleop_leader_along_and_its_locked_joints_stay(tmp_path):
+    """With `teleop:`, `home` moves the leader too: joints it holds by position (the
+    camera's torso and head) go to the pose and stay there while the arms are driven."""
+    import numpy as np
+
+    from roboloom.runtime.session import Session
+
+    path = _project(tmp_path)
+    nodes = path.parent / "nodes"
+    policy = yaml.safe_load((nodes / "policy_teleop.yaml").read_text())
+    policy.update(home=HOME, observe=[])
+    (nodes / "policy_teleop.yaml").write_text(yaml.safe_dump(policy))
+    leader = yaml.safe_load((nodes / "leader.yaml").read_text())
+    body = next(g for g in leader["control"] if g["group"] == "body")
+    assert body["joints"] == ["torso_yaw", "head_yaw", "head_pitch"]
+    body["law"] = "position"  # the camera's joints: held where they are put
+    (nodes / "leader.yaml").write_text(yaml.safe_dump(leader))
+    logs = tmp_path / "logs"
+    with Session.launch(
+        path, options=["policy_teleop"], log_dir=logs, screen=False
+    ) as s:
+        s.wait_ready(30)
+        s.home()
+        assert s.status()["follower"]["fields"]["home_state"] == "reached"
+        s.teleop()
+        time.sleep(1.0)
+    trace = np.load(next(logs.rglob("leader_trace.npz")))
+    torso = list(trace["joints"]).index("torso_yaw")
+    assert abs(trace["positions"][-1][torso] - 2100) <= 2  # the pose's torso_yaw
+    follower = np.load(next(logs.rglob("follower_trace.npz")))
+    assert abs(follower["target"][-1][torso] - 2100) <= 2  # still there under teleop

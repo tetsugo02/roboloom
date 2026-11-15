@@ -357,6 +357,16 @@ teleop: [controller.yaml]   # leaderで動かすときの controller（このフ
 - 方策に戻すとき（Policy）は，方策の履歴を消し（`policy.reset()`），フォロワが保持している目標から補間を始め直します．
 - 記録では，人が動かした行を `action.intervention`（1）で区別します．`teleop:` のある構成だけにある特徴量です．leaderも入力として記録されるので，データセット名は別になります（Rakuda2 では `-eval-teleop`）．
 - エピソードの外のTeleopは記録しません．エピソードの最初の1〜2行は，`start` の直前の人の指令が残ることがあり，`action.intervention` が1になります．
+- **`home` はleaderも一緒に動かします**：方策に `home:` があると，`home` はフォロワと同時に，teleop の controller のleaderも同じ姿勢へ動かします．leaderの関節を位置制御（`law: position`）のグループにしておくと，その関節は `home` の姿勢へ動いたあと，そこで固定されます．カメラの向きを決める胴体と頭をこのグループにすれば，Teleop で腕だけを動かしても，カメラの角度は変わりません．
+
+  ```yaml
+  # nodes/leader.yaml（teleop で使うleader）の control
+  - group: camera
+    law: position
+    joints: [torso_yaw, head_yaw, head_pitch]
+  ```
+
+  手順は，`home` → 必要なら Teleop で腕を開始姿勢へ → `start` です．
 - Pythonでは `Session.teleop()`，`Session.policy()`，`Session.stop_teleop()` を使います．
 - 対応する teleop の controller は `type: joint` だけです．`pose_ik`（PiPER＋Pika Sense など）は，読み込み時に「介入に未対応」として断ります．
 - フォロワがESTOP・FAULTになったとき，信号が途絶えたときは，Teleop も止まります．もう一度 Teleop を押すと，その時点から関節ごとにつかまえ直します．
