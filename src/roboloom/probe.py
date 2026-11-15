@@ -61,12 +61,13 @@ def probe(
         raise ValueError(f"unknown device {device!r}: dynamixel, pika or pika_sense")
     import dynamixel_sdk as dxl
 
-    from .drivers.dynamixel import DynamixelBus, latency_timer_ms
+    from .drivers.dynamixel import DynamixelBus, claim_port, latency_timer_ms
 
     handler = dxl.PortHandler(port)
     packet = dxl.PacketHandler(2.0)
     if not handler.openPort() or not handler.setBaudRate(baudrate):
         raise ConnectionError(f"cannot open {port}")
+    claim_port(handler, port)  # not while a dataflow uses the bus
     try:
         if ids is None:
             found, result = packet.broadcastPing(handler)

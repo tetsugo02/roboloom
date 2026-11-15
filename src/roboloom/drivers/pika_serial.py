@@ -83,7 +83,15 @@ class JsonStream:
 def open_serial(port: str) -> Any:
     import serial
 
-    return serial.Serial(port=port, baudrate=BAUDRATE, timeout=0.01)
+    from .base import claim_serial
+
+    opened = serial.Serial(port=port, baudrate=BAUDRATE, timeout=0.01)
+    try:
+        claim_serial(opened.fileno(), port)  # one process per device
+    except ConnectionError:
+        opened.close()
+        raise
+    return opened
 
 
 class PikaSerial:

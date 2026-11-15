@@ -57,7 +57,7 @@ uv run roboloom validate --with digit
 uv run roboloom session home
 ```
 
-`calibrate-joints` / `measure-travel` do not write to the bus, but they save local YAML. The arm torque must be off. `identify-gravity --collect`, `tune-gravity`, and `gravity-check` energize the motors. Do not open the same bus at the same time as the dataflow. `commission`, `watchdog-test`, `check-hold`, and `gravity-check` refuse a mock configuration.
+`calibrate-joints` / `measure-travel` do not write to the bus, but they save local YAML. The arm torque must be off. `identify-gravity --collect`, `tune-gravity`, and `gravity-check` energize the motors. A bus is opened by one process at a time: opening the bus a dataflow uses with `probe` or `tune-gravity` (or the other way round) stops the second one with `... is in use by another process`. `commission`, `watchdog-test`, `check-hold`, and `gravity-check` refuse a mock configuration.
 
 ## Launcher
 

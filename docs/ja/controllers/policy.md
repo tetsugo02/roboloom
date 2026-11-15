@@ -171,7 +171,8 @@ factory: roboloom.policy.remote:connect
 kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 は infer 1回の上限
 ```
 
-- サーバーはモデルを1回だけ読み込み，方策ノードを1つずつ相手にします．エピソードやセッションをまたいで使えます．`roboloom infer` より先に起動してください．ノードは `connect_timeout_s`（30秒）まで待ちます．
+- サーバーはモデルを1回だけ読み込み，方策ノードを1つずつ相手にします．エピソードやセッションをまたいで使えます．`roboloom infer` より先に起動してください．ノードは `connect_timeout_s`（30秒）まで待ちます．1つを相手にしている間につないできた2つ目のノードには，待たせずに，使用中であること（`the policy server is serving another policy node`）を返します．
+- `timeout_s` 以内に答えがない呼び出しは，そのエピソードを失敗させます（`TimeoutError`）．あとから届いたその答えは捨てます．呼び出しには番号が付いていて，同じ番号の答えだけを受け取ります．
 - サーバー側に要るのは，numpyとextraなしのroboloomだけです（LeRobotも，roboloomが入れるtorchも要りません）．
 - 方策が出した例外は，同じプロセスの方策と同じく，controllerの行に出ます．
 - 共有する秘密の文字列で両側を認証します．通信は暗号化しません．アドレスはループバックか，信頼できるネットワークにしてください．メッセージはJSONのヘッダと配列の生のバイト列です（pickleは使いません）．
