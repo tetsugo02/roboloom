@@ -238,6 +238,10 @@ def test_a_lerobot_policy_drives_the_mock(act_checkpoint, tmp_path):
         project,
         ignore=shutil.ignore_patterns("datasets", "__pycache__"),
     )
+    # A loaded machine (CI) stalls the mock followers past the default 150 ms while
+    # torch starts; this test is about the policy path, not about that timing.
+    with (project / "nodes" / "policy.yaml").open("a") as f:
+        f.write("\nfollower_timeout_ms: 2000\n")
     with Session.launch(
         project / "config.yaml",
         options=["policy"],
