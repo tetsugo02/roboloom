@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -110,9 +111,13 @@ def test_what_is_missing_or_mistyped_is_named(tmp_path, monkeypatch):
     project = _project(tmp_path, "options: [policy]\n")
     monkeypatch.chdir(tmp_path)
     _plans(monkeypatch)
-    with pytest.raises(SystemExit, match="give --seconds, or `seconds:` in exp"):
+    with pytest.raises(
+        SystemExit, match="give --seconds or --steps, or `seconds:` in exp"
+    ):
         cli.main(["infer", "--plain", "--experiment", "drawer"])
-    with pytest.raises(SystemExit, match="give --seconds, or `seconds:` in an exp"):
+    with pytest.raises(
+        SystemExit, match="give --seconds or --steps, or `seconds:` in an exp"
+    ):
         cli.main(["infer", "--plain"])
     with pytest.raises(SystemExit, match="record: give --task"):
         cli.main(["record", "--plain", "--experiment", "drawer", "--seconds", "5"])
@@ -126,6 +131,8 @@ def test_what_is_missing_or_mistyped_is_named(tmp_path, monkeypatch):
         ("episodes: 1.5\n", "episodes: expected a whole number"),
         ("home: yes please\n", "home: expected true or false"),
         ("options: [polcy]\n", "unknown option 'polcy'"),
+        ("steps: 0\n", "steps: expected a whole number, at least 1"),
+        ("steps: 50\nseconds: 3\n", "write seconds or steps"),
         ("policy: nodes/a.yaml\nset: {controllers.policy: nodes/b.yaml}\n", "same"),
     ):
         file.write_text(text)
@@ -134,6 +141,64 @@ def test_what_is_missing_or_mistyped_is_named(tmp_path, monkeypatch):
     file.rename(file.with_name("policy.yaml"))  # the name of an option of the robot
     with pytest.raises(ConfigError, match="already has an option 'policy'"):
         declared_options(config)
+
+
+def test_an_episode_may_be_given_in_steps_of_the_policy(tmp_path, monkeypatch):
+    text = "options: [policy]\npolicy: nodes/policy_slow.yaml\nsteps: 50\n"
+    _project(tmp_path, text)
+    monkeypatch.chdir(tmp_path)
+    started = _plans(monkeypatch)
+    cli.main(["infer", "--plain", "--experiment", "drawer"])
+    cli.main(["infer", "--plain", "--experiment", "drawer", "--seconds", "4"])
+    cli.main(["infer", "--plain", "--experiment", "drawer", "--steps", "10"])
+    plans = [plan for _, plan in started]
+    assert [p.steps for p in plans] == [50, 0, 10]  # the command line wins
+    assert plans[1].seconds == 4
+    assert (
+        load_experiment(tmp_path / ".roboloom/rakuda2/config.yaml", "drawer").steps
+        == 50
+    )
+    with pytest.raises(SystemExit, match="give --seconds or --steps, not both"):
+        cli.main(["infer", "--plain", "--seconds", "4", "--steps", "10"])
+    with pytest.raises(SystemExit, match="steps, which count a policy's actions"):
+        cli.main(["record", "--plain", "--experiment", "drawer", "--task", "x"])
+    # the time is only the episode's limit: 50 actions at 5 Hz, half as long again + 5 s
+    from roboloom.runtime.session import steps_timeout
+
+    assert steps_timeout(started[0][0], 50) == pytest.approx(50 / 5 * 1.5 + 5)
+    with pytest.raises(ConfigError, match="no controller here is a policy"):
+        steps_timeout(load_config("rakuda2", options=[]), 50)
+
+
+def test_the_progress_line_counts_steps_or_time():
+    from roboloom.ui.record import progress
+
+    by_time = progress(0, 2, 5.0, 20.0)
+    assert by_time == "episode 1/2  [█████░░░░░░░░░░░░░░░] 25%  15.0 s left"
+    by_steps = progress(1, 10, 30.0, 155.0, 137, 500)
+    assert by_steps.startswith("episode 2/10  step 137/500  [█████░░░░░░░░░░░░░░░] 27%")
+    assert by_steps.endswith("at most 125.0 s left")
+    assert progress(2, 2, 0.0, 9.0, 600, 500).startswith(
+        "episode 3 (2 planned)  step 500/500  [████████████████████] 100%"
+    )
+
+
+@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
+def test_an_episode_ends_when_the_policy_has_taken_its_steps(tmp_path, monkeypatch):
+    from roboloom.runtime.session import Session, steps_done
+
+    project = _project(tmp_path)
+    with Session.launch(project / "config.yaml", options=["drawer"]) as s:
+        s.wait_ready(30)
+        seen: list[int] = []
+        began = time.monotonic()
+        result = s.record(
+            "steps", 30.0, steps=10, on_tick=lambda st: seen.append(steps_done(st))
+        )
+        took = time.monotonic() - began
+    assert result.saved
+    assert max(seen) >= 10 and took < 10  # 10 actions at 5 Hz: about 2 s, not 30
+    assert seen == sorted(seen)  # counted up from the start of the episode
 
 
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")

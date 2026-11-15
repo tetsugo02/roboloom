@@ -250,10 +250,12 @@ uv run roboloom infer rakuda2 --experiment drawer
 | `set` | オプションの `set` と同じ．方策以外のノードを置き換えるときに使う |
 | `dataset` | データセット名へ付ける短い名前．実験ごとにデータセットを分けるときに書く |
 | `task`，`seconds`，`episodes`，`home` | `--task`，`--seconds`，`--episodes`，`--home` の値 |
+| `steps` | `infer --steps` の値．エピソードを，方策が実行した行動の数で終える．`seconds` とは同時に書けない |
 
 - 実験は，ファイル名と同じ名前の起動オプションでもあります．`--experiment drawer` はそのオプションを有効にします．ランチャーのオプション一覧にも出ます．`config.yaml` のオプションと同じ名前は使えません．
 - パスは `config.yaml` から見た相対パスです．
-- コマンドラインに書いた値が優先します（`--experiment drawer --seconds 10`）．`seconds` がどちらにもなければ拒否します．
+- コマンドラインに書いた値が優先します（`--experiment drawer --seconds 10`）．`seconds` も `steps` もどちらにもなければ拒否します．
+- `steps` のエピソードは，方策が指定の手数を実行した時点で終わります．推論待ちで遅れる場合に備えて，上限時間（`steps / rate_hz × 1.5 + 5` 秒）でも終わり，そのときは何手で終わったかを表示します．
 - 未知のキーは拒否します．
 - 保存したデータセットの `meta/roboloom.json` には，有効だったオプションとして実験の名前が残ります．
 

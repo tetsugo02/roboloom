@@ -248,7 +248,7 @@ options: [policy]                   # add digit for a policy that reads the DIGI
 policy: nodes/policy_drawer.yaml    # a copy of nodes/policy.yaml with your policy
 dataset: drawer                     # episodes go to local/rakuda2-eval-drawer
 task: open the drawer               # with a task the runs are saved
-seconds: 40
+seconds: 40                         # or steps: 200 (actions of the policy)
 episodes: 10
 home: true                          # needs `home:` in the policy's YAML
 ```
@@ -267,7 +267,10 @@ a divider for arrow-key resizing and Ctrl-R reset. Proportions persist for the
 session across tab changes and terminal resizing; they are not saved to disk. Node selection changes the display only; experiment
 operations target all configured nodes. Record/infer show readiness, remaining
 time, episode count, and results; select Start for each episode. `record --home`
-moves home before every episode. Inference saves only with `--task`.
+moves home before every episode. Inference saves only with `--task`. The episode count
+is a goal: after it, close the quit dialog and Home, Teleop and Start run further
+episodes. `infer --steps <n>` (or `steps:` in an experiment file) ends an episode after
+that many actions of the policy; the top line shows the progress.
 
 `run --plain` uses line input; `record --plain` and `infer --plain` run without
 key input. Non-TTY runs select these paths automatically. Tuning requires a TTY

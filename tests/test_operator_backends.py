@@ -301,6 +301,25 @@ def test_timed_recording_progress_and_policy_save_choice(tmp_path, save: bool):
         assert session.saved == (2 if save else 0)
         assert session.discarded == (0 if save else 2)
         assert session.started == ["task", "task"]
+        assert any(
+            isinstance(n, Snapshot) and n.phase.startswith("episode 2/2  [")
+            for n in notices.items
+        )
+        # the plan is a goal, not a limit: Start is still there and runs another
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot)
+                and n.phase == "complete"
+                and any(o.command == "start" and o.enabled for o in n.operations)
+            )
+        )
+        backend.submit("start")
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot) and n.phase == "ready: episode 4 (2 planned)"
+            )
+        )
+        assert session.started == ["task"] * 3
     finally:
         backend.shutdown()
 
@@ -550,3 +569,33 @@ def test_tuning_close_releases_position_groups_before_closing_the_bus(tmp_path):
     bus.close = close_bus
     session.close()
     assert torque_at_close == [[False, False, False]]
+
+
+def test_an_episode_of_the_plan_ends_on_the_policys_steps(tmp_path):
+    session = FakeSession(tmp_path)
+    usual, since = session.status, [time.monotonic()]
+
+    def status() -> dict:  # the policy executes ten actions a second
+        step = int((time.monotonic() - since[0]) * 10)
+        return {**usual(), "policy": {"fields": {"step": step}}}
+
+    session.status = status  # type: ignore[method-assign]
+    plan = RecordingPlan("task", 30.0, 1, steps=10)  # 30 s is only the limit
+    backend = SessionBackend(lambda: session, mode="infer", recording=plan)
+    notices = Notices()
+    backend.start(notices)
+    try:
+        notices.wait(ready)
+        began = since[0] = time.monotonic()
+        backend.submit("start")
+        notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == "complete")
+        assert time.monotonic() - began < 10
+        assert any(
+            isinstance(n, Snapshot) and "  step " in n.phase and "/10  [" in n.phase
+            for n in notices.items
+        )
+        assert not any(
+            isinstance(n, LogEvent) and "ended by time" in n.text for n in notices.items
+        )
+    finally:
+        backend.shutdown()

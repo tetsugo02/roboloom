@@ -134,7 +134,8 @@ options: [policy, digit]            # enabled with it (an option's `requires`)
 policy: nodes/policy_drawer.yaml    # = set: {controllers.policy: <file>}
 dataset: drawer                     # dataset name suffix
 task: open the drawer               # --task
-seconds: 40                         # --seconds
+seconds: 40                         # --seconds (or steps: 200, infer only: --steps,
+                                    #   the episode ends after that many policy actions)
 episodes: 10                        # --episodes
 home: true                          # --home
 ```
@@ -142,7 +143,9 @@ home: true                          # --home
 Other keys: `conflicts`, `set` (as an option's). Unknown keys are refused. The
 experiment is also a launch option named after the file (so it cannot share a name with
 one in `config.yaml`, and the nodes load it like any option); paths are relative to
-`config.yaml`; command-line values win; `seconds` must be in one of the two.
+`config.yaml`; command-line values win; `seconds` or `steps` must be in one of the two. In the operator screen the episode count
+is a goal: after it, Home/Teleop/Start run further episodes; the top line shows
+`episode 2/10  step 137/500  [bar] 27%`.
 
 Choosing options: CLI `--with a,b` / `--without a,b` (added to / removed from the
 defaults); Python `options=[...]` is the **whole set** (not added to defaults), `None`

@@ -26,12 +26,12 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from ..config import NO_OPTIONS, RobotConfig, load_config
 from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
@@ -150,6 +150,29 @@ def validate_flow(cfg: RobotConfig, directory: Path) -> Path:
     if check.returncode:
         raise ConfigError(f"dora validate failed:\n{check.stdout}{check.stderr}")
     return flow
+
+
+def steps_done(status: Mapping[str, Any]) -> int:
+    """How many actions the policy has executed in the running episode, from the nodes'
+    status (`Session.status()`): the `step` a policy controller reports."""
+    counts = [
+        node.get("fields", {}).get("step")
+        for node in status.values()
+        if isinstance(node, Mapping)
+    ]
+    return max((int(c) for c in counts if isinstance(c, int | float)), default=0)
+
+
+def steps_timeout(cfg: RobotConfig, steps: int) -> float:
+    """The longest an episode of `steps` policy actions may take, in seconds: half as
+    long again as the actions at the policy's rate, plus 5 s (waiting for inference)."""
+    rates = [c.rate_hz for c in cfg.controllers.values() if hasattr(c, "rate_hz")]
+    if not rates:
+        raise ConfigError(
+            f"{cfg.path}: steps count a policy's actions, and no controller here is a "
+            "policy; give seconds instead"
+        )
+    return steps / min(rates) * 1.5 + 5.0
 
 
 def config_env(cfg: RobotConfig) -> dict[str, str]:
@@ -878,11 +901,15 @@ class Session:
         home: bool = False,
         label: Label = None,
         note: str | None = None,
+        steps: int | None = None,
     ) -> EpisodeResult:
         """One episode: wait until it may start (leader aligned with the follower, at most
         `ready_timeout` s), start, record for `seconds`, stop, then save it unless `keep`
         rejects the stopped episode (default: keep every one; quality warnings are in the
         result either way).
+
+        `steps`: end as soon as the policy has executed this many actions (`steps_done`);
+        `seconds` is then the longest the episode may take (`steps_timeout`).
 
         `task` is a string or a function of `EpisodeInfo`. `on_tick(status)` is called
         every `tick_s` while recording. An exception or Ctrl-C discards the episode, and
@@ -907,8 +934,11 @@ class Session:
             end = time.monotonic() + seconds
             while time.monotonic() < end:
                 self._check_running()
+                status = self.status()
                 if on_tick is not None:
-                    on_tick(self.status())
+                    on_tick(status)
+                if steps is not None and steps_done(status) >= steps:
+                    break
                 time.sleep(min(tick_s, max(0.0, end - time.monotonic())))
             stopped = self.stop()
         except BaseException:

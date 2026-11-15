@@ -752,6 +752,7 @@ class PolicyController(Controller):
             "state": self.state,
             "queued": len(self.queue),
             "interpolation": self.multiplier,
+            "step": self.popped,  # actions executed since the episode started
         }
         if self.inference == "async":
             out["inference"] = "async"
