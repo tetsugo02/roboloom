@@ -36,6 +36,7 @@
 | `gravity-check [robot] leader <group> --with gravity` | 補償の有無による姿勢の変化を測る |
 | `run [robot]` | 操作画面で収集する |
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
+| `record [robot] --experiment <名前>`，`infer [robot] --experiment <名前>` | `experiments/<名前>.yaml` のとおりに走らせる（オプション，方策，task，秒数，回数，home．[実験ファイル](configuration.md#experiments)）．コマンドラインに書いた値が優先 |
 | `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る：`start <task>`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も．`save success`・`save failure` は，成否を付けて保存する |
 | `serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | この環境の方策を，`roboloom.policy.remote:connect` を読み込む方策ノードへ提供する（[別のプロセス](../controllers/policy.md#running-the-policy-in-another-process)）．秘密の文字列は `ROBOLOOM_POLICY_AUTHKEY` から読む |
@@ -54,6 +55,7 @@ uv run roboloom run --with gravity                # ランチャーを開かず�
 uv run roboloom run --mock                        # mockデバイス
 uv run roboloom record --task "pick up the cup" --seconds 30 --home
 uv run roboloom infer --seconds 20 --policy my_lab.policies:load
+uv run roboloom infer --experiment drawer         # experiments/drawer.yaml
 uv run roboloom validate --with digit
 uv run roboloom session home
 uv run roboloom session save success               # 別端末から，成否を付けて保存

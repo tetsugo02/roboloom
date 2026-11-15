@@ -102,6 +102,27 @@ Rules: unknown names are errors; two options setting one node differently is an 
 unless one requires the other (the dependent wins); disabling an option disables those
 that require it; an option that changes recorded features **must** have a `dataset`.
 
+### Experiment files
+
+`.roboloom/<robot>/experiments/<name>.yaml` holds one experiment, so that the command
+needs no other words: `roboloom infer --experiment <name>` (also `record`).
+
+```yaml
+help: evaluation of the drawer policy
+options: [policy, digit]            # enabled with it (an option's `requires`)
+policy: nodes/policy_drawer.yaml    # = set: {controllers.policy: <file>}
+dataset: drawer                     # dataset name suffix
+task: open the drawer               # --task
+seconds: 40                         # --seconds
+episodes: 10                        # --episodes
+home: true                          # --home
+```
+
+Other keys: `conflicts`, `set` (as an option's). Unknown keys are refused. The
+experiment is also a launch option named after the file (so it cannot share a name with
+one in `config.yaml`, and the nodes load it like any option); paths are relative to
+`config.yaml`; command-line values win; `seconds` must be in one of the two.
+
 Choosing options: CLI `--with a,b` / `--without a,b` (added to / removed from the
 defaults); Python `options=[...]` is the **whole set** (not added to defaults), `None`
 means defaults. `roboloom validate --with ...` prints the enabled options and dataset

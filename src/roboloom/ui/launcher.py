@@ -39,8 +39,8 @@ from ..config import (
     Option,
     check_options,
     dataset_suffix,
+    declared_options,
     option_changes,
-    parse_options,
     project_robots,
     read_config,
     toggle_option,
@@ -298,7 +298,7 @@ def robot_detail(root: Path, robot: str) -> RenderableType:
     path = root / robot / CONFIG_FILE
     try:
         raw = yaml.safe_load(path.read_text()) or {}
-        options = parse_options(raw.get("options"))
+        options = declared_options(path, raw.get("options"))
     except (OSError, yaml.YAMLError, ConfigError, AttributeError) as exc:
         return Text(f"{path}\n\ncannot read: {exc}", style="red")
     repo_id = str(raw.get("repo_id", "?"))
@@ -410,7 +410,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         super().__init__()
         self.config, self.back = config, back
         raw = yaml.safe_load(config.read_text()) or {}
-        self.options = parse_options(raw.get("options"))
+        self.options = declared_options(config, raw.get("options"))
         self.sensor_names = list(raw.get("sensors") or {})
         for option in self.options.values():
             for key, value in option.set.items():

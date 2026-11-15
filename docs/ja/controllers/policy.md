@@ -22,6 +22,7 @@ command_deadline_ms: 300
 ```
 
 - `factory` のモジュールは，インストール済みのパッケージを先に探し，見つからなければロボットのディレクトリ（`.roboloom/<robot>/`）を探します．
+- 方策のYAML，有効にするオプション，task，秒数，回数を [実験ファイル](../reference/configuration.md#experiments) にまとめると，`roboloom infer --experiment <名前>` だけで走ります．
 - `roboloom infer` は，`policy` という名前のオプションを自動で有効にします．`--policy` と `--policy-kwargs` で，YAMLを書き換えずに方策を差し替えられます．
 
 ```bash

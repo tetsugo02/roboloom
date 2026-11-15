@@ -235,6 +235,23 @@ configuration, run `uv run roboloom init rakuda2 --update` (it adds `nodes/polic
 and lists the options `config.yaml` lacks), remove `requires: [digit]` from
 `options.policy` in `config.yaml` and set `observe: [camera]` in `nodes/policy.yaml`.
 
+### One file per experiment
+
+To run the same evaluation again without retyping its words, write
+`experiments/<name>.yaml` in this directory and run `uv run roboloom infer --experiment <name>`:
+
+```yaml
+options: [policy]                   # add digit for a policy that reads the DIGITs
+policy: nodes/policy_drawer.yaml    # a copy of nodes/policy.yaml with your policy
+dataset: drawer                     # episodes go to local/rakuda2-eval-drawer
+task: open the drawer               # with a task the runs are saved
+seconds: 40
+episodes: 10
+home: true                          # needs `home:` in the policy's YAML
+```
+
+Values on the command line win (`--experiment drawer --seconds 10`).
+
 ## Operator screen
 
 Interactive run, record, infer, and tune-gravity use Textual: Ctrl-L command input,

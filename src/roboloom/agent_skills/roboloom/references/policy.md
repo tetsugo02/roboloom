@@ -150,6 +150,8 @@ def load(checkpoint: str) -> MyPolicy:
 ```bash
 uv run roboloom infer --seconds 30 --policy my_lab.policies:load \
   --policy-kwargs '{"checkpoint": "outputs/act/last"}' --task "pick up the cup"
+# or everything in .roboloom/<robot>/experiments/cup.yaml (configuration.md):
+uv run roboloom infer --experiment cup
 ```
 
 ```python

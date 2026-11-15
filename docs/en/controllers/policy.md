@@ -22,6 +22,7 @@ command_deadline_ms: 300
 ```
 
 - The `factory` module is looked up in the installed packages first, then in the robot's directory (`.roboloom/<robot>/`).
+- Put the policy's YAML, the options, the task, the seconds and the episode count into an [experiment file](../reference/configuration.md#experiments), and `roboloom infer --experiment <name>` is all it takes.
 - `roboloom infer` turns on the option named `policy`. `--policy` and `--policy-kwargs` replace the policy without editing the YAML.
 
 ```bash
