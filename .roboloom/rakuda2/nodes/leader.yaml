@@ -1,4 +1,6 @@
 # Lab unit, values from `roboloom probe` on 2026-10-23 (leader FT7923HA). Re-run probe after any motor change.
+# This is the base of the other leader files: they `extends: leader.yaml` and say only
+#   what differs. Port, motor ids and registers are written here once.
 # registers: EEPROM values the node verifies at startup and refuses to run on mismatch.
 # Fill them from `roboloom probe`; current_limit in mA, return_delay in microseconds.
 # drive_mode: r_arm_grip is reversed (5) and l_arm_grip is not (0) ON PURPOSE, so the two triggers
@@ -55,18 +57,26 @@ registers:
   shutdown:
     default: 52
 control:
-- group: hand
+- group: body
   law: free
+  # To hold these joints where `home` puts them (or at the startup pose), a file that
+  # extends this one gives the group `law: position` (Operating Mode 3).
   joints:
   - torso_yaw
   - head_yaw
   - head_pitch
+- group: right_arm
+  law: free
+  joints:
   - r_arm_sh_pitch1
   - r_arm_sh_roll
   - r_arm_sh_pitch2
   - r_arm_el_yaw
   - r_arm_wr_roll
   - r_arm_wr_yaw
+- group: left_arm
+  law: free
+  joints:
   - l_arm_sh_pitch1
   - l_arm_sh_roll
   - l_arm_sh_pitch2
