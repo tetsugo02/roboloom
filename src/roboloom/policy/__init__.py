@@ -30,14 +30,13 @@ joint targets stay in the policy.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from importlib import import_module, invalidate_caches
 from typing import Any, Protocol
 
 import numpy as np
 
+from ..core.registry import load_reference
 from ..errors import ConfigError
 
 
@@ -82,14 +81,7 @@ def load_policy(
     module, _, attribute = reference.partition(":")
     if not module or not attribute:
         raise ConfigError(f"policy {reference!r}: expected 'module:callable'")
-    added = [d for d in search if d and d not in sys.path]
-    if added:
-        sys.path.extend(added)
-        invalidate_caches()
-    try:
-        factory = getattr(import_module(module), attribute)
-    except (ImportError, AttributeError) as exc:
-        raise ConfigError(f"policy {reference!r}: {exc}") from exc
+    factory = load_reference(reference, search, "policy")
     policy = factory(**(kwargs or {}))
     if not callable(getattr(policy, "infer", None)) or not callable(
         getattr(policy, "reset", None)

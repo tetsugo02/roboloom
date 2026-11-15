@@ -75,9 +75,44 @@ Python 3.12とuvを使い，`uv sync --locked --only-group docs` でlock済み�
 
 初回はリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定します（[GitHubの設定手順](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)）．workflowを `main` に反映すると公開され，URLは `github-pages` environmentとActionsのデプロイ結果に表示されます．ビルドが失敗した場合は公開しません．
 
-## 新しいフォロワを足す
+## 新しいフォロワを足す { #adding-a-follower }
 
 フォロワの機種（`Follower` のサブクラス）は，安全に関わる性質 `safety_traits`（設定で変わる場合は `declared_traits()`）を必ず宣言します．宣言のないクラスはimportの時点でTypeErrorになります．値の意味は [設定](reference/configuration.md) の「脱力したときと放置したときの性質」にあります．確かめていない性質は `unknown` にします．制御則で動く入力機器（`JointInput` のサブクラス）も `safety_traits` を宣言します．姿勢で動かす（`pose_ik`）腕は，`kinematics()` でURDFの鎖（`KinematicSpec`：URDF，base，tip，関節）を返します．
+
+### roboloomを変えずに，自分のパッケージから足す { #own-types }
+
+roboloomに入っていないロボット，入力機器，センサー，controller，estimatorは，自分のコードに置いたまま使えます．
+
+- ノードのYAMLの `type` に，クラスを `module:Class` で書きます．importは，インストール済みのパッケージ，次に機体のディレクトリ（`.roboloom/<robot>/`）の順に探します．
+- ノードは1つずつ別のプロセスで動き，それぞれが設定を読み直します．そのため，クラスは参照（`module:Class`）で指定します．1つのプロセスの中でレジストリに登録しても，ほかのノードからは見えません．
+- クラスは，その役割の基底クラス（`roboloom.robots.base.Follower`，`roboloom.inputs.base.JointInput` と `PoseInput`，`roboloom.core.source.Source`，`roboloom.controllers.base.Controller`，`roboloom.estimators.base.Estimator`）を継承します．継承していないクラスは，読み込みのときに拒否します．
+- クラスが読むYAMLのキーを `keys` に書くと，それ以外のキーは読み込みのときに拒否されます（綴りの誤りが黙って無視されません）．`keys` を書かないクラスは検査しません．
+
+    ```python
+    from roboloom.robots.base import FOLLOWER_KEYS, Follower
+
+    class MyArm(Follower):
+        keys = (*FOLLOWER_KEYS, "address")
+    ```
+
+- フォロワに要るものは，関節名と単位，`safety_traits`，`open_bus(mock)` が返すバス（`read_positions`，`write_positions`，`enable_torque`，`close`．`roboloom.drivers.base.JointBus`）です．`mock` がTrueのときは模擬のバスを返します．
+- シミュレーターは，同じフォロワのクラスの後ろに別のバスを置きます．実機と同じ単位で話せば，データセットと方策を共有できます．
+- `control:` の制御則（`roboloom.control`）はDynamixel系のバス（カウント，mA，Operating Mode）を前提にしています．自前の位置制御を持つロボットでは使いません．
+
+テンプレートも自分の側に置けます．`config.yaml`，ノードのYAML，クラスのモジュール，`mock.yaml` を1つのディレクトリ（またはパッケージの `template/`）にまとめ，次のようにプロジェクトを作ります．
+
+```bash
+uv run roboloom init lab_arm --template my_lab.robots.arm   # パッケージの template/
+uv run roboloom init lab_arm --template path/to/template    # ディレクトリ
+uv run roboloom init lab_arm --update                       # テンプレートが変わったあと
+```
+
+リポジトリの `examples/own_robot/` が，動く最小の見本です（フォロワのクラス `my_arm.py`，方策で保持するだけの構成，模擬のバス）．
+
+```bash
+uv run roboloom init lab_arm --template examples/own_robot
+uv run roboloom infer lab_arm --mock --seconds 5 --plain
+```
 
 ## 操作画面の拡張
 

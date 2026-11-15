@@ -13,4 +13,5 @@ ESTIMATORS: Registry[Estimator] = Registry(
         "none": "roboloom.estimators.base:NoEstimator",
         "model_residual": "roboloom.estimators.model_residual:ModelResidual",
     },
+    base=Estimator,
 )

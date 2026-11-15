@@ -9,9 +9,9 @@ itself (upstream).
 | Own collection/eval script, task prompts, episode filtering | Downstream: `Session` ([python-api.md](python-api.md)) |
 | Simulation, tests, a simple one-follower robot with your own bus or sensor functions | Downstream: `InProcessSession.from_components` ([in-process.md](in-process.md)) |
 | Another camera/sensor of a supported `type`, another node layout | Downstream: own options and node YAML in `config.yaml` |
-| New robot, leader, hand-held input, sensor, controller or bus `type` | **Upstream** (a change to roboloom) |
+| New robot, leader, hand-held input, sensor, controller or estimator class | Downstream: `type: module:Class` in the node YAML (below); upstream when it should ship with roboloom |
 
-## What a new type has to provide (upstream)
+## What a new type has to provide
 
 - **Follower model**: joints, unit, safety traits, `open_bus` returning a `JointBus`
   (`read_positions`, `write_positions`, `enable_torque`, `close`; optional `read_state`,
@@ -27,21 +27,48 @@ itself (upstream).
 - `control:` laws (`roboloom.control`) assume a Dynamixel-like bus (counts, mA, operating
   modes); robots with their own position control (PiPER, Pika Gripper) refuse `control:`.
 
-## Why new device types cannot be added downstream
+## A type of your own, downstream
 
-Each role maps `type:` to a class through a `Registry` (`roboloom.core.registry`):
-`roboloom.robots.FOLLOWERS`, `roboloom.inputs.INPUTS`, `roboloom.sensors.SENSORS`,
-`roboloom.controllers.CONTROLLERS` (and `roboloom.estimators.ESTIMATORS`). Their entries
-are fixed in roboloom's `__init__.py` files. `Registry.register()` exists, but `Session`
-starts every node as a new process (`<python> .../roboloom/runtime/node.py <node>
-<config.yaml>`) that calls `load_config` again with only the built-in entries; there is no
-entry-point or plugin discovery. A `FOLLOWERS.register(...)` in the user's script lets
-`load_config` pass in that process, then the node fails with `unsupported follower type
-'x'; expected one of ...`. Do not monkeypatch registries, and do not copy roboloom modules
-into the project to fake a type.
+A node YAML's `type` is a built-in name or a reference `module:Class` to a class of the
+user's own code:
+
+```yaml
+# .roboloom/lab_arm/nodes/follower.yaml
+type: my_arm:MyArm          # .roboloom/lab_arm/my_arm.py, or an installed my_lab.arm:MyArm
+address: 10.0.0.2
+control_hz: 50
+limits: [...]
+```
+
+- The module is imported from the installed packages first, then from the robot's
+  directory (`.roboloom/<robot>/`), in every node process.
+- The class must subclass its role's base (`roboloom.robots.base.Follower`,
+  `roboloom.inputs.base.JointInput` / `PoseInput`, `roboloom.core.source.Source`,
+  `roboloom.controllers.base.Controller`, `roboloom.estimators.base.Estimator`); another
+  object is refused on loading (`... is not a Follower subclass`).
+- `keys = (*FOLLOWER_KEYS, "address")` on the class lists the YAML keys it reads; any
+  other key is then refused on loading. A class without `keys` of its own is not checked.
+- A follower also needs `safety_traits` and `open_bus(mock)` (a mock bus when `mock`).
+- `Registry.register()` in a script does **not** work: every node is a new process that
+  loads the configuration again. Name the class by reference. Do not monkeypatch
+  registries or copy roboloom modules into the project.
+
+Working example in a roboloom checkout: `examples/own_robot/` (`my_arm.py`, node YAML,
+`mock.yaml`).
+
+```bash
+uv run roboloom init lab_arm --template examples/own_robot   # or --template my_lab.robots.arm
+uv run roboloom infer lab_arm --mock --seconds 5 --plain
+```
+
+`roboloom init <name> --template <package or directory>` copies a template roboloom does
+not ship (`<package>/template/`, or a directory holding `config.yaml`); the class's module
+can sit in the template so it lands next to `config.yaml`. `--update` finds the template
+again through `.template.json`.
 
 ## Downstream extension points that work
 
+- **Types.** `type: module:Class` (above).
 - **Policies.** `factory: "module:callable"` is imported inside the policy node: from
   installed packages first, then from `.roboloom/<robot>/` (e.g. `my_policy:load`). The
   same for `Session.launch(..., policy=..., policy_kwargs=...)` and `roboloom infer

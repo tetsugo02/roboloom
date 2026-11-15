@@ -43,5 +43,6 @@ extra:
       lang: en
 markdown_extensions:
   - admonition
+  - attr_list  # `## Heading { #anchor }`: a stable anchor for a Japanese heading
   - pymdownx.superfences
   - tables

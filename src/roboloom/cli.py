@@ -159,6 +159,13 @@ def main(argv: list[str] | None = None) -> None:
     init.add_argument("robot")
     init.add_argument("--root", default=".roboloom")
     init.add_argument(
+        "--template",
+        default=None,
+        metavar="PACKAGE_OR_DIR",
+        help="a template that roboloom does not ship: a package holding template/ "
+        "(my_lab.robots.arm) or a directory; the project is named after ROBOT",
+    )
+    init.add_argument(
         "--update",
         action="store_true",
         help="bring an existing project up to the installed template: add missing "
@@ -488,7 +495,7 @@ def _dispatch(args: argparse.Namespace) -> None:
         from .project import init_project, update_project
 
         make = update_project if args.update else init_project
-        print(make(args.robot, args.root))
+        print(make(args.robot, args.root, args.template))
         return
     if args.command == "probe":
         from .probe import probe

@@ -75,9 +75,44 @@ The workflow uses Python 3.12 and uv, installing only the locked documentation d
 
 For the initial setup, set the repository's **Settings → Pages → Build and deployment → Source** to **GitHub Actions** ([GitHub setup instructions](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)). Once the workflow reaches `main`, it publishes the site; the URL appears in the `github-pages` environment and the Actions deployment result. Failed builds are not deployed.
 
-## Adding a follower
+## Adding a follower { #adding-a-follower }
 
 A follower model (a `Follower` subclass) must declare its safety traits, `safety_traits` (or `declared_traits()` when they depend on the configuration). A class without them raises TypeError on import. The values are explained in "Behaviour without torque and when left alone" in [Configuration](reference/configuration.md). Declare what has not been established as `unknown`. Input models that run control laws (`JointInput` subclasses) declare `safety_traits` too. An arm driven by poses (`pose_ik`) returns its URDF chain from `kinematics()` (a `KinematicSpec`: the URDF, base, tip and joints).
+
+### From your own package, without changing roboloom { #own-types }
+
+A robot, input device, sensor, controller or estimator roboloom does not ship can stay in your own code.
+
+- Write the class as `module:Class` in the node YAML's `type`. It is imported from the installed packages first, then from the robot's directory (`.roboloom/<robot>/`).
+- Every node runs as a process of its own and loads the configuration again. That is why a class is named by reference (`module:Class`): registering it in a registry inside one process is not seen by the other nodes.
+- The class subclasses the base class of its role (`roboloom.robots.base.Follower`, `roboloom.inputs.base.JointInput` and `PoseInput`, `roboloom.core.source.Source`, `roboloom.controllers.base.Controller`, `roboloom.estimators.base.Estimator`). A class that does not is refused on loading.
+- List the YAML keys the class reads in `keys`, and any other key is refused on loading (a misspelled key is not ignored in silence). A class without `keys` is not checked.
+
+    ```python
+    from roboloom.robots.base import FOLLOWER_KEYS, Follower
+
+    class MyArm(Follower):
+        keys = (*FOLLOWER_KEYS, "address")
+    ```
+
+- A follower needs its joint names and unit, `safety_traits`, and the bus `open_bus(mock)` returns (`read_positions`, `write_positions`, `enable_torque`, `close`; `roboloom.drivers.base.JointBus`). With `mock` true it returns a mock bus.
+- A simulator is another bus behind the same follower class. Speak the real robot's unit and the datasets and policies are shared.
+- The `control:` laws (`roboloom.control`) assume a Dynamixel-like bus (counts, mA, operating modes). A robot with its own position control does not use them.
+
+The template can live on your side too. Put `config.yaml`, the node YAML, the module with the class and `mock.yaml` in one directory (or in a package's `template/`) and make a project from it:
+
+```bash
+uv run roboloom init lab_arm --template my_lab.robots.arm   # a package's template/
+uv run roboloom init lab_arm --template path/to/template    # a directory
+uv run roboloom init lab_arm --update                       # after the template changed
+```
+
+`examples/own_robot/` in the repository is the smallest working example (the follower class `my_arm.py`, a configuration in which a policy holds the pose, a mock bus).
+
+```bash
+uv run roboloom init lab_arm --template examples/own_robot
+uv run roboloom infer lab_arm --mock --seconds 5 --plain
+```
 
 ## Operator UI extensions
 
