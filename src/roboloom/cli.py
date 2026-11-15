@@ -359,6 +359,12 @@ def main(argv: list[str] | None = None) -> None:
         "seconds, episodes and home (words given here win)",
     )
     inf.add_argument("--seconds", type=float)
+    inf.add_argument(
+        "--steps",
+        type=int,
+        help="end each episode after this many actions of the policy, instead of "
+        "--seconds",
+    )
     inf.add_argument("--episodes", type=int)
     inf.add_argument(
         "--home",
@@ -467,13 +473,29 @@ def _run_settings(args: argparse.Namespace) -> None:
     if name:
         run = load_experiment(resolve_config(args.config), name)
         args.with_ = [name, *(args.with_ or [])]
-        for key in ("task", "seconds", "episodes"):
+        for key in ("task", "episodes"):
             if getattr(args, key) is None:
                 setattr(args, key, getattr(run, key))
         args.home = args.home or bool(run.home)
+        # the length: what the command line says, else the file's seconds or steps
+        if args.seconds is None and getattr(args, "steps", None) is None:
+            args.seconds = run.seconds
+            if args.command == "infer":
+                args.steps = run.steps
+            elif run.steps is not None:
+                raise ConfigError(
+                    f"record: experiments/{name}.yaml gives steps, which count a "
+                    "policy's actions; give --seconds"
+                )
     source = f"experiments/{name}.yaml" if name else "an experiment (--experiment)"
-    if args.seconds is None:
-        raise ConfigError(f"{args.command}: give --seconds, or `seconds:` in {source}")
+    steps = getattr(args, "steps", None)
+    if steps is not None and args.seconds is not None:
+        raise ConfigError("infer: give --seconds or --steps, not both")
+    if steps is not None and steps < 1:
+        raise ConfigError("infer: --steps must be at least 1")
+    if args.seconds is None and steps is None:
+        length = "--seconds or --steps" if args.command == "infer" else "--seconds"
+        raise ConfigError(f"{args.command}: give {length}, or `seconds:` in {source}")
     if args.command == "record" and not args.task:
         raise ConfigError(f"record: give --task, or `task:` in {source}")
     args.task = args.task or ""
@@ -739,6 +761,7 @@ def _operate_robot(
         mock=mock,
         task=getattr(args, "task", "") or "",
         seconds=getattr(args, "seconds", 0.0) or 0.0,
+        steps=getattr(args, "steps", None) or 0,
         episodes=getattr(args, "episodes", 1) or 1,
         home=getattr(args, "home", False),
     )
@@ -816,6 +839,11 @@ def _start(
 
     policy = getattr(args, "policy", None)
     policy_kwargs = getattr(args, "policy_kwargs", None)
+    steps = plan.steps or None
+    if steps:  # the episode ends on the count; the time is only its limit
+        from .runtime.session import steps_timeout
+
+        plan = replace(plan, seconds=steps_timeout(cfg, steps))
     if live:
         from .ui.app import run_backend
         from .ui.backend import RecordingPlan, SessionBackend
@@ -828,6 +856,7 @@ def _start(
                 plan.episodes,
                 save=plan.mode == "record" or bool(plan.task),
                 home=plan.home,
+                steps=steps,
             )
         backend = SessionBackend(
             lambda: Session.launch(
@@ -866,6 +895,7 @@ def _start(
                 plan.episodes,
                 keep=lambda _: bool(plan.task),
                 home=plan.home,
+                steps=steps,
             )
         else:
             _plain_loop(session.client, session.process, session.release_note())

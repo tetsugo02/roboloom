@@ -71,6 +71,7 @@ class LaunchPlan:
     seconds: float = 0.0
     episodes: int = 1
     home: bool = False
+    steps: int = 0  # infer: policy actions per episode (0: `seconds` decides)
     sensors: list[str] | None = None
     observe: list[str] | None = None
     video_codec: str | None = None  # None: the recorder YAML (recording.video)
@@ -80,7 +81,7 @@ class LaunchPlan:
         if self.mode not in MODES:
             return f"unknown operation {self.mode}"
         if self.mode in ("record", "infer"):
-            if self.seconds <= 0 or self.episodes < 1:
+            if (self.seconds <= 0 and self.steps < 1) or self.episodes < 1:
                 return "seconds > 0 and episodes >= 1 are required"
             if self.mode == "record" and not self.task.strip():
                 return "record needs a task"

@@ -55,6 +55,16 @@ Release names, from the devices' traits ("Behaviour without torque and when left
 
 `record` and `infer` show readiness, episode count, remaining time, and save results. Select Start for each episode after readiness. `record --home` moves home before every episode. `record` saves; `infer` saves only with `--task`. Stop can finish a timed episode early and apply the same save policy. After the requested episodes, the exit confirmation opens.
 
+The count is a goal, not a limit. Close the confirmation and you can move the robot with Home or Teleop and run another episode with Start (shown as `episode 3 (2 planned)`). `--plain` ends after the count.
+
+During an episode the top line shows its progress.
+
+```
+episode 2/10  step 137/500  [█████░░░░░░░░░░░░░░░] 27%  at most 72.6 s left
+```
+
+`step` is the number of actions the policy has executed; it appears when the length is given in steps (`infer --steps`, `steps` in an experiment file). Such an episode ends as soon as the policy has executed that many actions. With a length in seconds the bar shows the share of the time.
+
 ## Gravity tuning
 
 `tune-gravity` remains a separate command. Stop the dataflow before opening the same bus. Its node list selects joints, and Details describes the selected joint and measured/model/sent current in mA. The menu and input share these commands:

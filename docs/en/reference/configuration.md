@@ -250,10 +250,12 @@ uv run roboloom infer rakuda2 --experiment drawer
 | `set` | As an option's `set`; use it to replace nodes other than the policy |
 | `dataset` | Short name appended to the dataset name; write it to keep each experiment in a dataset of its own |
 | `task`, `seconds`, `episodes`, `home` | The values of `--task`, `--seconds`, `--episodes`, `--home` |
+| `steps` | The value of `infer --steps`: the episode ends after this many actions of the policy. Not together with `seconds` |
 
 - An experiment is also a launch option named after its file. `--experiment drawer` enables that option, and the launcher lists it with the others. It cannot have the name of an option in `config.yaml`.
 - Paths are relative to `config.yaml`.
-- Values on the command line win (`--experiment drawer --seconds 10`). The command is refused when `seconds` is in neither.
+- Values on the command line win (`--experiment drawer --seconds 10`). The command is refused when neither has `seconds` or `steps`.
+- An episode given in `steps` ends as soon as the policy has executed that many actions. In case inference keeps it waiting, it also ends after a time limit (`steps / rate_hz × 1.5 + 5` seconds) and says at how many steps.
 - Unknown keys are refused.
 - `meta/roboloom.json` of the saved dataset keeps the experiment's name among the enabled options.
 

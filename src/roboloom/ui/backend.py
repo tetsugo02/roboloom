@@ -14,7 +14,7 @@ from ..config import CONFIG_FILE
 from ..core.traits import ending_note
 from ..errors import Cancelled
 from ..runtime.node import start_warning
-from ..runtime.session import Session, _ui_launch
+from ..runtime.session import Session, _ui_launch, steps_done
 from .models import (
     Capabilities,
     Closed,
@@ -25,7 +25,7 @@ from .models import (
     Snapshot,
     Value,
 )
-from .record import describe
+from .record import describe, progress
 from .render import describe_report
 
 
@@ -36,6 +36,8 @@ class RecordingPlan:
     episodes: int = 1
     save: bool = True
     home: bool = False
+    # end an episode after this many actions of the policy; `seconds` is then its limit
+    steps: int | None = None
 
     def __post_init__(self) -> None:
         if not self.task.strip() or self.seconds <= 0 or self.episodes < 1:
@@ -177,11 +179,7 @@ class SessionBackend:
                 or ("episode already open" if self._episode else "")
                 or readiness
             )
-            finished = (
-                self.recording is not None and self._index >= self.recording.episodes
-            )
-            if finished:
-                start_reason = "all episodes complete"
+            # the planned count is a goal, not a limit: Start runs another episode
             operations = (
                 Operation(
                     "start", "Start episode", not bool(start_reason), start_reason
@@ -338,11 +336,15 @@ class SessionBackend:
             session.home()
         self._phase = "waiting for readiness"
         session.wait_ready(120)
-        self._phase = (
-            f"ready: episode {self._index + 1}/{self.recording.episodes}"
-            if self.recording
-            else "ready"
-        )
+        self._phase = self._ready_phase()
+
+    def _ready_phase(self) -> str:
+        plan = self.recording
+        if plan is None:
+            return "ready"
+        if self._index < plan.episodes:
+            return f"ready: episode {self._index + 1}/{plan.episodes}"
+        return f"ready: episode {self._index + 1} ({plan.episodes} planned)"
 
     def _execute(self, session: Session, command: str) -> None:
         name, _, task = command.partition(" ")
@@ -361,16 +363,34 @@ class SessionBackend:
                 session.start(plan.task)
                 self._episode = self._recording = True
                 try:
-                    end = time.monotonic() + plan.seconds
+                    began = time.monotonic()
+                    end, done = began + plan.seconds, 0
                     while (
                         time.monotonic() < end and not self._finish_recording.is_set()
                     ):
                         session._check_running()
                         self._hand_over(session)
-                        self._phase = f"episode {self._index + 1}/{plan.episodes}: {max(0.0, end - time.monotonic()):.1f} s remaining"
+                        if plan.steps:
+                            done = steps_done(session.status())
+                        self._phase = progress(
+                            self._index,
+                            plan.episodes,
+                            time.monotonic() - began,
+                            plan.seconds,
+                            done,
+                            plan.steps,
+                        )
+                        if plan.steps and done >= plan.steps:
+                            break
                         self._finish_recording.wait(
                             min(0.1, max(0.0, end - time.monotonic()))
                         )
+                    if (
+                        plan.steps
+                        and done < plan.steps
+                        and not self._finish_recording.is_set()
+                    ):
+                        self._log(f"ended by time at {done}/{plan.steps} steps", "warn")
                     self._phase = "stopping"
                     self._recording = False
                     result = session.stop()
@@ -388,10 +408,14 @@ class SessionBackend:
                 finally:
                     self._episode = self._recording = False
                 self._index += 1
-                if self._index < plan.episodes:
-                    self._prepare(session)
-                else:
+                if self._index == plan.episodes:
+                    # the app asks once whether to quit; Home, Teleop and Start stay
+                    # available, and Start runs another episode
                     self._phase = "complete"
+                elif self._index < plan.episodes:
+                    self._prepare(session)
+                else:  # past the plan: the operator moves the robot (Home, Teleop)
+                    self._phase = self._ready_phase()
         elif name == "home":
             session.home()
             session.wait_ready(120)

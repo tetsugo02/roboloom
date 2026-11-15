@@ -142,7 +142,7 @@ def parse_options(raw: object) -> dict[str, Option]:
 
 
 EXPERIMENTS = "experiments"  # next to the configuration: one YAML file per experiment
-RUN_KEYS = ("task", "seconds", "episodes", "home")
+RUN_KEYS = ("task", "seconds", "steps", "episodes", "home")
 EXPERIMENT_KEYS = {
     "help",
     "options",
@@ -166,6 +166,7 @@ class Experiment:
     seconds: float | None = None
     episodes: int | None = None
     home: bool | None = None
+    steps: int | None = None  # policy actions per episode, instead of seconds
 
 
 def experiment_names(config: str | Path) -> list[str]:
@@ -219,8 +220,17 @@ def _experiment(config: Path, name: str) -> tuple[dict, Experiment]:
         raise ConfigError(f"{where}.episodes: expected a whole number, at least 1")
     if home is not None and not isinstance(home, bool):
         raise ConfigError(f"{where}.home: expected true or false")
+    steps = raw.get("steps")
+    if steps is not None and (
+        isinstance(steps, bool) or not isinstance(steps, int) or steps < 1
+    ):
+        raise ConfigError(f"{where}.steps: expected a whole number, at least 1")
+    if steps is not None and seconds is not None:
+        raise ConfigError(
+            f"{where}: write seconds or steps (the policy's actions), not both"
+        )
     run = Experiment(
-        name, task, None if seconds is None else float(seconds), episodes, home
+        name, task, None if seconds is None else float(seconds), episodes, home, steps
     )
     return option, run
 

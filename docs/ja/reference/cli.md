@@ -37,7 +37,7 @@
 | `run [robot]` | 操作画面で収集する |
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
 | `record [robot] --experiment <名前>`，`infer [robot] --experiment <名前>` | `experiments/<名前>.yaml` のとおりに走らせる（オプション，方策，task，秒数，回数，home．[実験ファイル](configuration.md#experiments)）．コマンドラインに書いた値が優先 |
-| `infer [robot] --seconds <n>` | 時間指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
+| `infer [robot] --seconds <n>`，`infer [robot] --steps <n>` | 時間指定，または方策の行動の手数（`--steps`）指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る：`start <task>`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も．`save success`・`save failure` は，成否を付けて保存する |
 | `serve-policy --from <方策のYAML>`，`serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | この環境の方策を，`backend: server` の方策ノードへ提供する．`--from` は方策のYAMLの `factory`，`kwargs`，`server.address` を使う（[別のプロセス](../controllers/policy.md#running-the-policy-in-another-process)）．秘密の文字列は `ROBOLOOM_POLICY_AUTHKEY` から読む |
 | `check-dataset [robot]` | 記録したデータセットを読むだけで検査する：エピソード数とファイルの整合，動画の長さと行数，`valid` が0の行の割合，成否の数．問題があれば終了コード1．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ．`--recover` は保存の途中で止まったエピソードを取り除く（[記録と再開](configuration.md#recording-and-resuming)） |
