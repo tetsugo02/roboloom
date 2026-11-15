@@ -125,6 +125,38 @@ Each follower model and each actuated input model (a leader that runs control la
 - `ESTOP` holds in place and latches, whatever the traits.
 - Only an `unattended` that the model declares `unknown` may be set in the follower YAML, to a measured value (`unattended: holds` or `torque_off`); `roboloom check-hold` ([CLI](cli.md)) measures it and writes it after confirmation. A value that contradicts the model's declaration is refused when the configuration loads.
 
+## Node files built on another (extends) { #extends }
+
+Copying a node file for every combination of features means correcting a port or a measured value in all of them. Decide on one base file instead; the other files point at it with `extends` and say only what differs.
+
+```yaml
+# nodes/leader_gravity.yaml
+extends: leader.yaml                  # the base: a node file in the same directory
+without: [registers.operating_mode]   # keys of the base to drop (dotted); optional
+registers:
+  current_limit: {r_arm_sh_pitch1: 150}   # only what is added or changed
+control:
+- group: right_arm                    # laid over the base's group of the same name
+  law: gravity_comp
+  gravity_model: ../calibration/gravity_right.yaml
+bus_watchdog_ms: 500
+```
+
+| Kind of value | How it is laid over the base |
+| --- | --- |
+| Mapping | Key by key (nested ones too) |
+| List of mappings named by `group` or `name` (`control`, `limits`) | Entry by entry of the same name; entries with a new name are added last |
+| Anything else (number, text, plain list) | Replaced |
+
+- The base must be a file in the same directory, so that relative paths inside the files (`../calibration/...`) keep their meaning.
+- A base may extend another file. A circle is refused.
+- To remove or reorder entries of the base, drop the whole list with `without: [control]` and write it again. A key in `without` that the base does not have is refused.
+- Unknown keys are checked on the result.
+- `meta/roboloom.json` of a saved dataset keeps the resulting values and the names of the base files (`extends`).
+- `check-hold` writes `unattended` into the file that has the key; when none has it, into the node's own file.
+
+In the Rakuda2 template `leader_gravity.yaml` is built on `leader.yaml` and `policy_teleop.yaml` on `policy.yaml`.
+
 ## Launch options
 
 `options:` names the features chosen at launch (gravity compensation, extra sensors, and so on). Each option replaces, adds, or removes node files. The node files under `nodes/` stay split by feature; an option only chooses which of them are used.

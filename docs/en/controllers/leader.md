@@ -35,7 +35,7 @@ The concrete setup is in [Rakuda2 Quick start](../quick-start/rakuda2.md).
 
 ## Lock leader joints
 
-In `control` of the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml`, move the joints to lock into a `law: position` group. For example, replace the template's `body` group with these two groups to leave the torso free and lock neck yaw and pitch. Keep the arm and trigger groups. In older configurations where the torso and head belong to `hand`, remove these three joints from `hand`. Every joint must belong to exactly one group.
+In a file built on the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml` ([`extends`](../reference/configuration.md#extends)), or in `control` of that file itself, move the joints to lock into a `law: position` group. For example, replace the template's `body` group with these two groups to leave the torso free and lock neck yaw and pitch. Keep the arm and trigger groups. In older configurations where the torso and head belong to `hand`, remove these three joints from `hand`. Every joint must belong to exactly one group.
 
 ```yaml
 control:

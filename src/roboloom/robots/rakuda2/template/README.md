@@ -102,19 +102,22 @@ Both options are disabled by default. They have been checked with mock buses and
 controllers; check motor directions, travel, and tracking on your robot before use.
 Existing projects are not changed by a package update.
 
-In the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml`, replace `body` with:
+Write a leader file of your own that extends the one you use, and name it in the
+option's `set` (`inputs.leader`) in `config.yaml`:
 
 ```yaml
+# nodes/leader_fixed_head.yaml
+extends: leader_gravity.yaml   # or leader.yaml
+control:
 - group: body
-  law: free
   joints: [torso_yaw]
 - group: fixed_head
   law: position
   joints: [head_yaw, head_pitch]
 ```
 
-Keep the arm and trigger groups. In older files, remove these three joints from
-`hand` instead. Every joint must occur exactly once. `position` seeds the measured
+A file with `extends` says only what differs from its base; groups of the same name are
+laid over the base's. Every joint must occur exactly once. `position` seeds the measured
 startup pose before torque enable and holds it; align these leader joints with the
 follower before launch. Locking starts at Session launch, persists through `stop`,
 and releases on `estop`, `release`, or `quit`. The motors must already be in position

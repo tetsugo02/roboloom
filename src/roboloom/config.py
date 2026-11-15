@@ -414,6 +414,90 @@ def _read(path: Path) -> dict:
     return data
 
 
+EXTENDS, WITHOUT = "extends", "without"  # keys of a node file, gone once it is read
+IDENTITY = ("group", "name")  # what names the entries of `control` and `limits`
+
+
+def _identity(items: object) -> str | None:
+    """The key that names every entry of a list of mappings, if one does."""
+    if not isinstance(items, list) or not items:
+        return None
+    for key in IDENTITY:
+        if all(isinstance(item, dict) and key in item for item in items):
+            names = [item[key] for item in items]
+            if len(set(map(str, names))) == len(names):
+                return key
+    return None
+
+
+def overlay(base: object, top: object) -> object:
+    """`top` laid over `base`, as a node file over the one it extends: mappings merge
+    key by key; a list of mappings named by `group` or `name` (control, limits) merges
+    entry by entry of the same name, new entries last; anything else is replaced."""
+    if isinstance(base, dict) and isinstance(top, dict):
+        out = dict(base)
+        for key, value in top.items():
+            out[key] = overlay(base[key], value) if key in base else value
+        return out
+    key = _identity(top)
+    if key is not None and key == _identity(base):
+        assert isinstance(base, list) and isinstance(top, list)
+        over = {str(item[key]): item for item in top}
+        merged = [
+            overlay(item, over.pop(str(item[key]))) if str(item[key]) in over else item
+            for item in base
+        ]
+        return [*merged, *over.values()]
+    return top
+
+
+def _without(data: dict, dotted: object, where: str) -> None:
+    """Drop the key `a.b.c` of `data` (what the extended file says there)."""
+    if not isinstance(dotted, str) or not dotted:
+        raise ConfigError(f"{where}: `{WITHOUT}` lists keys such as registers.kp")
+    *parents, last = dotted.split(".")
+    at: object = data
+    for part in parents:
+        at = at.get(part) if isinstance(at, dict) else None
+    if not isinstance(at, dict) or last not in at:
+        raise ConfigError(f"{where}: `{WITHOUT}` names {dotted!r}, which is not there")
+    del at[last]
+
+
+def read_node(file: Path, _seen: tuple[Path, ...] = ()) -> dict:
+    """A node file as a mapping. `extends: <file in the same directory>` reads that
+    file first and lays this one over it (`overlay`), after dropping the keys listed in
+    `without`. `__extends__` lists the files it was built on, nearest first."""
+    file = file.resolve()
+    if file in _seen:
+        chain = " -> ".join(p.name for p in (*_seen, file))
+        raise ConfigError(f"{file}: `{EXTENDS}` goes in a circle ({chain})")
+    data = _read(file)
+    base_name, dropped = data.pop(EXTENDS, None), data.pop(WITHOUT, None)
+    if base_name is None:
+        if dropped is not None:
+            raise ConfigError(f"{file}: `{WITHOUT}` needs `{EXTENDS}`")
+        return data
+    if not isinstance(base_name, str) or Path(base_name).name != base_name:
+        raise ConfigError(
+            f"{file}: `{EXTENDS}` names a node file in the same directory "
+            f"(e.g. leader.yaml), not {base_name!r}"
+        )
+    base_file = file.with_name(base_name)
+    if not base_file.is_file():
+        raise ConfigError(f"{file}: `{EXTENDS}` names {base_name}, which is not there")
+    base = read_node(base_file, (*_seen, file))
+    built_on = [str(base_file), *base.pop("__extends__", [])]
+    if dropped is not None:
+        if not isinstance(dropped, list):
+            raise ConfigError(f"{file}: `{WITHOUT}` is a list of keys")
+        for dotted in dropped:
+            _without(base, dotted, str(file))
+    merged = overlay(base, data)
+    assert isinstance(merged, dict)
+    return {**merged, "__extends__": built_on}
+
+
 def read_config(
     path: str | Path,
     options: Iterable[str] | None = None,
@@ -482,7 +566,7 @@ def read_config(
             raise TypeError(f"{where}: expected YAML path")
         file = (path.parent / relative).resolve()
         return {
-            **_read(file),
+            **read_node(file),
             "__dir__": str(file.parent),  # resolves files a node names (gravity models)
             "__file__": str(file),  # where setup steps record measured values
             "__robot_dir__": str(path.parent),  # where a node imports local code from
@@ -650,7 +734,7 @@ def _nested_nodes(policy: dict, key: str, where: str) -> dict[str, dict]:
         if file.stem in out:
             raise ConfigError(f"{where}.{key}: two controllers named {file.stem!r}")
         out[file.stem] = {
-            **_read(file),
+            **read_node(file),
             "__dir__": str(file.parent),
             "__file__": str(file),
             "__robot_dir__": policy.get("__robot_dir__"),

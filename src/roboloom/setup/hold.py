@@ -160,6 +160,13 @@ def check_hold(
         for line in result.lines():
             operator.notify(line)
         path = Path(str(model.cfg.get("__file__", "")))
+        # a file that extends another: where `unattended` is written now, else itself
+        for candidate in (path, *map(Path, model.cfg.get("__extends__", []))):
+            if candidate.is_file() and re.search(
+                r"^unattended:", candidate.read_text(), re.MULTILINE
+            ):
+                path = candidate
+                break
         answer = operator.prompt(
             f"Type 'record' to write 'unattended: {result.unattended}' to {path.name}; "
             "Enter skips: "

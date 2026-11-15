@@ -66,6 +66,27 @@ input's and follower's; a follower refuses commands in another unit.
 | `policy` controller `max_speed: {follower: value}` | policy target change per period |
 | controller `home.max_speed` | move to a saved pose (≤ controller `max_speed`); `home.tolerance` required |
 
+## Node files built on another (`extends`)
+
+A node file may start from another one in the same directory and say only what differs:
+
+```yaml
+# nodes/leader_gravity.yaml
+extends: leader.yaml
+without: [registers.operating_mode]   # optional: dotted keys of the base to drop
+registers: {current_limit: {r_arm_sh_pitch1: 150}}
+control:
+- group: right_arm        # same-named group of the base; its joints stay as written there
+  law: gravity_comp
+```
+
+Mappings merge key by key; lists of mappings named by `group` or `name` (`control`,
+`limits`) merge entry by entry, new names last; everything else is replaced. Chains are
+allowed, circles and bases in another directory refused. To remove or reorder base
+entries: `without: [control]` and write the list again. Prefer this over copying a node
+file: keep ports, motor ids and registers in the base only. The Rakuda2 template's
+`leader_gravity.yaml` and `policy_teleop.yaml` are built this way.
+
 ## Launch options
 
 ```yaml
