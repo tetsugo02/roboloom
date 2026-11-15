@@ -51,6 +51,12 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 
 - Waits until start is allowed (alignment), starts, records, stops, saves unless
   `keep(result)` returns `False`. Exception or Ctrl-C discards the episode.
+- Raises `EpisodeFailed` (a `SessionError`) and discards the episode when a controller
+  fails during it (the policy raised) or a follower latches FAULT/ESTOP. The policy is
+  ready for the next `record` without a restart.
+- When the launching process ends in any way (killed too), the dataflow discards the
+  running episode, the followers hold and it ends; `close()` is not what keeps a robot
+  from running on.
 - `task`: a string or `Callable[[EpisodeInfo], str]`.
   `EpisodeInfo(index, number, dataset, previous)`: dataset episode index, number in this
   session, dataset name (e.g. `rakuda2-digit`), tasks saved in this session.
@@ -72,7 +78,7 @@ s.record(lambda info: f"pick up the {next(objects)}", seconds=20, keep=lambda ep
 | `stop() -> EpisodeResult` | stop; not saved yet (inspect metrics/warnings) |
 | `save(timeout=300.0) -> EpisodeResult` / `discard()` | write the episode (readable from then on, whatever happens to the process) or drop it; a failed write raises `SessionError` and drops the episode |
 | `home(timeout=None)` | slow move to the home pose; refused while recording |
-| `estop()` | emergency stop (latched) |
+| `estop()` | emergency stop (latched); goes out even after a node failed |
 | `release(confirm=False)` | torque off; with `confirm=False` raises `HardwareError` carrying `release_note()` |
 | `status() -> dict` | latest status per node `{name: {"role", "level", "fields", "t_ns"}}`, e.g. `s.status()["follower"]["fields"]["mode"]` |
 | `reports() -> list[dict]` | unread reports (mode changes, ...) |

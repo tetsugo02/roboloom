@@ -145,6 +145,10 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
   - `status()`：各ノードの最新の状態．
   - `reports()`：未読の報告．robot のモードの変化など．
 - コマンドが拒否されたとき（leader が揃っていないなど）は，`SessionError` になります．
+  - `start` は，前のエピソードが保存中・停止したまま未保存・記録中のときも拒否されます．recorderが `start` を受けられなかったときは，フォロワと方策も止めます（記録されないエピソードが走り続けません）．
+- `record` は，エピソードの途中でcontrollerが失敗したとき（方策の例外など）と，フォロワがFAULT・ESTOPになったとき，そのエピソードを破棄して `EpisodeFailed`（`SessionError` の一種）を上げます．方策は次のエピソードでそのまま使えます．
+- `estop()` は，ノードが落ちたあとでも送れます（ほかのコマンドは，ノードの障害を見つけると `SessionError` になります）．
+- `Session.launch` を呼んだプロセスが終わると，どう終わった場合でも（強制終了，例外，端末を閉じた），dataflowは記録中のエピソードを破棄し，フォロワを保持させて終わります．`close()` を呼ばずに放置しても，ロボットが方策で動き続けることはありません．`multiprocessing` などで作った子プロセスが残っている間は，終わったと見なされません．
 - `home(timeout=None)`：leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かし，両方が着くまで待ちます．着かないときや拒否されたときは `SessionError` です．`record(..., home=True)` は毎回のエピソードの前にこれを行います．詳しくは [Leader](../controllers/leader.md) の「初期姿勢へ動かす」を参照してください．
 - `teleop()`，`policy()`，`stop_teleop()`：方策に `teleop:` があるとき，leaderに切り替え（エピソードの前，または途中の介入），方策に戻し，エピソードの外のテレオペを終えます．詳しくは [テレオペと介入](../controllers/policy.md) を参照してください．
 

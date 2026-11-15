@@ -84,6 +84,14 @@ def load(checkpoint: str) -> MyPolicy:
 
   Raise when the configuration differs from what the policy was trained on. The controller turns `failed`, shows the reason on the screen and starts no episode. `roboloom infer` and `Session.wait_ready` stop at once with the reason instead of waiting. Policies without `bind` work as before.
 
+### When the policy fails during an episode
+
+- When `infer` or `reset` raises, the controller stops sending commands and turns `failed`; the followers hold. The reason shows on the controller's row of the screen.
+- `roboloom infer`, `Session.record` and the timed runs of the operator screen discard that episode (it is not saved). `Session.record` raises `EpisodeFailed`.
+- Once `stop` or `discard` has ended the episode, the policy is `ready` again. No restart is needed: the next `start` begins with `policy.reset()`. The reason stays on the screen until that `start`.
+- A policy that did not load (including a `bind` that raised) stays `failed`. Fix it and launch again.
+- An episode in which a follower latched FAULT or ESTOP is discarded in the same way.
+
 ### History, joints left alone, and fresh samples
 
 What a model needs beyond the latest frame is asked from the controller, so a new model

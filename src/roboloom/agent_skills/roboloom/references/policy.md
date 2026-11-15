@@ -140,6 +140,9 @@ def load(checkpoint: str) -> MyPolicy:
   **units** of the recorded `action` (Rakuda2: 17 counts; PiPER+Pika mock: 14 rad).
 - A failing `bind` marks the controller `failed`; `infer` and `Session.wait_ready` stop
   with the reason.
+- `infer` or `reset` raising during an episode: the controller turns `failed`, the
+  followers hold, the episode is discarded (`EpisodeFailed`). After `stop`/`discard`
+  the policy is `ready` again; the error stays on its row until the next `start`.
 
 ## Running
 

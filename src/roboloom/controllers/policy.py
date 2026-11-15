@@ -505,11 +505,20 @@ class PolicyController(Controller):
         self.control = "policy"  # also after teleoperation before the episode
 
     def stop(self) -> None:
+        """End the episode. A loaded policy is ready for the next one whatever state
+        this one ended in (running, waiting for a stale camera or a late inference,
+        failed): `start` resets it."""
         self.running = False
         self.control = ""
         self._clear()
-        if self.state == "running":
+        if self.policy is not None:
             self.state = "ready"
+
+    def fail(self, error: str) -> None:
+        """The episode cannot go on (the policy raised): the followers hold, and the
+        failure shows until `stop` or `discard` ends the episode."""
+        self.stop()
+        self.state, self.error = "failed", error
 
     def reset(self) -> None:
         self.stop()

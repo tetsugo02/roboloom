@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import sys
 import threading
 import time
@@ -65,11 +66,33 @@ def _event(node):
 
 
 READY = ("following", "ready", "running")  # controller states that may start an episode
+# How long the session FIFO may have no writer before the operator counts as gone. The
+# launching process keeps it open for as long as it lives (Session.launch).
+OPERATOR_GONE_NS = 300_000_000
+# ... and how long the followers then hold (their state and the last reports still
+# arrive) before the dataflow ends
+QUIT_AFTER_NS = 300_000_000
 
 
 def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
     """Why an episode may not start yet (checked before start reaches the robot and
     recorder), or None. `latest` maps node names to their last status."""
+    recorder = latest.get("recorder")
+    if recorder is not None:
+        # every node takes `start` on its own: one that refuses must not leave the
+        # followers and the policy running an episode nobody records
+        if not 0 <= now_ns - recorder["t_ns"] <= 1_000_000_000:
+            return "recorder: no recent status; wait and retry start"
+        state = recorder["fields"].get("state")
+        if state == "saving":
+            return "the previous episode is still being saved; wait, then retry start"
+        if state == "stopped":
+            return (
+                "the stopped episode is neither saved nor discarded: save or discard "
+                "it, then retry start"
+            )
+        if state == "recording":
+            return "an episode is already being recorded: stop it first"
     for name in cfg.controllers:
         status = latest.get(name)
         # Reports arrive at 4 Hz; never start from missing or outdated readiness.
@@ -199,6 +222,9 @@ def _session(node, cfg: RobotConfig):
     pending = b""
     latest: dict[str, dict] = {}
     written_ns = 0
+    attached = False  # the launching process holds the FIFO open (it sent `attach`)
+    unheld_ns = 0  # since when nobody does
+    gone_ns = 0  # when the operator was found gone (0: it is there)
 
     def report(payload: dict) -> None:
         print(payload, flush=True)
@@ -208,13 +234,44 @@ def _session(node, cfg: RobotConfig):
     try:
         while True:
             try:
-                pending += os.read(fd, 4096)
-            except BlockingIOError:
-                pass
+                data = os.read(fd, 4096)
+            except BlockingIOError:  # a writer holds the FIFO, nothing to read
+                data, unheld_ns = b"", 0
+            else:
+                pending += data
+                if data or not attached:
+                    unheld_ns = 0
+                else:  # an empty read: no process has the FIFO open for writing
+                    unheld_ns = unheld_ns or time.monotonic_ns()
+            if (
+                not gone_ns
+                and unheld_ns
+                and time.monotonic_ns() - unheld_ns > OPERATOR_GONE_NS
+            ):
+                # However the operator's process ended (killed, crashed, its terminal
+                # closed), nobody is left to stop the robot: stop it, then end.
+                gone_ns = time.monotonic_ns()
+                report(
+                    {
+                        "note": "the operator's process is gone: the episode is "
+                        "discarded, the followers hold and the dataflow ends",
+                        "level": "error",
+                    }
+                )
+                discard = {"command": "discard", "task": ""}
+                _send(node, "control", p.make("session", discard))
+            if gone_ns and time.monotonic_ns() - gone_ns > QUIT_AFTER_NS:
+                _send(
+                    node, "control", p.make("session", {"command": "quit", "task": ""})
+                )
+                return
             while b"\n" in pending:
                 raw, pending = pending.split(b"\n", 1)
                 request = parse_command(raw.decode())
                 cmd = request["command"]
+                if cmd == "attach":  # from Session.launch; not an operation
+                    attached = True
+                    continue
                 if cmd not in COMMANDS:
                     report({**request, "error": f"unknown command {cmd!r}"})
                     continue
@@ -266,6 +323,19 @@ def _session(node, cfg: RobotConfig):
                 written_ns = now
     finally:
         os.close(fd)
+        if gone_ns:  # what Session.close would have removed
+            try:
+                os.unlink(fifo)
+            except OSError:
+                pass
+            reports = Path(os.environ["ROBOLOOM_REPORT_PATH"])
+            log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
+            if log_dir:  # nobody reads them any more: keep them with the logs
+                try:
+                    shutil.copy(reports, Path(log_dir) / "reports.jsonl")
+                except OSError:
+                    pass
+            shutil.rmtree(reports.parent, ignore_errors=True)
 
 
 def _quit(event_id, msg) -> bool:
@@ -737,27 +807,33 @@ def _policy(node, controller: PolicyController):
                 commands.append(time.monotonic_ns())
         elif event_id == "session" and msg is not None:
             command = msg.payload["command"]
-            if controller.state != "failed":
-                controller.error = (
-                    ""  # a refused teleop/policy shows until the next one
-                )
+            if command in ("start", "teleop", "policy", "stop_teleop") and (
+                controller.policy is not None
+            ):
+                # what the last episode failed with, or a refused teleop/policy,
+                # shows until the next attempt
+                controller.error = ""
             try:
                 if command in ("stop", "discard", "estop", "release"):
-                    controller.stop()
+                    controller.stop()  # also ends a failed episode: ready again
                 elif command == "teleop":  # works also when the policy failed to load
                     controller.begin_teleop()
                     stopped = ""
                 elif command == "stop_teleop":
                     controller.end_teleop()
-                elif controller.state == "failed":
-                    pass
+                elif controller.policy is None:
+                    pass  # it did not load: nothing to start
                 elif command == "start":
                     controller.start(msg.payload.get("task", ""))
                     stopped = ""
                 elif command == "policy":
                     controller.resume_policy()
-            except RuntimeError as exc:  # shown on the screen; the followers hold
+            except (
+                RuntimeError
+            ) as exc:  # refused: shown on the screen, the followers hold
                 controller.error = f"{command}: {exc}"
+            except Exception as exc:  # noqa: BLE001 - e.g. the policy's reset() raised
+                controller.fail(f"{command}: {type(exc).__name__}: {exc}")
         elif event_id == "tick":
             now = time.monotonic_ns()
             silent = [
@@ -772,8 +848,7 @@ def _policy(node, controller: PolicyController):
             try:
                 sent = controller.tick()
             except Exception as exc:  # noqa: BLE001 - a bad policy output stops the episode
-                controller.stop()
-                controller.state, controller.error = "failed", str(exc)
+                controller.fail(f"{type(exc).__name__}: {exc}")
                 sent = {}
             for name, command in sent.items():
                 _send(node, command_output(name), command)

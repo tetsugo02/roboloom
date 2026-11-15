@@ -145,6 +145,10 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
   - `status()`: latest status of each node.
   - `reports()`: unread reports, such as robot mode changes.
 - When a command is rejected (e.g. the leader is not aligned), a `SessionError` is raised.
+  - `start` is also rejected while the previous episode is being saved, is stopped but neither saved nor discarded, or is still recording. When the recorder could not take a `start`, the followers and the policy are stopped too (no episode runs that nobody records).
+- `record` discards the episode and raises `EpisodeFailed` (a `SessionError`) when a controller fails during it (for example the policy raised) or a follower latches FAULT or ESTOP. The policy can be used for the next episode as it is.
+- `estop()` goes out even after a node has failed (other commands raise `SessionError` once they see a failed node).
+- When the process that called `Session.launch` ends, however it ends (killed, an exception, its terminal closed), the dataflow discards the episode in progress, lets the followers hold and ends. A robot never keeps following a policy after its script is gone, with or without `close()`. Child processes made with `multiprocessing` and the like count as the process still being there.
 - `home(timeout=None)`: move the leader and follower slowly to the initial pose chosen in the controller and wait until both arrive. Raises `SessionError` if they do not arrive or a node refuses. `record(..., home=True)` does this before every episode. See "Move to an initial pose" in [Leader](../controllers/leader.md).
 - `teleop()`, `policy()`, `stop_teleop()`: with `teleop:` in the policy, hand the followers to the leader (before an episode, or during one as an intervention), hand back to the policy, and end teleoperation outside an episode. See [teleoperation and interventions](../controllers/policy.md).
 
