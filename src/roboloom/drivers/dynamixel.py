@@ -13,7 +13,7 @@ from pathlib import Path
 
 import dynamixel_sdk as dxl
 
-from .base import HEALTH_FIELDS, Health, JointState, health_from
+from .base import HEALTH_FIELDS, Health, JointState, claim_serial, health_from
 from .dynamixel_table import (
     COUNTS_PER_REV,
     FAST_SYNC_READ_FIRMWARE,
@@ -29,6 +29,19 @@ from .dynamixel_table import (
 
 def _signed(raw: int, size: int) -> int:
     return raw - 2 ** (size * 8) if raw >= 2 ** (size * 8 - 1) else raw
+
+
+def claim_port(handler: dxl.PortHandler, port: str) -> None:
+    """Take the opened port for this process alone (`claim_serial`); closes it and
+    raises ConnectionError when another process has it."""
+    opened = getattr(handler, "ser", None)  # the SDK's pyserial port
+    if opened is None:
+        return
+    try:
+        claim_serial(opened.fileno(), port)
+    except ConnectionError:
+        handler.closePort()
+        raise
 
 
 def latency_timer_ms(port: str) -> int | None:
@@ -50,6 +63,11 @@ class DynamixelBus:
     Reads use Fast Sync Read (one reply packet for every motor) once `use_fast_read`
     found all firmware recent enough; on 17 motors at 1 Mbps the state read drops from
     5 to 4 ms (2026-10-27).
+
+    A read that fails (no reply, a garbled one, a motor missing from it) is repeated
+    `read_retries` times before it raises: one lost packet must not latch the follower
+    in FAULT. `retries` counts the repeats, for the status line; a bus that needs them
+    often has a wiring or adapter problem. Writes are never repeated.
     """
 
     def __init__(
@@ -58,6 +76,7 @@ class DynamixelBus:
         motor_ids: list[int],
         models: list[int] | None = None,
         baudrate: int = 1_000_000,
+        read_retries: int = 1,
     ):
         self.ids = list(motor_ids)
         self.models = list(models) if models is not None else None
@@ -68,8 +87,11 @@ class DynamixelBus:
         self._units: list[float] | None = None
         self.fast_read = False
         self.read_note = "sync read"  # how reads are done, for probe and status
+        self.read_retries = read_retries
+        self.retries = 0  # reads repeated so far
         if not self.port.openPort() or not self.port.setBaudRate(baudrate):
             raise ConnectionError(f"cannot open Dynamixel bus {port}")
+        claim_port(self.port, port)
         # The SDK drains the serial output (tcdrain) before every packet, so each write
         # waits for the previous one to leave the adapter: 1.9 ms per leader tick on FTDI
         # (2026-10-27). Packets stay in order without it (one writer per bus), and reads
@@ -89,20 +111,39 @@ class DynamixelBus:
                 if not group.addParam(motor_id):
                     raise ConnectionError(f"cannot register motor {motor_id}")
             self._readers[(address, size)] = group
-        result = group.fastSyncRead() if self.fast_read else group.txRxPacket()
-        if result != dxl.COMM_SUCCESS:
-            raise ConnectionError("Dynamixel sync read failed")
-        out = []
-        for motor_id in self.ids:
-            if not group.isAvailable(motor_id, address, size):
-                raise ConnectionError(f"missing motor {motor_id}")
-            out.append(
-                [
-                    _signed(group.getData(motor_id, a, n), n)
-                    for a, n in fields or [(address, size)]
-                ]
-            )
-        return out
+        problem = ""
+        for attempt in range(self.read_retries + 1):
+            if attempt:
+                self.retries += 1
+                self._drop_input()
+            result = group.fastSyncRead() if self.fast_read else group.txRxPacket()
+            if result != dxl.COMM_SUCCESS:
+                problem = "Dynamixel sync read failed"
+                continue
+            missing = [m for m in self.ids if not group.isAvailable(m, address, size)]
+            if not missing:
+                break
+            problem = f"missing motor {missing[0]}"
+        else:
+            raise ConnectionError(problem)
+        return [
+            [
+                _signed(group.getData(motor_id, a, n), n)
+                for a, n in fields or [(address, size)]
+            ]
+            for motor_id in self.ids
+        ]
+
+    def _drop_input(self) -> None:
+        """Before a read is repeated: what is left of the failed reply would be taken
+        for the start of the next one."""
+        opened = getattr(self.port, "ser", None)
+        reset = getattr(opened, "reset_input_buffer", None)
+        if reset is not None:
+            try:
+                reset()
+            except OSError:
+                pass
 
     def _write(
         self, address: int, size: int, values: list[int], ids: list[int] | None = None

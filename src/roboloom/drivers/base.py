@@ -7,6 +7,7 @@ bus (e.g. one passed to `InProcessSession.from_components`) keeps working.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -57,6 +58,30 @@ def health_from(values: dict[str, list[int]]) -> Health:
         temperature_c=[float(x) for x in values.get("present_temperature", [])],
         watchdog_fired=any(x < 0 for x in values.get("bus_watchdog", [])),
     )
+
+
+def claim_serial(fd: int, port: str) -> None:
+    """Take an opened serial port for this process alone, or raise ConnectionError.
+
+    Two processes on one bus (a running dataflow and a `probe` or `tune-gravity`, two
+    runs) garble each other's packets and both then see a failing bus. The lock tells
+    that another roboloom process (or anything that locks its port, such as pyserial's
+    exclusive mode) already has it; TIOCEXCL then keeps programs that open the port
+    later out."""
+    try:
+        import fcntl
+        import termios
+    except ImportError:  # not a POSIX system: no such lock
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        raise ConnectionError(
+            f"{port} is in use by another process (a running roboloom dataflow, "
+            "probe or tune-gravity?); end it first"
+        ) from exc
+    with contextlib.suppress(OSError):  # not every serial driver knows it
+        fcntl.ioctl(fd, termios.TIOCEXCL)
 
 
 def disable_torque(bus: JointBus) -> None:

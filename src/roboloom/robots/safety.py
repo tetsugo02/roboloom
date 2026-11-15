@@ -81,6 +81,7 @@ class FollowerSafety:
         self.last_boot: str | None = None
         self.last_seq = -1
         self.state: JointState | None = None
+        self.read_ns: int | None = None  # when `state` was read from the bus
         self.hold_target: list[float] | None = None
         self.last_sent: list[float] | None = None
         self.last_tick_ns: int | None = None
@@ -324,6 +325,7 @@ class FollowerSafety:
         command: Envelope | None = None
         try:
             self._read()
+            self.read_ns = now
             self._check_home(now)  # the measured joints against the last home move
             problem = self._check_health(now) if self.mode not in self.LATCHED else None
             if problem:
@@ -368,7 +370,10 @@ class FollowerSafety:
                     command is not None and not sent and self.mode == "HOLD"
                 ),
             },
-            now,
+            # When the bus could not be read this tick, the positions are the last ones
+            # that were: say when they were read, so nothing takes them for fresh (the
+            # recorder marks such rows invalid once they are older than max_age_ms).
+            self.read_ns or now,
         )
         action = self.publisher.make(
             "action",

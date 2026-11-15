@@ -611,7 +611,8 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                 _send(node, "state", state)
                 _send(node, ACTION, action)
                 if trace is not None:
-                    trace.add(state.t_capture_ns, state.payload)
+                    # the tick's time (the state's own is older when a read failed)
+                    trace.add(state.t_ready_ns, state.payload)
                 intervals.append(state.payload["tick_interval_ms"])
                 clamped.append(bool(action.payload["clamped"]))
                 rejected.append(bool(state.payload["rejected"]))
@@ -629,6 +630,9 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                     "last_reject": safety.last_reject if any(rejected) else "",
                     "gc_max_ms": gc_pauses.take(),
                     "error": error,
+                    # bus reads that had to be repeated since the start (None: a bus
+                    # that does not count them)
+                    "bus_retries": getattr(getattr(bus, "bus", bus), "retries", None),
                     **_home_fields(safety),
                     "torque_off": traits.torque_off,
                     "unattended": traits.unattended,

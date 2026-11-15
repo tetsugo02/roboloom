@@ -19,7 +19,7 @@ input_timeout_ms: 150
 | 項目 | 意味 |
 | --- | --- |
 | `alignment_tolerance` | 追従を始める前と，毎回のエピソード開始（`start`）の前に許すleaderとfollowerの関節差（counts）．超えていると `start` を拒否します |
-| `joints` | 任意．書かなければ，followerの各関節は同じ名前の入力の関節に追従する（入力がfollowerの関節をすべて持つこと）．書くときは，followerの関節ごとに `{leader, follower, sign, offset}` を，followerの順に並べる．名前が違う，向きが逆（`sign: -1`），ずれがある（目標＝leader × sign ＋ offset）場合に使う |
+| `joints` | 任意．書かなければ，followerの各関節は同じ名前の入力の関節に追従する（入力がfollowerの関節をすべて持つこと）．書くときは，followerの関節ごとに `{leader, follower, sign, offset}` を，followerの順に並べる．名前が違う，向きが逆（`sign: -1`），ずれがある（目標＝leader × sign ＋ offset）場合に使う．減速比や単位がfollowerと違うleader（カウントで読むGELLO型のleaderと，radの腕など）は，各関節に `scale`（正の数）を足す：目標＝sign × scale × leader ＋ offset．全関節に `scale` を書けば，入力とfollowerの単位は違ってよい（`offset`，`max_speed`，`alignment_tolerance` はfollowerの単位）．力の逆送（`feedback`）とは併用できない |
 | `unit` | 任意．入力とfollowerの単位は同じでなければならない（Rakuda2は `dynamixel_count`）．書いた場合は両方と一致させる |
 | `max_speed` | 目標値の変化速度の上限（followerの単位/s．Rakuda2はcounts/s） |
 | `followers` | 動かすフォロワ．`joint` controllerはちょうど1台です |

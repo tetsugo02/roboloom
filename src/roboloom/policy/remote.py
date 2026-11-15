@@ -13,7 +13,11 @@ and `infer` to a server that holds the real policy:
 
 This is for models whose dependencies do not fit the environment roboloom runs in (a
 different torch) or that should run on another machine. The server loads the model once
-and serves one policy node at a time, across episodes and sessions.
+and serves one policy node at a time, across episodes and sessions; a second node that
+connects meanwhile is told so instead of being left waiting.
+
+Every call carries a number the answer repeats. An answer that arrives after its call
+timed out is dropped, so it is never taken for the answer to the next call.
 
 Wire format: `multiprocessing.connection` (the key authenticates both ends with HMAC;
 nothing is encrypted, so keep it on the loopback interface or a trusted network). A
@@ -27,6 +31,7 @@ import argparse
 import json
 import os
 import struct
+import threading
 import time
 import traceback
 from dataclasses import asdict
@@ -155,6 +160,7 @@ class RemotePolicy:
         connect_timeout_s: float = 30.0,
     ):
         self.address, self.timeout_s = address, float(timeout_s)
+        self.calls = 0  # the number of the last call; its answer repeats it
         target, key = _address(address), _authkey(None, authkey_env)
         deadline = time.monotonic() + connect_timeout_s
         while True:  # the server may still be loading its model
@@ -170,13 +176,23 @@ class RemotePolicy:
                 time.sleep(0.2)
 
     def _call(self, method: str, *arguments: object) -> Any:
-        self.connection.send_bytes(encode([method, *arguments]))
-        if not self.connection.poll(self.timeout_s):
-            raise TimeoutError(
-                f"remote policy {self.address}: no answer to {method} within "
-                f"{self.timeout_s:g} s"
-            )
-        status, *result = decode(self.connection.recv_bytes())
+        self.calls += 1
+        self.connection.send_bytes(encode([self.calls, method, *arguments]))
+        deadline = time.monotonic() + self.timeout_s
+        while True:
+            if not self.connection.poll(max(0.0, deadline - time.monotonic())):
+                raise TimeoutError(
+                    f"remote policy {self.address}: no answer to {method} within "
+                    f"{self.timeout_s:g} s"
+                )
+            reply = decode(self.connection.recv_bytes())
+            if isinstance(reply[0], str):  # a server from before calls had numbers
+                status, *result = reply
+                break
+            if reply[0] == self.calls:
+                status, *result = reply[1:]
+                break
+            # the answer to a call that timed out earlier: not this one's
         if status == "error":
             kind, text, trace = result
             raise RemotePolicyError(f"{kind}: {text}\n(on the policy server)\n{trace}")
@@ -230,20 +246,46 @@ def _answer(policy: Policy, method: str, arguments: list) -> object:
     raise ValueError(f"unknown call {method!r}")
 
 
-def _serve_client(policy: Policy, connection: Connection) -> None:
+BUSY = (
+    "the policy server is serving another policy node (one at a time); end that "
+    "dataflow, or start a second server on another --address"
+)
+
+
+def _serve_client(policy: Policy | None, connection: Connection) -> None:
+    """Answer one client's calls until it disconnects; without a policy (the server is
+    busy with another client) every call is answered with that."""
     while True:
         try:
-            method, *arguments = decode(connection.recv_bytes())
+            call = decode(connection.recv_bytes())
         except (EOFError, ConnectionError):
             return
+        # the call's number comes first; a client from before calls had numbers sends none
+        numbered = not isinstance(call[0], str)
+        method, *arguments = call[1:] if numbered else call
         try:
+            if policy is None:
+                raise RuntimeError(BUSY)
             reply: list = ["ok", _answer(policy, method, arguments)]
         except Exception as exc:  # noqa: BLE001 - reported to the policy node
             reply = ["error", type(exc).__name__, str(exc), traceback.format_exc()]
         try:
-            connection.send_bytes(encode(reply))
+            connection.send_bytes(encode([call[0], *reply] if numbered else reply))
         except (EOFError, ConnectionError):
             return
+
+
+def _serve_connection(
+    policy: Policy, connection: Connection, busy: threading.Lock
+) -> None:
+    with connection:
+        if not busy.acquire(blocking=False):
+            _serve_client(None, connection)  # tells it why, instead of a silent wait
+            return
+        try:
+            _serve_client(policy, connection)
+        finally:
+            busy.release()
 
 
 def serve(
@@ -261,6 +303,8 @@ def serve(
     server listens."""
     key = _authkey(authkey, authkey_env)
     served = load_policy(policy, kwargs) if isinstance(policy, str) else policy
+    busy = threading.Lock()  # held by the one client the policy answers
+    threads: list[threading.Thread] = []
     with Listener(_address(address), authkey=key) as listener:
         if ready is not None:
             ready()
@@ -272,8 +316,18 @@ def serve(
                 print(f"policy server: refused a connection ({exc})")
                 continue
             count += 1
-            with connection:
-                _serve_client(served, connection)
+            # on a thread, so the next connection is accepted (and told the server is
+            # busy) while this one is served
+            thread = threading.Thread(
+                target=_serve_connection,
+                args=(served, connection, busy),
+                name="policy-client",
+                daemon=True,
+            )
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
 
 
 def main(argv: list[str] | None = None) -> None:

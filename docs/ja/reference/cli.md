@@ -57,7 +57,7 @@ uv run roboloom validate --with digit
 uv run roboloom session home
 ```
 
-`calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．dataflowと同時に同じバスを開かないでください．`commission`，`watchdog-test`，`check-hold`，`gravity-check` はmockの設定を拒否します．
+`calibrate-joints` / `measure-travel` はバスには書き込みませんが，ローカルYAMLを保存します．腕のトルクが切れていることが必要です．`identify-gravity --collect`，`tune-gravity`，`gravity-check` はモーターに通電します．同じバスは，同時に1つのプロセスしか開けません．dataflowが使っているバスを `probe` や `tune-gravity` で開くと（逆も同じ），あとから開いた方が `... is in use by another process` で止まります．`commission`，`watchdog-test`，`check-hold`，`gravity-check` はmockの設定を拒否します．
 
 ## ランチャー
 

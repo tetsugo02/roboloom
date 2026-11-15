@@ -115,6 +115,10 @@ def follower(f: dict) -> tuple[str, Text]:
             if f.get("rejected_2s")
             else None,
             _gc(f),
+            # a bus that loses packets: check the cable and the adapter
+            Text(f"bus reads repeated: {f['bus_retries']}", style=WATCH)
+            if f.get("bus_retries")
+            else None,
             _home(f) if f.get("home") else None,
             Text(f"last error: {f['error']}", style=BAD) if f.get("error") else None,
         ]

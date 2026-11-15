@@ -176,7 +176,8 @@ factory: roboloom.policy.remote:connect
 kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 bounds one infer
 ```
 
-- The server loads the model once and serves one policy node at a time, across episodes and sessions. Start it before `roboloom infer`; the node waits up to `connect_timeout_s` (30 s) for it.
+- The server loads the model once and serves one policy node at a time, across episodes and sessions. Start it before `roboloom infer`; the node waits up to `connect_timeout_s` (30 s) for it. A second node that connects while one is served is told so (`the policy server is serving another policy node`) instead of waiting.
+- A call that gets no answer within `timeout_s` fails that episode (`TimeoutError`). Its answer, when it comes later, is dropped: every call carries a number and only the answer with that number is taken.
 - The server side needs only numpy and roboloom without extras (no LeRobot, no torch from roboloom).
 - An exception raised by the policy is shown on the controller's line, as for a policy in the same process.
 - The shared secret authenticates both ends; the data is not encrypted. Keep the address on the loopback interface or a trusted network. Messages carry a JSON header and raw array bytes (no pickle).

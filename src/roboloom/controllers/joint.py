@@ -13,6 +13,14 @@ Rakuda2) needs no more: each follower joint follows the input joint of the same 
 `joints: [{leader, follower, sign, offset}, ...]` maps other names, flips directions or
 adds offsets (one entry per follower joint, in the follower's order); `unit:` may be
 written to state the unit, and must then be the input's and the follower's.
+
+A leader built differently from the follower (another gear ratio, another unit: a
+GELLO-style leader in counts for an arm in rad) adds `scale` to every entry:
+
+    follower = sign * scale * leader + offset
+
+With a `scale` on every joint the input's unit may differ from the follower's;
+`max_speed`, `alignment_tolerance` and `offset` stay in the follower's unit.
 """
 
 from __future__ import annotations
@@ -64,12 +72,21 @@ class JointController(Controller):
             raise TypeError(
                 f"{name}: joint controller cannot map {type(source).__name__} input {source.name!r}"
             )
-        # `unit` may be left out; the input and the follower must speak the same one
-        if not cfg.get("unit", source.unit) == source.unit == robot.unit:
-            raise ValueError(
-                f"{name}: unit must match input {source.unit!r} and robot {robot.unit!r}"
-            )
         mapping = cfg.get("joints")
+        # a `scale` on every joint says how the input's unit becomes the follower's
+        converts = isinstance(mapping, list) and all(
+            isinstance(j, dict) and "scale" in j for j in mapping
+        )
+        # `unit` may be left out; without scales the input and the follower must speak
+        # the same one
+        if cfg.get("unit", robot.unit) != robot.unit or (
+            source.unit != robot.unit and not converts
+        ):
+            raise ValueError(
+                f"{name}: unit must match input {source.unit!r} and robot "
+                f"{robot.unit!r} (or give every joint a scale from the input's unit to "
+                "the follower's)"
+            )
         if mapping is None:  # an input shaped like the follower: joint to same joint
             missing = [j for j in robot.joint_names if j not in source.joint_names]
             if missing:
@@ -88,7 +105,9 @@ class JointController(Controller):
                 f"{name} needs a complete, ordered, one-to-one joint mapping"
             )
         for j in mapping:
-            unknown_keys(j, ("leader", "follower", "sign", "offset"), f"{name}.joints")
+            unknown_keys(
+                j, ("leader", "follower", "sign", "offset", "scale"), f"{name}.joints"
+            )
         leaders = [j.get("leader") for j in mapping]
         if (
             [j.get("follower") for j in mapping] != list(robot.joint_names)
@@ -105,6 +124,17 @@ class JointController(Controller):
                 or not math.isfinite(j["offset"])
             ):
                 raise ValueError("joint sign must be +/-1 and offset finite")
+            scale = j.get("scale", 1.0)
+            if (
+                isinstance(scale, bool)
+                or not isinstance(scale, (int, float))
+                or not math.isfinite(scale)
+                or scale <= 0
+            ):
+                raise ValueError(
+                    f"{name}.joints: scale must be a positive number (the direction "
+                    "is `sign`)"
+                )
         if "max_speed_counts_per_s" in cfg:
             raise ConfigError(
                 f"{name}.max_speed_counts_per_s was renamed: use max_speed "
@@ -127,6 +157,11 @@ class JointController(Controller):
         if home is not None:
             self.homes[robot.name] = home
         if "feedback" in cfg:
+            if any(j.get("scale", 1.0) != 1.0 for j in mapping):
+                raise ValueError(
+                    f"{name}.feedback: not with scaled joints (the force would have to "
+                    "be scaled back, which is not implemented)"
+                )
             self.feedback = FeedbackMap(cfg["feedback"], name, mapping)
         self.last_seq = -1
         self.last_boot: str | None = None
@@ -160,7 +195,7 @@ class JointController(Controller):
         the joint map, couplings included, so the controller sees no difference there."""
         added = self.couplings.apply([0.0] * len(follower), follower)
         return {
-            j["leader"]: j["sign"] * (f - j["offset"] - extra)
+            j["leader"]: j["sign"] * (f - j["offset"] - extra) / j.get("scale", 1.0)
             for j, f, extra in zip(self.mapping, follower, added, strict=True)
         }
 
@@ -169,7 +204,10 @@ class JointController(Controller):
         aside): where the follower is aligned with a leader at rest."""
         values = positions(list(leader), len(self.source_joints))
         by_name = dict(zip(self.source_joints, values, strict=True))
-        return [by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.mapping]
+        return [
+            by_name[j["leader"]] * j["sign"] * j.get("scale", 1.0) + j["offset"]
+            for j in self.mapping
+        ]
 
     @property
     def home(self) -> HomeSpec | None:
@@ -242,7 +280,10 @@ class JointController(Controller):
         self.last_seq = intent.seq
         incoming = positions(intent.payload["positions"], len(self.source_joints))
         by_name = dict(zip(self.source_joints, incoming, strict=True))
-        target = [by_name[j["leader"]] * j["sign"] + j["offset"] for j in self.mapping]
+        target = [
+            by_name[j["leader"]] * j["sign"] * j.get("scale", 1.0) + j["offset"]
+            for j in self.mapping
+        ]
         current = positions(follower, len(self.follower.joint_names))
         target = self.couplings.apply(target, current, follower_velocity)
         if self.pickup is not None:  # joints not reached yet keep their held value
