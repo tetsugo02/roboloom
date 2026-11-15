@@ -8,6 +8,9 @@ until the operator fills them; `config.parse_config` refuses to run with any lef
 template without touching what was measured or edited: it adds the files the project
 lacks, replaces files nobody changed since they were copied, and for the others lists
 what the template has that the project does not (`update_project`).
+
+A robot of your own ships its template the same way: `roboloom init <name> --template
+<package>` copies `<package>/template/`, `--template <directory>` a directory.
 """
 
 from __future__ import annotations
@@ -39,10 +42,32 @@ datasets/
 """
 
 
-def _template(robot: str) -> Traversable:
-    if robot not in TEMPLATES:
-        raise ConfigError(f"unknown robot {robot!r}; available: {', '.join(TEMPLATES)}")
-    return resources.files(TEMPLATES[robot]).joinpath("template")
+def _template(robot: str, source: str | None = None) -> Traversable:
+    """The template of `robot`: the shipped one, or `source` (a package holding
+    `template/`, or a directory that is a template or holds `template/`)."""
+    if source is None:
+        if robot not in TEMPLATES:
+            raise ConfigError(
+                f"unknown robot {robot!r}; available: {', '.join(TEMPLATES)} (a robot "
+                "of your own: --template <package or directory>)"
+            )
+        source = TEMPLATES[robot]
+    found: Traversable
+    directory = Path(source)
+    if directory.is_dir():
+        inside = (directory / CONFIG_FILE).is_file()
+        found = directory if inside else directory / "template"
+    else:
+        try:
+            found = resources.files(source).joinpath("template")
+        except (ImportError, TypeError, ValueError) as exc:
+            raise ConfigError(
+                f"template {source!r}: neither a directory nor an importable package "
+                f"({exc})"
+            ) from exc
+    if not found.joinpath(CONFIG_FILE).is_file():
+        raise ConfigError(f"template {source!r} holds no template/{CONFIG_FILE}")
+    return found
 
 
 def _files(source: Traversable, prefix: str = "") -> dict[str, bytes]:
@@ -62,17 +87,22 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _record(target: Path, robot: str, files: dict[str, bytes]) -> None:
-    note = {
-        "roboloom": version(),
-        "robot": robot,
-        "files": {name: _sha(data) for name, data in files.items()},
-    }
+def _record(
+    target: Path, robot: str, hashes: dict[str, str], source: str | None
+) -> None:
+    note: dict = {"roboloom": version(), "robot": robot}
+    if source is not None:  # not a shipped template: where `--update` finds it again
+        note["template"] = source
+    note["files"] = hashes
     (target / RECORD).write_text(json.dumps(note, indent=1) + "\n")
 
 
-def init_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
-    template = _files(_template(robot))
+def init_project(
+    robot: str, root: str | Path = PROJECT_ROOT, template: str | None = None
+) -> str:
+    """Create `root/robot` from the shipped template of `robot`, or from `template` (a
+    package holding `template/`, or a directory)."""
+    files = _files(_template(robot, template))
     root = Path(root)
     target = root / robot
     if target.exists():
@@ -81,17 +111,18 @@ def init_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
             "--update` adds what a newer template has)"
         )
     target.mkdir(parents=True)
-    for name, data in template.items():
+    for name, data in files.items():
         path = target / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    _record(target, robot, template)
+    _record(target, robot, {n: _sha(d) for n, d in files.items()}, template)
     ignore = root / ".gitignore"
     if not ignore.exists():
         ignore.write_text(GITIGNORE)
+    guide = f", following {target / 'README.md'}" if "README.md" in files else ""
     return (
-        f"created {target} ({len(template)} files)\n"
-        f"next: fill the SET_ values, following {target / 'README.md'}\n"
+        f"created {target} ({len(files)} files)\n"
+        f"next: fill the SET_ values{guide}\n"
         f"then: roboloom validate {robot} (`--mock` runs before anything is measured)"
     )
 
@@ -110,7 +141,9 @@ def _missing(template: object, project: object, where: str = "") -> list[str]:
     return out
 
 
-def update_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
+def update_project(
+    robot: str, root: str | Path = PROJECT_ROOT, template: str | None = None
+) -> str:
     """Bring `root/robot` up to the installed template; returns what was done.
 
     - A file the project lacks is added.
@@ -119,19 +152,21 @@ def update_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
     - Any other file is left alone: it was edited, or holds measured values. For a YAML
       file the keys the template has and the project lacks are listed, to copy by hand.
 
-    A project made before `.template.json` existed has every file treated as edited."""
-    template = _files(_template(robot))
+    A project made before `.template.json` existed has every file treated as edited.
+    `template`: as in `init_project` (default: the one the project was made from)."""
     target = Path(root) / robot
     if not (target / CONFIG_FILE).is_file():
         raise ConfigError(
             f"{target} holds no {CONFIG_FILE}; create it with `roboloom init {robot}`"
         )
     record_path = target / RECORD
-    copied = (
-        json.loads(record_path.read_text())["files"] if record_path.exists() else {}
-    )
+    record = json.loads(record_path.read_text()) if record_path.exists() else {}
+    copied = record.get("files", {})
+    source = template or record.get("template")
+    shipped = _template(robot, source)
+    files = _files(shipped)
     added, replaced, kept = [], [], []
-    for name, data in template.items():
+    for name, data in files.items():
         path = target / name
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,12 +182,9 @@ def update_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
         else:
             kept.append(name)
     # the hash a kept file was copied with stays: it is still not "as copied"
-    note = {name: _sha(data) for name, data in template.items()}
-    note.update({name: copied[name] for name in kept if name in copied})
-    (target / RECORD).write_text(
-        json.dumps({"roboloom": version(), "robot": robot, "files": note}, indent=1)
-        + "\n"
-    )
+    hashes = {name: _sha(data) for name, data in files.items()}
+    hashes.update({name: copied[name] for name in kept if name in copied})
+    _record(target, robot, hashes, source)
 
     lines = [f"{target}: compared with the template of roboloom {version()}"]
     for title, names in (("added", added), ("replaced (unchanged copies)", replaced)):
@@ -170,13 +202,13 @@ def update_project(robot: str, root: str | Path = PROJECT_ROOT) -> str:
             if path.suffix in (".yaml", ".yml"):
                 try:
                     extra = _missing(
-                        yaml.safe_load(template[name]), yaml.safe_load(path.read_text())
+                        yaml.safe_load(files[name]), yaml.safe_load(path.read_text())
                     )
                 except yaml.YAMLError:
                     extra = []
             lines.append(f"  {name}: {', '.join(extra) or 'other values or text'}")
-        with resources.as_file(_template(robot)) as shipped:
-            lines.append(f"the template's files: {shipped}")
+        with resources.as_file(shipped) as directory:
+            lines.append(f"the template's files: {directory}")
     if not (added or replaced or kept):
         lines.append("nothing to do: every file is the template's")
     return "\n".join(lines)

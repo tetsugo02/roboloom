@@ -1,0 +1,2 @@
+# Stand-ins for the SET_ values, used with mock devices only (--mock).
+SET_ARM_ADDRESS: mock://arm

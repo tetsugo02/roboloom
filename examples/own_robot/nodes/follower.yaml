@@ -1,0 +1,6 @@
+type: my_arm:MyArm  # module:Class, imported from this project directory
+address: SET_ARM_ADDRESS
+control_hz: 50
+limits:
+- {name: shoulder, min: -2.0, max: 2.0, max_speed: 2.0, max_jump: 0.5}
+- {name: elbow, min: -2.0, max: 2.0, max_speed: 2.0, max_jump: 0.5}

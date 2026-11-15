@@ -383,18 +383,23 @@ def read_config(
             name: node(relative, f"{role}.{name}") for name, relative in group.items()
         }
     for name, controller in tree["controllers"].items():
-        if controller.get("type") == "policy" and "teleop" in controller:
+        # by what the keys hold, so a controller class of your own (`type:
+        # module:Class`) built on the policy or parts controller works the same
+        builtin = controller.get("type")
+        if "teleop" in controller and (
+            builtin == "policy" or isinstance(controller["teleop"], list)
+        ):
             controller["teleop"] = _nested_nodes(
                 controller, "teleop", f"controllers.{name}"
             )
-        if controller.get("type") == "parts":
+        if builtin == "parts" or isinstance(controller.get("parts"), list):
             controller["parts"] = _nested_nodes(
                 controller, "parts", f"controllers.{name}"
             )
     if observe is not None:
         observed = list(observe)
         for controller in tree["controllers"].values():
-            if controller.get("type") == "policy":
+            if controller.get("type") == "policy" or "observe" in controller:
                 controller["observe"] = observed
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
@@ -548,7 +553,7 @@ def _bind_teleop(
     nodes = controller.cfg.get("teleop") or {}
     built = {}
     for inner, c in nodes.items():
-        cls = CONTROLLERS.get(c.get("type"))
+        cls = CONTROLLERS.get(c.get("type"), _search(c))
         targets = c.get("followers")
         source = inputs.get(c.get("input"))
         if not cls.uses_input or source is None:
@@ -579,7 +584,7 @@ def _bind_parts(name: str, controller: Controller, inputs: dict) -> None:
     built = {}
     for inner, c in (controller.cfg.get("parts") or {}).items():
         where = f"controllers.{name}.parts.{inner}"
-        cls = CONTROLLERS.get(c.get("type"))
+        cls = CONTROLLERS.get(c.get("type"), _search(c))
         source = inputs.get(c.get("input"))
         if not cls.uses_input or source is None:
             raise ConfigError(
@@ -600,6 +605,13 @@ def _bind_parts(name: str, controller: Controller, inputs: dict) -> None:
         built[inner] = cls(f"{name}.{inner}", c, source, parts)
         _check_keys(built[inner], c, where)
     controller.bind_parts(built)  # type: ignore[attr-defined]  # a PartsController
+
+
+def _search(cfg: dict) -> list[str]:
+    """Where a `type: module:Class` of this node file is imported from, after the
+    installed packages: the robot's directory (`.roboloom/<robot>/`)."""
+    directory = cfg.get("__robot_dir__")
+    return [str(directory)] if directory else []
 
 
 def _check_keys(owner: object, cfg: dict, where: str) -> None:
@@ -645,18 +657,19 @@ def parse_config(tree: dict) -> RobotConfig:
             )
 
     followers = {
-        name: FOLLOWERS.get(c.get("type"))(name, c)
+        name: FOLLOWERS.get(c.get("type"), _search(c))(name, c)
         for name, c in tree["followers"].items()
     }
     for name, model in followers.items():
         _check_keys(model, tree["followers"][name], f"followers.{name}")
         model.traits()  # a measured `unattended` must fill in an unknown one
     trackers = {
-        name: TRACKERS.get(c.get("type"))(name, c)
+        name: TRACKERS.get(c.get("type"), _search(c))(name, c)
         for name, c in (tree.get("trackers") or {}).items()
     }
     inputs = {
-        name: INPUTS.get(c.get("type"))(name, c) for name, c in tree["inputs"].items()
+        name: INPUTS.get(c.get("type"), _search(c))(name, c)
+        for name, c in tree["inputs"].items()
     }
     for name, held in inputs.items():
         _check_keys(held, tree["inputs"][name], f"inputs.{name}")
@@ -667,13 +680,14 @@ def parse_config(tree: dict) -> RobotConfig:
                 f"({', '.join(trackers) or 'none configured'})"
             )
     sensors = {
-        name: SENSORS.get(c.get("type"))(name, c) for name, c in tree["sensors"].items()
+        name: SENSORS.get(c.get("type"), _search(c))(name, c)
+        for name, c in tree["sensors"].items()
     }
     for name, sensor in sensors.items():
         _check_keys(sensor, tree["sensors"][name], f"sensors.{name}")
     estimators = {}
     for name, c in tree["estimators"].items():
-        estimator = ESTIMATORS.get(c.get("type"))(name, c)
+        estimator = ESTIMATORS.get(c.get("type"), _search(c))(name, c)
         _check_keys(estimator, c, f"estimators.{name}")
         follower = followers.get(estimator.follower)
         if follower is None:
@@ -682,7 +696,7 @@ def parse_config(tree: dict) -> RobotConfig:
         estimators[name] = estimator
     controllers = {}
     for name, c in tree["controllers"].items():
-        cls = CONTROLLERS.get(c.get("type"))
+        cls = CONTROLLERS.get(c.get("type"), _search(c))
         if "robot" in c:
             raise ConfigError(
                 f"controllers.{name}.robot was renamed: use followers: [<follower>]"
@@ -729,7 +743,7 @@ def parse_config(tree: dict) -> RobotConfig:
             bind({**inputs, **sensors}, fps, tree["recorder"].get("max_age_ms", {}))
         if c.get("teleop"):
             _bind_teleop(name, controller, inputs, followers)
-        if c.get("type") == "parts":
+        if hasattr(controller, "bind_parts"):
             _bind_parts(name, controller, inputs)
         controller.bind_feedback(estimators)
         controllers[name] = controller

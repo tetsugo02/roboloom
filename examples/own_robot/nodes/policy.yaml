@@ -1,0 +1,7 @@
+type: policy
+followers: [arm]
+factory: roboloom.policy:hold  # stays where the robot is
+observe: []
+rate_hz: 10
+max_speed: {arm: 1.0}  # rad/s
+command_deadline_ms: 300
