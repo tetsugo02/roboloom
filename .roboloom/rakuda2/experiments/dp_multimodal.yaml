@@ -1,0 +1,10 @@
+# uv run roboloom infer rakuda2 --experiment dp_multimodal
+# (start the policy server in master_proj first: nodes/policy_dp_multimodal.yaml)
+help: master_proj raw multimodal diffusion policy (To 8), marker transfer
+options: [policy, digit]
+policy: nodes/policy_dp_multimodal.yaml
+dataset: dp-multimodal  # episodes go to datasets/rakuda2-digit-eval-dp-multimodal
+task: transfer the marker
+seconds: 100  # master_proj's rollout_steps 500 at 5 Hz
+episodes: 1
+home: false

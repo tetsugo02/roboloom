@@ -1,0 +1,25 @@
+# master_proj's raw multimodal diffusion policy (camera + both DIGITs + joint state),
+# dp_raw_multimodal_dynaflip_mopoe_transfer_marker_To_8_Tp_32, served from master_proj's
+# own environment (torch 2.5.1): start it there first with
+#   scripts/deploy/serve_roboloom_policy.sh dp_multimodal
+# Both sides need the same ROBOLOOM_POLICY_AUTHKEY. Checked with mock devices only.
+type: policy
+followers: [follower]
+factory: roboloom.policy.remote:connect
+kwargs: {address: "127.0.0.1:18765", timeout_s: 30}
+observe: [camera, digit_left, digit_right]
+rate_hz: 5  # the policy's data was recorded at 5 Hz
+action_horizon: 16  # the policy's action_horizon (configs/inference/closed_loop_raw_multimodal_dynaflip_mopoe.yaml)
+observation_history: 8  # the policy's observation_horizon (To)
+inference: async  # sampling takes longer than one action; the queued actions go on
+# the model was trained on the 14 arm joints: torso and head keep their held target
+hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]
+max_speed: {follower: 1024}  # counts/s; the template's value, not measured: lower it for the first runs
+command_deadline_ms: 300
+# Start pose: uncomment, and set `home: true` in experiments/dp_multimodal.yaml, when
+# poses/follower/ready.yaml is the pose the task starts from.
+# home:
+#   pose: ../poses/follower/ready.yaml
+#   max_speed: 200
+#   tolerance: 30
+#   timeout_s: 30
