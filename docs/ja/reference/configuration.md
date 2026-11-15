@@ -223,41 +223,66 @@ options:
 
 ### 実験ファイル { #experiments }
 
-同じ条件で何度も走らせる実験は，`experiments/<名前>.yaml`（`config.yaml` の隣）に書きます．`roboloom infer --experiment <名前>` と `roboloom record --experiment <名前>` が，このファイルのとおりに走ります．
+`.roboloom/<robot>/` には実機と制御の設定（ポート，測定値，制限，姿勢）を置きます．実験ごとに変わるもの（方策とチェックポイント，有効にするオプション，保存先，task，長さ）は，プロジェクトの `configs/roboloom/<名前>.yaml` に書きます．`roboloom infer --experiment <名前>` と `roboloom record --experiment <名前>` が，このファイルのとおりに走ります．
 
 ```yaml
-# .roboloom/rakuda2/experiments/drawer.yaml
+# configs/roboloom/drawer.yaml
 help: 引き出しを開ける方策の評価
-options: [policy, digit]            # 一緒に有効にするオプション
-policy: nodes/policy_drawer.yaml    # 方策のノードファイル（controllers.policy を置き換える）
-dataset: drawer                     # データセット名の末尾に付ける
+robot: rakuda2                       # .roboloom/rakuda2 を使う．コマンドの robot が優先
+options: [policy, digit]             # 有効にする起動オプション
+dataset:                             # 保存先．省略すると robot の設定どおり
+  root: data/roboloom/drawer
+  repo_id: local/rakuda2-drawer
+nodes:                               # ノードの設定への上書き
+  controllers.policy:                # マッピング：そのノードの設定に重ねる
+    factory: my_lab.policies:load
+    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    rate_hz: 10
+    action_horizon: 8
+  inputs.leader: nodes/leader_fixed_head.yaml   # 文字列：robot のディレクトリの別のノードファイルにする
 task: open the drawer
-seconds: 40
+steps: 200                           # または seconds: 40
 episodes: 10
 home: true
 ```
 
 ```bash
-uv run roboloom infer rakuda2 --experiment drawer
+uv run roboloom infer --experiment drawer            # configs/roboloom/drawer.yaml
+uv run roboloom infer --experiment path/to/file.yaml
 ```
 
 | キー | 意味 |
 | --- | --- |
-| `help` | ランチャーに表示する説明 |
-| `options` | 一緒に有効にするオプションのリスト（オプションの `requires` と同じ） |
-| `conflicts` | 同時に使えないオプションのリスト |
-| `policy` | 方策のノードファイル．`set: {controllers.policy: <ファイル>}` と同じ |
-| `set` | オプションの `set` と同じ．方策以外のノードを置き換えるときに使う |
-| `dataset` | データセット名へ付ける短い名前．実験ごとにデータセットを分けるときに書く |
+| `help` | 説明 |
+| `robot` | ロボットの名前（`.roboloom/<名前>/`）．コマンドに書いた robot が優先 |
+| `options` | 有効にする起動オプションのリスト．`--with`・`--without` で足し引きできる |
+| `dataset` | `root`（保存先のディレクトリ）と `repo_id`．書いた場所がそのまま保存先になり，オプションの名前（`-digit-eval`）は付かない |
+| `nodes` | `<role>.<node>` ごとの上書き．マッピングは，そのノードの設定に [`extends`](#extends) と同じ規則で重ねる．文字列は，robot のディレクトリから見た別のノードファイルに差し替える |
 | `task`，`seconds`，`episodes`，`home` | `--task`，`--seconds`，`--episodes`，`--home` の値 |
 | `steps` | `infer --steps` の値．エピソードを，方策が実行した行動の数で終える．`seconds` とは同時に書けない |
 
-- 実験は，ファイル名と同じ名前の起動オプションでもあります．`--experiment drawer` はそのオプションを有効にします．ランチャーのオプション一覧にも出ます．`config.yaml` のオプションと同じ名前は使えません．
-- パスは `config.yaml` から見た相対パスです．
+- **名前とパス**：`--experiment drawer` は，コマンドを実行したディレクトリの `configs/roboloom/drawer.yaml` です．`/` を含むか `.yaml` で終わるものはパスとして読みます．
+- **相対パス**：`dataset.root` はコマンドを実行したディレクトリ（プロジェクトのルート）から，`nodes` の文字列は robot のディレクトリから見ます．
+- **`nodes` で指せるノード**：オプションを適用したあとに存在するノードだけです．`followers.*` は上書きできません（フォロワの範囲・速度・飛びの制限は，すべての指令を検査する最後の層です）．
+- 書かなかった設定は，robot のノードファイルの値のままです（方策の `max_speed`，`command_deadline_ms` など）．
 - コマンドラインに書いた値が優先します（`--experiment drawer --seconds 10`）．`seconds` も `steps` もどちらにもなければ拒否します．
 - `steps` のエピソードは，方策が指定の手数を実行した時点で終わります．推論待ちで遅れる場合に備えて，上限時間（`steps / rate_hz × 1.5 + 5` 秒）でも終わり，そのときは何手で終わったかを表示します．
 - 未知のキーは拒否します．
-- 保存したデータセットの `meta/roboloom.json` には，有効だったオプションとして実験の名前が残ります．
+- `validate`，`check-dataset`，`label` も `--experiment` を受けます（その実験の構成と保存先を指します）．
+- 保存したデータセットの `meta/roboloom.json` には，実験の名前と，重ねたあとの設定が残ります．
+- `backend: server` の方策は，同じファイルからサーバーを起動できます（`roboloom serve-policy --experiment <ファイル>`）．
+
+Pythonでは `Session.launch(experiment=...)` に，名前，パス，同じキーのマッピングのどれかを渡します．Hydraで実験を合成するプロジェクトは，合成した結果を渡します．roboloom自身はHydraに依存しません．
+
+```python
+from omegaconf import OmegaConf
+from roboloom import Session
+
+experiment = OmegaConf.to_container(cfg.roboloom, resolve=True)   # Hydraで合成したもの
+with Session.launch(experiment=experiment) as session:
+    session.wait_ready(60)
+    session.record(experiment["task"], 155.0, steps=experiment["steps"])
+```
 
 ## 関節固定と相殺
 

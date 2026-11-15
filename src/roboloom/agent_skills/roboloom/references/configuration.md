@@ -125,27 +125,37 @@ that require it; an option that changes recorded features **must** have a `datas
 
 ### Experiment files
 
-`.roboloom/<robot>/experiments/<name>.yaml` holds one experiment, so that the command
-needs no other words: `roboloom infer --experiment <name>` (also `record`).
+Keep `.roboloom/<robot>/` for the robot's own settings (ports, measured values, limits,
+poses). What an experiment changes goes into `configs/roboloom/<name>.yaml` of the
+project; run it with `roboloom infer --experiment <name>` (also `record`, `validate`,
+`check-dataset`, `label`; a word with `/` or ending `.yaml` is a path).
 
 ```yaml
 help: evaluation of the drawer policy
-options: [policy, digit]            # enabled with it (an option's `requires`)
-policy: nodes/policy_drawer.yaml    # = set: {controllers.policy: <file>}
-dataset: drawer                     # dataset name suffix
+robot: rakuda2                      # .roboloom/rakuda2; a robot on the command line wins
+options: [policy, digit]            # launch options
+dataset: {root: data/roboloom/drawer, repo_id: local/rakuda2-drawer}  # optional
+nodes:
+  controllers.policy:               # mapping: laid over the node's settings (as extends)
+    factory: my_lab.policies:load
+    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    rate_hz: 10
+  inputs.leader: nodes/leader_fixed_head.yaml   # text: another node file of the robot
 task: open the drawer               # --task
-seconds: 40                         # --seconds (or steps: 200, infer only: --steps,
-                                    #   the episode ends after that many policy actions)
+steps: 200                          # --steps (infer; or seconds: 40)
 episodes: 10                        # --episodes
 home: true                          # --home
 ```
 
-Other keys: `conflicts`, `set` (as an option's). Unknown keys are refused. The
-experiment is also a launch option named after the file (so it cannot share a name with
-one in `config.yaml`, and the nodes load it like any option); paths are relative to
-`config.yaml`; command-line values win; `seconds` or `steps` must be in one of the two. In the operator screen the episode count
-is a goal: after it, Home/Teleop/Start run further episodes; the top line shows
-`episode 2/10  step 137/500  [bar] 27%`.
+`dataset.root` is relative to the directory the command runs in; with `dataset` the
+options' names are not appended. `nodes` may name only nodes present after the options,
+never `followers.*` (their limits guard every command). Unknown keys are refused;
+command-line values win; `seconds` or `steps` must be in one of the two. Python:
+`Session.launch(experiment=<name|path|mapping>)` (pass what Hydra composed as a
+mapping; roboloom does not depend on Hydra). A `backend: server` policy is served from
+the same file: `roboloom serve-policy --experiment <file>`. In the operator screen the
+episode count is a goal: after it, Home/Teleop/Start run further episodes; the top line
+shows `episode 2/10  step 137/500  [bar] 27%`.
 
 Choosing options: CLI `--with a,b` / `--without a,b` (added to / removed from the
 defaults); Python `options=[...]` is the **whole set** (not added to defaults), `None`

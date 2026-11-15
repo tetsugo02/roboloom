@@ -77,7 +77,8 @@ command_deadline_ms: 300
   (default `backend: process`: the policy node loads it) with
   `server: {address: "127.0.0.1:18765"}` (also `timeout_s`, `connect_timeout_s`,
   `authkey_env`). Start the server in the model's environment and directory with
-  `roboloom serve-policy --from <that YAML>` (or `python -m roboloom.policy.remote --from
+  `roboloom serve-policy --from <that YAML>` (or, when an experiment file gives the
+  policy, `--experiment <file>`; also `python -m roboloom.policy.remote --from
   ...`; needs only numpy + roboloom without extras). `--policy`/`--policy-kwargs` are
   refused with `backend: server`. The older `factory: roboloom.policy.remote:connect`
   with `kwargs: {address: ...}` still works.
@@ -159,7 +160,7 @@ def load(checkpoint: str) -> MyPolicy:
 ```bash
 uv run roboloom infer --seconds 30 --policy my_lab.policies:load \
   --policy-kwargs '{"checkpoint": "outputs/act/last"}' --task "pick up the cup"
-# or everything in .roboloom/<robot>/experiments/cup.yaml (configuration.md):
+# or everything in the project's configs/roboloom/cup.yaml (configuration.md):
 uv run roboloom infer --experiment cup
 ```
 

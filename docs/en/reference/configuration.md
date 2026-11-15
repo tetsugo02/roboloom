@@ -223,41 +223,66 @@ options:
 
 ### Experiment files { #experiments }
 
-An experiment that is run again and again under the same conditions goes into `experiments/<name>.yaml`, next to `config.yaml`. `roboloom infer --experiment <name>` and `roboloom record --experiment <name>` run as the file says.
+`.roboloom/<robot>/` holds the robot's own settings (ports, measured values, limits, poses). What changes with every experiment (the policy and its checkpoint, the options, where the episodes go, the task, the length) goes into `configs/roboloom/<name>.yaml` of the project. `roboloom infer --experiment <name>` and `roboloom record --experiment <name>` run as the file says.
 
 ```yaml
-# .roboloom/rakuda2/experiments/drawer.yaml
+# configs/roboloom/drawer.yaml
 help: evaluation of the drawer policy
-options: [policy, digit]            # options enabled with it
-policy: nodes/policy_drawer.yaml    # the policy's node file (replaces controllers.policy)
-dataset: drawer                     # appended to the dataset name
+robot: rakuda2                       # .roboloom/rakuda2 is used; a robot on the command line wins
+options: [policy, digit]             # launch options to enable
+dataset:                             # where the episodes go; left out: as the robot's configuration says
+  root: data/roboloom/drawer
+  repo_id: local/rakuda2-drawer
+nodes:                               # what the nodes are given on top of their files
+  controllers.policy:                # a mapping: laid over the node's settings
+    factory: my_lab.policies:load
+    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    rate_hz: 10
+    action_horizon: 8
+  inputs.leader: nodes/leader_fixed_head.yaml   # text: another node file of the robot's directory
 task: open the drawer
-seconds: 40
+steps: 200                           # or seconds: 40
 episodes: 10
 home: true
 ```
 
 ```bash
-uv run roboloom infer rakuda2 --experiment drawer
+uv run roboloom infer --experiment drawer            # configs/roboloom/drawer.yaml
+uv run roboloom infer --experiment path/to/file.yaml
 ```
 
 | Key | Meaning |
 | --- | --- |
-| `help` | Description shown in the launcher |
-| `options` | Options enabled with the experiment (an option's `requires`) |
-| `conflicts` | Options that cannot be used with it |
-| `policy` | The policy's node file; the same as `set: {controllers.policy: <file>}` |
-| `set` | As an option's `set`; use it to replace nodes other than the policy |
-| `dataset` | Short name appended to the dataset name; write it to keep each experiment in a dataset of its own |
+| `help` | Description |
+| `robot` | The robot's name (`.roboloom/<name>/`); a robot on the command line wins |
+| `options` | Launch options to enable; `--with` and `--without` add to and remove from them |
+| `dataset` | `root` (the dataset's directory) and `repo_id`. The episodes go exactly there; the options' names (`-digit-eval`) are not appended |
+| `nodes` | Changes by `<role>.<node>`. A mapping is laid over the node's settings by the rules of [`extends`](#extends); text names another node file, seen from the robot's directory |
 | `task`, `seconds`, `episodes`, `home` | The values of `--task`, `--seconds`, `--episodes`, `--home` |
 | `steps` | The value of `infer --steps`: the episode ends after this many actions of the policy. Not together with `seconds` |
 
-- An experiment is also a launch option named after its file. `--experiment drawer` enables that option, and the launcher lists it with the others. It cannot have the name of an option in `config.yaml`.
-- Paths are relative to `config.yaml`.
+- **Name or path**: `--experiment drawer` is `configs/roboloom/drawer.yaml` under the directory the command runs in. A word with `/` or ending in `.yaml` is read as a path.
+- **Relative paths**: `dataset.root` is seen from the directory the command runs in (the project's root), text under `nodes` from the robot's directory.
+- **Nodes that can be named**: those present after the options are applied. `followers.*` cannot be changed (a follower's range, speed and jump limits are the last check of every command).
+- What the file does not say stays as the robot's node files say (the policy's `max_speed`, `command_deadline_ms`, ...).
 - Values on the command line win (`--experiment drawer --seconds 10`). The command is refused when neither has `seconds` or `steps`.
 - An episode given in `steps` ends as soon as the policy has executed that many actions. In case inference keeps it waiting, it also ends after a time limit (`steps / rate_hz × 1.5 + 5` seconds) and says at how many steps.
 - Unknown keys are refused.
-- `meta/roboloom.json` of the saved dataset keeps the experiment's name among the enabled options.
+- `validate`, `check-dataset` and `label` take `--experiment` too (the experiment's configuration and dataset).
+- `meta/roboloom.json` of a saved dataset keeps the experiment's name and the resulting settings.
+- A policy with `backend: server` is served from the same file (`roboloom serve-policy --experiment <file>`).
+
+In Python, `Session.launch(experiment=...)` takes the name, the path or a mapping with the same keys. A project that composes its experiments with Hydra passes the composed result; roboloom itself does not depend on Hydra.
+
+```python
+from omegaconf import OmegaConf
+from roboloom import Session
+
+experiment = OmegaConf.to_container(cfg.roboloom, resolve=True)   # composed by Hydra
+with Session.launch(experiment=experiment) as session:
+    session.wait_ready(60)
+    session.record(experiment["task"], 155.0, steps=experiment["steps"])
+```
 
 ## Joint locking and compensation
 

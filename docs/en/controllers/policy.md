@@ -22,7 +22,7 @@ command_deadline_ms: 300
 ```
 
 - The `factory` module is looked up in the installed packages first, then in the robot's directory (`.roboloom/<robot>/`).
-- Put the policy's YAML, the options, the task, the seconds and the episode count into an [experiment file](../reference/configuration.md#experiments), and `roboloom infer --experiment <name>` is all it takes.
+- The policy and its checkpoint, the options, the dataset, the task and the length go into an [experiment file](../reference/configuration.md#experiments) of the project (`configs/roboloom/<name>.yaml`). `roboloom infer --experiment <name>` is then all it takes, and `nodes/policy.yaml` stays as it is.
 - `roboloom infer` turns on the option named `policy`. `--policy` and `--policy-kwargs` replace the policy without editing the YAML.
 
 ```bash
@@ -179,7 +179,8 @@ With `backend: server` the policy node does not load `factory`; it connects to `
 ```bash
 # where the model lives: its own environment, with roboloom installed without extras
 export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
-uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
+uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # the experiment's policy
+# from a policy YAML: roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
 # without roboloom's command line: python -m roboloom.policy.remote --from <the same file>
 # without the YAML: roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
 ```

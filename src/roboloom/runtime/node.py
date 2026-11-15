@@ -1146,6 +1146,9 @@ def config_from_env(path: str, env: Mapping[str, str]) -> RobotConfig:
         sensors=json.loads(env["ROBOLOOM_SENSORS"])
         if "ROBOLOOM_SENSORS" in env
         else None,
+        experiment=json.loads(env["ROBOLOOM_EXPERIMENT"])
+        if "ROBOLOOM_EXPERIMENT" in env
+        else None,
     )
     for controller, selected in json.loads(env.get("ROBOLOOM_OBSERVE", "{}")).items():
         node = tree["controllers"][controller]

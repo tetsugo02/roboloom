@@ -48,6 +48,8 @@ roboloom も同じ構成をとります．
 - **`Session`**：dataflow を起動し，出来事を送ります．出来事とは，開始，停止，保存，task 名などです．制御のループは回しません．
   - そのため，利用者のスクリプトが重い処理をしたり，止まったりしても，制御の周期は乱れません．
 
+実験ごとの設定（方策，オプション，保存先）は，`Session.launch(experiment=...)` で渡せます．名前（`configs/roboloom/<名前>.yaml`），ファイルのパス，同じキーのマッピングのどれかです（[実験ファイル](configuration.md#experiments)）．
+
 ### エピソードを録る
 
 ```python
