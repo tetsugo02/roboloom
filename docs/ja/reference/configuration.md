@@ -189,6 +189,42 @@ options:
 
 `output` にも同じ名前が付きます（例：`datasets/rakuda2-digit`）．どのオプションが有効か，データセット名が何になるかは `roboloom validate --with digit` のように確かめられます．オプションの選び方は [CLI](cli.md) を，Rakuda2で使える組み合わせと制約は [Rakuda2](../robots/rakuda2.md) を参照してください．
 
+### 実験ファイル { #experiments }
+
+同じ条件で何度も走らせる実験は，`experiments/<名前>.yaml`（`config.yaml` の隣）に書きます．`roboloom infer --experiment <名前>` と `roboloom record --experiment <名前>` が，このファイルのとおりに走ります．
+
+```yaml
+# .roboloom/rakuda2/experiments/drawer.yaml
+help: 引き出しを開ける方策の評価
+options: [policy, digit]            # 一緒に有効にするオプション
+policy: nodes/policy_drawer.yaml    # 方策のノードファイル（controllers.policy を置き換える）
+dataset: drawer                     # データセット名の末尾に付ける
+task: open the drawer
+seconds: 40
+episodes: 10
+home: true
+```
+
+```bash
+uv run roboloom infer rakuda2 --experiment drawer
+```
+
+| キー | 意味 |
+| --- | --- |
+| `help` | ランチャーに表示する説明 |
+| `options` | 一緒に有効にするオプションのリスト（オプションの `requires` と同じ） |
+| `conflicts` | 同時に使えないオプションのリスト |
+| `policy` | 方策のノードファイル．`set: {controllers.policy: <ファイル>}` と同じ |
+| `set` | オプションの `set` と同じ．方策以外のノードを置き換えるときに使う |
+| `dataset` | データセット名へ付ける短い名前．実験ごとにデータセットを分けるときに書く |
+| `task`，`seconds`，`episodes`，`home` | `--task`，`--seconds`，`--episodes`，`--home` の値 |
+
+- 実験は，ファイル名と同じ名前の起動オプションでもあります．`--experiment drawer` はそのオプションを有効にします．ランチャーのオプション一覧にも出ます．`config.yaml` のオプションと同じ名前は使えません．
+- パスは `config.yaml` から見た相対パスです．
+- コマンドラインに書いた値が優先します（`--experiment drawer --seconds 10`）．`seconds` がどちらにもなければ拒否します．
+- 未知のキーは拒否します．
+- 保存したデータセットの `meta/roboloom.json` には，有効だったオプションとして実験の名前が残ります．
+
 ## 関節固定と相殺
 
 leaderノードの `control` は，`free`（脱力），`position`（leaderでは通電時の姿勢を保持），`spring`，`gravity_comp` などを関節グループごとに選びます．全関節をちょうど1回ずつ指定します．`joint` controllerの `couplings`（既定 `[]`）は，`{joint, source, scale, reference}`（任意で `lead_ms`） のリストで，他のfollower関節の `reference` からの実測変位を目標へ加えます．両者は独立した設定です．[Leaderの設定例](../controllers/leader.md)を参照してください．

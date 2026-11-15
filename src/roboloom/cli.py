@@ -13,16 +13,15 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import yaml
-
 from .agent_skills import TARGETS as SKILL_TARGETS
 from .config import (
     INFER_OPTION,
     Option,
     RobotConfig,
+    declared_options,
     is_configuration,
     load_config,
-    parse_options,
+    load_experiment,
     resolve_config,
     select_options,
 )
@@ -331,9 +330,15 @@ def main(argv: list[str] | None = None) -> None:
     rec.add_argument(
         "--plain", action="store_true", help="use non-interactive recording"
     )
-    rec.add_argument("--task", required=True, help="task text stored with every frame")
-    rec.add_argument("--seconds", type=float, required=True)
-    rec.add_argument("--episodes", type=int, default=1)
+    rec.add_argument(
+        "--experiment",
+        metavar="NAME",
+        help="run experiments/NAME.yaml of the robot: its options, policy, task, "
+        "seconds, episodes and home (words given here win)",
+    )
+    rec.add_argument("--task", help="task text stored with every frame")
+    rec.add_argument("--seconds", type=float)
+    rec.add_argument("--episodes", type=int)
     rec.add_argument(
         "--home",
         action="store_true",
@@ -347,8 +352,14 @@ def main(argv: list[str] | None = None) -> None:
     inf.add_argument(
         "--plain", action="store_true", help="use non-interactive inference"
     )
-    inf.add_argument("--seconds", type=float, required=True)
-    inf.add_argument("--episodes", type=int, default=1)
+    inf.add_argument(
+        "--experiment",
+        metavar="NAME",
+        help="run experiments/NAME.yaml of the robot: its options, policy, task, "
+        "seconds, episodes and home (words given here win)",
+    )
+    inf.add_argument("--seconds", type=float)
+    inf.add_argument("--episodes", type=int)
     inf.add_argument(
         "--home",
         action="store_true",
@@ -360,9 +371,7 @@ def main(argv: list[str] | None = None) -> None:
     inf.add_argument(
         "--policy-kwargs", type=json.loads, default=None, help="JSON arguments"
     )
-    inf.add_argument(
-        "--task", default="", help="task given to the policy; with it, runs are saved"
-    )
+    inf.add_argument("--task", help="task given to the policy; with it, runs are saved")
     conv = sub.add_parser(
         "convert-handheld",
         parents=[configured],
@@ -419,18 +428,11 @@ def main(argv: list[str] | None = None) -> None:
     lab.add_argument("--note", help="free text kept with the verdict")
     serve = sub.add_parser(
         "serve-policy",
-        help="serve a policy to a policy node (factory: roboloom.policy.remote:connect)",
+        help="serve a policy to a policy node with backend: server (--from its YAML)",
     )
-    serve.add_argument("policy", help="module:callable returning the policy")
-    serve.add_argument(
-        "--kwargs", type=json.loads, default={}, help="JSON arguments of the callable"
-    )
-    serve.add_argument("--address", default="127.0.0.1:18765", help="host:port")
-    serve.add_argument(
-        "--authkey-env",
-        default="ROBOLOOM_POLICY_AUTHKEY",
-        help="environment variable holding the shared secret",
-    )
+    from .policy.remote import add_arguments as serve_arguments
+
+    serve_arguments(serve)
     skills = sub.add_parser(
         "skills", help="the Agent Skill for coding agents (Claude Code, Codex, ...)"
     )
@@ -447,11 +449,35 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(_with_config(list(sys.argv[1:] if argv is None else argv)))
     try:
+        _run_settings(args)
         _dispatch(args)
     except Cancelled as exc:
         print(exc)
     except RoboloomError as exc:
         raise SystemExit(f"error: {exc}") from None
+
+
+def _run_settings(args: argparse.Namespace) -> None:
+    """`record` and `infer`: how the run goes, from the command line, else from the
+    experiment's file (`--experiment`), else the default. The experiment is also a
+    launch option of that name: it is enabled with what it requires."""
+    if args.command not in ("record", "infer"):
+        return
+    name = args.experiment
+    if name:
+        run = load_experiment(resolve_config(args.config), name)
+        args.with_ = [name, *(args.with_ or [])]
+        for key in ("task", "seconds", "episodes"):
+            if getattr(args, key) is None:
+                setattr(args, key, getattr(run, key))
+        args.home = args.home or bool(run.home)
+    source = f"experiments/{name}.yaml" if name else "an experiment (--experiment)"
+    if args.seconds is None:
+        raise ConfigError(f"{args.command}: give --seconds, or `seconds:` in {source}")
+    if args.command == "record" and not args.task:
+        raise ConfigError(f"record: give --task, or `task:` in {source}")
+    args.task = args.task or ""
+    args.episodes = args.episodes or 1
 
 
 def _selection(args: argparse.Namespace, path: Path) -> tuple[str, ...] | None:
@@ -468,7 +494,7 @@ def _selection(args: argparse.Namespace, path: Path) -> tuple[str, ...] | None:
 
 def _declared(path: Path) -> dict[str, Option]:
     """The configuration's options, read without loading its nodes."""
-    return parse_options((yaml.safe_load(path.read_text()) or {}).get("options"))
+    return declared_options(path)
 
 
 def _load(args: argparse.Namespace) -> RobotConfig:
@@ -513,14 +539,7 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "serve-policy":
         from .policy import remote
 
-        print(f"policy server: loading {args.policy}")
-        remote.serve(
-            args.policy,
-            args.address,
-            kwargs=args.kwargs,
-            authkey_env=args.authkey_env,
-            ready=lambda: print(f"policy server: listening on {args.address}"),
-        )
+        remote.run(args)
         return
     if args.command == "init":
         from .project import init_project, update_project

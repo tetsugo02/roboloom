@@ -22,6 +22,7 @@ command_deadline_ms: 300
 ```
 
 - `factory` のモジュールは，インストール済みのパッケージを先に探し，見つからなければロボットのディレクトリ（`.roboloom/<robot>/`）を探します．
+- 方策のYAML，有効にするオプション，task，秒数，回数を [実験ファイル](../reference/configuration.md#experiments) にまとめると，`roboloom infer --experiment <名前>` だけで走ります．
 - `roboloom infer` は，`policy` という名前のオプションを自動で有効にします．`--policy` と `--policy-kwargs` で，YAMLを書き換えずに方策を差し替えられます．
 
 ```bash
@@ -156,21 +157,41 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 ### 方策を別のプロセスで動かす { #running-the-policy-in-another-process }
 
-roboloomを動かす環境に依存関係が入らないモデル（torchの版が違うなど）や，別のマシンで動かしたいモデルは，自分のプロセスから提供します．方策ノードは `roboloom.policy.remote:connect` でそこへつなぎます．`bind`，`reset`，`infer`，`options` はそのまま渡るので，方策の書き方は上と同じです．
+方策を読み込む場所は2通りあり，方策のYAMLの `backend` で選びます．方策の書き方（`bind`，`reset`，`infer`，`options`）はどちらも同じです．
+
+| `backend` | 方策を読み込むプロセス | 使う場面 |
+| --- | --- | --- |
+| `process`（既定） | 方策ノード自身 | 方策の依存関係がroboloomの環境に入る．サーバーの起動が要らない |
+| `server` | 別に起動した方策サーバー | 依存関係が入らないモデル（torchの版が違うなど），別のマシンで動かすモデル |
+
+```yaml
+# nodes/policy.yaml
+factory: my_lab.policies:load        # どちらの backend でも，方策そのものを書く
+kwargs: {checkpoint: "..."}
+backend: server                      # 省略すると process
+server: {address: "127.0.0.1:18765"} # backend: server のときだけ読む
+```
+
+`backend: server` では，方策ノードは `factory` を読み込まず，`server.address` へつなぎます．サーバーは同じYAMLから `factory`，`kwargs`，`server.address` を読んで起動します．
 
 ```bash
 # モデルのある側：そのモデルの環境．roboloomはextraなしで入れる
 export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
-uv run roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
-# roboloomのコマンドを使わない場合：python -m roboloom.policy.remote my_lab.policies:load
+uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
+# roboloomのコマンドを使わない場合：python -m roboloom.policy.remote --from <同じファイル>
+# YAMLを使わない場合：roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
 ```
 
-```yaml
-# nodes/policy.yaml（roboloomを動かす環境にも同じ ROBOLOOM_POLICY_AUTHKEY が要る）
-factory: roboloom.policy.remote:connect
-kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 は infer 1回の上限
-```
+| `server` のキー | 意味 |
+| --- | --- |
+| `address` | `host:port`（既定 `127.0.0.1:18765`） |
+| `timeout_s` | `infer` 1回の上限（既定30秒） |
+| `connect_timeout_s` | サーバーの起動を待つ上限（既定30秒） |
+| `authkey_env` | 秘密の文字列を読む環境変数（既定 `ROBOLOOM_POLICY_AUTHKEY`）．roboloomを動かす環境にも同じ値が要る |
 
+- `factory` のモジュールと `kwargs` の相対パスは，サーバーを起動したディレクトリと環境で解決します．
+- `backend: server` では `roboloom infer --policy`・`--policy-kwargs` は使えません（方策を読み込むのはサーバーです）．
+- `factory: roboloom.policy.remote:connect` と `kwargs: {address: ...}` を直接書く以前の形も動きます．
 - サーバーはモデルを1回だけ読み込み，方策ノードを1つずつ相手にします．エピソードやセッションをまたいで使えます．`roboloom infer` より先に起動してください．ノードは `connect_timeout_s`（30秒）まで待ちます．1つを相手にしている間につないできた2つ目のノードには，待たせずに，使用中であること（`the policy server is serving another policy node`）を返します．
 - `timeout_s` 以内に答えがない呼び出しは，そのエピソードを失敗させます（`TimeoutError`）．あとから届いたその答えは捨てます．呼び出しには番号が付いていて，同じ番号の答えだけを受け取ります．
 - サーバー側に要るのは，numpyとextraなしのroboloomだけです（LeRobotも，roboloomが入れるtorchも要りません）．
@@ -336,6 +357,16 @@ teleop: [controller.yaml]   # leaderで動かすときの controller（このフ
 - 方策に戻すとき（Policy）は，方策の履歴を消し（`policy.reset()`），フォロワが保持している目標から補間を始め直します．
 - 記録では，人が動かした行を `action.intervention`（1）で区別します．`teleop:` のある構成だけにある特徴量です．leaderも入力として記録されるので，データセット名は別になります（Rakuda2 では `-eval-teleop`）．
 - エピソードの外のTeleopは記録しません．エピソードの最初の1〜2行は，`start` の直前の人の指令が残ることがあり，`action.intervention` が1になります．
+- **`home` はleaderも一緒に動かします**：方策に `home:` があると，`home` はフォロワと同時に，teleop の controller のleaderも同じ姿勢へ動かします．leaderの関節を位置制御（`law: position`）のグループにしておくと，その関節は `home` の姿勢へ動いたあと，そこで固定されます．カメラの向きを決める胴体と頭をこのグループにすれば，Teleop で腕だけを動かしても，カメラの角度は変わりません．
+
+  ```yaml
+  # nodes/leader.yaml（teleop で使うleader）の control
+  - group: camera
+    law: position
+    joints: [torso_yaw, head_yaw, head_pitch]
+  ```
+
+  手順は，`home` → 必要なら Teleop で腕を開始姿勢へ → `start` です．
 - Pythonでは `Session.teleop()`，`Session.policy()`，`Session.stop_teleop()` を使います．
 - 対応する teleop の controller は `type: joint` だけです．`pose_ik`（PiPER＋Pika Sense など）は，読み込み時に「介入に未対応」として断ります．
 - フォロワがESTOP・FAULTになったとき，信号が途絶えたときは，Teleop も止まります．もう一度 Teleop を押すと，その時点から関節ごとにつかまえ直します．

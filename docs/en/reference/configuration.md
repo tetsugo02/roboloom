@@ -189,6 +189,42 @@ options:
 
 `output` gets the same name (for example `datasets/rakuda2-digit`). Check which options are enabled and what the dataset is called with, for example, `roboloom validate --with digit`. See [CLI](cli.md) for choosing options and [Rakuda2](../robots/rakuda2.md) for the combinations and limitations on Rakuda2.
 
+### Experiment files { #experiments }
+
+An experiment that is run again and again under the same conditions goes into `experiments/<name>.yaml`, next to `config.yaml`. `roboloom infer --experiment <name>` and `roboloom record --experiment <name>` run as the file says.
+
+```yaml
+# .roboloom/rakuda2/experiments/drawer.yaml
+help: evaluation of the drawer policy
+options: [policy, digit]            # options enabled with it
+policy: nodes/policy_drawer.yaml    # the policy's node file (replaces controllers.policy)
+dataset: drawer                     # appended to the dataset name
+task: open the drawer
+seconds: 40
+episodes: 10
+home: true
+```
+
+```bash
+uv run roboloom infer rakuda2 --experiment drawer
+```
+
+| Key | Meaning |
+| --- | --- |
+| `help` | Description shown in the launcher |
+| `options` | Options enabled with the experiment (an option's `requires`) |
+| `conflicts` | Options that cannot be used with it |
+| `policy` | The policy's node file; the same as `set: {controllers.policy: <file>}` |
+| `set` | As an option's `set`; use it to replace nodes other than the policy |
+| `dataset` | Short name appended to the dataset name; write it to keep each experiment in a dataset of its own |
+| `task`, `seconds`, `episodes`, `home` | The values of `--task`, `--seconds`, `--episodes`, `--home` |
+
+- An experiment is also a launch option named after its file. `--experiment drawer` enables that option, and the launcher lists it with the others. It cannot have the name of an option in `config.yaml`.
+- Paths are relative to `config.yaml`.
+- Values on the command line win (`--experiment drawer --seconds 10`). The command is refused when `seconds` is in neither.
+- Unknown keys are refused.
+- `meta/roboloom.json` of the saved dataset keeps the experiment's name among the enabled options.
+
 ## Joint locking and compensation
 
 The leader node's `control` selects a law per joint group, such as `free` (torque off), `position` (holds the torque-enable pose on a leader), `spring`, or `gravity_comp`. Specify every joint exactly once. The `joint` controller's `couplings` (default `[]`) is a list of `{joint, source, scale, reference}` (optionally `lead_ms`) entries that add another follower joint's measured displacement from `reference` to a target. These settings are independent. See the [Leader configuration examples](../controllers/leader.md).

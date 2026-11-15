@@ -1,0 +1,26 @@
+# The arms of ready.yaml with the camera angles of master_proj's transfer_marker data
+# (configs: camera_transfer_marker; episode 6_9, frame 0, robopy positions). Whether
+# robopy's zero is this follower's (homing_offset) is not checked: look at the camera
+# image after the first `home`. Capture your own start pose from here:
+#   home -> Teleop the arms -> quit with hold -> roboloom capture-pose rakuda2 <name>
+follower: follower
+model: rakuda2
+unit: dynamixel_count
+pose:
+  torso_yaw: 2037
+  head_yaw: 2043
+  head_pitch: 2538
+  r_arm_sh_pitch1: 1898
+  r_arm_sh_roll: 1035
+  r_arm_sh_pitch2: 2175
+  r_arm_el_yaw: 1726
+  r_arm_wr_roll: 2190
+  r_arm_wr_yaw: 1498
+  r_arm_grip: 2503
+  l_arm_sh_pitch1: 2188
+  l_arm_sh_roll: 3021
+  l_arm_sh_pitch2: 2034
+  l_arm_el_yaw: 2451
+  l_arm_wr_roll: 2161
+  l_arm_wr_yaw: 2502
+  l_arm_grip: 2505

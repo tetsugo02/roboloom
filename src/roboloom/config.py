@@ -141,6 +141,119 @@ def parse_options(raw: object) -> dict[str, Option]:
     return out
 
 
+EXPERIMENTS = "experiments"  # next to the configuration: one YAML file per experiment
+RUN_KEYS = ("task", "seconds", "episodes", "home")
+EXPERIMENT_KEYS = {
+    "help",
+    "options",
+    "conflicts",
+    "policy",
+    "set",
+    "dataset",
+    *RUN_KEYS,
+}
+POLICY_NODE = "controllers.policy"  # what an experiment's `policy: <file>` replaces
+
+
+@dataclass(frozen=True)
+class Experiment:
+    """One experiment (`experiments/<name>.yaml` next to the configuration): a launch
+    option of that name plus how `roboloom infer|record --experiment <name>` runs it.
+    None: not given in the file (the command line or its default decides)."""
+
+    name: str
+    task: str | None = None
+    seconds: float | None = None
+    episodes: int | None = None
+    home: bool | None = None
+
+
+def experiment_names(config: str | Path) -> list[str]:
+    """The experiments declared next to the configuration file `config`."""
+    directory = Path(config).parent / EXPERIMENTS
+    return (
+        sorted(f.stem for f in directory.glob("*.yaml")) if directory.is_dir() else []
+    )
+
+
+def _experiment(config: Path, name: str) -> tuple[dict, Experiment]:
+    """The experiment `name` as its option settings and its run settings."""
+    file = Path(config).parent / EXPERIMENTS / f"{name}.yaml"
+    where = f"{EXPERIMENTS}/{name}.yaml"
+    if not file.is_file():
+        known = ", ".join(experiment_names(config)) or "none"
+        raise ConfigError(f"no experiment {name!r} ({file}); available: {known}")
+    raw = yaml.safe_load(file.read_text()) or {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{where}: expected a mapping")
+    unknown_keys(raw, EXPERIMENT_KEYS, where)
+    changes = raw.get("set") or {}
+    if not isinstance(changes, dict):
+        raise ConfigError(f"{where}.set: expected mapping of <role>.<node> to file")
+    if raw.get("policy") is not None:
+        if not isinstance(raw["policy"], str):
+            raise ConfigError(f"{where}.policy: expected the policy's node file")
+        if POLICY_NODE in changes:
+            raise ConfigError(f"{where}: `policy` and set.{POLICY_NODE} say the same")
+        changes = {**changes, POLICY_NODE: raw["policy"]}
+    option = {
+        "help": raw.get("help") or f"experiment {where}",
+        "requires": raw.get("options"),
+        "conflicts": raw.get("conflicts"),
+        "set": changes,
+        "dataset": raw.get("dataset"),
+    }
+    task, seconds = raw.get("task"), raw.get("seconds")
+    episodes, home = raw.get("episodes"), raw.get("home")
+    if task is not None and not isinstance(task, str):
+        raise ConfigError(f"{where}.task: expected text")
+    if seconds is not None and (
+        isinstance(seconds, bool)
+        or not isinstance(seconds, int | float)
+        or seconds <= 0
+    ):
+        raise ConfigError(f"{where}.seconds: expected a positive number")
+    if episodes is not None and (
+        isinstance(episodes, bool) or not isinstance(episodes, int) or episodes < 1
+    ):
+        raise ConfigError(f"{where}.episodes: expected a whole number, at least 1")
+    if home is not None and not isinstance(home, bool):
+        raise ConfigError(f"{where}.home: expected true or false")
+    run = Experiment(
+        name, task, None if seconds is None else float(seconds), episodes, home
+    )
+    return option, run
+
+
+def load_experiment(config: str | Path, name: str) -> Experiment:
+    """How the experiment `name` of the configuration file `config` runs. Its nodes
+    and dataset come with the launch option of the same name (`declared_options`)."""
+    return _experiment(Path(config), name)[1]
+
+
+def declared_options(config: str | Path, raw: object = None) -> dict[str, Option]:
+    """The launch options of the configuration file `config`: its `options:` (`raw`
+    when the file was already read) and one per experiment next to it, named after
+    the experiment's file. No node file is read."""
+    config = Path(config)
+    if raw is None:
+        raw = (yaml.safe_load(config.read_text()) or {}).get("options")
+    names = experiment_names(config)
+    if not names:
+        return parse_options(raw)
+    if raw is not None and not isinstance(raw, dict):
+        raise ConfigError("options: expected mapping of option name to settings")
+    merged = dict(raw or {})
+    for name in names:
+        if name in merged:
+            raise ConfigError(
+                f"{EXPERIMENTS}/{name}.yaml: {config.name} already has an option "
+                f"{name!r}; rename the experiment"
+            )
+        merged[name] = _experiment(config, name)[0]
+    return parse_options(merged)
+
+
 def requirements(options: dict[str, Option], name: str) -> set[str]:
     """The options `name` requires, transitively."""
     seen: set[str] = set()
@@ -316,7 +429,7 @@ def read_config(
     `mock`: override the YAML's `mode` (True: mock devices, False: hardware)."""
     path = Path(path).resolve()
     raw = _read(path)
-    available = parse_options(raw.pop("options", None))
+    available = declared_options(path, raw.pop("options", None))
     enabled = (
         select_options(available)
         if options is None

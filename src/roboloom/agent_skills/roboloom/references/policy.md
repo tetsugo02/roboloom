@@ -73,9 +73,14 @@ command_deadline_ms: 300
   (`stale_observation`, followers hold, also mid-interpolation); when fresh again it restarts with `reset()`.
 
 - A model that cannot share roboloom's environment (other torch) or runs elsewhere:
-  serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or
-  `python -m roboloom.policy.remote ...`; needs only numpy + roboloom without extras) and
-  set `factory: roboloom.policy.remote:connect`, `kwargs: {address: "127.0.0.1:18765"}`.
+  keep the policy's own `factory`/`kwargs` in the YAML and add `backend: server`
+  (default `backend: process`: the policy node loads it) with
+  `server: {address: "127.0.0.1:18765"}` (also `timeout_s`, `connect_timeout_s`,
+  `authkey_env`). Start the server in the model's environment and directory with
+  `roboloom serve-policy --from <that YAML>` (or `python -m roboloom.policy.remote --from
+  ...`; needs only numpy + roboloom without extras). `--policy`/`--policy-kwargs` are
+  refused with `backend: server`. The older `factory: roboloom.policy.remote:connect`
+  with `kwargs: {address: ...}` still works.
   Both sides need the same `ROBOLOOM_POLICY_AUTHKEY`. `bind`/`reset`/`infer`/`options` are
   forwarded; policy errors show on the controller line. Not encrypted: loopback or a
   trusted network only.
@@ -90,6 +95,10 @@ command_deadline_ms: 300
   replays one recorded episode's `action` (or a `.npy` `[T, n]`) open loop through the
   policy path: checks the path without a model. Names and rate are checked at load;
   `home` to the first pose first, low `max_speed`.
+
+- With `teleop:` and `home:`, `home` moves the teleop leader to the pose as well; leader
+  joints in a `law: position` group stay there afterwards (e.g. torso and head, to keep
+  the camera angle while Teleop moves the arms). Order: `home`, Teleop if needed, `start`.
 
 ## Writing a policy
 
@@ -150,6 +159,8 @@ def load(checkpoint: str) -> MyPolicy:
 ```bash
 uv run roboloom infer --seconds 30 --policy my_lab.policies:load \
   --policy-kwargs '{"checkpoint": "outputs/act/last"}' --task "pick up the cup"
+# or everything in .roboloom/<robot>/experiments/cup.yaml (configuration.md):
+uv run roboloom infer --experiment cup
 ```
 
 ```python

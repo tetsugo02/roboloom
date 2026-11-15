@@ -36,9 +36,10 @@ Real hardware is the default. Commands that open devices accept:
 | `gravity-check [robot] leader <group> --with gravity` | Measure the change in pose with and without compensation |
 | `run [robot]` | Collect data with the operation screen |
 | `record [robot] --task <text> --seconds <n>` | Collect fixed-duration episodes (`--episodes` sets the count; `--home` moves to the initial pose before each) |
+| `record [robot] --experiment <name>`, `infer [robot] --experiment <name>` | Run as `experiments/<name>.yaml` says (options, policy, task, seconds, episodes, home; [experiment files](configuration.md#experiments)); values on the command line win |
 | `infer [robot] --seconds <n>` | Fixed-duration policy episodes; enables the option `policy` automatically; save only with `--task`; `--home` moves to the policy's initial pose before each ([policy home](../controllers/policy.md)) |
 | `session [robot] <operation> [task]` | Send an operation to a running `run`: `start <task>`, `stop`, `save`, `discard`, `home`, `estop`, `release`, `quit`; with `teleop:` in the policy also `teleop`, `policy`, `stop_teleop`. `save success` and `save failure` save with the verdict |
-| `serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | Serve a policy from this environment to a policy node that loads `roboloom.policy.remote:connect` ([another process](../controllers/policy.md#running-the-policy-in-another-process)); the secret is read from `ROBOLOOM_POLICY_AUTHKEY` |
+| `serve-policy --from <policy YAML>`, `serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | Serve a policy from this environment to a policy node with `backend: server`; `--from` uses the policy YAML's `factory`, `kwargs` and `server.address` ([another process](../controllers/policy.md#running-the-policy-in-another-process)); the secret is read from `ROBOLOOM_POLICY_AUTHKEY` |
 | `check-dataset [robot]` | Check a recorded dataset by reading it only: episode counts against the files, video length against the rows, the share of rows whose `valid` is 0, the count of verdicts. Exit code 1 when something is wrong. A dataset directory can be given instead of `[robot]`; select a dataset whose name an option changes with `--with`. `--recover` removes an episode whose save was interrupted ([Recording and resuming](configuration.md#recording-and-resuming)) |
 | `label [robot] <episode> success\|failure` | Give a saved episode its evaluation verdict, or change it (`--note <text>` adds a note). Appends to the dataset's `meta/roboloom_episodes.jsonl` and prints the count of verdicts. A dataset directory can be given instead of `[robot]`; select a dataset whose name an option changes with `--with` ([Episode records](configuration.md#episode-records)) |
 | `convert-handheld [robot] --action delta\|relative-chunk` | Turn a hand-held recording (a configuration without followers) into a training dataset whose actions are relative poses ([in development](../contribution/pika-handheld.md); `--horizon`, `--hands`, `--max-gap`, `--output`, `--repo-id`) |
@@ -54,6 +55,7 @@ uv run roboloom run --with gravity                # start without the launcher
 uv run roboloom run --mock                        # mock devices
 uv run roboloom record --task "pick up the cup" --seconds 30 --home
 uv run roboloom infer --seconds 20 --policy my_lab.policies:load
+uv run roboloom infer --experiment drawer         # experiments/drawer.yaml
 uv run roboloom validate --with digit
 uv run roboloom session home
 uv run roboloom session save success               # from another terminal: save with the verdict

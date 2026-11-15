@@ -22,6 +22,7 @@ command_deadline_ms: 300
 ```
 
 - The `factory` module is looked up in the installed packages first, then in the robot's directory (`.roboloom/<robot>/`).
+- Put the policy's YAML, the options, the task, the seconds and the episode count into an [experiment file](../reference/configuration.md#experiments), and `roboloom infer --experiment <name>` is all it takes.
 - `roboloom infer` turns on the option named `policy`. `--policy` and `--policy-kwargs` replace the policy without editing the YAML.
 
 ```bash
@@ -158,23 +159,41 @@ uv run roboloom infer rakuda2 --seconds 20 --home --task replay \
 
 ### Running the policy in another process
 
-A model whose dependencies do not fit the environment roboloom runs in (another torch
-version, for example), or that should run on another machine, is served from its own
-process. The policy node connects to it with `roboloom.policy.remote:connect`; `bind`,
-`reset`, `infer` and `options` are forwarded, so the policy itself is written as above.
+A policy is loaded in one of two places, chosen with `backend` in the policy's YAML. The policy itself (`bind`, `reset`, `infer`, `options`) is written the same for both.
+
+| `backend` | Process that loads the policy | When |
+| --- | --- | --- |
+| `process` (default) | The policy node itself | The policy's dependencies fit roboloom's environment; no server to start |
+| `server` | A policy server started separately | A model whose dependencies do not fit (another torch version, for example), or that runs on another machine |
+
+```yaml
+# nodes/policy.yaml
+factory: my_lab.policies:load        # the policy itself, with either backend
+kwargs: {checkpoint: "..."}
+backend: server                      # left out: process
+server: {address: "127.0.0.1:18765"} # read only with backend: server
+```
+
+With `backend: server` the policy node does not load `factory`; it connects to `server.address`. The server starts from the same YAML: it reads `factory`, `kwargs` and `server.address`.
 
 ```bash
 # where the model lives: its own environment, with roboloom installed without extras
 export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
-uv run roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
-# the same, without roboloom's command line: python -m roboloom.policy.remote my_lab.policies:load
+uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
+# without roboloom's command line: python -m roboloom.policy.remote --from <the same file>
+# without the YAML: roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
 ```
 
-```yaml
-# nodes/policy.yaml (the environment roboloom runs in needs the same ROBOLOOM_POLICY_AUTHKEY)
-factory: roboloom.policy.remote:connect
-kwargs: {address: "127.0.0.1:18765"}   # timeout_s: 30 bounds one infer
-```
+| Key of `server` | Meaning |
+| --- | --- |
+| `address` | `host:port` (default `127.0.0.1:18765`) |
+| `timeout_s` | Bound of one `infer` (default 30 s) |
+| `connect_timeout_s` | Bound of the wait for the server to come up (default 30 s) |
+| `authkey_env` | Environment variable holding the shared secret (default `ROBOLOOM_POLICY_AUTHKEY`); the environment roboloom runs in needs the same value |
+
+- The module of `factory` and relative paths in `kwargs` are resolved in the directory and environment the server was started in.
+- With `backend: server`, `roboloom infer --policy` and `--policy-kwargs` are refused (the server loads the policy).
+- The earlier form, `factory: roboloom.policy.remote:connect` with `kwargs: {address: ...}`, still works.
 
 - The server loads the model once and serves one policy node at a time, across episodes and sessions. Start it before `roboloom infer`; the node waits up to `connect_timeout_s` (30 s) for it. A second node that connects while one is served is told so (`the policy server is serving another policy node`) instead of waiting.
 - A call that gets no answer within `timeout_s` fails that episode (`TimeoutError`). Its answer, when it comes later, is dropped: every call carries a number and only the answer with that number is taken.
@@ -341,6 +360,16 @@ teleop: [controller.yaml]   # the controller the leader drives through (next to 
 - Handing back (Policy) clears the policy's history (`policy.reset()`) and restarts the interpolation from the targets the followers hold.
 - The recording marks the rows a person drove with `action.intervention` (1). The feature exists only in configurations with `teleop:`. The leader is recorded as an input too, so the dataset name differs (Rakuda2: `-eval-teleop`).
 - Teleop outside an episode records nothing. The first one or two rows of an episode may still carry the person's command from just before `start` and then have `action.intervention` 1.
+- **`home` takes the leader along**: when the policy has `home:`, `home` moves the leader of the teleop controller to the same pose as the follower. A leader joint in a position group (`law: position`) goes to the `home` pose and is held there. Put the torso and head, which set the camera's direction, into such a group, and the camera angle stays while Teleop moves only the arms.
+
+  ```yaml
+  # control of nodes/leader.yaml (the leader used for teleop)
+  - group: camera
+    law: position
+    joints: [torso_yaw, head_yaw, head_pitch]
+  ```
+
+  The order is `home`, then Teleop to bring the arms to the start pose when needed, then `start`.
 - In Python: `Session.teleop()`, `Session.policy()`, `Session.stop_teleop()`.
 - Only `type: joint` teleop controllers are supported. `pose_ik` (PiPER + Pika Sense and the like) is refused at load as not supporting takeover yet.
 - An ESTOP or FAULT of a follower, or a follower going silent, also ends Teleop. Pressing Teleop again takes the joints over from there.

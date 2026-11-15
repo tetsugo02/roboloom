@@ -1,0 +1,12 @@
+# uv run roboloom infer rakuda2 --experiment dp_multimodal
+# (start the policy server in master_proj first: nodes/policy_dp_multimodal.yaml)
+help: master_proj raw multimodal diffusion policy (To 8), marker transfer
+options: [policy_teleop, digit]  # policy_teleop: the leader drives before an episode (Teleop)
+policy: nodes/policy_dp_multimodal.yaml
+set:
+  inputs.leader: nodes/leader_fixed_camera.yaml  # torso and head held at the home pose
+dataset: dp-multimodal  # episodes go to datasets/rakuda2-digit-eval-teleop-dp-multimodal
+task: transfer the marker
+seconds: 100  # master_proj's rollout_steps 500 at 5 Hz
+episodes: 1
+home: true  # to poses/follower/camera_transfer_marker.yaml before every episode

@@ -35,9 +35,10 @@ Flags of commands that open devices:
 | `roboloom capture-pose [robot] [follower] <name> [--force]` | save current follower pose to `poses/` | reads |
 | `roboloom run [robot] [--plain]` | operator screen, many episodes | yes |
 | `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--plain]` | fixed-length episodes | yes |
+| `roboloom record\|infer [robot] --experiment <name>` | run as `.roboloom/<robot>/experiments/<name>.yaml` says (see configuration.md); words on the command line win | yes |
 | `roboloom infer [robot] --seconds <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only with `--task` | yes |
 | `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit\|teleop\|policy\|stop_teleop> [task]` | send one operation to a running `run`; `save success` / `save failure` saves with the verdict | no |
-| `roboloom serve-policy <module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node (`factory: roboloom.policy.remote:connect`) | no |
+| `roboloom serve-policy --from <policy YAML>` or `<module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node with `backend: server` (`--from`: the YAML's `factory`, `kwargs`, `server.address`) | no |
 | `roboloom check-dataset [robot\|dataset dir] [--with a,b] [--recover]` | is a recorded dataset whole (exit 1 if not), which rows are not valid; `--recover` removes an episode whose save was interrupted | no |
 | `roboloom label [robot\|dataset dir] <episode> success\|failure [--note TEXT] [--with a,b]` | set or change a saved episode's evaluation verdict (appends to `meta/roboloom_episodes.jsonl`), print the counts | no |
 | `roboloom convert-handheld [robot] --action delta\|relative-chunk [--horizon 16] [--hands a,b] [--max-gap 3] [--output P] [--repo-id R]` | hand-held recording → training dataset (in development) | no |

@@ -40,12 +40,58 @@ from typing import Any
 
 import numpy as np
 
+from ..core.checks import positive, unknown_keys
 from ..errors import ConfigError
 from . import Policy, PolicySpec, load_policy
 
 ADDRESS = "127.0.0.1:18765"
 AUTHKEY_ENV = "ROBOLOOM_POLICY_AUTHKEY"
 OPTIONS = ("observation_history", "hold", "action_horizon")
+BACKENDS = ("process", "server")  # a policy controller's `backend:`
+SERVER_KEYS = ("address", "authkey_env", "timeout_s", "connect_timeout_s")
+
+
+def server_settings(raw: object, where: str = "server") -> dict[str, Any]:
+    """A policy controller's `server:` mapping as the arguments of `connect`."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{where}: expected a mapping with {', '.join(SERVER_KEYS)}")
+    unknown_keys(raw, SERVER_KEYS, where)
+    out = dict(raw)
+    for key in ("address", "authkey_env"):
+        if key in out and not isinstance(out[key], str):
+            raise ConfigError(f"{where}.{key}: expected text")
+    if "address" in out:
+        _address(out["address"])
+    for key in ("timeout_s", "connect_timeout_s"):
+        if key in out:
+            out[key] = positive(out[key], f"{where}.{key}")
+    return out
+
+
+def served(path: str) -> tuple[str, dict, dict[str, Any]]:
+    """What the policy server of the policy node file `path` loads and where it
+    listens: its `factory`, `kwargs` and `server:` (`serve-policy --from`)."""
+    from pathlib import Path
+
+    import yaml
+
+    try:
+        cfg = yaml.safe_load(Path(path).read_text())
+    except OSError as exc:
+        raise ConfigError(f"{path}: {exc}") from None
+    if not isinstance(cfg, dict) or not isinstance(cfg.get("factory"), str):
+        raise ConfigError(f"{path}: not a policy node file (no factory)")
+    if cfg["factory"] == "roboloom.policy.remote:connect":
+        raise ConfigError(
+            f"{path}: its factory connects to a server; write the policy's own "
+            "factory and kwargs there, with backend: server"
+        )
+    kwargs = cfg.get("kwargs") or {}
+    if not isinstance(kwargs, dict):
+        raise ConfigError(f"{path}: kwargs must be a mapping")
+    return cfg["factory"], kwargs, server_settings(cfg.get("server"), f"{path}: server")
 
 
 class RemotePolicyError(RuntimeError):
@@ -336,24 +382,56 @@ def main(argv: list[str] | None = None) -> None:
         description="Serve a policy to a roboloom policy node "
         "(factory: roboloom.policy.remote:connect).",
     )
-    parser.add_argument("policy", help="module:callable returning the policy")
+    add_arguments(parser)
+    try:
+        run(parser.parse_args(argv))
+    except ConfigError as exc:
+        raise SystemExit(f"error: {exc}") from None
+
+
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    """The words of `roboloom serve-policy` and `python -m roboloom.policy.remote`."""
     parser.add_argument(
-        "--kwargs", type=json.loads, default={}, help="JSON arguments of the callable"
+        "policy", nargs="?", help="module:callable returning the policy"
     )
-    parser.add_argument("--address", default=ADDRESS, help="host:port to listen on")
+    parser.add_argument(
+        "--from",
+        dest="from_",
+        metavar="POLICY_YAML",
+        help="serve the policy of this policy node file (its factory, kwargs and "
+        "server.address), e.g. .roboloom/<robot>/nodes/policy.yaml",
+    )
+    parser.add_argument(
+        "--kwargs", type=json.loads, default=None, help="JSON arguments of the callable"
+    )
+    parser.add_argument("--address", default=None, help=f"host:port ({ADDRESS})")
     parser.add_argument(
         "--authkey-env",
-        default=AUTHKEY_ENV,
-        help="environment variable holding the shared secret",
+        default=None,
+        help=f"environment variable holding the shared secret ({AUTHKEY_ENV})",
     )
-    args = parser.parse_args(argv)
-    print(f"policy server: loading {args.policy}")
+
+
+def run(args: argparse.Namespace) -> None:
+    """Serve what the words say: a node file's policy (`--from`) or `policy`; the
+    other words replace the file's."""
+    factory: str | None = args.policy
+    kwargs: dict = {}
+    server: dict[str, Any] = {}
+    if args.from_:
+        if args.policy:
+            raise ConfigError("give the policy or --from <policy YAML>, not both")
+        factory, kwargs, server = served(args.from_)
+    if not factory:
+        raise ConfigError("give module:callable, or --from <policy YAML>")
+    address = args.address or server.get("address", ADDRESS)
+    print(f"policy server: loading {factory}", flush=True)
     serve(
-        args.policy,
-        args.address,
-        kwargs=args.kwargs,
-        authkey_env=args.authkey_env,
-        ready=lambda: print(f"policy server: listening on {args.address}"),
+        factory,
+        address,
+        kwargs=kwargs if args.kwargs is None else args.kwargs,
+        authkey_env=args.authkey_env or server.get("authkey_env", AUTHKEY_ENV),
+        ready=lambda: print(f"policy server: listening on {address}", flush=True),
     )
 
 
