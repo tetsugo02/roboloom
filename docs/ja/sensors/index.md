@@ -9,7 +9,7 @@
 
 ## Recorderの設定
 
-どのセンサーも，`nodes/recorder.yaml` の `max_age_ms` にノード名をキーとした項目が必要です．データセットの行に使えるサンプルの古さの上限（ms）で，それより古いものは欠測（0，`valid` は0）として記録します．inputとfollowerにも必要です．項目が無いと，設定の読み込みが `max_age_ms.<name>: expected positive finite number`（例：`max_age_ms.digit_left: expected positive finite number`）で失敗します．
+どのセンサーも，`nodes/recorder.yaml` の `max_age_ms` にノード名をキーとした項目が必要です．データセットの行に使えるサンプルの古さの上限（ms）で，それより古いものは欠測として記録します（`valid` は0．値は直前の有効なサンプルを繰り返し，まだ一度も届いていないときだけ0）．inputとfollowerにも必要です．項目が無いと，設定の読み込みが `max_age_ms.<name>: expected positive finite number`（例：`max_age_ms.digit_left: expected positive finite number`）で失敗します．
 
 ```yaml
 max_age_ms:

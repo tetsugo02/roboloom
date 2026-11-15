@@ -77,7 +77,7 @@ allow-direct-references = true  # the pysurvive wheel URL of the pika extra
 testpaths = ["tests"]
 
 [[tool.mypy.overrides]]
-module = ["dynamixel_sdk", "piper_sdk", "serial", "pinocchio", "lerobot.*"]
+module = ["dynamixel_sdk", "piper_sdk", "serial", "pinocchio", "lerobot.*", "pyarrow.*"]
 ignore_missing_imports = true
 
 [tool.pyright]

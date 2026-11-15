@@ -139,6 +139,7 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
 ### Fine-grained control
 
 - You can call `start(task)`, `stop()`, `save()`, `discard()`, `estop()`, and `release(confirm=True)` one at a time.
+- An episode `save()` returned for stays readable even if the process stops afterwards. When the write fails, `save()` raises `SessionError` and drops that episode (the earlier ones stay and the next can be recorded; [Recording and resuming](configuration.md#recording-and-resuming)).
   - Example: when start and end are decided by an external signal.
 - Inspecting state:
   - `status()`: latest status of each node.

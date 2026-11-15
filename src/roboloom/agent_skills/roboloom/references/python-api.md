@@ -70,7 +70,7 @@ s.record(lambda info: f"pick up the {next(objects)}", seconds=20, keep=lambda ep
 | --- | --- |
 | `start(task)` | start following + recording; `SessionError` if not aligned |
 | `stop() -> EpisodeResult` | stop; not saved yet (inspect metrics/warnings) |
-| `save(timeout=300.0) -> EpisodeResult` / `discard()` | finalize or drop the episode |
+| `save(timeout=300.0) -> EpisodeResult` / `discard()` | write the episode (readable from then on, whatever happens to the process) or drop it; a failed write raises `SessionError` and drops the episode |
 | `home(timeout=None)` | slow move to the home pose; refused while recording |
 | `estop()` | emergency stop (latched) |
 | `release(confirm=False)` | torque off; with `confirm=False` raises `HardwareError` carrying `release_note()` |

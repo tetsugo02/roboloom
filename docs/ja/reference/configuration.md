@@ -308,9 +308,9 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 
 この間に1回，約120 msの停止がありました．60 Hzでも同じ程度の停止が起きており，周期とは関係ありません．120 HzはFTDIのlatency timerが1 msで，Fast Sync Readが使えることを前提にしています．`probe` の目安がこれを下回る場合や，`work` の最大が周期の70%を超える場合は，`control_hz` と `poll_hz` を下げてください（例：60）．
 
-## 記録と再開
+## 記録と再開 { #recording-and-resuming }
 
-`record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損はゼロ値と有効フラグで表します．`task` はフレームに記録されます．
+`record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損は直前の有効な値と有効フラグで表します．`task` はフレームに記録されます．
 
 フォロワが複数あるとき，`observation.state`，`observation.effort`，`action` は全フォロワを設定の順につなげた1本のベクトルです．`names` が各要素の持ち主を `<フォロワ名>.<関節名>` で示します（例：`follower.r_arm_sh_pitch1`）．ほかのfeatureはノードごとで，ノード名が付きます．
 
@@ -326,11 +326,24 @@ Rakuda2での実測値です（2026-10-27，17モーター，1 Mbps，FTDI laten
 | `action.clamped` | どれかのフォロワが制限した行で1 |
 | `action.meta.<フォロワ名>.valid` / `clamped` / `seq` / `sent_ns` | フォロワごとの指令の有無，制限，指令の番号，送信時刻 |
 
-`nodes/recorder.yaml` のそのノードの `max_age_ms` より古いサンプルは使いません．そのfeatureは0で埋め，`observation.meta.<ノード名>.valid` を0，`seq` を-1にします．input，フォロワ，センサーのどれにも `max_age_ms` の項目が必要です（[Sensors](../sensors/index.md) の「Recorderの設定」）．
+`nodes/recorder.yaml` のそのノードの `max_age_ms` より古いサンプルは使いません．その行は `observation.meta.<ノード名>.valid` を0，`seq` を-1にし，featureにはそのノードの直前の有効なサンプルの値を入れます（まだ一度も届いていないときだけ0）．0で埋めると，統計の最小値と平均が0に引かれるためです．input，フォロワ，センサーのどれにも `max_age_ms` の項目が必要です（[Sensors](../sensors/index.md) の「Recorderの設定」）．
 
 指令を送らなかったフォロワの部分は，そのフォロワが保持していた目標（状態の `target`．なければ位置）で埋めます．ゼロで埋めると，学習した方策が0への跳びを覚えるためです．LeRobotの学習は `action.valid` を見ないので，有効な行だけを使う場合は `action.valid` で選んでください．行は，全フォロワの指令がその区間を過ぎたとき，または `grace_ms`（既定500 ms）が過ぎたときに確定します．
 
 同じデータセットに次のエピソードを追記できます．再開時はFPSとfeatureの互換性を検査します．記録するfeatureを変えるオプションには `dataset` を付け，データセットを分けます（「起動オプション」の節）．
+
+### 保存したエピソードの扱い
+
+- 保存のたびに，そのエピソードのファイルを閉じます．`save` が成功を返したエピソードは，そのあとプロセスが強制終了されても読めます．
+- そのため，データ・エピソードのメタデータ・動画は1エピソードにつき1ファイルです（LeRobotで `resume` を繰り返したときと同じ配置）．Hubに上げる前にファイルをまとめたい場合は，LeRobotの集約ツールを使います．
+- 保存が失敗した場合（ディスクの空きがないなど）は，そのエピソードを破棄し，データセットを保存前の状態に戻します．それまでのエピソードは残り，次のエピソードを記録できます．
+- 保存の途中でプロセスが止まった場合は，次にそのデータセットを開いたとき（`run`・`record`，または `check-dataset --recover`）に，書きかけのエピソードを取り除きます．
+- 動画の長さがエピソードの行数と合わない場合（画像を書けなかったなど）は，保存の失敗として扱います．
+- 対象はプロセスの異常終了です．電源断までは保証しません（LeRobotがファイルをディスクへ同期しないため）．
+
+`meta/roboloom.json` に，データセットを作ったroboloomの版，`action` と `observation.state` の各要素の単位，エピソードを保存した起動ごとのオプションと設定（`meta/roboloom_config/<名前>.json`．ノードの値をそのまま写したもの）を残します．ノードのファイルが指す別のファイル（重力モデル，調整値，校正）は写しません．
+
+`roboloom check-dataset [robot]` は，データセットを読むだけで検査します（[CLI](cli.md)）．壊れているところ（読めないファイル，数の食い違い，動画と行数の不一致）と，学習の前に知っておくべきこと（`valid` が0の行の割合）を表示します．
 
 `recorder.quality` の `max_missing_rate`，`min_action_valid_rate`，`max_interval_ms` で品質警告の閾値を指定できます．保存結果のmetricsとwarningsを確認します．`control_interval_ms` と `action_missing_rate`（指令のなかった行の割合）はフォロワごとで，警告にはフォロワの名前が出ます．
 

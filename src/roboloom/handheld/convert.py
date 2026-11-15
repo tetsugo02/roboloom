@@ -72,17 +72,24 @@ def hands_of(features: dict[str, dict]) -> list[str]:
     ]
 
 
-def recorded_poses(raw: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Poses `[N, 4, 4]` and which rows are tracked, from recorded `[N, 10]` rows.
+def recorded_poses(
+    raw: np.ndarray, valid: np.ndarray | None = None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Poses `[N, 4, 4]` and which rows are tracked, from recorded `[N, 10]` rows and
+    their `observation.meta.<hand>.valid`.
 
-    A row without a fresh sample is recorded as zeros (no rotation, tracking 0); such
-    rows, and untracked ones, get the identity rotation here and count as untracked, so
-    `fill_gaps` fills or reports them instead of the conversion failing."""
+    A row without a fresh sample repeats the last one (`valid` 0), or is all zeros (no
+    rotation, tracking 0) before the first sample and in recordings of older versions.
+    Such rows, and untracked ones, get the identity rotation here and count as
+    untracked, so `fill_gaps` fills or reports them instead of the conversion failing
+    or taking a repeated pose for a hand that stood still."""
     raw = np.asarray(raw, dtype=float)
     quaternion = raw[:, _Q].copy()
     norm = np.linalg.norm(quaternion, axis=1)
     tracked = (raw[:, _TRACKING] > 0.5) & np.isfinite(norm) & (norm > 1e-6)
     tracked &= np.isfinite(raw[:, _X]).all(axis=1)
+    if valid is not None:
+        tracked &= np.asarray(valid, dtype=float).ravel() > 0.5
     quaternion[~tracked] = (0.0, 0.0, 0.0, 1.0)
     position = np.where(tracked[:, None], raw[:, _X], 0.0)
     return P.poses_from(position, quaternion), tracked
@@ -190,6 +197,11 @@ def convert(
         )
 
     columns = {h: np.stack(dataset.hf_dataset[f"observation.{h}"]) for h in chosen}
+    fresh = {
+        h: np.asarray(dataset.hf_dataset[f"observation.meta.{h}.valid"]).ravel()
+        for h in chosen
+        if f"observation.meta.{h}.valid" in features
+    }
     episode = np.asarray(dataset.hf_dataset["episode_index"]).ravel()
     order = np.argsort(np.asarray(dataset.hf_dataset["index"]).ravel(), kind="stable")
     report = Report(output, 0, 0)
@@ -200,7 +212,8 @@ def convert(
         problem = None
         for h in chosen:
             raw = columns[h][at].astype(float)
-            pose, filled, problem = P.fill_gaps(*recorded_poses(raw), max_gap)
+            valid = fresh[h][at] if h in fresh else None
+            pose, filled, problem = P.fill_gaps(*recorded_poses(raw, valid), max_gap)
             if problem:
                 problem = f"{h}: {problem}"
                 break

@@ -21,7 +21,7 @@ from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.estimators.base import Estimate, Estimator
-from roboloom.recording import ACTION, EpisodeRecorder
+from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed
 from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
@@ -805,6 +805,14 @@ def _recorder(node, cfg: RobotConfig):
     saving: threading.Thread | None = None
     done: queue.Queue[dict] = queue.Queue()
     status = StatusReporter(Publisher("recorder"), "recorder")
+    if writer.recovered:
+        done.put(
+            {
+                "note": "the dataset was put back to its last saved episode: a save "
+                "had been interrupted",
+                "level": "warn",
+            }
+        )
 
     def save(metrics: dict, ident: object) -> None:
         try:
@@ -813,12 +821,15 @@ def _recorder(node, cfg: RobotConfig):
                     "command": "save",
                     "id": ident,
                     "saved_frames": writer.save(),
-                    "episodes": writer.dataset.num_episodes,
+                    "episodes": writer.episodes,
                     "metrics": metrics,
                 }
             )
         except Exception as exc:  # noqa: BLE001 - report session failure to operator
-            done.put({"command": "save", "id": ident, "error": str(exc)})
+            failed = {"command": "save", "id": ident, "error": str(exc)}
+            if isinstance(exc, SaveFailed):  # the episode is gone: nothing to retry
+                failed["dropped"] = True
+            done.put(failed)
 
     try:
         while True:
@@ -849,7 +860,7 @@ def _recorder(node, cfg: RobotConfig):
                     "missing": {k: v for k, v in writer.missing.items() if v},
                     # rows in which a follower sent no command
                     "no_action": {k: v for k, v in writer.action_missing.items() if v},
-                    "episodes": writer.dataset.num_episodes,
+                    "episodes": writer.episodes,
                 }
                 level = (
                     "warn" if any(writer.missing.values()) and writer.active else "ok"

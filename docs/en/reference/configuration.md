@@ -310,7 +310,7 @@ There was one stall of about 120 ms during the run. Stalls of the same size also
 
 ## Recording and resuming
 
-With the `record` extra, data is saved as LeRobotDataset 0.6.1. Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by zero values and validity flags. `task` is recorded in each frame.
+With the `record` extra, data is saved as LeRobotDataset 0.6.1. Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by the last valid value and validity flags. `task` is recorded in each frame.
 
 With several followers, `observation.state`, `observation.effort` and `action` are one vector joining all followers in configuration order. Their `names` tell which follower each entry belongs to, as `<follower>.<joint>` (for example `follower.r_arm_sh_pitch1`). The other features are per node and named after it.
 
@@ -326,11 +326,24 @@ With several followers, `observation.state`, `observation.effort` and `action` a
 | `action.clamped` | 1 in rows where any follower limited its command |
 | `action.meta.<follower>.valid` / `clamped` / `seq` / `sent_ns` | Each follower's own: command present, limited, command number, send time |
 
-A sample older than the node's `max_age_ms` in `nodes/recorder.yaml` is not used: its features hold zeros, `observation.meta.<node>.valid` is 0 and `seq` is -1. Every input, follower and sensor needs a `max_age_ms` entry (see "Recorder entry" in [Sensors](../sensors/index.md)).
+A sample older than the node's `max_age_ms` in `nodes/recorder.yaml` is not used: in that row `observation.meta.<node>.valid` is 0 and `seq` is -1, and the features repeat that node's last valid sample (zeros only before its first one). Filling with zeros would pull the minimum and the mean of the statistics to 0. Every input, follower and sensor needs a `max_age_ms` entry (see "Recorder entry" in [Sensors](../sensors/index.md)).
 
 A follower that sent no command fills its part with the target it held (its state's `target`, else its position); filling with zeros would teach a policy a jump to 0. LeRobot training does not read `action.valid`, so select rows by `action.valid` when you only want valid ones. A row is final once every follower's commands have passed its interval, or after `grace_ms` (default 500 ms).
 
 You can append further episodes to the same dataset. On resume, FPS and feature compatibility are checked. Give an option that changes the recorded features a `dataset`, so it gets a dataset of its own (see "Launch options").
+
+### What happens to a saved episode
+
+- Every save closes the episode's files. An episode whose `save` succeeded stays readable even if the process is killed afterwards.
+- So the rows, the episode metadata and each video are one file per episode (the layout LeRobot produces when `resume` is called for every episode). To merge the files before uploading to the Hub, use LeRobot's aggregation tools.
+- When a save fails (for example the disk is full), that episode is dropped and the dataset is put back as it was before the save. The earlier episodes stay, and the next episode can be recorded.
+- When the process stops in the middle of a save, the half-written episode is removed the next time the dataset is opened (`run`, `record`, or `check-dataset --recover`).
+- A video that is not as long as the episode's rows (for example a frame could not be written) counts as a failed save.
+- This covers a process that dies. It does not cover a power loss (LeRobot does not sync its files to the disk).
+
+`meta/roboloom.json` keeps the roboloom version that created the dataset, the unit of every entry of `action` and `observation.state`, and, for every run that saved an episode, its options and configuration (`meta/roboloom_config/<name>.json`, the nodes' values as loaded). Files a node file points to (gravity models, tuning, calibration) are not copied.
+
+`roboloom check-dataset [robot]` checks a dataset by reading it only ([CLI](cli.md)). It lists what is broken (unreadable files, counts that disagree, a video that does not match its rows) and what to know before training (the share of rows whose `valid` is 0).
 
 Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_valid_rate`, and `max_interval_ms` in `recorder.quality`. Check the metrics and warnings in the save result. `control_interval_ms` and `action_missing_rate` (the share of rows without a command) are per follower, and warnings name the follower.
 

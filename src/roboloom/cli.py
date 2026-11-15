@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 # Subcommands whose first word may name the configuration (a robot under .roboloom/ or a
 # YAML file). Commands without other positional words always read it as one.
 CONFIGURED = {
+    "check-dataset",
     "convert-handheld",
     "launch",
     "run",
@@ -50,7 +51,15 @@ CONFIGURED = {
     "tune-gravity",
     "capture-pose",
 }
-ONLY_CONFIG = {"launch", "run", "record", "infer", "validate", "convert-handheld"}
+ONLY_CONFIG = {
+    "launch",
+    "run",
+    "record",
+    "infer",
+    "validate",
+    "convert-handheld",
+    "check-dataset",
+}
 SESSION_OPERATIONS = (
     "start",
     "stop",
@@ -346,6 +355,18 @@ def main(argv: list[str] | None = None) -> None:
     )
     conv.add_argument("--output", help="default: <output>-<action> of the recording")
     conv.add_argument("--repo-id", help="default: <repo_id>-<action>")
+    check = sub.add_parser(
+        "check-dataset",
+        parents=[configured, devices],
+        help="is a recorded dataset whole, and which rows are not valid (reads only); "
+        "names a robot (its dataset, with --with/--without as recorded) or a "
+        "dataset directory",
+    )
+    check.add_argument(
+        "--recover",
+        action="store_true",
+        help="first undo a save that was interrupted (the half-written episode)",
+    )
     sess = sub.add_parser(
         "session", parents=[configured], help="send one command to a running `run`"
     )
@@ -571,6 +592,17 @@ def _dispatch(args: argparse.Namespace) -> None:
             source_repo_id=cfg.repo_id,
         )
         print(report.describe())
+        return
+    if args.command == "check-dataset":
+        from .recording.check import check_dataset
+
+        target = Path(args.config) if args.config else None
+        if target is None or not (target / "meta" / "info.json").exists():
+            target = Path(_load(args).output)  # the robot's dataset
+        checked = check_dataset(target, recover=args.recover)
+        print(checked.describe())
+        if not checked.ok:
+            raise SystemExit(1)
         return
     if args.command == "validate":
         cfg = _load(args)

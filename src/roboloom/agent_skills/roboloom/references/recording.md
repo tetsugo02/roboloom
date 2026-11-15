@@ -20,10 +20,11 @@ With the `record` extra, episodes are saved as **LeRobotDataset 0.6.1** (format 
 
 - Rows without a command hold the follower's kept target (not zeros). LeRobot training
   ignores `action.valid`; filter by it yourself if you only want valid rows.
-- A sample older than `recorder.max_age_ms.<node>` is missing: zeros, `observation.meta.<node>.valid` 0, `seq` -1.
+- A sample older than `recorder.max_age_ms.<node>` is missing: `observation.meta.<node>.valid` 0, `seq` -1,
+  and the value repeats that node's last valid sample (zeros only before its first one).
   Every input, follower and sensor needs an entry; entries for nodes not in the configuration
   (and misspelled names) are ignored.
-- Missing observations are zeros plus validity flags. Timestamps distinguish capture,
+- Missing observations are the last valid value plus validity flags. Timestamps distinguish capture,
   availability, reception and sending (monotonic clock).
 - A row is final once every follower's commands passed its interval or after `grace_ms`
   (500 ms).
@@ -48,6 +49,23 @@ checked; a mismatch is refused. **Do not delete data to get around it** – chan
 or give the option that changed the features a `dataset` name. The same holds for the
 video codec: without `video_codec` the saved videos' codec is reused, and a different
 explicit one is refused ([configuration](configuration.md#video-codec)).
+
+## What a save guarantees
+
+- Every save closes the episode's files (one data file, one metadata file and one video
+  per camera for each episode). An episode whose `save` succeeded stays readable even if
+  the process is killed afterwards.
+- A save that fails (disk full, a video that does not match the rows) drops that episode
+  and puts the dataset back as it was: `save()` raises `SessionError`, the earlier
+  episodes stay, the next episode can be recorded.
+- A save interrupted by a kill is undone the next time the dataset is opened (`run`,
+  `record`, or `roboloom check-dataset --recover`).
+- `meta/roboloom.json` holds the roboloom version, the unit of each `action` /
+  `observation.state` entry, and each recording run's options and configuration
+  (`meta/roboloom_config/`).
+- `roboloom check-dataset [robot|dataset dir]` reads a dataset only and lists what is
+  broken (exit code 1) and the share of rows whose `valid` is 0. Run it before training
+  and after a crash. **Do not repair a dataset by editing its files.**
 
 ## Training
 
