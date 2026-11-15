@@ -239,9 +239,29 @@ def test_the_policy_server_reads_the_same_experiment_file(tmp_path, monkeypatch)
     )
     with pytest.raises(SystemExit, match="give one of"):
         remote.main(["policies:creep", "--experiment", str(file)])
+    served: list[tuple] = []
+    monkeypatch.setattr(
+        remote, "serve", lambda *a, **k: served.append((a, k["kwargs"]))
+    )
+    cli.main(["serve-policy", "--experiment", str(file)])  # the command, not the module
+    assert served == [(("policies:creep", server["address"]), {"step": 5.0})]
     file.write_text(yaml.safe_dump({"nodes": {"inputs.leader": "nodes/leader.yaml"}}))
     with pytest.raises(ConfigError, match="expected one policy under nodes"):
         remote.served_by_experiment(str(file))
+
+
+def test_what_an_experiment_changes_is_not_blamed_on_an_option(tmp_path, monkeypatch):
+    """An option without a dataset of its own must not change the recorded features;
+    the comparison is made with the experiment on both sides."""
+    camera = {"width": 320, "height": 240}
+    _project(tmp_path, monkeypatch, nodes={"sensors.camera": camera})
+    config = tmp_path / ".roboloom" / "rakuda2" / "config.yaml"
+    tree = yaml.safe_load(config.read_text())
+    tree["options"]["quiet"] = {"help": "changes nothing that is recorded"}
+    config.write_text(yaml.safe_dump(tree, sort_keys=False))
+    run = load_experiment("drawer")
+    cfg = load_config(run.robot, options=["quiet"], mock=True, experiment=run)
+    assert "quiet" in cfg.options  # loaded: the camera size is the experiment's doing
 
 
 @needs_dora

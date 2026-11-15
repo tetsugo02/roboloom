@@ -1214,7 +1214,7 @@ def load_config(
             read_config(path, options, mock, sensors, observe, video_codec, experiment)
         )
         if sensors is None:
-            _check_datasets(path, cfg)
+            _check_datasets(path, cfg, experiment)
         return cfg
     except ConfigError:
         raise
@@ -1222,10 +1222,15 @@ def load_config(
         raise ConfigError(f"{path}: {exc}") from exc
 
 
-def _check_datasets(path: Path, cfg: RobotConfig) -> None:
+def _check_datasets(
+    path: Path,
+    cfg: RobotConfig,
+    experiment: Experiment | Mapping[str, Any] | None = None,
+) -> None:
     """An enabled option without `dataset` must not change the recorded features, or its
     episodes would share a dataset with differently shaped ones. Compared with the
-    configuration loaded without that option and the options requiring it."""
+    configuration loaded without that option and the options requiring it, with the
+    same experiment: what the experiment changes is not the option's doing."""
     expected = features(cfg)
     for name in cfg.options:
         if cfg.available_options[name].dataset:
@@ -1236,7 +1241,9 @@ def _check_datasets(path: Path, cfg: RobotConfig) -> None:
             if n != name and name not in requirements(cfg.available_options, n)
         ]
         try:
-            other = parse_config(read_config(path, rest, mock=True))
+            other = parse_config(
+                read_config(path, rest, mock=True, experiment=experiment)
+            )
         except (ConfigError, ValueError, TypeError, KeyError, FileNotFoundError):
             continue  # not loadable without it: nothing to compare with
         if features(other) != expected:

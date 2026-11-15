@@ -473,6 +473,8 @@ def _experiment(args: argparse.Namespace) -> Experiment | None:
 def _run_settings(args: argparse.Namespace) -> None:
     """The experiment's robot when none is named; for `record` and `infer` also how
     the run goes: from the command line, else from the experiment, else the default."""
+    if args.command == "serve-policy":
+        return  # the server reads the file itself, without the robot's configuration
     run = _experiment(args)
     if run is not None and getattr(args, "config", None) is None and run.robot:
         args.config = run.robot
