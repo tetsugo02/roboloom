@@ -26,10 +26,14 @@ inference: async  # sampling takes longer than one action; the queued actions go
 hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]
 max_speed: {follower: 1024}  # counts/s; the template's value, not measured: lower it for the first runs
 command_deadline_ms: 300
-# Start pose: uncomment, and set `home: true` in experiments/dp_multimodal.yaml, when
-# poses/follower/ready.yaml is the pose the task starts from.
-# home:
-#   pose: ../poses/follower/ready.yaml
-#   max_speed: 200
-#   tolerance: 30
-#   timeout_s: 30
+# The leader drives the follower before an episode (Teleop, key t), to bring it to the
+# pose the task starts from; Start hands over to the policy. Also during an episode.
+teleop: [controller.yaml]
+# Home: the follower, and the leader with it, move to this pose before an episode. The
+# leader holds its torso and head there (nodes/leader_fixed_camera.yaml), so the camera
+# angle stays while Teleop moves the arms to where the task starts.
+home:
+  pose: ../poses/follower/camera_transfer_marker.yaml
+  max_speed: 200
+  tolerance: 30
+  timeout_s: 30
