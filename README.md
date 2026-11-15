@@ -135,7 +135,7 @@ Ctrl-Lで入力，Tab/Shift-Tabで補完，↑↓で履歴，Ctrl-N/Ctrl-Pでペ
 
 `run --plain` は行入力，`record --plain`・`infer --plain` は非対話処理です．非TTYも同じ経路です．`tune-gravity` は機器open前に非TTYを拒否します．Python APIの `Session.launch(..., screen="auto")` は入力を読まないRich表示を維持し，`print()`・`input()` と既存の終了確認を使えます．
 
-コマンドは `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` です．各操作の利用可否と理由をメニューに表示します．doraの出力は設定の隣の `logs/<dataset名>-<時刻>/dora.log` に保存し，画面のログにも表示します．新しい機種は通常の登録と状態通知で汎用表示でき，専用Presenterは任意です．キー・機能情報・表示拡張は [操作画面](docs/ja/reference/operator-screen.md)（[English](docs/en/reference/operator-screen.md)）を参照してください．mock検証と実機検証は別です．
+コマンドは `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` です（方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も）．`save success`・`save failure` と書くと，保存するエピソードに成否を付けます．各操作の利用可否と理由をメニューに表示します．doraの出力は設定の隣の `logs/<dataset名>-<時刻>/dora.log` に保存し，画面のログにも表示します．新しい機種は通常の登録と状態通知で汎用表示でき，専用Presenterは任意です．キー・機能情報・表示拡張は [操作画面](docs/ja/reference/operator-screen.md)（[English](docs/en/reference/operator-screen.md)）を参照してください．mock検証と実機検証は別です．
 
 別端末からは `uv run roboloom session start handover` の形でも操作できます．
 
@@ -158,7 +158,7 @@ uv run roboloom record --task handover --seconds 10
 uv run roboloom infer --policy my_lab.policies:load --seconds 30
 ```
 
-`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．
+`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．各回の成否は，保存のときに `save success`・`save failure` と書くか，あとから `uv run roboloom label --with policy <エピソード番号> success` で残せます（データセットの `meta/roboloom_episodes.jsonl`．[方策で動かす](docs/ja/controllers/policy.md)）．
 
 EEPROM について：
 
@@ -167,11 +167,11 @@ EEPROM について：
 
 機体固有の関節限界，速度上限，ポート，機器 ID はノード YAML に明示してください．模擬構成の値を実機用の安全値として流用しないでください．
 
-全ての関節値は **Dynamixel の生の位置カウント**です．電流は mA で扱い，モーターごとの単位変換はドライバが行います．
+関節値の単位は機体ごとに決まり，follower と入力が `unit` として申告します．Rakuda2 と Rakuda-mini は **Dynamixel の生の位置カウント**（`dynamixel_count`）です．電流は mA で扱い，モーターごとの単位変換はドライバが行います．入力と follower の単位や減速比が違うときは，`type: joint` の対応表の `scale` で換算します（[Leader](docs/ja/controllers/leader.md)）．
 
 follower の安全判定：
 
-- 指令は，速度上限 `max_speed`（カウント/s）に切り詰めて送ります（soft clamp）．切り詰めた行は `action.clamped` に記録します．
+- 指令は，速度上限 `max_speed`（follower の単位/s．Rakuda2 ではカウント/s）に切り詰めて送ります（soft clamp）．切り詰めた行は `action.clamped` に記録します．
 - 範囲外，NaN，期限切れ，`max_jump` を超える飛びは拒否して `HOLD` にします（hard reject）．
 - `HOLD` は，最後に送った目標を固定して送り続けます．実測位置を目標にし直すと，重力で少しずつ下がっていくためです．
 - 健全性の検査（Hardware Error，温度，電流の継続超過，Bus Watchdog の発動）に引っかかると `FAULT` にします．
@@ -237,35 +237,44 @@ recorder は取得，利用可能，受信，送信の単調時計時刻を区�
 
 ```text
 src/roboloom/
-  core/         Envelope（通信形式），値の検査，型レジストリ，Source（入力・センサー共通の契約）
-  drivers/      機器バス（Dynamixel，模擬バス）．inputs と robots が共有する
+  core/         Envelope（通信形式），値の検査，型レジストリ（`type` 名と `module:Class`），Source（入力・センサー共通の契約），状態通知
+  drivers/      機器バス（Dynamixel，PiPER，Pika，模擬バス）．inputs と robots が共有する
   inputs/       操作入力の契約（InputDevice，JointInput，PoseInput）
     rakuda_mini/ Rakuda-mini（rakuda_mini．Rakuda2 を操作するアーム．実験では leader の役割で使う）
-  controllers/  入力から follower への指令（command）を作る．joint，pose_ik，policy（方策ノード）
-  control/      制御則（laws）と JointDevice（device）．leader と follower が共有する
+    pika_sense/  Pika Sense（手に持つ姿勢の入力．開発中）
+  trackers/     追跡システム（Lighthouse を libsurvive で読む）．複数の入力が1つを共有する
+  controllers/  入力から follower への指令（command）を作る．joint，pose_ik，parts（follower の部分ごと），policy（方策ノード）
+  control/      制御則（laws）と JointDevice（device），home への移動，補間，介入の引き継ぎ．leader と follower が共有する
   dynamics/     重力モデルの契約，URDF 運動学，同定（regressor，identify）
+  kinematics/   腕の鎖（spec）と順・逆運動学（ik．extra: ik）
+  estimators/   follower の力の推定（model_residual）
   robots/       Follower の契約（base），FollowerSafety（safety）
     rakuda2/    spec（関節・モーター ID・モデル．Rakuda-mini も参照），follower（rakuda2_follower），model（URDF），template（init が写す設定一式）
+    piper/      PiPER（開発中・実機未検証）
+    pika/       Pika Gripper（開発中・実機未検証）
   sensors/
-    vision/     ImageSensor（base），realsense_rgb
+    vision/     ImageSensor（base），realsense_rgb，opencv_rgb，v4l2_rgb
     tactile/    TactileImageSensor（base），digit
-    audio/      PcmAudio（base），pcm_mono（microphone）
-  recording/    時刻整列，LeRobot スキーマ，指標
-  runtime/      dora dataflow の生成，ノードの実行，Session（dataflow の起動と指揮）
-  ui/           ランチャー（launcher），操作画面（rich Live），状態の描画，session との受け渡し
-  config.py     設定 YAML の読み込み，オプション（options）の適用，ノード間の整合性検査
+    audio/      PcmAudio（base），pcm_mono・mel_mono（microphone）
+  recording/    時刻整列（recorder），LeRobot スキーマ，指標，保存の巻き戻し（journal），記録の条件（manifest），エピソードごとの記録（episodes），データセットの検査（check）
+  handheld/     follower なしで手に持って記録したデータセットの変換（開発中）
+  policy/       方策の契約（reset，infer）と読み込み．hold（その場に留まる），LeRobot の方策（lerobot），別プロセスの方策（remote），記録の再生（replay）
+  runtime/      dora dataflow の生成（flow），ノードの実行（node），Session（dataflow の起動と指揮）
+  ui/           ランチャー（launcher），操作画面（Textual の app と，入力を読まない Rich 表示の live），状態の描画，session との受け渡し
+  setup/        セットアップと計測の本体（commission，calibrate-joints，measure-travel，identify-gravity，gravity-check，tune-gravity，check-hold，capture-pose）．結果をデータで返し，操作者とのやりとりは Operator に任せる
+  agent_skills/ コーディングエージェント向けのスキル（`roboloom skills install` が写す）
+  config.py     設定 YAML の読み込み，オプション（options）の適用，未知のキーの拒否，ノード間の整合性検査
   probe.py      Dynamixel バスの読み取り専用の調査
-  setup/        セットアップと計測の本体（commission，calibrate-joints，measure-travel，identify-gravity，gravity-check，tune-gravity）．結果をデータで返し，操作者とのやりとりは Operator に任せる
   operator.py   Operator（CLI は TerminalOperator，スクリプトと試験は ScriptedOperator）
   errors.py     利用者が対処できるエラー（ConfigError，SetupError，HardwareError，Cancelled）
-  project.py    roboloom init（robots/<robot>/template から .roboloom/<robot>/ を作る）
+  project.py    roboloom init（テンプレートから .roboloom/<robot>/ を作る，`--update` で追いつかせる）
   api.py        1 プロセスの InProcessSession（試験・簡単な機体）
-  policy/       方策の契約（reset，infer）と読み込み．hold（その場に留まる），LeRobot の方策（lerobot）
+  version.py    roboloom の版（データセットとプロジェクトに記録する）
 ```
 
-依存の向きは `core` ← `drivers` ← `dynamics` ← `control` ← `robots`/`inputs`/`sensors` ← `controllers` ← `recording`/`config` ← `runtime`/`api`/`cli` です．各役割のパッケージは `__init__.py` に `type` 名から実装への対応表（`FOLLOWERS`，`INPUTS`，`CONTROLLERS`，`SENSORS`）を持ちます．実装のモジュールは選ばれたときにだけ import されます．
+依存の向きは `core` ← `drivers` ← `dynamics` ← `control` ← `robots`/`inputs`/`sensors` ← `controllers` ← `recording`/`config` ← `runtime`/`api`/`cli` です．各役割のパッケージは `__init__.py` に `type` 名から実装への対応表（`FOLLOWERS`，`INPUTS`，`CONTROLLERS`，`SENSORS`，`ESTIMATORS`，`TRACKERS`）を持ちます．実装のモジュールは選ばれたときにだけ import されます．
 
-拡張するときは，次のように実装を1つのモジュールに書き，対応表に1行追加します．
+roboloom を変えずに自分のパッケージから型を足すときは，ノード YAML の `type` に `my_lab.robots:MyFollower`（`モジュール:クラス`）と書きます．テンプレートは `roboloom init <名前> --template <パッケージかディレクトリ>` で使えます（[自分のパッケージから足す](docs/ja/contribution.md#own-types)，例は `examples/own_robot/`）．roboloom 本体に足すときは，次のように実装を1つのモジュールに書き，対応表に1行追加します．
 
 - **ロボット**（Koch，SO-101，xArm）：`robots/<model>/` に機体情報（`spec.py`）と `robots.base.Follower` を継承した follower を置き，`FOLLOWERS` に登録します．機体固有の機能は，汎用部分に書かずに機体の側で申告します．バスは `drivers.base` の契約（必要なら `read_state`，`read_health`，`write_goal_currents`，`set_torque`）を実装し，起動時に照合する EEPROM を `expected_eeprom`，`current_limits_mA` で示します．電流モードや watchdog を持たない機体では，その制御則が設定の読み込み時に拒否されます．leader アームがあれば `inputs/<model>/` に置いて `spec.py` を参照し，`INPUTS` に登録します．新しいバスが必要なら `drivers/` に追加します．
 - **入力**（SpaceMouse，VR）：`inputs/<device>/` に置きます．関節空間の入力なら `inputs.base.JointInput`，手に持った姿勢の入力なら `inputs.base.PoseInput` を継承します．速度（twist）の入力のような新しい種類は，現在は基底クラスがありません．追加するときは `inputs/base.py` に基底クラスを加え，固有の `kind` を持たせます．
@@ -277,12 +286,9 @@ src/roboloom/
 OpenCV（`opencv-python-headless`）は共通依存に含まれます．USB／内蔵のWebカメラを読む `type: opencv_rgb`（Linux・macOS・Windows向けのドライバー）は開発中・実機未検証です．設定とPython単体の例は [Webカメラ](docs/ja/contribution/webcam.md)（[English](docs/en/contribution/webcam.md)）を参照してください．WindowsでのSession全体の対応は含みません．
 
 
-Sensors can be selected individually with `--sensors camera,audio`; policy inputs
-are selected separately with `--observe camera`. Empty strings select none.
-Rakuda2 audio is off by default; configure nodes/audio.yaml and install the audio
-extra to use PCM or mel numeric observations with a custom policy.
-Dataset schema mismatches require a manually chosen repo_id/output.
-Camera videos (`storage: video`) are H.264 by default for wide playback compatibility;
-record smaller AV1 with `video_codec: av1` in nodes/recorder.yaml or `--video-codec av1`.
-A dataset keeps one codec: a different explicit codec needs a new repo_id/output.
-Physical microphone capture is unverified.
+センサーとデータセットについて：
+
+- 起動するセンサーは `--sensors camera,audio` で個別に選べます．方策に渡す観測は `--observe camera` で別に選びます．空文字列を渡すと，何も選びません．
+- Rakuda2 の音声は既定で無効です．PCM や mel の数値の観測を自作の方策で使うときは，`nodes/audio.yaml` を設定し，`audio` の extra を導入します．実機のマイクでの収録は未検証です．
+- 既存のデータセットとスキーマが合わないときは拒否します．`repo_id` と `output` を自分で選び直してください．
+- カメラの動画（`storage: video`）は，再生できる環境が広い H.264 が既定です．より小さい AV1 で記録するときは，`nodes/recorder.yaml` に `video_codec: av1` と書くか，`--video-codec av1` を渡します．1つのデータセットの codec は1つです．違う codec を明示するときは，新しい `repo_id` と `output` が要ります．

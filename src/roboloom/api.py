@@ -271,9 +271,11 @@ class InProcessSession:
         self.safety.stop()
         self.recorder.stop()
 
-    def save_episode(self) -> int:
+    def save_episode(self, label: str | None = None, note: str | None = None) -> int:
+        """Save the stopped episode; `label` ("success" / "failure") and `note` go
+        into the dataset's record of it (`recording.episodes`)."""
         self.last_metrics = self.recorder.metrics()
-        return self.recorder.save()
+        return self.recorder.save(label, note)
 
     def discard_episode(self) -> None:
         self.safety.stop()

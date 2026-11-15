@@ -27,6 +27,7 @@ from .config import (
     select_options,
 )
 from .errors import Cancelled, ConfigError, RoboloomError
+from .recording.episodes import LABELS
 from .recording.video import check_video_encoding, video_codec_names
 from .runtime.flow import build_flow
 
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 # YAML file). Commands without other positional words always read it as one.
 CONFIGURED = {
     "check-dataset",
+    "label",
     "convert-handheld",
     "launch",
     "run",
@@ -69,6 +71,10 @@ SESSION_OPERATIONS = (
     "release",
     "home",
     "quit",
+    # a policy with `teleop:` (runtime.node.COMMANDS)
+    "teleop",
+    "policy",
+    "stop_teleop",
 )
 
 
@@ -83,6 +89,15 @@ class _Removed(argparse.Action):
             "--hardware is no longer needed: real devices are the default; "
             "pass --mock for mock devices"
         )
+
+
+def _dataset_root(args: argparse.Namespace) -> Path:
+    """The dataset a command names: a dataset directory, or the robot's dataset (with
+    the options given, which are part of its name)."""
+    target = Path(args.config) if args.config else None
+    if target is None or not (target / "meta" / "info.json").exists():
+        target = Path(_load(args).output)
+    return target
 
 
 def _names(text: str) -> list[str]:
@@ -103,6 +118,7 @@ def _with_config(argv: list[str]) -> list[str]:
     if (
         command in ONLY_CONFIG
         or (command == "session" and word not in SESSION_OPERATIONS)
+        or (command == "label" and not word.isdigit())  # before the episode number
         or is_configuration(word)
     ):
         return [command, "--config", word, *rest[1:]]
@@ -385,7 +401,22 @@ def main(argv: list[str] | None = None) -> None:
         "session", parents=[configured], help="send one command to a running `run`"
     )
     sess.add_argument("operation", choices=SESSION_OPERATIONS)
-    sess.add_argument("task", nargs="?", default="")
+    sess.add_argument(
+        "task",
+        nargs="?",
+        default="",
+        help="start: the task; save: the episode's verdict (success or failure)",
+    )
+    lab = sub.add_parser(
+        "label",
+        parents=[configured, devices],
+        help="give a saved episode its verdict (an evaluation's success or failure); "
+        "names a robot (its dataset, with --with/--without as recorded) or a dataset "
+        "directory",
+    )
+    lab.add_argument("episode", type=int, help="the episode's index in the dataset")
+    lab.add_argument("verdict", choices=LABELS)
+    lab.add_argument("--note", help="free text kept with the verdict")
     serve = sub.add_parser(
         "serve-policy",
         help="serve a policy to a policy node (factory: roboloom.policy.remote:connect)",
@@ -608,12 +639,24 @@ def _dispatch(args: argparse.Namespace) -> None:
         )
         print(report.describe())
         return
+    if args.command == "label":
+        from .recording import episodes
+
+        target = _dataset_root(args)
+        try:
+            record = episodes.label(target, args.episode, args.verdict, args.note)
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
+        print(
+            f"episode {args.episode} of {target}: {record['label']}"
+            + (f" ({record['note']})" if record.get("note") else "")
+        )
+        print(episodes.summary(target, episodes.total(target)))
+        return
     if args.command == "check-dataset":
         from .recording.check import check_dataset
 
-        target = Path(args.config) if args.config else None
-        if target is None or not (target / "meta" / "info.json").exists():
-            target = Path(_load(args).output)  # the robot's dataset
+        target = _dataset_root(args)
         checked = check_dataset(target, recover=args.recover)
         print(checked.describe())
         if not checked.ok:
@@ -836,7 +879,10 @@ def _plain_loop(client, process: subprocess.Popen, release_note: str) -> None:
     `release_note`: what to do before release (Session.release_note)."""
     from .ui.render import describe_report
 
-    print("Commands: start <task>, stop, save, discard, estop, release, quit")
+    print(
+        "Commands: start <task>, stop, save [success|failure], discard, estop, "
+        "release, quit"
+    )
     while process.poll() is None:
         try:
             line = input("roboloom> ").strip()
@@ -859,7 +905,7 @@ def _plain_loop(client, process: subprocess.Popen, release_note: str) -> None:
             if process.poll() is not None:
                 break
             raise
-        if line == "save":
+        if line.split(" ", 1)[0] == "save":
             deadline = time.monotonic() + 120
             while process.poll() is None and time.monotonic() < deadline:
                 items = client.new_reports()

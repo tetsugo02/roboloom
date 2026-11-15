@@ -345,3 +345,41 @@ def test_a_start_the_recorder_refuses_stops_what_already_started(tmp_path):
     with pytest.raises(SessionError, match="align"):
         session.start("task")
     assert sent == ["start"]  # the session node sent it to nobody: nothing to stop
+
+
+# -- a node that starts slowly --------------------------------------------------------
+
+
+def test_a_node_keeps_taking_events_while_it_loads(monkeypatch):
+    # dora hands a node everything queued for it in one reply (64 MB at most): a node
+    # that reads nothing while a model loads loses the reply, and its timer with it
+    release = threading.Event()
+    taken = itertools.count()
+
+    def event(node):
+        if next(taken) == 3:
+            release.set()  # the work ends only after events were taken meanwhile
+        time.sleep(0.01)
+        return "observe_camera", None
+
+    monkeypatch.setattr(runtime, "_event", event)
+    done: list[str] = []
+
+    def work() -> None:
+        assert release.wait(5)
+        done.append("loaded")
+
+    assert runtime._prepare(None, work) is True
+    assert done == ["loaded"] and next(taken) > 3
+
+    def broken() -> None:
+        raise ImportError("no module named my_policy")
+
+    with pytest.raises(ImportError, match="my_policy"):
+        runtime._prepare(None, broken)
+
+    quit_ = Envelope("session", "session", "boot", 0, 1, 1, {"command": "quit"})
+    monkeypatch.setattr(runtime, "_event", lambda node: ("session", quit_))
+    assert (
+        runtime._prepare(None, lambda: time.sleep(0.3)) is False
+    )  # quit while loading

@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: ruff, mypy and pytest (mock devices only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: "0.8.15"
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install FFmpeg's shared libraries
+        # LeRobot decodes dataset videos with torchcodec, which loads the system's FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install the locked test and development dependencies
+        run: uv sync --locked --extra rakuda2 --extra test --group dev
+      - name: Lint
+        run: uv run --no-sync ruff check .
+      - name: Type-check
+        run: uv run --no-sync mypy src
+      - name: Test
+        # The dataflow tests start real dora processes with mock devices; no hardware.
+        run: uv run --no-sync pytest -q

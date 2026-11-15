@@ -37,6 +37,7 @@ from ..config import NO_OPTIONS, RobotConfig, load_config
 from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
+from ..recording.episodes import check_label
 from ..recording.metrics import assess
 from ..recording.video import check_video_encoding
 from ..ui.client import SessionClient
@@ -97,6 +98,7 @@ class EpisodeResult:
     index: int | None = None  # dataset episode index when saved
     metrics: dict = field(default_factory=dict)  # EpisodeRecorder.metrics()
     warnings: list[str] = field(default_factory=list)  # quality limits exceeded
+    label: str | None = None  # the verdict it was saved with: "success" / "failure"
 
     @property
     def ok(self) -> bool:
@@ -104,6 +106,8 @@ class EpisodeResult:
 
 
 Task = str | Callable[[EpisodeInfo], str]
+# the verdict of an episode: fixed, or decided from the stopped episode (None: none)
+Label = str | Callable[[EpisodeResult], str | None] | None
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 FAILED = ("exited with code", "exited with error")  # dora's node-failure lines
@@ -591,11 +595,13 @@ class Session:
 
     # -- commands ---------------------------------------------------------------
 
-    def send(self, command: str, task: str = "") -> int:
-        """Send one command to every node; returns its id (echoed in the reports)."""
+    def send(self, command: str, task: str = "", **extra: str) -> int:
+        """Send one command to every node; returns its id (echoed in the reports).
+        `extra`: what else the command carries (`save`: label, note)."""
         self._check_alive()
         ident = next(self._ids)
-        self.client.send(json.dumps({"id": ident, "command": command, "task": task}))
+        request = {"id": ident, "command": command, "task": task, **extra}
+        self.client.send(json.dumps(request))
         return ident
 
     def wait_report(self, ident: int, timeout: float = 10.0) -> dict:
@@ -670,13 +676,30 @@ class Session:
             warnings=assess(metrics, self.cfg.quality),
         )
 
-    def save(self, timeout: float = 300.0) -> EpisodeResult:
+    def save(
+        self,
+        timeout: float = 300.0,
+        *,
+        label: str | None = None,
+        note: str | None = None,
+    ) -> EpisodeResult:
         """Write the stopped episode (video encoding can take a while). When the
         write fails the episode is dropped (SessionError); the dataset keeps the
-        episodes saved before it and the next one can be recorded."""
+        episodes saved before it and the next one can be recorded.
+
+        `label` ("success" or "failure") and `note` are the verdict of an evaluation
+        episode. They go into the dataset's `meta/roboloom_episodes.jsonl` with the
+        task, the metrics and what the controllers reported; `roboloom label` sets
+        the verdict afterwards."""
         task = self._episode or ""
+        extra: dict[str, str] = {}
+        verdict = check_label(label)  # a mistyped one: before anything is sent
+        if verdict:
+            extra["label"] = verdict
+        if note:
+            extra["note"] = note
         try:
-            report = self.wait_report(self.send("save"), timeout)
+            report = self.wait_report(self.send("save", **extra), timeout)
         except SessionError as exc:
             if exc.report.get("dropped"):  # nothing left to save or discard
                 self._episode = None
@@ -692,6 +715,7 @@ class Session:
             int(report.get("episodes", 0)) - 1,
             metrics,
             assess(metrics, self.cfg.quality),
+            report.get("label"),
         )
         for warning in result.warnings:
             self.note(f"episode {result.index} quality: {warning}", "warn")
@@ -852,6 +876,8 @@ class Session:
         tick_s: float = 0.2,
         ready_timeout: float = 60.0,
         home: bool = False,
+        label: Label = None,
+        note: str | None = None,
     ) -> EpisodeResult:
         """One episode: wait until it may start (leader aligned with the follower, at most
         `ready_timeout` s), start, record for `seconds`, stop, then save it unless `keep`
@@ -864,7 +890,12 @@ class Session:
         it runs (EpisodeFailed): an episode that broke off is not saved.
         `home=True` first moves to the saved home pose (`home`), so every episode starts
         from the same pose.
+        `label` is the verdict saved with the episode ("success" / "failure"), or a
+        function of the stopped episode returning it (None: no verdict); `note` is
+        free text (`save`).
         """
+        if not callable(label):
+            check_label(label)  # a mistyped verdict: before the robot moves
         name = task(self.next_info()) if callable(task) else task
         if home:
             self.home()
@@ -888,7 +919,14 @@ class Session:
         if keep is not None and not keep(stopped):
             self.discard()
             return stopped
-        return self.save()
+        try:
+            verdict = check_label(label(stopped) if callable(label) else label)
+        except BaseException:  # nothing decided: the stopped episode is not left over
+            if self.alive:
+                with self._cancellable(None):
+                    self.discard()
+            raise
+        return self.save(label=verdict, note=note)
 
 
 def _node_ids(cfg: RobotConfig) -> list[dict]:

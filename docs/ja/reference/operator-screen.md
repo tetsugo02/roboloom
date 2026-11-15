@@ -47,7 +47,7 @@ F2・F6 / Shift-F6・F12・Ctrl-Endも，入力欄・ペイン移動・非常停
 
 ## 操作
 
-メニューと入力欄から `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` を使います．`run` のStartはtask入力へ移動します．開始拒否は警告になり，状態更新は続くので準備後に再操作できます．Homeはcontrollerに初期姿勢がある場合だけ有効で，到着後も準備状態を再確認します．
+メニューと入力欄から `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` を使います．入力欄で `save success`・`save failure` と書くと，評価の成否を付けて保存します（[エピソードごとの記録と評価の成否](configuration.md#episode-records)．`success`・`failure` 以外は拒否し，エピソードは保存前のまま残ります）．`run` のStartはtask入力へ移動します．開始拒否は警告になり，状態更新は続くので準備後に再操作できます．Homeはcontrollerに初期姿勢がある場合だけ有効で，到着後も準備状態を再確認します．
 
 Releaseでは，機器の性質（[設定](configuration.md) の「脱力したときと放置したときの性質」）から，支える機器と物を外す機器を示して確認します．終了はCancel・followerの保持（保持できるfollowerがある場合．ない場合は「脱力せずに終了」）・脱力して終了（トルクのあるfollowerがある場合）・オプションを選び直す（Quit and choose options again）から選び，初期選択はCancelです．確認文には，終了時に脱力する（またはするかもしれない）機器と，すべきことを示します．オプションはdataflowの実行中には切り替えません（制御モードが変わるためです）．選び直す場合は，followerを保持したまま終了し，ランチャーへ戻ります．CLIから起動した対話端末の場合だけ表示します．followerを保持しても，通電している入力機器は終了時に脱力します．UI異常終了時も，脱力の選択が確認済みでなければfollowerを保持します．roboloomのプロセスごと止まった場合（強制終了，端末を閉じた）も，dataflowは記録中のエピソードを破棄し，followerを保持させて終わります．非常停止は送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別します．バスやdataflowが切断されている場合の到達は保証できません．
 

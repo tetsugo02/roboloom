@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import journal, manifest
+from . import episodes, journal, manifest
 
 
 @dataclass
@@ -181,6 +181,9 @@ def check_dataset(root: str | Path, recover: bool = False) -> DatasetReport:
         f"files: {len(data_files)} data, {len(files)} episode metadata, "
         f"{len(video_files)} video"
     )
+    labels = episodes.summary(root, report.episodes)
+    if labels is not None:  # the verdicts of an evaluation (recording.episodes)
+        report.summary.append(labels)
 
     # -- what training should know ------------------------------------------------
     for column, count in sorted(invalid.items()):

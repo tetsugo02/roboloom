@@ -136,6 +136,32 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
 ```
 
+### Recording an evaluation's verdicts
+
+- `record(..., label="success")` and `save(label="failure", note="...")` save the episode with a verdict (`success` or `failure`) and a note.
+  - `record` also takes a function as `label`: it receives the stopped episode (`result`) and returns the verdict. Returning `None` saves without one.
+  - Any other string raises `ValueError` before anything is saved.
+- Every save appends one line to the dataset's `meta/roboloom_episodes.jsonl`, with or without a verdict. It holds:
+  - the episode's index, task, rows and metrics
+  - what each controller reported when the episode was saved (a policy's inference time `infer_max_ms`, the steps asynchronous inference dropped as late `dropped`, its error, and so on)
+  - the verdict (`label`) and the note (`note`)
+- To set or change a verdict afterwards, use `roboloom label [robot] <episode> success|failure` ([CLI](cli.md)) or `roboloom.recording.episodes.label(...)`. `roboloom check-dataset` counts the verdicts.
+- LeRobot does not read this file; training is unaffected.
+
+```python
+from roboloom.recording import episodes
+
+for k in range(10):
+    s.record(
+        "pick up the cup",
+        seconds=30,
+        label=lambda ep: "success" if cup_lifted() else "failure",  # your own check
+    )
+records = episodes.read(s.cfg.output)  # {episode index: record}
+print(episodes.summary(s.cfg.output, s.episodes))
+# labels: 7 success, 3 failure, 0 not labelled (70% of the labelled)
+```
+
 ### Fine-grained control
 
 - You can call `start(task)`, `stop()`, `save()`, `discard()`, `estop()`, and `release(confirm=True)` one at a time.
@@ -155,7 +181,7 @@ ok = s.record("pick up the cup", 30, keep=lambda ep: ep.ok)
 ```python
 s.start("wipe the table")
 while not task_done():  # user's own check
-    print(s.status()["robot"]["fields"]["mode"])
+    print(s.status()["follower"]["fields"]["mode"])
     time.sleep(0.5)
 stopped = s.stop()  # not saved yet; metrics and warnings can be inspected
 s.save() if stopped.ok else s.discard()
@@ -211,9 +237,9 @@ with Session.launch(
 ```
 
 **Notes**
-- No command is sent during `infer`.
+- By default (synchronous) no command is sent during `infer`.
   - If inference takes longer than `command_deadline_ms`, the robot enters HOLD. It stops and waits.
-  - An asynchronous mode that keeps executing the previous action chunk during inference is future work.
+  - `inference: async` in `nodes/policy.yaml` keeps executing the previous action chunk during inference ([Asynchronous inference](../controllers/policy.md#asynchronous-inference)).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place.
   - Use it when verifying the inference path on real hardware for the first time.
 

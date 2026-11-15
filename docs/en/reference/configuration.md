@@ -349,6 +349,24 @@ You can append further episodes to the same dataset. On resume, FPS and feature 
 
 Thresholds for quality warnings can be set with `max_missing_rate`, `min_action_valid_rate`, and `max_interval_ms` in `recorder.quality`. Check the metrics and warnings in the save result. `control_interval_ms` and `action_missing_rate` (the share of rows without a command) are per follower, and warnings name the follower.
 
+### Episode records and evaluation verdicts { #episode-records }
+
+Every save appends one line (JSON) to the dataset's `meta/roboloom_episodes.jsonl`.
+
+| Key | Content |
+| --- | --- |
+| `episode` | The episode's index in the dataset |
+| `saved` | When it was saved |
+| `task`, `frames` | The task and the number of rows |
+| `metrics` | The recorder's metrics (missing rates, the share of valid actions, the control interval) |
+| `controllers` | What each controller reported when the episode was saved. For a policy: `infer_ms` and `infer_max_ms` (inference time), `dropped` (the steps asynchronous inference dropped as late), `error`, and so on |
+| `label`, `note` | The evaluation verdict (`success` or `failure`; `null` when none was given) and a note |
+
+- A verdict is given when saving: `save(label=...)` and `record(..., label=...)` in Python ([Python API](python-api.md)), `save success` or `save failure` in the operator screen's command box or the `--plain` line input, `roboloom session save success` from another terminal.
+- To set or change it afterwards, use `roboloom label [robot] <episode> success|failure`. It appends a `{"episode", "label", "labelled", "note"}` line; reading merges the lines of an episode, later ones winning. No line is ever rewritten.
+- `roboloom check-dataset` counts the verdicts.
+- LeRobot does not read this file; training is unaffected. An episode whose save failed, or that was discarded, has no line.
+
 ### Image storage
 
 Set `storage: video | image` in each image sensor's node YAML (RealSense, DIGIT, V4L2 including Pika wrist cameras). The default is `video`: the existing lossy MP4 encoding. `image` embeds lossless PNG frames in Parquet; use it for DIGIT/background pixel differences. Formats can be mixed in one dataset. Invalid values are refused at configuration load, including `validate`.

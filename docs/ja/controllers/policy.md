@@ -340,6 +340,20 @@ teleop: [controller.yaml]   # leaderで動かすときの controller（このフ
 - 対応する teleop の controller は `type: joint` だけです．`pose_ik`（PiPER＋Pika Sense など）は，読み込み時に「介入に未対応」として断ります．
 - フォロワがESTOP・FAULTになったとき，信号が途絶えたときは，Teleop も止まります．もう一度 Teleop を押すと，その時点から関節ごとにつかまえ直します．
 
+## 評価の成否を残す
+
+`roboloom infer --task <text>`（Pythonでは `record`）で保存した回は，評価のデータセットに入ります．それぞれの回が成功したかどうかは，エピソードごとの記録（データセットの `meta/roboloom_episodes.jsonl`）に残せます．
+
+```bash
+uv run roboloom infer --seconds 30 --episodes 10 --task "pick up the cup"
+uv run roboloom label --with policy 3 failure --note "つかみ損ねた"   # あとから，エピソード3に
+uv run roboloom check-dataset --with policy                            # labels: 7 success, 3 failure, ...
+```
+
+- 保存のときに付けることもできます：操作画面の入力欄で `save success`・`save failure`，Pythonでは `record(..., label=...)`・`save(label=...)`（[Python API](../reference/python-api.md)）．
+- 記録には，その回の方策の状態（推論時間 `infer_max_ms`，非同期の推論で遅れて捨てた手数 `dropped`，エラー）と，recorderの指標も入ります．項目は [エピソードごとの記録と評価の成否](../reference/configuration.md#episode-records) にあります．
+- 途中で方策が失敗した回は保存されないので，記録にも入りません．
+
 ## 限界
 
 - LeRobotのRTCには対応していません．非同期の推論は，行動の列を混ぜずに入れ替えます．
