@@ -10,9 +10,10 @@ replaces, adds or removes node files. Nothing here opens a device.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -141,70 +142,133 @@ def parse_options(raw: object) -> dict[str, Option]:
     return out
 
 
-EXPERIMENTS = "experiments"  # next to the configuration: one YAML file per experiment
+EXPERIMENT_DIR = Path("configs") / "roboloom"  # in the project, next to .roboloom/
 RUN_KEYS = ("task", "seconds", "steps", "episodes", "home")
-EXPERIMENT_KEYS = {
-    "help",
-    "options",
-    "conflicts",
-    "policy",
-    "set",
-    "dataset",
-    *RUN_KEYS,
-}
-POLICY_NODE = "controllers.policy"  # what an experiment's `policy: <file>` replaces
+EXPERIMENT_KEYS = ("help", "robot", "options", "dataset", "nodes", *RUN_KEYS)
+DATASET_KEYS = ("root", "repo_id")
+# What an experiment may not change: the followers hold the limits every command is
+# checked against (range, speed, jump), the last guard before the motors.
+FIXED_ROLES = ("followers",)
 
 
 @dataclass(frozen=True)
 class Experiment:
-    """One experiment (`experiments/<name>.yaml` next to the configuration): a launch
-    option of that name plus how `roboloom infer|record --experiment <name>` runs it.
-    None: not given in the file (the command line or its default decides)."""
+    """One experiment: which robot and launch options, what its nodes are given on top
+    of their files (the policy and its checkpoint, a leader variant), where the episodes
+    go, and how `roboloom infer|record --experiment` runs it. It lives outside the
+    robot's directory, by default in `configs/roboloom/<name>.yaml` of the project.
+    None: not given (the command line, the robot's configuration or a default decides)."""
 
     name: str
+    robot: str | None = None
+    options: tuple[str, ...] | None = None
+    # `<role>.<node>` -> a node file of the robot's directory (replaces the node's
+    # file) or a mapping laid over the node's settings (`overlay`)
+    nodes: Mapping[str, str | Mapping[str, Any]] = field(default_factory=dict)
+    dataset: Mapping[str, str] = field(default_factory=dict)  # root (absolute), repo_id
     task: str | None = None
     seconds: float | None = None
     episodes: int | None = None
     home: bool | None = None
     steps: int | None = None  # policy actions per episode, instead of seconds
 
+    def settings(self) -> dict[str, Any]:
+        """What the nodes of the dataflow need to load the configuration as the
+        launching process did (`read_config(experiment=...)`); plain data."""
+        return {
+            "name": self.name,
+            "nodes": {
+                k: v if isinstance(v, str) else dict(v) for k, v in self.nodes.items()
+            },
+            "dataset": dict(self.dataset),
+        }
 
-def experiment_names(config: str | Path) -> list[str]:
-    """The experiments declared next to the configuration file `config`."""
-    directory = Path(config).parent / EXPERIMENTS
-    return (
-        sorted(f.stem for f in directory.glob("*.yaml")) if directory.is_dir() else []
-    )
+
+def experiment_path(name: str | Path, root: str | Path = ".") -> Path:
+    """The file of the experiment `name`: a path when it has a directory or ends in
+    .yaml, else `configs/roboloom/<name>.yaml` under `root` (the project)."""
+    text = str(name)
+    if "/" in text or text.endswith((".yaml", ".yml")):
+        path = Path(text).expanduser()
+    else:
+        path = Path(root) / EXPERIMENT_DIR / f"{text}.yaml"
+    if not path.is_file():
+        directory = Path(root) / EXPERIMENT_DIR
+        known = (
+            sorted(f.stem for f in directory.glob("*.yaml"))
+            if directory.is_dir()
+            else []
+        )
+        raise ConfigError(
+            f"no experiment {text!r} ({path}); in {directory}: "
+            f"{', '.join(known) or 'none'}"
+        )
+    return path
 
 
-def _experiment(config: Path, name: str) -> tuple[dict, Experiment]:
-    """The experiment `name` as its option settings and its run settings."""
-    file = Path(config).parent / EXPERIMENTS / f"{name}.yaml"
-    where = f"{EXPERIMENTS}/{name}.yaml"
-    if not file.is_file():
-        known = ", ".join(experiment_names(config)) or "none"
-        raise ConfigError(f"no experiment {name!r} ({file}); available: {known}")
-    raw = yaml.safe_load(file.read_text()) or {}
-    if not isinstance(raw, dict):
-        raise ConfigError(f"{where}: expected a mapping")
+def load_experiment(
+    source: str | Path | Mapping[str, Any], root: str | Path = "."
+) -> Experiment:
+    """An experiment from its name or file (`experiment_path`), or from a mapping with
+    the same keys (e.g. what Hydra composed). `dataset.root` is taken from `root`, the
+    project's directory (default: where the command runs)."""
+    if isinstance(source, Mapping):
+        raw, name, where = (
+            dict(source),
+            str(source.get("name", "experiment")),
+            "experiment",
+        )
+        raw.pop("name", None)
+    else:
+        file = experiment_path(source, root)
+        loaded = yaml.safe_load(file.read_text()) or {}
+        if not isinstance(loaded, dict):
+            raise ConfigError(f"{file}: expected a mapping")
+        raw, name, where = loaded, file.stem, str(file)
     unknown_keys(raw, EXPERIMENT_KEYS, where)
-    changes = raw.get("set") or {}
-    if not isinstance(changes, dict):
-        raise ConfigError(f"{where}.set: expected mapping of <role>.<node> to file")
-    if raw.get("policy") is not None:
-        if not isinstance(raw["policy"], str):
-            raise ConfigError(f"{where}.policy: expected the policy's node file")
-        if POLICY_NODE in changes:
-            raise ConfigError(f"{where}: `policy` and set.{POLICY_NODE} say the same")
-        changes = {**changes, POLICY_NODE: raw["policy"]}
-    option = {
-        "help": raw.get("help") or f"experiment {where}",
-        "requires": raw.get("options"),
-        "conflicts": raw.get("conflicts"),
-        "set": changes,
-        "dataset": raw.get("dataset"),
-    }
-    task, seconds = raw.get("task"), raw.get("seconds")
+    robot = raw.get("robot")
+    if robot is not None and not isinstance(robot, str):
+        raise ConfigError(f"{where}.robot: expected the robot's name")
+    options = raw.get("options")
+    if options is not None and (
+        not isinstance(options, list) or not all(isinstance(o, str) for o in options)
+    ):
+        raise ConfigError(f"{where}.options: expected a list of option names")
+    nodes = raw.get("nodes") or {}
+    if not isinstance(nodes, dict):
+        raise ConfigError(
+            f"{where}.nodes: expected mapping of <role>.<node> to settings"
+        )
+    for key, value in nodes.items():
+        role, _, node = str(key).partition(".")
+        if role not in ROLES or not node:
+            raise ConfigError(
+                f"{where}.nodes.{key}: expected <role>.<node>, role one of {ROLES}"
+            )
+        if role in FIXED_ROLES:
+            raise ConfigError(
+                f"{where}.nodes.{key}: an experiment does not change a follower (its "
+                "limits guard every command); edit the robot's node file"
+            )
+        if not isinstance(value, str | dict):
+            raise ConfigError(
+                f"{where}.nodes.{key}: expected a node file of the robot, or a mapping "
+                "of settings laid over the node's"
+            )
+    dataset = raw.get("dataset") or {}
+    if not isinstance(dataset, dict):
+        raise ConfigError(f"{where}.dataset: expected a mapping with root and repo_id")
+    unknown_keys(dataset, DATASET_KEYS, f"{where}.dataset")
+    for key, value in dataset.items():
+        if not isinstance(value, str) or not value:
+            raise ConfigError(f"{where}.dataset.{key}: expected text")
+    placed = dict(dataset)
+    if "root" in placed:
+        base = Path(placed["root"]).expanduser()
+        placed["root"] = str(
+            base if base.is_absolute() else (Path(root) / base).resolve()
+        )
+    task, seconds, steps = raw.get("task"), raw.get("seconds"), raw.get("steps")
     episodes, home = raw.get("episodes"), raw.get("home")
     if task is not None and not isinstance(task, str):
         raise ConfigError(f"{where}.task: expected text")
@@ -220,7 +284,6 @@ def _experiment(config: Path, name: str) -> tuple[dict, Experiment]:
         raise ConfigError(f"{where}.episodes: expected a whole number, at least 1")
     if home is not None and not isinstance(home, bool):
         raise ConfigError(f"{where}.home: expected true or false")
-    steps = raw.get("steps")
     if steps is not None and (
         isinstance(steps, bool) or not isinstance(steps, int) or steps < 1
     ):
@@ -229,39 +292,26 @@ def _experiment(config: Path, name: str) -> tuple[dict, Experiment]:
         raise ConfigError(
             f"{where}: write seconds or steps (the policy's actions), not both"
         )
-    run = Experiment(
-        name, task, None if seconds is None else float(seconds), episodes, home, steps
+    return Experiment(
+        name=name,
+        robot=robot,
+        options=None if options is None else tuple(options),
+        nodes={str(k): v for k, v in nodes.items()},
+        dataset=placed,
+        task=task,
+        seconds=None if seconds is None else float(seconds),
+        episodes=episodes,
+        home=home,
+        steps=steps,
     )
-    return option, run
-
-
-def load_experiment(config: str | Path, name: str) -> Experiment:
-    """How the experiment `name` of the configuration file `config` runs. Its nodes
-    and dataset come with the launch option of the same name (`declared_options`)."""
-    return _experiment(Path(config), name)[1]
 
 
 def declared_options(config: str | Path, raw: object = None) -> dict[str, Option]:
-    """The launch options of the configuration file `config`: its `options:` (`raw`
-    when the file was already read) and one per experiment next to it, named after
-    the experiment's file. No node file is read."""
-    config = Path(config)
+    """The launch options of the configuration file `config` (`raw`: its `options:`
+    when the file was already read). No node file is read."""
     if raw is None:
-        raw = (yaml.safe_load(config.read_text()) or {}).get("options")
-    names = experiment_names(config)
-    if not names:
-        return parse_options(raw)
-    if raw is not None and not isinstance(raw, dict):
-        raise ConfigError("options: expected mapping of option name to settings")
-    merged = dict(raw or {})
-    for name in names:
-        if name in merged:
-            raise ConfigError(
-                f"{EXPERIMENTS}/{name}.yaml: {config.name} already has an option "
-                f"{name!r}; rename the experiment"
-            )
-        merged[name] = _experiment(config, name)[0]
-    return parse_options(merged)
+        raw = (yaml.safe_load(Path(config).read_text()) or {}).get("options")
+    return parse_options(raw)
 
 
 def requirements(options: dict[str, Option], name: str) -> set[str]:
@@ -398,6 +448,8 @@ class RobotConfig:
     path: str = ""
     options: tuple[str, ...] = ()  # enabled launch options, in declaration order
     available_options: dict[str, Option] = field(default_factory=dict)
+    # the experiment it was loaded with (`Experiment.settings()`), if any
+    experiment: dict | None = None
 
     @property
     def mock(self) -> bool:
@@ -515,8 +567,12 @@ def read_config(
     sensors: Iterable[str] | None = None,
     observe: Iterable[str] | None = None,
     video_codec: str | None = None,
+    experiment: Experiment | Mapping[str, Any] | None = None,
 ) -> dict:
     """Load the configuration YAML and every referenced node file into one tree.
+
+    `experiment`: an Experiment or its `settings()`: its `nodes` replace node files or
+    are laid over the nodes' settings, its `dataset` says where the episodes go.
 
     `options`: the launch options to enable, with what they require (None: those with
     `default: true`). Their node changes are applied and their `dataset` names appended to `repo_id` and `output`.
@@ -537,6 +593,26 @@ def read_config(
         else:
             group[name] = value
         raw[role] = group
+    chosen_experiment = (
+        experiment.settings() if isinstance(experiment, Experiment) else experiment
+    )
+    laid_over: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for key, value in ((chosen_experiment or {}).get("nodes") or {}).items():
+        role, _, name = str(key).partition(".")
+        group = dict(raw.get(role) or {})
+        if role in FIXED_ROLES:
+            raise ConfigError(f"experiment: nodes.{key}: a follower is not changed")
+        if name not in group:
+            there = ", ".join(f"{role}.{n}" for n in group) or "none"
+            raise ConfigError(
+                f"experiment: nodes.{key} is not a node of this configuration with "
+                f"the options {', '.join(enabled) or 'none'} (there: {there})"
+            )
+        if isinstance(value, str):
+            group[name] = value  # another node file of the robot's directory
+            raw[role] = group
+        else:
+            laid_over[(role, name)] = value
     # Options may introduce sensors; explicit selection resolves after them.
     catalog = dict(raw.get("sensors") or {})
     for option in available.values():
@@ -562,14 +638,22 @@ def read_config(
         if name in chosen
     }
     suffix = dataset_suffix(available, enabled)
-    for key in ("repo_id", "output"):
-        if suffix and isinstance(raw.get(key), str) and raw[key]:
+    placed = (chosen_experiment or {}).get("dataset") or {}
+    for key, given in (("repo_id", "repo_id"), ("output", "root")):
+        if given in placed:  # the experiment's own dataset: named as written
+            raw[key] = placed[given]
+        elif suffix and isinstance(raw.get(key), str) and raw[key]:
             raw[key] += suffix
     if mock is not None:
         raw["mode"] = "mock" if mock else "hardware"
     if isinstance(raw.get("output"), str) and raw["output"]:
         raw["output"] = str((path.parent / raw["output"]).resolve())
-    tree: dict = {"path": str(path), "options": enabled, "available": available}
+    tree: dict = {
+        "path": str(path),
+        "options": enabled,
+        "available": available,
+        "experiment": chosen_experiment,
+    }
 
     def node(relative: object, where: str) -> dict:
         if not isinstance(relative, str):
@@ -589,6 +673,14 @@ def read_config(
         tree[role] = {
             name: node(relative, f"{role}.{name}") for name, relative in group.items()
         }
+    for (role, name), settings in laid_over.items():
+        if role not in tree or name not in tree[role]:
+            raise ConfigError(
+                f"experiment: nodes.{role}.{name} is not active (a sensor left out?)"
+            )
+        merged = overlay(tree[role][name], dict(settings))
+        assert isinstance(merged, dict)
+        tree[role][name] = merged
     for name, controller in tree["controllers"].items():
         # by what the keys hold, so a controller class of your own (`type:
         # module:Class`) built on the policy or parts controller works the same
@@ -1029,6 +1121,7 @@ def parse_config(tree: dict) -> RobotConfig:
         path=tree["path"],
         options=tuple(tree.get("options", ())),
         available_options=dict(tree.get("available", {})),
+        experiment=tree.get("experiment"),
     )
     if tree["session"].get("type") != "terminal":
         raise ValueError("session must be terminal")
@@ -1097,8 +1190,12 @@ def load_config(
     sensors: Iterable[str] | None = None,
     observe: Iterable[str] | None = None,
     video_codec: str | None = None,
+    experiment: Experiment | Mapping[str, Any] | None = None,
 ) -> RobotConfig:
     """Load and validate a configuration file, or one named under the project root.
+
+    `experiment`: an Experiment (`load_experiment`) or its `settings()`; see
+    `read_config`. Its options are not applied here: pass them as `options`.
 
     `sensors`: active recorded sensors (None: defaults, []: none).
     `observe`: policy inputs (None: YAML, []: follower state only).
@@ -1114,10 +1211,10 @@ def load_config(
     path = resolve_config(config, root)
     try:
         cfg = parse_config(
-            read_config(path, options, mock, sensors, observe, video_codec)
+            read_config(path, options, mock, sensors, observe, video_codec, experiment)
         )
         if sensors is None:
-            _check_datasets(path, cfg)
+            _check_datasets(path, cfg, experiment)
         return cfg
     except ConfigError:
         raise
@@ -1125,10 +1222,15 @@ def load_config(
         raise ConfigError(f"{path}: {exc}") from exc
 
 
-def _check_datasets(path: Path, cfg: RobotConfig) -> None:
+def _check_datasets(
+    path: Path,
+    cfg: RobotConfig,
+    experiment: Experiment | Mapping[str, Any] | None = None,
+) -> None:
     """An enabled option without `dataset` must not change the recorded features, or its
     episodes would share a dataset with differently shaped ones. Compared with the
-    configuration loaded without that option and the options requiring it."""
+    configuration loaded without that option and the options requiring it, with the
+    same experiment: what the experiment changes is not the option's doing."""
     expected = features(cfg)
     for name in cfg.options:
         if cfg.available_options[name].dataset:
@@ -1139,7 +1241,9 @@ def _check_datasets(path: Path, cfg: RobotConfig) -> None:
             if n != name and name not in requirements(cfg.available_options, n)
         ]
         try:
-            other = parse_config(read_config(path, rest, mock=True))
+            other = parse_config(
+                read_config(path, rest, mock=True, experiment=experiment)
+            )
         except (ConfigError, ValueError, TypeError, KeyError, FileNotFoundError):
             continue  # not loadable without it: nothing to compare with
         if features(other) != expected:

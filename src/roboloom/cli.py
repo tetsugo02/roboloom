@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from .agent_skills import TARGETS as SKILL_TARGETS
 from .config import (
     INFER_OPTION,
+    Experiment,
     Option,
     RobotConfig,
     declared_options,
@@ -149,6 +150,14 @@ def main(argv: list[str] | None = None) -> None:
         help="codec of storage: video images: "
         + ", ".join(video_codec_names())
         + " (default: the recorder YAML, else the saved videos', else h264)",
+    )
+    devices.add_argument(
+        "--experiment",
+        metavar="NAME",
+        help="an experiment: configs/roboloom/NAME.yaml of this project, or a file. "
+        "It gives the robot, the options, what its nodes are given (the policy), "
+        "where the episodes go, and for record/infer the task, length, episodes and "
+        "home (words given here win)",
     )
     devices.add_argument(
         "--with",
@@ -330,12 +339,6 @@ def main(argv: list[str] | None = None) -> None:
     rec.add_argument(
         "--plain", action="store_true", help="use non-interactive recording"
     )
-    rec.add_argument(
-        "--experiment",
-        metavar="NAME",
-        help="run experiments/NAME.yaml of the robot: its options, policy, task, "
-        "seconds, episodes and home (words given here win)",
-    )
     rec.add_argument("--task", help="task text stored with every frame")
     rec.add_argument("--seconds", type=float)
     rec.add_argument("--episodes", type=int)
@@ -351,12 +354,6 @@ def main(argv: list[str] | None = None) -> None:
     )
     inf.add_argument(
         "--plain", action="store_true", help="use non-interactive inference"
-    )
-    inf.add_argument(
-        "--experiment",
-        metavar="NAME",
-        help="run experiments/NAME.yaml of the robot: its options, policy, task, "
-        "seconds, episodes and home (words given here win)",
     )
     inf.add_argument("--seconds", type=float)
     inf.add_argument(
@@ -463,16 +460,28 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(f"error: {exc}") from None
 
 
+def _experiment(args: argparse.Namespace) -> Experiment | None:
+    """The experiment the command line names (`--experiment`), loaded once."""
+    name = getattr(args, "experiment", None)
+    if not name:
+        return None
+    if not isinstance(name, Experiment):
+        args.experiment = load_experiment(name)
+    return args.experiment
+
+
 def _run_settings(args: argparse.Namespace) -> None:
-    """`record` and `infer`: how the run goes, from the command line, else from the
-    experiment's file (`--experiment`), else the default. The experiment is also a
-    launch option of that name: it is enabled with what it requires."""
+    """The experiment's robot when none is named; for `record` and `infer` also how
+    the run goes: from the command line, else from the experiment, else the default."""
+    if args.command == "serve-policy":
+        return  # the server reads the file itself, without the robot's configuration
+    run = _experiment(args)
+    if run is not None and getattr(args, "config", None) is None and run.robot:
+        args.config = run.robot
     if args.command not in ("record", "infer"):
         return
-    name = args.experiment
-    if name:
-        run = load_experiment(resolve_config(args.config), name)
-        args.with_ = [name, *(args.with_ or [])]
+    source = "the experiment" if run else "an experiment (--experiment)"
+    if run is not None:
         for key in ("task", "episodes"):
             if getattr(args, key) is None:
                 setattr(args, key, getattr(run, key))
@@ -484,10 +493,9 @@ def _run_settings(args: argparse.Namespace) -> None:
                 args.steps = run.steps
             elif run.steps is not None:
                 raise ConfigError(
-                    f"record: experiments/{name}.yaml gives steps, which count a "
+                    f"record: experiment {run.name} gives steps, which count a "
                     "policy's actions; give --seconds"
                 )
-    source = f"experiments/{name}.yaml" if name else "an experiment (--experiment)"
     steps = getattr(args, "steps", None)
     if steps is not None and args.seconds is not None:
         raise ConfigError("infer: give --seconds or --steps, not both")
@@ -504,7 +512,11 @@ def _run_settings(args: argparse.Namespace) -> None:
 
 def _selection(args: argparse.Namespace, path: Path) -> tuple[str, ...] | None:
     """The options the command line asks for (None: the configuration's defaults)."""
-    with_ = list(getattr(args, "with_", None) or [])
+    run = _experiment(args)
+    with_ = [
+        *(run.options or () if run else ()),
+        *(getattr(args, "with_", None) or []),
+    ]
     without = getattr(args, "without", None) or []
     options = _declared(path)
     if args.command == "infer" and INFER_OPTION in options:
@@ -528,6 +540,7 @@ def _load(args: argparse.Namespace) -> RobotConfig:
         observe=getattr(args, "observe", None),
         video_codec=getattr(args, "video_codec", None),
         mock=True if getattr(args, "mock", False) else None,
+        experiment=_experiment(args),
     )
 
 
@@ -750,7 +763,11 @@ def _operate_robot(
     path = resolve_config(args.config)
     plain = getattr(args, "plain", False)
     given = _selection(args, path)
-    asked = bool(getattr(args, "with_", None) or getattr(args, "without", None))
+    asked = bool(
+        getattr(args, "with_", None)
+        or getattr(args, "without", None)
+        or getattr(args, "experiment", None)  # it says which options
+    )
     mock = bool(getattr(args, "mock", False))
     plan = LaunchPlan(
         mode="run" if args.command == "launch" else args.command,
@@ -797,6 +814,7 @@ def _operate_robot(
             sensors=plan.sensors,
             observe=plan.observe,
             video_codec=plan.video_codec,
+            experiment=_experiment(args),
         )
         if terminal and not cfg.mock:
             _commission(cfg)

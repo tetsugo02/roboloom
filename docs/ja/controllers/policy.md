@@ -22,7 +22,7 @@ command_deadline_ms: 300
 ```
 
 - `factory` のモジュールは，インストール済みのパッケージを先に探し，見つからなければロボットのディレクトリ（`.roboloom/<robot>/`）を探します．
-- 方策のYAML，有効にするオプション，task，秒数，回数を [実験ファイル](../reference/configuration.md#experiments) にまとめると，`roboloom infer --experiment <名前>` だけで走ります．
+- 方策とチェックポイント，有効にするオプション，保存先，task，長さは，プロジェクトの [実験ファイル](../reference/configuration.md#experiments)（`configs/roboloom/<名前>.yaml`）にまとめます．`roboloom infer --experiment <名前>` だけで走り，`nodes/policy.yaml` は書き換えません．
 - `roboloom infer` は，`policy` という名前のオプションを自動で有効にします．`--policy` と `--policy-kwargs` で，YAMLを書き換えずに方策を差し替えられます．
 
 ```bash
@@ -177,7 +177,8 @@ server: {address: "127.0.0.1:18765"} # backend: server のときだけ読む
 ```bash
 # モデルのある側：そのモデルの環境．roboloomはextraなしで入れる
 export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
-uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
+uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # 実験ファイルの方策
+# 方策のYAMLから：roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
 # roboloomのコマンドを使わない場合：python -m roboloom.policy.remote --from <同じファイル>
 # YAMLを使わない場合：roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
 ```

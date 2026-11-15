@@ -33,7 +33,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Self
 
-from ..config import NO_OPTIONS, RobotConfig, load_config
+from ..config import (
+    NO_OPTIONS,
+    Experiment,
+    RobotConfig,
+    load_config,
+    load_experiment,
+)
 from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
@@ -179,6 +185,11 @@ def config_env(cfg: RobotConfig) -> dict[str, str]:
     """The choices the nodes need to reload `cfg` from `cfg.path` as the parent loaded
     it (read back by `runtime.node.config_from_env`)."""
     return {
+        **(
+            {"ROBOLOOM_EXPERIMENT": json.dumps(cfg.experiment)}
+            if cfg.experiment
+            else {}
+        ),
         "ROBOLOOM_OPTIONS": ",".join(cfg.options) or NO_OPTIONS,
         "ROBOLOOM_MODE": cfg.mode,
         "ROBOLOOM_SENSORS": json.dumps(list(cfg.sensors)),
@@ -249,8 +260,9 @@ class Session:
     @classmethod
     def launch(
         cls,
-        config: str | Path | RobotConfig,
+        config: str | Path | RobotConfig | None = None,
         *,
+        experiment: str | Path | Mapping[str, Any] | Experiment | None = None,
         options: Iterable[str] | None = None,
         mock: bool | None = None,
         sensors: Iterable[str] | None = None,
@@ -268,6 +280,11 @@ class Session:
         - `options`: the launch options to enable (None: their defaults); `mock`:
           True runs mock devices, False real ones (None: the YAML's `mode`, default
           hardware). Both apply only when `config` is a path or name.
+        - `experiment`: an experiment's name (`configs/roboloom/<name>.yaml`), its
+          file, a mapping with the same keys (e.g. what Hydra composed) or an
+          `Experiment`. It gives the robot (when `config` is left out), the options
+          (when `options` is left out), what is laid over the nodes and where the
+          episodes go. Its task, seconds or steps are yours to pass to `record`.
         - `sensors`, `observe`, `video_codec`: as in `load_config` (None: the YAML);
           with a `RobotConfig`, choose them in `load_config` instead.
         - `policy` ("module:callable") and `policy_kwargs` replace the policy of a
@@ -278,12 +295,24 @@ class Session:
           go limp ("auto": a TerminalOperator when stdin is a terminal; None: no question).
         """
         if isinstance(config, RobotConfig) and (
-            sensors is not None or observe is not None or video_codec is not None
+            sensors is not None
+            or observe is not None
+            or video_codec is not None
+            or experiment is not None
         ):
             raise ConfigError(
-                "select sensors, observe and video_codec in load_config before "
-                "passing RobotConfig"
+                "select sensors, observe, the experiment and video_codec in load_config "
+                "before passing RobotConfig"
             )
+        chosen = (
+            experiment
+            if experiment is None or isinstance(experiment, Experiment)
+            else load_experiment(experiment)
+        )
+        if chosen is not None and not isinstance(config, RobotConfig):
+            config = config if config is not None else chosen.robot
+            if options is None and chosen.options is not None:
+                options = chosen.options
         cfg = (
             config
             if isinstance(config, RobotConfig)
@@ -294,6 +323,7 @@ class Session:
                 sensors=sensors,
                 observe=observe,
                 video_codec=video_codec,
+                experiment=chosen,
             )
         )
         check_video_encoding(cfg)  # before any node opens the dataset

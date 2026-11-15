@@ -61,7 +61,9 @@ def snapshot(cfg: RobotConfig) -> dict[str, Any] | None:
     path = Path(cfg.path)
     if not cfg.path or not path.is_file():
         return None
-    tree = read_config(path, cfg.options, cfg.mock, list(cfg.sensors))
+    tree = read_config(
+        path, cfg.options, cfg.mock, list(cfg.sensors), experiment=cfg.experiment
+    )
     base = path.parent
 
     def node(values: dict) -> dict:
@@ -87,6 +89,7 @@ def snapshot(cfg: RobotConfig) -> dict[str, Any] | None:
     return {
         "config": path.name,
         "options": list(cfg.options),
+        **({"experiment": cfg.experiment["name"]} if cfg.experiment else {}),
         "settings": settings,
         **{role: {n: node(v) for n, v in tree[role].items()} for role in ROLES},
         **{service: node(tree[service]) for service in SERVICES},

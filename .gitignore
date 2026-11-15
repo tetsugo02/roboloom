@@ -17,3 +17,6 @@ logs/
 # Documentation build output
 site/
 .cache/
+
+# episodes recorded by experiments (configs/roboloom/*.yaml: dataset.root)
+/data/

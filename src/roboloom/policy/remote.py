@@ -94,6 +94,39 @@ def served(path: str) -> tuple[str, dict, dict[str, Any]]:
     return cfg["factory"], kwargs, server_settings(cfg.get("server"), f"{path}: server")
 
 
+def served_by_experiment(path: str) -> tuple[str, dict, dict[str, Any]]:
+    """What the policy server of the experiment file `path` loads and where it
+    listens: `factory`, `kwargs` and `server:` of the policy its `nodes` give
+    (`serve-policy --experiment`). Only this file is read: the server may run in an
+    environment and a directory without the robot's configuration."""
+    from pathlib import Path
+
+    import yaml
+
+    try:
+        raw = yaml.safe_load(Path(path).expanduser().read_text())
+    except OSError as exc:
+        raise ConfigError(f"{path}: {exc}") from None
+    nodes = raw.get("nodes") if isinstance(raw, dict) else None
+    policies = [
+        node
+        for key, node in (nodes or {}).items()
+        if str(key).startswith("controllers.")
+        and isinstance(node, dict)
+        and isinstance(node.get("factory"), str)
+    ]
+    if len(policies) != 1:
+        raise ConfigError(
+            f"{path}: expected one policy under nodes (controllers.<name> with a "
+            f"factory), found {len(policies)}"
+        )
+    kwargs = policies[0].get("kwargs") or {}
+    if not isinstance(kwargs, dict):
+        raise ConfigError(f"{path}: kwargs must be a mapping")
+    server = server_settings(policies[0].get("server"), f"{path}: server")
+    return policies[0]["factory"], kwargs, server
+
+
 class RemotePolicyError(RuntimeError):
     """The policy on the server raised; the message carries its type and text."""
 
@@ -402,6 +435,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "server.address), e.g. .roboloom/<robot>/nodes/policy.yaml",
     )
     parser.add_argument(
+        "--experiment",
+        metavar="EXPERIMENT_YAML",
+        help="serve the policy of this experiment file (the factory, kwargs and "
+        "server.address its nodes give the policy), e.g. "
+        "configs/roboloom/<name>.yaml",
+    )
+    parser.add_argument(
         "--kwargs", type=json.loads, default=None, help="JSON arguments of the callable"
     )
     parser.add_argument("--address", default=None, help=f"host:port ({ADDRESS})")
@@ -418,12 +458,19 @@ def run(args: argparse.Namespace) -> None:
     factory: str | None = args.policy
     kwargs: dict = {}
     server: dict[str, Any] = {}
+    given = [x for x in (args.policy, args.from_, args.experiment) if x]
+    if len(given) > 1:
+        raise ConfigError(
+            "give one of: the policy, --from <policy YAML>, --experiment <file>"
+        )
     if args.from_:
-        if args.policy:
-            raise ConfigError("give the policy or --from <policy YAML>, not both")
         factory, kwargs, server = served(args.from_)
+    elif args.experiment:
+        factory, kwargs, server = served_by_experiment(args.experiment)
     if not factory:
-        raise ConfigError("give module:callable, or --from <policy YAML>")
+        raise ConfigError(
+            "give module:callable, --from <policy YAML> or --experiment <file>"
+        )
     address = args.address or server.get("address", ADDRESS)
     print(f"policy server: loading {factory}", flush=True)
     serve(

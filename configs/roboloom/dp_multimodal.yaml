@@ -1,0 +1,52 @@
+# master_proj's raw multimodal diffusion policy (camera + both DIGITs + joint state) on
+# Rakuda2, marker transfer. Checked with mock devices only.
+#
+#   1. the policy server, in master_proj's environment (torch 2.5.1; roboloom needs 2.7,
+#      so the policy node cannot load it itself):
+#        cd ~/workspace/master_proj && scripts/deploy/serve_roboloom_policy.sh dp_multimodal
+#   2. here:  uv run roboloom infer --experiment dp_multimodal
+#   Both sides need the same ROBOLOOM_POLICY_AUTHKEY.
+#
+# The robot's own settings (ports, measured values, limits, poses) are in
+# .roboloom/rakuda2/; this file says only what this experiment needs.
+help: master_proj raw multimodal diffusion policy (To 8), marker transfer
+robot: rakuda2
+options: [policy_teleop, digit]  # policy_teleop: the leader can drive before an episode (Teleop)
+dataset:
+  root: data/roboloom/dp_multimodal  # from the project's directory
+  repo_id: local/rakuda2-dp-multimodal
+nodes:
+  # the gravity-compensated leader with torso and head held where `home` put them
+  inputs.leader: nodes/leader_fixed_camera.yaml
+  # laid over .roboloom/rakuda2/nodes/policy_teleop.yaml (max_speed, command_deadline_ms
+  # and the teleop controller stay as written there)
+  controllers.policy:
+    factory: scripts.deploy.roboloom_policy:load  # imported in master_proj, from its root
+    kwargs:
+      config: inference/closed_loop_raw_multimodal_dynaflip_mopoe
+      experiment: dp_raw_multimodal_dynaflip_mopoe_transfer_marker_To_8_Tp_32
+      checkpoint: checkpoints/dp_raw_multimodal_dynaflip_mopoe_transfer_marker_To_8_Tp_32/2026-07-29_14-46-34/best-epoch-111.ckpt
+      # the pretrained encoder file of master_proj's configs/pretrained/default.yaml is
+      # gone; the policy checkpoint holds the encoders' weights and is loaded strictly
+      overrides: [pretrained.mopoe_rssm.checkpoint_path=null]
+    backend: server
+    server: {address: "127.0.0.1:18765", timeout_s: 30}
+    observe: [camera, digit_left, digit_right]
+    rate_hz: 5  # the policy's data was recorded at 5 Hz
+    action_horizon: 16  # the policy's action_horizon
+    observation_history: 8  # the policy's observation_horizon (To)
+    # sync, as master_proj's own runner: all 16 actions of a chunk are executed, then the
+    # next chunk is inferred from the newest observation (about 70 ms, inside one action)
+    inference: sync
+    # the model was trained on the 14 arm joints: torso and head keep their held target
+    hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]
+    # Home (pressed in the operator screen): the first frame of the training data
+    home:
+      pose: ../poses/follower/camera_transfer_marker.yaml
+      max_speed: 200
+      tolerance: 30
+      timeout_s: 30
+task: transfer the marker
+steps: 500  # master_proj's rollout_steps: 500 actions of the policy (100 s at 5 Hz)
+episodes: 1  # a goal, not a limit: after it, Home / Teleop / Start run further episodes
+home: false  # no automatic move: press Home in the operator screen when you want it

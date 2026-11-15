@@ -233,9 +233,9 @@ def test_the_node_file_says_what_the_server_loads_and_where(tmp_path):
     file.write_text("factory: roboloom.policy.remote:connect\n")
     with pytest.raises(ConfigError, match="write the policy's own factory"):
         R.served(str(file))
-    with pytest.raises(SystemExit, match="not both"):
+    with pytest.raises(SystemExit, match="give one of"):
         R.main(["policies:creep", "--from", str(file)])
-    with pytest.raises(SystemExit, match="give module:callable, or --from"):
+    with pytest.raises(SystemExit, match="give module:callable, --from"):
         R.main([])
 
 

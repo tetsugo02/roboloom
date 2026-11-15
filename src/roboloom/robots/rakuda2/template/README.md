@@ -240,17 +240,24 @@ and lists the options `config.yaml` lacks), remove `requires: [digit]` from
 
 ### One file per experiment
 
-To run the same evaluation again without retyping its words, write
-`experiments/<name>.yaml` in this directory and run `uv run roboloom infer --experiment <name>`:
+This directory holds the robot's own settings. What an experiment changes (the policy
+and its checkpoint, the options, where the episodes go, the task, the length) goes into
+`configs/roboloom/<name>.yaml` of your project, and
+`uv run roboloom infer --experiment <name>` runs it:
 
 ```yaml
+robot: rakuda2
 options: [policy]                   # add digit for a policy that reads the DIGITs
-policy: nodes/policy_drawer.yaml    # a copy of nodes/policy.yaml with your policy
-dataset: drawer                     # episodes go to local/rakuda2-eval-drawer
+dataset: {root: data/roboloom/drawer, repo_id: local/rakuda2-drawer}
+nodes:
+  controllers.policy:               # laid over nodes/policy.yaml
+    factory: my_lab.policies:load
+    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    rate_hz: 10
 task: open the drawer               # with a task the runs are saved
-seconds: 40                         # or steps: 200 (actions of the policy)
+steps: 200                          # actions of the policy (or seconds: 40)
 episodes: 10
-home: true                          # needs `home:` in the policy's YAML
+home: true                          # needs `home:` in the policy's settings
 ```
 
 Values on the command line win (`--experiment drawer --seconds 10`).

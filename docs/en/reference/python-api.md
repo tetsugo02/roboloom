@@ -48,6 +48,8 @@ roboloom takes the same structure.
 - **`Session`**: launches the dataflow and sends events. Events are start, stop, save, task name, and so on. It does not run the control loop.
   - Therefore, even if the user's script does heavy processing or stalls, the control period is not disturbed.
 
+The settings of one experiment (the policy, the options, the dataset) are passed with `Session.launch(experiment=...)`: a name (`configs/roboloom/<name>.yaml`), a file path or a mapping with the same keys ([experiment files](configuration.md#experiments)).
+
 ### Record an episode
 
 ```python
