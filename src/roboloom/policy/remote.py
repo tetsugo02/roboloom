@@ -278,18 +278,23 @@ class RemotePolicy:
         return result[0]
 
     def options(self) -> dict:
+        """The served policy's `options()` (empty when it has none)."""
         return self._call("options")
 
     def bind(self, spec: PolicySpec) -> None:
+        """Forward `bind` to the served policy."""
         self._call("bind", asdict(spec))
 
     def reset(self) -> None:
+        """Forward `reset` to the served policy."""
         self._call("reset")
 
     def infer(self, observation: dict[str, Any]) -> np.ndarray:
+        """The served policy's answer to `observation`."""
         return np.asarray(self._call("infer", observation), dtype=np.float64)
 
     def close(self) -> None:
+        """Close the connection to the server."""
         self.connection.close()
 
 

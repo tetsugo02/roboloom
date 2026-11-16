@@ -167,7 +167,7 @@ with Session.launch("rakuda2", options=["gravity"]) as session:
     print(result.index, result.frames, result.warnings)
 ```
 
-The arms must be supported when the script ends as well. To build in manual stop and release, see [Python API](../reference/python-api.md).
+The arms must be supported when the script ends as well. To build in manual stop and release, see [Python API](../reference/python-api/session.md).
 
 With only `gravity` enabled, the save location is `.roboloom/rakuda2/datasets/rakuda2` (`output` is relative to the configuration YAML); with `digit` it becomes `datasets/rakuda2-digit`. Logs are kept in `.roboloom/rakuda2/logs/<dataset name>-<time>/`. Keep the configuration, calibration, and tuning YAMLs under management, and you can resume collection into a dataset with the same configuration, FPS, and features.
 

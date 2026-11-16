@@ -33,12 +33,38 @@ nav:
       - Pika wrist cameras (in development): sensors/pika-cameras.md
       - Web camera (in development): sensors/webcam.md
   - Policy:
-      - Running a policy: policy/index.md
+      - Overview: policy/index.md
+      - Running a policy: policy/run.md
+      - LeRobot policies: policy/lerobot.md
+      - Your own policy: policy/custom.md
+      - In another process: policy/remote.md
+      - Asynchronous inference and interpolation: policy/async.md
+      - Teleoperation and interventions: policy/intervention.md
+      - Evaluation and replay: policy/evaluation.md
+  - Data:
+      - Dataset format: data/format.md
+      - Recording and saving: data/recording.md
+      - Checking and training: data/check-and-train.md
   - Reference:
-      - Configuration: reference/configuration/index.md
+      - Configuration:
+          - Overview: reference/configuration/index.md
+          - Followers: reference/configuration/followers.md
+          - Inputs: reference/configuration/inputs.md
+          - Controllers: reference/configuration/controllers.md
+          - Policy: reference/configuration/policy.md
+          - Sensors: reference/configuration/sensors.md
+          - Recorder and session: reference/configuration/recorder.md
+          - Control laws and limits: reference/configuration/control.md
       - CLI: reference/cli.md
+      - Python API:
+          - Overview: reference/python-api/index.md
+          - Session: reference/python-api/session.md
+          - Setup: reference/python-api/setup.md
+          - Policy: reference/python-api/policy.md
+          - Recording: reference/python-api/recording.md
+      - Dataset features: reference/dataset-features.md
       - Operator screen: reference/operator-screen.md
-      - Python API: reference/python-api.md
+      - Status labels: reference/status-labels.md
   - Explanation:
       - Gravity tuning: explanation/gravity-compensation.md
   - Contribution:

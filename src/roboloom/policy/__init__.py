@@ -62,6 +62,17 @@ class PolicySpec:
 
 
 class Policy(Protocol):
+    """What the policy node runs: any object with `reset()` and `infer(observation)`.
+
+    `observation` maps the dataset's feature names (`observation.state`,
+    `observation.images.<camera>`, ...) to the latest values, plus `task` (and
+    `history` with `observation_history`). `infer` returns joint targets in the
+    order of `action` and the followers' units: one step `[n]` or a chunk `[H, n]`.
+    Optional methods: `bind(spec: PolicySpec)`, called once after loading to refuse a
+    configuration the policy was not trained for, and `options()`, returning
+    `observation_history`, `hold` or `action_horizon` to use instead of the YAML's.
+    """
+
     def reset(self) -> None:
         """Forget the previous episode (called when an episode starts)."""
         ...
@@ -99,12 +110,15 @@ class Hold:
         self.horizon = horizon
 
     def reset(self) -> None:
-        pass
+        """Nothing to forget."""
 
     def infer(self, observation: dict[str, Any]) -> np.ndarray:
+        """`horizon` copies of the current `observation.state`."""
         state = np.asarray(observation["observation.state"], dtype=np.float64)
         return np.repeat(state[None, :], self.horizon, axis=0)
 
 
 def hold(horizon: int = 1) -> Hold:
+    """`roboloom.policy:hold`, the template's default policy: keep the arms where they
+    are, `horizon` steps per call."""
     return Hold(horizon)

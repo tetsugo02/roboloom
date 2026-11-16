@@ -27,7 +27,7 @@ storage: video
 | `width`，`height` | 必須の正の整数．実際のフレームの大きさが違えば読み取り時に拒否します．自動では縮小・拡大しません |
 | `fps` | 必須．取得周期の要求です．設定できない，報告されない，報告値が要求と0.5 fpsより大きく違う場合は，警告して続けます |
 | `format` | 任意．`MJPG` または `YUYV`．省略するとバックエンドの既定です．設定できない，確かめられない，違う形式が報告された場合は，報告された形式を添えて警告します |
-| `storage` | `video`（既定）または `image`．[保存形式](../reference/configuration/index.md#image-storage) を参照してください |
+| `storage` | `video`（既定）または `image`．[保存形式](../reference/configuration/sensors.md#image-storage) を参照してください |
 
 `backend` とOSの組み合わせ（例：Linuxで `dshow`）と，Linux以外での `/dev/` パスは，設定の読み込み（`validate`，模擬）では拒否せず，実機のカメラを開くときに `ValueError` で止めます．模擬の設定を別のOSでも確かめられるようにするためです．複数のOSで同じ設定を使うときは `backend: auto` にします．
 

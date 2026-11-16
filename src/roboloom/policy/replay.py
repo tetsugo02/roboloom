@@ -32,6 +32,9 @@ from . import PolicySpec
 
 
 class Replay:
+    """Recorded actions `[T, n]` returned `horizon` rows per call, open loop (made by
+    `load`)."""
+
     def __init__(
         self,
         actions: np.ndarray,
@@ -52,9 +55,12 @@ class Replay:
         self.at = 0
 
     def options(self) -> dict:
+        """`action_horizon`: the rows returned per call."""
         return {"action_horizon": self.horizon}
 
     def bind(self, spec: PolicySpec) -> None:
+        """Refuse a configuration whose action size (and, for a recording, names
+        and rate) differ from the recorded ones, or that uses `inference: async`."""
         problems = []
         if self.actions.shape[1] != len(spec.action):
             problems.append(
@@ -84,9 +90,11 @@ class Replay:
             )
 
     def reset(self) -> None:
+        """Start again from the first row."""
         self.at = 0
 
     def infer(self, observation: dict[str, Any]) -> np.ndarray:
+        """The next `horizon` rows, whatever is observed (the last row once done)."""
         chunk = self.actions[self.at : self.at + self.horizon]
         self.at += self.horizon
         return chunk if len(chunk) else self.actions[-1:]

@@ -32,8 +32,8 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | `observation.state`, `action` | 17 (`follower.torso_yaw`, `follower.head_yaw`, `follower.head_pitch`, the right arm `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`, the left arm `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`) | Dynamixel position counts |
 | `observation.effort` | 17 (same order; `record_effort: true` in the template) | mA (current) |
 | `observation.leader` | 17 (the leader's joint positions, same order; names without a prefix, `torso_yaw` … `l_arm_grip`; not recorded with option `policy`, which has no leader; recorded with `policy_teleop`) | Dynamixel position counts |
-| `observation.images.camera` | 480×640×3 (RGB) | [storage](../../reference/configuration/index.md#image-storage) |
-| `observation.images.digit_left`, `observation.images.digit_right` | 320×240×3 (RGB; option `digit`) | [storage](../../reference/configuration/index.md#image-storage) |
+| `observation.images.camera` | 480×640×3 (RGB) | [storage](../../reference/configuration/sensors.md#image-storage) |
+| `observation.images.digit_left`, `observation.images.digit_right` | 320×240×3 (RGB; option `digit`) | [storage](../../reference/configuration/sensors.md#image-storage) |
 | `observation.meta.<node>.valid`, `capture_age_ms`, `ready_age_ms` | 1 each (float32), for every recorded node: `leader`, `follower`, `camera`, and with `digit` also `digit_left`, `digit_right` | `valid` 0/1, ages in ms |
 | `observation.meta.<node>.seq`, `capture_ns`, `ready_ns`, `receive_ns` | 1 each (int64), same nodes | sequence number, monotonic-clock ns |
 | `action.valid`, `action.clamped` | 1 each (float32) | 0/1 |
@@ -41,10 +41,10 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 | `action.intervention` | 1 (float32; only with option `policy_teleop`) | 1 in rows a person drove with the leader |
 | `observation.audio.audio` | only when the sensor `audio` is selected; shape in [Audio](../../sensors/audio.md) | mel spectrogram |
 
-- What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in "Recording and resuming" of [Configuration](../../reference/configuration/index.md#recording-and-resuming); they are the same for every robot.
+- What `observation.leader`, `observation.meta.<node>.*`, `action.valid`, `action.clamped` and `action.meta.follower.*` mean, how missing samples are recorded, and what `action` holds in rows without a command are described in [Dataset format](../../data/format.md); they are the same for every robot.
 - The policy (option `policy`) observes joint state and `camera` by default. Select sensors with `observe` in `nodes/policy.yaml` (`[]` for joint state only). `infer` returns targets for the 17 joints in counts: one step `[17]` or a chunk `[H, 17]`.
 - `max_speed` is in counts/s (`{follower: 1024}` in the template).
-- `storage: video` images are H.264 by default; `video_codec: av1` in `nodes/recorder.yaml` or `--video-codec av1` records AV1 ([Video codec](../../reference/configuration/index.md#video-codec)).
+- `storage: video` images are H.264 by default; `video_codec: av1` in `nodes/recorder.yaml` or `--video-codec av1` records AV1 ([Video codec](../../reference/configuration/recorder.md#video-codec)).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../../policy/index.md).
 
 ## Launch options and combinations
@@ -57,7 +57,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `gravity` | Gravity-compensates the leader's left and right arms (`nodes/leader_gravity.yaml`) | | Unchanged |
 | `bilateral` | Force feedback (not verified on hardware); replaces the leader, controller, and robot and adds the estimator `effort` | Requires `gravity` | Appends `-bilateral` |
 | `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Conflicts with `gravity` | Appends `-eval` |
-| `policy_teleop` | With `policy`, the leader can drive before and during an episode ([teleoperation and interventions](../../policy/index.md)); brings the leader back and uses `nodes/policy_teleop.yaml` | Requires `policy` | Appends `-teleop` |
+| `policy_teleop` | With `policy`, the leader can drive before and during an episode ([teleoperation and interventions](../../policy/intervention.md)); brings the leader back and uses `nodes/policy_teleop.yaml` | Requires `policy` | Appends `-teleop` |
 | `pika` | A Pika Sense per arm through IK instead of the leader ([in development, mock only](pika-sense-ik.md)) | conflicts with `gravity`, `policy` | appends `-pika` |
 
 | Enabled options | Leader | Sensors | `repo_id` |
@@ -104,7 +104,7 @@ Limitations:
 
 Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits on the hardware. The template has `torque` set to `true`, so if you want to check the pipeline the first time without moving the follower, **change `nodes/follower.yaml` to `torque: false` before launch**. Leader-side control is independent; the trigger and gravity compensation are energized.
 
-The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Configuration](../../reference/configuration/index.md#control-rate).
+The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Control rate](../../reference/configuration/followers.md#control-rate).
 
 For the steps from setup to data collection, see [Rakuda2 Quick start](../../tutorials/rakuda2.md); for the meaning of the control values, see [Gravity tuning](../../explanation/gravity-compensation.md).
 

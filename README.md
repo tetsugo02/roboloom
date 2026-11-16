@@ -34,7 +34,7 @@ Claude Code・Codex などのコーディングエージェント向けに，rob
 
 ## Python interface
 
-roboloom の操作は，どれも Python の関数として使えます．CLI はそれを呼ぶだけの薄い層です．対応表と例は [docs/ja/reference/python-api.md](docs/ja/reference/python-api.md) にあります．
+roboloom の操作は，どれも Python の関数として使えます．CLI はそれを呼ぶだけの薄い層です．対応表と例は [docs/ja/reference/python-api/](docs/ja/reference/python-api/index.md) にあります．
 
 - **`Session`**（実機の収集と推論）
   - 実験の dora dataflow を起動します．
@@ -158,7 +158,7 @@ uv run roboloom record --task handover --seconds 10
 uv run roboloom infer --policy my_lab.policies:load --seconds 30
 ```
 
-`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．各回の成否は，保存のときに `save success`・`save failure` と書くか，あとから `uv run roboloom label --with policy <エピソード番号> success` で残せます（データセットの `meta/roboloom_episodes.jsonl`．[方策で動かす](docs/ja/policy/index.md)）．
+`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．各回の成否は，保存のときに `save success`・`save failure` と書くか，あとから `uv run roboloom label --with policy <エピソード番号> success` で残せます（データセットの `meta/roboloom_episodes.jsonl`．[評価と再生](docs/ja/policy/evaluation.md)）．
 
 EEPROM について：
 

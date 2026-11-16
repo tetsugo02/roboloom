@@ -33,12 +33,38 @@ nav:
       - Pikaの手首カメラ（開発中）: sensors/pika-cameras.md
       - Webカメラ（開発中）: sensors/webcam.md
   - Policy:
-      - 方策で動かす: policy/index.md
+      - 概要: policy/index.md
+      - 方策で動かす: policy/run.md
+      - LeRobotの方策: policy/lerobot.md
+      - 自作の方策: policy/custom.md
+      - 別のプロセスで動かす: policy/remote.md
+      - 非同期の推論と補間: policy/async.md
+      - テレオペと介入: policy/intervention.md
+      - 評価と再生: policy/evaluation.md
+  - Data:
+      - データの形式: data/format.md
+      - 記録と保存: data/recording.md
+      - 検査と学習: data/check-and-train.md
   - Reference:
-      - 設定: reference/configuration/index.md
+      - 設定:
+          - 概要: reference/configuration/index.md
+          - Followers: reference/configuration/followers.md
+          - Inputs: reference/configuration/inputs.md
+          - Controllers: reference/configuration/controllers.md
+          - Policy: reference/configuration/policy.md
+          - Sensors: reference/configuration/sensors.md
+          - Recorder と session: reference/configuration/recorder.md
+          - 制御則と制限: reference/configuration/control.md
       - CLI: reference/cli.md
+      - Python API:
+          - 概要: reference/python-api/index.md
+          - Session: reference/python-api/session.md
+          - Setup: reference/python-api/setup.md
+          - Policy: reference/python-api/policy.md
+          - Recording: reference/python-api/recording.md
+      - データセットの列: reference/dataset-features.md
       - 操作画面: reference/operator-screen.md
-      - Python API: reference/python-api.md
+      - 状態ラベル: reference/status-labels.md
   - Explanation:
       - 重力補償の調整: explanation/gravity-compensation.md
   - Contribution:

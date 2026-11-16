@@ -27,7 +27,7 @@ storage: video
 | `width`, `height` | Required positive integers. Frames whose actual size differs are refused at read time; no automatic resize |
 | `fps` | Required requested capture rate. An unsupported, unreported, or reported rate differing by more than 0.5 fps warns and continues |
 | `format` | Optional `MJPG` or `YUYV`; omitted uses the backend default. An unsupported, unconfirmed or different format warns with the reported format |
-| `storage` | `video` (default) or `image`. See [storage](../reference/configuration/index.md#image-storage) |
+| `storage` | `video` (default) or `image`. See [storage](../reference/configuration/sensors.md#image-storage) |
 
 A backend that does not match the OS (e.g. `dshow` on Linux) and a `/dev/` path outside Linux are not refused when the configuration is loaded (`validate`, mock); opening the real camera stops with `ValueError`. This keeps a mock configuration checkable on another OS. Use `backend: auto` to share one configuration across operating systems.
 

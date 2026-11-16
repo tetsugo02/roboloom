@@ -167,7 +167,7 @@ with Session.launch("rakuda2", options=["gravity"]) as session:
     print(result.index, result.frames, result.warnings)
 ```
 
-スクリプト終了時も腕の支持が必要です．手動の停止・解放を組み込む場合は [Python API](../reference/python-api.md) を参照してください．
+スクリプト終了時も腕の支持が必要です．手動の停止・解放を組み込む場合は [Python API](../reference/python-api/session.md) を参照してください．
 
 `gravity` だけを有効にしたときの保存先は `.roboloom/rakuda2/datasets/rakuda2` です（`output` は設定YAMLからの相対パス）．`digit` を有効にすると `datasets/rakuda2-digit` になります．ログは `.roboloom/rakuda2/logs/<データセット名>-<時刻>/` に残ります．設定・校正・調整のYAMLを管理し，同じ設定・FPS・featureのデータセットへ収集を再開できます．
 

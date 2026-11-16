@@ -3,7 +3,7 @@
 !!! warning "開発中・模擬のみ"
     Rakuda2テンプレートのオプション `pika` は，模擬のデバイスだけで確かめています．腕の関節の対応表（零点のカウントと向き），グリッパーの対応，ツールのオフセット，作業範囲は，どれも仮の値です．腕の逆運動学は，方向によって条件が悪くなります（[限界](#limitations)）．[実機の前に](#before-hardware) の確認を済ませるまで，実機では動かさないでください．
 
-leaderの代わりに，腕ごとに1台のPika Senseで，逆運動学を通してRakuda2を動かします．Rakuda2やPikaに限らない2つの仕組みを，初めて使う構成です．[フォロワの部分](../../reference/configuration/index.md#parts) と，フォロワ自身の関節の単位で扱う運動学です．
+leaderの代わりに，腕ごとに1台のPika Senseで，逆運動学を通してRakuda2を動かします．Rakuda2やPikaに限らない2つの仕組みを，初めて使う構成です．[フォロワの部分](../../reference/configuration/controllers.md#parts) と，フォロワ自身の関節の単位で扱う運動学です．
 
 ## 構成
 

@@ -88,7 +88,14 @@ class EpisodeFailed(SessionError):
 
 @dataclass
 class EpisodeInfo:
-    """What a task-naming function knows about the episode it names."""
+    """What a task-naming function knows about the episode it names.
+
+    Attributes:
+        index: The episode's index in the dataset (the episodes already saved).
+        number: The episodes this session has recorded so far.
+        dataset: The dataset's name, e.g. `rakuda2-digit` (it tells the options).
+        previous: The tasks this session has saved, oldest first.
+    """
 
     index: int  # episode index in the dataset (episodes already saved)
     number: int  # episodes recorded by this session so far
@@ -98,6 +105,19 @@ class EpisodeInfo:
 
 @dataclass
 class EpisodeResult:
+    """A stopped episode, saved or not (`Session.stop`, `save`, `record`).
+
+    Attributes:
+        task: The episode's task text.
+        saved: Whether the episode was written to the dataset.
+        frames: The rows recorded.
+        index: The episode's index in the dataset once saved, else None.
+        metrics: The recorder's quality metrics (missing rates, the share of valid
+            actions, the control interval distribution).
+        warnings: The quality limits (`quality:` of the recorder YAML) it exceeded.
+        label: The verdict it was saved with, `"success"` or `"failure"`, else None.
+    """
+
     task: str
     saved: bool
     frames: int  # rows recorded
@@ -108,6 +128,7 @@ class EpisodeResult:
 
     @property
     def ok(self) -> bool:
+        """True when no quality limit was exceeded (`warnings` is empty)."""
         return not self.warnings
 
 
@@ -227,6 +248,16 @@ def _fifo_in_use(fifo: Path) -> bool:
 
 
 class Session:
+    """A robot's running dora dataflow, directed from this process.
+
+    The control loops, sensors, recorder and policy run in their own processes; a
+    Session only starts the dataflow and sends it events (start, stop, save, the
+    task), so a slow or stopped script never delays a control loop. Create one with
+    `Session.launch` and use it as a context manager: leaving the `with` block discards
+    an unfinished episode, asks the operator to support the arms (when `operator` is
+    set) and stops the dataflow (`close`).
+    """
+
     def __init__(
         self,
         cfg: RobotConfig,
@@ -425,6 +456,7 @@ class Session:
 
     @property
     def alive(self) -> bool:
+        """True while the dataflow process is running."""
         return self.process.poll() is None
 
     @property
@@ -701,6 +733,14 @@ class Session:
                 )
 
     def start(self, task: str) -> None:
+        """Start recording an episode of `task` and let the controllers drive.
+
+        Raises SessionError when a controller refuses (e.g. the leader is not aligned
+        with the follower, `alignment_tolerance`) or while the previous episode is
+        recording, stopped but not saved, or being saved. When the recorder could not take the
+        start, the followers and the policy are stopped too, so no episode runs that
+        nobody records.
+        """
         if not task.strip():
             raise ValueError("task is required")
         ident = self.send("start", task)
@@ -912,6 +952,7 @@ class Session:
     # -- episodes ---------------------------------------------------------------
 
     def next_info(self) -> EpisodeInfo:
+        """What a task-naming function is given for the next episode."""
         return EpisodeInfo(
             self.episodes,
             len(self._recorded),

@@ -147,6 +147,18 @@ class InProcessSession:
         unit: str,
         dataset=None,
     ) -> InProcessSession:
+        """A one-follower session built from parts, without a configuration file.
+
+        - `bus`: the follower's joint bus (e.g. `roboloom.drivers.mock.MockBus`);
+          `joint_names`, `unit` and `limits` (one mapping per joint: `name`, `min`,
+          `max`, `max_speed`, `max_jump`) describe its joints.
+        - `controller`: observation dict -> targets (or None), as in the constructor.
+        - `sensors`: source name -> callable returning a `Sample` or None. A source
+          named `leader` is recorded as a joint input; the others need an entry in
+          `image_shapes` (HWC RGB) or are the `audio` stream (`audio_sample_rate`).
+        - `fps`: the dataset rate; `control_hz` (at least `fps`): the control rate.
+        - `output`, `repo_id`: where and under which id the dataset is written.
+        """
         if (
             len(joint_names) != len(limits)
             or len(set(joint_names)) != len(joint_names)
@@ -185,6 +197,7 @@ class InProcessSession:
         return cls(cfg, bus, controller=controller, sensors=sensors, dataset=dataset)
 
     def start_episode(self, task: str) -> None:
+        """Start recording an episode of `task` and arm the follower."""
         self.recorder.start(task)
         self.safety.arm()
 
@@ -193,6 +206,7 @@ class InProcessSession:
         self.safety.arm()
 
     def stop_inference(self) -> None:
+        """Stop commanding the follower (it holds); the counterpart of `start_inference`."""
         self.safety.stop()
 
     def step(
@@ -258,6 +272,7 @@ class InProcessSession:
         *,
         policy: Callable[[dict], list[float] | None] | None = None,
     ) -> list[dict]:
+        """Call `step` at the control rate for `seconds`; returns each step's result."""
         results = []
         end = time.monotonic() + seconds
         next_tick = time.monotonic()
@@ -268,6 +283,7 @@ class InProcessSession:
         return results
 
     def stop_episode(self) -> None:
+        """Stop the follower and end the episode's recording (save or discard it next)."""
         self.safety.stop()
         self.recorder.stop()
 
@@ -278,10 +294,12 @@ class InProcessSession:
         return self.recorder.save(label, note)
 
     def discard_episode(self) -> None:
+        """Stop the follower and drop the episode in progress."""
         self.safety.stop()
         self.recorder.discard()
 
     def estop(self) -> None:
+        """Latch the follower in ESTOP."""
         self.safety.stop(estop=True)
 
     def release(self) -> None:

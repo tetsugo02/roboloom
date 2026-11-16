@@ -109,11 +109,22 @@ class CheckRow:
 
 @dataclass
 class GravityCheck:
+    """What `gravity_check` measured: one row per pose, scale and joint; `lines()`
+    is the table the CLI prints, `trace` the saved samples.
+
+    Attributes:
+        rows: One `CheckRow` per pose, scale and joint (position, model and sent
+            current, drift in counts after letting go, peak velocity).
+        trace: The file of saved samples, if any.
+        stopped: Why trials ended early (a runaway or the watchdog).
+    """
+
     rows: list[CheckRow] = field(default_factory=list)
     trace: Path | None = None
     stopped: list[str] = field(default_factory=list)
 
     def lines(self) -> list[str]:
+        """The result as the CLI prints it, one line per item."""
         out = [
             (
                 f"{'pose':>4} {'run':<12} {'joint':<16} {'q':>5} {'g(q)':>5} {'sent':>5} "
@@ -376,15 +387,28 @@ class JointFit:
 
 @dataclass
 class GravityFit:
+    """The fitted gravity model saved at `path` (`identify_gravity`, `fit_gravity`):
+    per-joint fits, the report lines and its `warnings`.
+
+    Attributes:
+        path: The saved gravity model.
+        joints: One `JointFit` per joint (`joint`, `rank`, `holdout_rms_mA`,
+            `train_rms_mA`, `current_std_mA`, and `explained`: the share of the
+            measured current's variance the model explains).
+        report: Poses used, directions, per-joint lines and warnings.
+    """
+
     path: Path
     joints: list[JointFit]
     report: list[str]  # poses used, directions, per-joint lines and warnings
 
     @property
     def warnings(self) -> list[str]:
+        """The report lines that are warnings."""
         return [x for x in self.report if x.startswith("warning")]
 
     def lines(self) -> list[str]:
+        """The result as the CLI prints it, one line per item."""
         return [*self.report, f"saved {self.path}"]
 
 

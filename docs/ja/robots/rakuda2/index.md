@@ -32,8 +32,8 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `observation.state`，`action` | 17（`follower.torso_yaw`，`follower.head_yaw`，`follower.head_pitch`，右腕 `follower.r_arm_sh_pitch1` … `follower.r_arm_grip`，左腕 `follower.l_arm_sh_pitch1` … `follower.l_arm_grip`） | Dynamixelの位置カウント |
 | `observation.effort` | 17（同じ並び．テンプレートの `record_effort: true`） | mA（電流） |
 | `observation.leader` | 17（leaderの関節位置．同じ並び．名前は接頭辞なしの `torso_yaw` … `l_arm_grip`．leaderを使わないオプション `policy` では記録しない．`policy_teleop` では記録する） | Dynamixelの位置カウント |
-| `observation.images.camera` | 480×640×3（RGB） | [storage](../../reference/configuration/index.md#image-storage) |
-| `observation.images.digit_left`，`observation.images.digit_right` | 320×240×3（RGB．オプション `digit`） | [storage](../../reference/configuration/index.md#image-storage) |
+| `observation.images.camera` | 480×640×3（RGB） | [storage](../../reference/configuration/sensors.md#image-storage) |
+| `observation.images.digit_left`，`observation.images.digit_right` | 320×240×3（RGB．オプション `digit`） | [storage](../../reference/configuration/sensors.md#image-storage) |
 | `observation.meta.<node>.valid`，`capture_age_ms`，`ready_age_ms` | 各1（float32）．記録するノードごと：`leader`，`follower`，`camera`，`digit` のときは `digit_left`，`digit_right` も | `valid` は0/1，経過時間はms |
 | `observation.meta.<node>.seq`，`capture_ns`，`ready_ns`，`receive_ns` | 各1（int64）．同じノード | 通し番号，単調時計のns |
 | `action.valid`，`action.clamped` | 各1（float32） | 0/1 |
@@ -41,10 +41,10 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `action.intervention` | 1（float32．オプション `policy_teleop` のときだけ） | 人がleaderで動かした行は1 |
 | `observation.audio.audio` | センサー `audio` を選んだときだけ．大きさは[音声](../../sensors/audio.md)を参照 | メルスペクトログラム |
 
-- `observation.leader`，`observation.meta.<node>.*`，`action.valid`，`action.clamped`，`action.meta.follower.*` の意味，欠測の記録のしかた，指令のなかった行の `action` の中身は，[設定](../../reference/configuration/index.md) の「記録と再開」で説明しています．どのロボットでも同じです．
+- `observation.leader`，`observation.meta.<node>.*`，`action.valid`，`action.clamped`，`action.meta.follower.*` の意味，欠測の記録のしかた，指令のなかった行の `action` の中身は，[データの形式](../../data/format.md) で説明しています．どのロボットでも同じです．
 - 方策（オプション `policy`）は，既定で関節状態と `camera` を観測します．`nodes/policy.yaml` の `observe` でセンサーを選べます（`[]` なら関節状態のみ）．`infer` は17関節の目標をカウントで返します．1手 `[17]` か，まとめた行動 `[H, 17]` です．
 - `max_speed` はカウント/sです（テンプレートは `{follower: 1024}`）．
-- `storage: video` の画像は既定で H.264 です．`nodes/recorder.yaml` の `video_codec: av1` か `--video-codec av1` で AV1 にできます（[Video codec](../../reference/configuration/index.md#video-codec)）．
+- `storage: video` の画像は既定で H.264 です．`nodes/recorder.yaml` の `video_codec: av1` か `--video-codec av1` で AV1 にできます（[Video codec](../../reference/configuration/recorder.md#video-codec)）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．方策の書き方は [方策で動かす](../../policy/index.md) にあります．
 
 ## 起動オプションと組み合わせ
@@ -57,7 +57,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `gravity` | leaderの左右腕を重力補償する（`nodes/leader_gravity.yaml`） | | 変えない |
 | `bilateral` | 力の逆送（実機未検証）．leader・controller・robotを置き換え，推定器 `effort` を足す | `gravity` が必要 | `-bilateral` を付ける |
 | `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `gravity` と競合 | `-eval` を付ける |
-| `policy_teleop` | `policy` に加えて，エピソードの前と途中にleaderで動かせる（[テレオペと介入](../../policy/index.md)）．leaderを戻し，`nodes/policy_teleop.yaml` を使う | `policy` が必要 | `-teleop` を付ける |
+| `policy_teleop` | `policy` に加えて，エピソードの前と途中にleaderで動かせる（[テレオペと介入](../../policy/intervention.md)）．leaderを戻し，`nodes/policy_teleop.yaml` を使う | `policy` が必要 | `-teleop` を付ける |
 | `pika` | leaderの代わりに，腕ごとのPika SenseとIKで動かす（[開発中・模擬のみ](pika-sense-ik.md)） | `gravity`，`policy` と競合 | `-pika` を付ける |
 
 | 有効なオプション | Leader | Sensors | `repo_id` |
@@ -104,7 +104,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 ポート，モーターID，モデル，EEPROM，関節範囲，速度・電流上限を実機で確認します．テンプレートの `torque` は `true` なので，初回にfollowerを動かさず経路を確かめる場合は **起動前に `nodes/follower.yaml` を `torque: false` に変更** してください．leader側の制御は独立しており，トリガーや重力補償は通電します．
 
-制御周期はテンプレートで120 Hzです．前提条件と下げ方は [設定](../../reference/configuration/index.md) の「制御周期」を参照してください．
+制御周期はテンプレートで120 Hzです．前提条件と下げ方は [制御周期](../../reference/configuration/followers.md#control-rate) を参照してください．
 
 セットアップから収集までの手順は [Rakuda2 Quick start](../../tutorials/rakuda2.md)，制御値の意味は [Gravity tuning](../../explanation/gravity-compensation.md) を参照してください．
 
