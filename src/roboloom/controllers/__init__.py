@@ -15,4 +15,5 @@ CONTROLLERS: Registry[Controller] = Registry(
         "policy": "roboloom.controllers.policy:PolicyController",
         "pose_ik": "roboloom.controllers.pose_ik:PoseIkController",
     },
+    base=Controller,
 )

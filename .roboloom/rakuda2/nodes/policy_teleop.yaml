@@ -1,0 +1,8 @@
+# policy.yaml plus teleoperation (option policy_teleop): before an episode drive the
+# follower with the leader (Teleop, nothing recorded), Start hands over to the policy,
+# Teleop during the episode takes over again (an intervention, recorded as
+# action.intervention) and Policy hands back. Each joint holds until the leader reaches
+# it (within alignment_tolerance of controller.yaml, or crossing it), then follows.
+# The policy's settings are those of policy.yaml, which this file extends.
+extends: policy.yaml
+teleop: [controller.yaml]  # the joint controller the leader drives through

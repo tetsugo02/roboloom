@@ -30,14 +30,13 @@ joint targets stay in the policy.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from importlib import import_module, invalidate_caches
 from typing import Any, Protocol
 
 import numpy as np
 
+from ..core.registry import load_reference
 from ..errors import ConfigError
 
 
@@ -63,6 +62,17 @@ class PolicySpec:
 
 
 class Policy(Protocol):
+    """What the policy node runs: any object with `reset()` and `infer(observation)`.
+
+    `observation` maps the dataset's feature names (`observation.state`,
+    `observation.images.<camera>`, ...) to the latest values, plus `task` (and
+    `history` with `observation_history`). `infer` returns joint targets in the
+    order of `action` and the followers' units: one step `[n]` or a chunk `[H, n]`.
+    Optional methods: `bind(spec: PolicySpec)`, called once after loading to refuse a
+    configuration the policy was not trained for, and `options()`, returning
+    `observation_history`, `hold` or `action_horizon` to use instead of the YAML's.
+    """
+
     def reset(self) -> None:
         """Forget the previous episode (called when an episode starts)."""
         ...
@@ -82,14 +92,7 @@ def load_policy(
     module, _, attribute = reference.partition(":")
     if not module or not attribute:
         raise ConfigError(f"policy {reference!r}: expected 'module:callable'")
-    added = [d for d in search if d and d not in sys.path]
-    if added:
-        sys.path.extend(added)
-        invalidate_caches()
-    try:
-        factory = getattr(import_module(module), attribute)
-    except (ImportError, AttributeError) as exc:
-        raise ConfigError(f"policy {reference!r}: {exc}") from exc
+    factory = load_reference(reference, search, "policy")
     policy = factory(**(kwargs or {}))
     if not callable(getattr(policy, "infer", None)) or not callable(
         getattr(policy, "reset", None)
@@ -107,12 +110,15 @@ class Hold:
         self.horizon = horizon
 
     def reset(self) -> None:
-        pass
+        """Nothing to forget."""
 
     def infer(self, observation: dict[str, Any]) -> np.ndarray:
+        """`horizon` copies of the current `observation.state`."""
         state = np.asarray(observation["observation.state"], dtype=np.float64)
         return np.repeat(state[None, :], self.horizon, axis=0)
 
 
 def hold(horizon: int = 1) -> Hold:
+    """`roboloom.policy:hold`, the template's default policy: keep the arms where they
+    are, `horizon` steps per call."""
     return Hold(horizon)

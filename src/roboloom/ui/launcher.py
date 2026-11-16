@@ -39,8 +39,8 @@ from ..config import (
     Option,
     check_options,
     dataset_suffix,
+    declared_options,
     option_changes,
-    parse_options,
     project_robots,
     read_config,
     toggle_option,
@@ -71,6 +71,7 @@ class LaunchPlan:
     seconds: float = 0.0
     episodes: int = 1
     home: bool = False
+    steps: int = 0  # infer: policy actions per episode (0: `seconds` decides)
     sensors: list[str] | None = None
     observe: list[str] | None = None
     video_codec: str | None = None  # None: the recorder YAML (recording.video)
@@ -80,7 +81,7 @@ class LaunchPlan:
         if self.mode not in MODES:
             return f"unknown operation {self.mode}"
         if self.mode in ("record", "infer"):
-            if self.seconds <= 0 or self.episodes < 1:
+            if (self.seconds <= 0 and self.steps < 1) or self.episodes < 1:
                 return "seconds > 0 and episodes >= 1 are required"
             if self.mode == "record" and not self.task.strip():
                 return "record needs a task"
@@ -298,7 +299,7 @@ def robot_detail(root: Path, robot: str) -> RenderableType:
     path = root / robot / CONFIG_FILE
     try:
         raw = yaml.safe_load(path.read_text()) or {}
-        options = parse_options(raw.get("options"))
+        options = declared_options(path, raw.get("options"))
     except (OSError, yaml.YAMLError, ConfigError, AttributeError) as exc:
         return Text(f"{path}\n\ncannot read: {exc}", style="red")
     repo_id = str(raw.get("repo_id", "?"))
@@ -410,7 +411,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         super().__init__()
         self.config, self.back = config, back
         raw = yaml.safe_load(config.read_text()) or {}
-        self.options = parse_options(raw.get("options"))
+        self.options = declared_options(config, raw.get("options"))
         self.sensor_names = list(raw.get("sensors") or {})
         for option in self.options.values():
             for key, value in option.set.items():

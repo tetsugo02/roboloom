@@ -19,4 +19,4 @@ uv run roboloom convert-handheld pika-handheld-mock --action relative-chunk --ho
 | `nodes/recorder.yaml` | the oldest sample a row may use, per node |
 
 Nothing here has run on hardware, and running a trained policy on PiPER does not exist
-yet; see the docs page "Hand-held collection with Pika Sense" under Contribution.
+yet; see the tutorial "Hand-held collection with Pika Sense" under Tutorials.

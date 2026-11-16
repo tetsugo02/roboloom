@@ -15,4 +15,5 @@ FOLLOWERS: Registry[Follower] = Registry(
         "piper_follower": "roboloom.robots.piper.follower:PiperFollower",
         "pika_gripper_follower": "roboloom.robots.pika.follower:PikaGripperFollower",
     },
+    base=Follower,
 )

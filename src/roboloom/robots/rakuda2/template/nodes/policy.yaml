@@ -8,6 +8,11 @@ type: policy
 followers: [follower]
 factory: roboloom.policy:hold
 kwargs: {}
+# backend: process (default) loads the policy in this node. backend: server connects to
+#   a policy server instead, for a model that needs another environment or machine:
+#   start it there with `roboloom serve-policy --from <this file>`.
+# backend: process
+# server: {address: "127.0.0.1:18765"}  # read with backend: server
 observe: [camera]  # add digit_left/digit_right with the digit option; [] for state only
 rate_hz: 15  # the policy's action rate: the rate it was trained at
 # interpolation_multiplier: N sends rate_hz * N commands per second, the straight line

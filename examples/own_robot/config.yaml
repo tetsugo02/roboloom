@@ -1,0 +1,13 @@
+# A robot roboloom does not ship: its follower class is my_arm.py, next to this file.
+# Make a project from it and try it with mock devices:
+#   uv run roboloom init lab_arm --template examples/own_robot
+#   uv run roboloom infer lab_arm --mock --seconds 5 --plain
+repo_id: local/lab-arm
+output: datasets/lab-arm
+dataset_fps: 10
+followers:
+  arm: nodes/follower.yaml
+controllers:
+  policy: nodes/policy.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml

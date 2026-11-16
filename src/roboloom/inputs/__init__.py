@@ -18,4 +18,5 @@ INPUTS: Registry[InputDevice] = Registry(
         "rakuda_mini": "roboloom.inputs.rakuda_mini.arm:RakudaMini",
         "pika_sense": "roboloom.inputs.pika_sense.sense:PikaSense",
     },
+    base=InputDevice,
 )

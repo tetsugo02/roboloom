@@ -9,34 +9,80 @@ theme:
   language: en
 nav:
   - Home: index.md
-  - Quick start:
-      - Installation: quick-start/installation.md
-      - Rakuda2: quick-start/rakuda2.md
+  - Get started:
+      - Installation: get-started/installation.md
+      - Concepts: get-started/concepts.md
+      - Support matrix: get-started/support-matrix.md
+  - Tutorials:
+      - Gallery: tutorials/index.md
+      - First run without devices: tutorials/first-run-mock.md
+      - "Rakuda2: configuration and read check": tutorials/rakuda2-setup.md
+      - "Rakuda2: gravity compensation": tutorials/rakuda2-gravity.md
+      - "Rakuda2: teleoperated collection": tutorials/rakuda2-collect.md
+      - "Rakuda2: from collection to inference": tutorials/rakuda2-train-infer.md
+      - "Rakuda2: evaluating with interventions": tutorials/rakuda2-intervention.md
+      - Running your own policy: tutorials/custom-policy.md
+      - Adding your own robot: tutorials/own-robot.md
+      - PiPER + Pika on mock devices (in development): tutorials/piper-pika-mock.md
+      - Hand-held collection with Pika Sense (in development): tutorials/pika-handheld.md
   - Robots:
       - Overview: robots/index.md
-      - Rakuda2: robots/rakuda2.md
+      - Rakuda2:
+          - Overview: robots/rakuda2/index.md
+          - Controllers: robots/rakuda2/controllers.md
+          - Sensors: robots/rakuda2/sensors.md
+          - With Pika Sense and IK (in development): robots/rakuda2/pika-sense-ik.md
+      - PiPER (in development):
+          - Overview: robots/piper/index.md
+          - Controllers: robots/piper/controllers.md
+      - Pika Gripper (in development): robots/pika/index.md
+  - Controllers:
+      - Overview: controllers/index.md
+      - Leader: controllers/leader.md
+      - Policy: controllers/policy.md
+      - Pika Sense and IK (in development): controllers/pose-ik.md
   - Sensors:
       - Overview: sensors/index.md
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
       - Audio: sensors/audio.md
-  - Controllers:
-      - Overview: controllers/index.md
-      - Leader: controllers/leader.md
-      - Policy: controllers/policy.md
+      - Pika wrist cameras (in development): sensors/pika-cameras.md
+      - Web camera (in development): sensors/webcam.md
+  - Policy:
+      - Overview: policy/index.md
+      - Running a policy: policy/run.md
+      - LeRobot policies: policy/lerobot.md
+      - Your own policy: policy/custom.md
+      - In another process: policy/remote.md
+      - Asynchronous inference and interpolation: policy/async.md
+      - Teleoperation and interventions: policy/intervention.md
+      - Evaluation and replay: policy/evaluation.md
+  - Data:
+      - Dataset format: data/format.md
+      - Recording and saving: data/recording.md
+      - Checking and training: data/check-and-train.md
   - Reference:
-      - Configuration: reference/configuration.md
+      - Configuration:
+          - Overview: reference/configuration/index.md
+          - Followers: reference/configuration/followers.md
+          - Inputs: reference/configuration/inputs.md
+          - Controllers: reference/configuration/controllers.md
+          - Policy: reference/configuration/policy.md
+          - Sensors: reference/configuration/sensors.md
+          - Recorder and session: reference/configuration/recorder.md
+          - Control laws and limits: reference/configuration/control.md
       - CLI: reference/cli.md
+      - Python API:
+          - Overview: reference/python-api/index.md
+          - Session: reference/python-api/session.md
+          - Setup: reference/python-api/setup.md
+          - Policy: reference/python-api/policy.md
+          - Recording: reference/python-api/recording.md
+      - Dataset features: reference/dataset-features.md
       - Operator screen: reference/operator-screen.md
-      - Python API: reference/python-api.md
-      - Gravity tuning: reference/gravity-tuning.md
+      - Status labels: reference/status-labels.md
+  - Explanation:
+      - Gravity tuning: explanation/gravity-compensation.md
   - Contribution:
-      - Development: contribution.md
+      - Development: contribution/index.md
       - Bilateral control design: contribution/bilateral.md
-      - PiPER follower (in development): contribution/piper.md
-      - Pika Gripper follower (in development): contribution/pika-gripper.md
-      - Teleoperation with Pika Sense and IK (in development): contribution/pika-sense.md
-      - Rakuda2 with Pika Sense and IK (in development): contribution/rakuda2-pika.md
-      - Pika wrist cameras (in development): contribution/pika-cameras.md
-      - Web camera (in development): contribution/webcam.md
-      - Hand-held collection with Pika Sense (in development): contribution/pika-handheld.md

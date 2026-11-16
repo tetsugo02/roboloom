@@ -92,7 +92,10 @@ def test_a_recorded_episode_replays_through_the_policy_path(recorded, tmp_path):
         result = s.record("replay", 2.0)
         replayed = Path(s.cfg.output)
         fields = s.status()["policy"]["fields"]
-    assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
+    assert result.saved and result.metrics["action_valid_rate"] > 0.5, (
+        fields,
+        result.metrics,
+    )
     assert fields["state"] in ("ready", "running"), fields
     sent = _column(replayed, "action")
     # the mock leader stands still, so the replay commands the recorded pose

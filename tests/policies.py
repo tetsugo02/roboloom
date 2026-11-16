@@ -31,3 +31,25 @@ def creep(step: float = 5.0, horizon: int = 4) -> Creep:
 
 def broken() -> object:
     return object()
+
+
+class Flaky(Creep):
+    """Raises once, in its first episode's third inference; fine afterwards."""
+
+    def __init__(self) -> None:
+        super().__init__(horizon=1)
+        self.episodes = self.calls = 0
+
+    def reset(self) -> None:
+        self.episodes += 1
+        self.calls = 0
+
+    def infer(self, observation: dict) -> np.ndarray:
+        self.calls += 1
+        if self.episodes == 1 and self.calls == 3:
+            raise RuntimeError("out of memory (simulated)")
+        return super().infer(observation)
+
+
+def flaky() -> Flaky:
+    return Flaky()

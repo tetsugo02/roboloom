@@ -34,6 +34,8 @@ class V4l2RGB(ImageSensor):
     """Keys: `device` (a /dev/v4l/by-path/... or by-id path), `width`, `height`, `fps`,
     `format` (MJPG, the default, or YUYV)."""
 
+    keys = (*ImageSensor.keys, "device", "format")
+
     def __init__(self, name: str, cfg: dict):
         super().__init__(name, cfg)
         self.device = identity(cfg.get("device"), f"{name}.device")

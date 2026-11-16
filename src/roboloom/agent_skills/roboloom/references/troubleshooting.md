@@ -16,6 +16,10 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | Message fragment | Cause | Fix |
 | --- | --- | --- |
 | `template values still to fill (see the README next to the configuration)` | A referenced file still has a `SET_...` value; each line is `<location>: SET_...` | Ask the user or name the measurement step that produces it ([project-layout.md](project-layout.md), [setup.md](setup.md)). Option files are checked only with that option on |
+| `<node>: unknown keys <key> (did you mean <name>?); it reads ...` | A key the node (or a `control` group's law, a `limits` entry, ...) does not read: misspelled, or meant for another node type | Fix the spelling or remove the key. A downstream class lists its keys in `keys` ([extending.md](extending.md)) |
+| `<node>: <rate> Hz is neither a whole number of Hz nor a whole number of milliseconds per tick` | dora's timers cannot tick that rate (`control_hz`, `poll_hz`, `fps`, `rate_hz`) | Use e.g. 30, 120 or 12.5 (80 ms) |
+| `<port> is in use by another process (a running roboloom dataflow, probe or tune-gravity?)` | Another process has the serial bus open | End that process (`roboloom session quit`, or the other tool) and retry; never run two on one bus |
+| `remote policy ...: the policy server is serving another policy node` | A second policy node connected to a busy `serve-policy` | End the other dataflow, or start a second server on another `--address` |
 | `no .roboloom/<robot>/config.yaml here (create one with` | No configuration under the project root (`.roboloom/`) | Run from the project root; `roboloom init rakuda2` (only template) or write one by hand |
 | `several robots under .roboloom: ...; name one` | More than one robot directory | Pass the robot name or a `config.yaml` path |
 | `unknown robot 'x'; available: rakuda2` | `init` has a template only for `rakuda2` | Other robots: copy a configuration by hand ([robots/piper-pika.md](robots/piper-pika.md)) |
@@ -45,7 +49,10 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | `torque is on; another process may own this bus` / `torque is on; stop the dataflow first` | A setup step while a dataflow or another tool owns the bus | Quit the running dataflow first |
 | `torque is on for some of these motors; support the arm, release it, then retry` | `commission` refuses torqued motors | User supports the arm and releases it |
 | `PiPER on <can>: ...` / `Pika Gripper on <port>: no ... feedback` / `Pika Sense on <port>:` | CAN interface down, power, USB path | Hints in the message; creating CAN interfaces needs an administrator. In development, mock only |
-| `session FIFO already exists:` | Another run of this robot, or a stale FIFO after a crash | Make sure no run is alive, then the user deletes that FIFO file |
+| `another run of this robot is using <fifo>` | A dataflow of this robot is running (or one started within the last 30 s) | End it: `roboloom session quit`. A FIFO left by a run that died is removed automatically |
+| `start not started: the stopped episode is neither saved nor discarded` / `still being saved` / `already being recorded` | The recorder is not idle | `save` or `discard` the stopped episode, or wait for the save; then retry `start` |
+| `EpisodeFailed: <controller> failed during the episode: ...` | The policy raised in `infer`/`reset` (or a follower latched FAULT/ESTOP); the episode was discarded | Read the error. The policy is ready again after the episode ended: no restart. A policy that did not *load* needs a restart |
+| `the operator's process is gone: ...` (in `logs/<run>/reports.jsonl`) | The launching process died while the dataflow ran; the followers were left holding | Nothing to clean up; start a new run |
 
 ## Session and start
 

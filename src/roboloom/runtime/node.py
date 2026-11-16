@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import sys
 import threading
 import time
@@ -22,6 +23,7 @@ from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.estimators.base import Estimate, Estimator
 from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed
+from roboloom.recording.episodes import check_label
 from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
@@ -53,23 +55,67 @@ def _send(node, output: str, msg: Envelope) -> None:
     node.send_output(output, msg.encode())
 
 
-def _event(node):
-    event = node.next(timeout=0.1)
-    if event is None:
-        return None, None
-    if event.get("type") != "INPUT":
+def _decode_event(event) -> tuple[str | None, Envelope | None]:
+    if event is None or event.get("type") != "INPUT":
         return None, None
     return event["id"], None if event["id"] == "tick" else Envelope.decode(
         event["value"]
     )
 
 
+def _event(node):
+    return _decode_event(node.next(timeout=0.1))
+
+
+def _events(node) -> list[tuple[str | None, Envelope | None]]:
+    """Take the next event (waiting up to 0.1 s) plus any already buffered on `node`,
+    collapsing a backlog of `tick`s into one after the incoming samples in the batch."""
+    first = _event(node)
+    if first == (None, None) or not hasattr(node, "drain"):
+        return [first]
+    batch = [first, *(_decode_event(e) for e in node.drain())]
+    out: list[tuple[str | None, Envelope | None]] = []
+    saw_tick = False
+    for eid, msg in batch:
+        if eid is None:
+            continue
+        if eid == "tick":
+            saw_tick = True
+        else:
+            out.append((eid, msg))
+    if saw_tick:
+        out.append(("tick", None))
+    return out or [(None, None)]
+
+
 READY = ("following", "ready", "running")  # controller states that may start an episode
+# How long the session FIFO may have no writer before the operator counts as gone. The
+# launching process keeps it open for as long as it lives (Session.launch).
+OPERATOR_GONE_NS = 300_000_000
+# ... and how long the followers then hold (their state and the last reports still
+# arrive) before the dataflow ends
+QUIT_AFTER_NS = 300_000_000
 
 
 def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
     """Why an episode may not start yet (checked before start reaches the robot and
     recorder), or None. `latest` maps node names to their last status."""
+    recorder = latest.get("recorder")
+    if recorder is not None:
+        # every node takes `start` on its own: one that refuses must not leave the
+        # followers and the policy running an episode nobody records
+        if not 0 <= now_ns - recorder["t_ns"] <= 1_000_000_000:
+            return "recorder: no recent status; wait and retry start"
+        state = recorder["fields"].get("state")
+        if state == "saving":
+            return "the previous episode is still being saved; wait, then retry start"
+        if state == "stopped":
+            return (
+                "the stopped episode is neither saved nor discarded: save or discard "
+                "it, then retry start"
+            )
+        if state == "recording":
+            return "an episode is already being recorded: stop it first"
     for name in cfg.controllers:
         status = latest.get(name)
         # Reports arrive at 4 Hz; never start from missing or outdated readiness.
@@ -111,6 +157,22 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
                 f"differs by {diff} (tolerance {tolerance}); hold the leader still near "
                 "the follower, then retry start"
             )
+    return None
+
+
+def recorder_state_after(report: dict) -> str | None:
+    """The recorder's state once it sent `report`, or None when the report does not
+    tell. Its status follows up to a quarter of a second later; without this a `start`
+    right after `save` or `discard` would be refused on the old one."""
+    command = report.get("command")
+    if command == "save" and ("saved_frames" in report or report.get("dropped")):
+        return "idle"
+    if command == "discard" and report.get("ok"):
+        return "idle"
+    if command == "stop" and report.get("ok"):
+        return "stopped"
+    if command == "start" and report.get("ok"):
+        return "recording"
     return None
 
 
@@ -173,21 +235,29 @@ def teleop_warning(
 
 
 def parse_command(line: str) -> dict:
-    """A command line from the FIFO: JSON {"id", "command", "task"} from a Session, or
-    plain `start <task>` typed by an operator (no id)."""
+    """A command line from the FIFO: JSON {"id", "command", "task"} from a Session
+    (`save` may carry "label" and "note"), or plain `start <task>` / `save <label>`
+    typed by an operator (no id)."""
     line = line.strip()
     if line.startswith("{"):
         try:
             data = json.loads(line)
         except json.JSONDecodeError:
             return {"command": line, "task": ""}
-        return {
+        request = {
             "id": data.get("id"),
             "command": str(data.get("command", "")),
             "task": str(data.get("task", "")),
         }
+        for key in ("label", "note"):
+            if data.get(key):
+                request[key] = str(data[key])
+        return request
     command, _, task = line.partition(" ")
-    return {"command": command, "task": task.strip()}
+    request = {"command": command, "task": task.strip()}
+    if command == "save" and request["task"]:  # `save success`
+        request["label"], request["task"] = request["task"], ""
+    return request
 
 
 def _session(node, cfg: RobotConfig):
@@ -199,6 +269,9 @@ def _session(node, cfg: RobotConfig):
     pending = b""
     latest: dict[str, dict] = {}
     written_ns = 0
+    attached = False  # the launching process holds the FIFO open (it sent `attach`)
+    unheld_ns = 0  # since when nobody does
+    gone_ns = 0  # when the operator was found gone (0: it is there)
 
     def report(payload: dict) -> None:
         print(payload, flush=True)
@@ -208,13 +281,44 @@ def _session(node, cfg: RobotConfig):
     try:
         while True:
             try:
-                pending += os.read(fd, 4096)
-            except BlockingIOError:
-                pass
+                data = os.read(fd, 4096)
+            except BlockingIOError:  # a writer holds the FIFO, nothing to read
+                data, unheld_ns = b"", 0
+            else:
+                pending += data
+                if data or not attached:
+                    unheld_ns = 0
+                else:  # an empty read: no process has the FIFO open for writing
+                    unheld_ns = unheld_ns or time.monotonic_ns()
+            if (
+                not gone_ns
+                and unheld_ns
+                and time.monotonic_ns() - unheld_ns > OPERATOR_GONE_NS
+            ):
+                # However the operator's process ended (killed, crashed, its terminal
+                # closed), nobody is left to stop the robot: stop it, then end.
+                gone_ns = time.monotonic_ns()
+                report(
+                    {
+                        "note": "the operator's process is gone: the episode is "
+                        "discarded, the followers hold and the dataflow ends",
+                        "level": "error",
+                    }
+                )
+                discard = {"command": "discard", "task": ""}
+                _send(node, "control", p.make("session", discard))
+            if gone_ns and time.monotonic_ns() - gone_ns > QUIT_AFTER_NS:
+                _send(
+                    node, "control", p.make("session", {"command": "quit", "task": ""})
+                )
+                return
             while b"\n" in pending:
                 raw, pending = pending.split(b"\n", 1)
                 request = parse_command(raw.decode())
                 cmd = request["command"]
+                if cmd == "attach":  # from Session.launch; not an operation
+                    attached = True
+                    continue
                 if cmd not in COMMANDS:
                     report({**request, "error": f"unknown command {cmd!r}"})
                     continue
@@ -229,6 +333,21 @@ def _session(node, cfg: RobotConfig):
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
+                if cmd == "save":
+                    # nothing is saved under a mistyped verdict
+                    try:
+                        check_label(request.get("label"))
+                    except ValueError as exc:
+                        refused = {"id": request.get("id"), "command": cmd}
+                        report({**refused, "error": str(exc)})
+                        continue
+                    # what the controllers say now goes into the episode's record: a
+                    # policy's inference time, the chunks it dropped, its error
+                    request["controllers"] = {
+                        name: latest[name].get("fields", {})
+                        for name in cfg.controllers
+                        if name in latest
+                    }
                 _send(node, "control", p.make("session", request))
                 # progress shows in the robot, leader and policy status
                 if cmd in ("home", "teleop", "policy", "stop_teleop"):
@@ -238,15 +357,19 @@ def _session(node, cfg: RobotConfig):
             event_id, msg = _event(node)
             if event_id == "report" and msg is not None:
                 report(msg.payload)
+                state = recorder_state_after(msg.payload)
+                if state is not None and "recorder" in latest:
+                    latest["recorder"]["fields"]["state"] = state
+                    latest["recorder"]["t_ns"] = msg.t_ready_ns
             elif (
                 event_id is not None
                 and event_id.endswith(STATUS_SUFFIX)
                 and msg is not None
             ):
-                latest[event_id.removesuffix(STATUS_SUFFIX)] = {
-                    **msg.payload,
-                    "t_ns": msg.t_ready_ns,
-                }
+                name = event_id.removesuffix(STATUS_SUFFIX)
+                # a status made before the report that set the state says the old one
+                if msg.t_ready_ns >= latest.get(name, {}).get("t_ns", 0):
+                    latest[name] = {**msg.payload, "t_ns": msg.t_ready_ns}
             now = time.monotonic_ns()
             if (
                 status_path and latest and now - written_ns > 200_000_000
@@ -266,6 +389,19 @@ def _session(node, cfg: RobotConfig):
                 written_ns = now
     finally:
         os.close(fd)
+        if gone_ns:  # what Session.close would have removed
+            try:
+                os.unlink(fifo)
+            except OSError:
+                pass
+            reports = Path(os.environ["ROBOLOOM_REPORT_PATH"])
+            log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
+            if log_dir:  # nobody reads them any more: keep them with the logs
+                try:
+                    shutil.copy(reports, Path(log_dir) / "reports.jsonl")
+                except OSError:
+                    pass
+            shutil.rmtree(reports.parent, ignore_errors=True)
 
 
 def _quit(event_id, msg) -> bool:
@@ -274,15 +410,50 @@ def _quit(event_id, msg) -> bool:
     )
 
 
+def _prepare(node, work, on_event=None) -> bool:
+    """Run `work()` (slow start-up: importing torch, loading a model, opening a
+    dataset) on a thread while this one keeps taking the node's events (passed to
+    `on_event` when given, else dropped). Returns False when `quit` came meanwhile.
+
+    A node that does not read for seconds gets everything queued for it in one reply;
+    with camera frames that passes dora's 64 MB limit, the reply is lost and the node's
+    timer never ticks again (seen on a machine with two cores, where loading is slow).
+    An exception of `work` is raised here."""
+    failure: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            work()
+        except BaseException as exc:  # noqa: BLE001 - raised below, on the node's thread
+            failure.append(exc)
+
+    worker = threading.Thread(target=run, name="prepare", daemon=True)
+    worker.start()
+    while worker.is_alive():
+        for event_id, msg in _events(node):
+            if _quit(event_id, msg):
+                return False
+            if on_event is not None and event_id is not None:
+                on_event(event_id, msg)
+    if failure:
+        raise failure[0]
+    return True
+
+
 def _source(node, source: Source, cfg: RobotConfig, role: str):
     """Inputs and sensors: read the device on every tick and publish its sample."""
     reader = source.open(cfg.mock, cfg.dataset_fps)
     set_home = getattr(reader, "set_home", None)
-    for pair in cfg.controllers.values():  # the pair this input leads, if it has a home
-        home = getattr(pair, "home", None)  # a leader moves home with its follower
-        leader_pose = getattr(pair, "leader_pose", None)
-        if set_home is not None and pair.source is source and home and leader_pose:
-            set_home(leader_pose(home.target(pair.follower.joint_names)), home)
+    # A leader moves home with the follower it leads: through its own controller, or
+    # through a teleop controller of a policy (the policy's `home:` for that follower).
+    for owner in cfg.controllers.values():
+        for pair in (owner, *owner.nested()):
+            leader_pose = getattr(pair, "leader_pose", None)
+            if set_home is None or pair.source is not source or leader_pose is None:
+                continue
+            home = owner.homes.get(pair.follower.name)
+            if home is not None:
+                set_home(leader_pose(home.target(pair.follower.joint_names)), home)
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     start_trace = getattr(reader, "start_trace", None)
     if log_dir and start_trace is not None:
@@ -445,8 +616,32 @@ def _home_fields(safety: FollowerSafety) -> dict:
     return out
 
 
+def _mock_start(bus, robot: Follower, cfg: RobotConfig) -> None:
+    """Mock devices only: the mock follower starts where its mock leader rests. Nobody
+    can move a mock leader to align it with the follower, so where the leader's laws
+    hold it away from the mock's first pose (a trigger spring's `rest`) `start` would
+    wait for an alignment that never comes."""
+    controller = cfg.controller_for(robot.name)
+    source = controller.source
+    pose = getattr(controller, "follower_pose", None)
+    inner = getattr(bus, "bus", bus)  # the mock bus inside a JointDevice
+    if source is None or pose is None or not hasattr(inner, "values"):
+        return
+    reader = source.open(True, cfg.dataset_fps)
+    try:
+        sample = None
+        for _ in range(3):  # its laws need a tick to pull the mock joints to rest
+            sample = reader.read() or sample
+    finally:
+        reader.close()
+    if sample is not None:
+        inner.values = pose([float(x) for x in sample.value])
+
+
 def _follower(node, robot: Follower, cfg: RobotConfig):
     bus = robot.open_device(cfg.mock)
+    if cfg.mock:
+        _mock_start(bus, robot, cfg)
     safety = FollowerSafety(robot.safety_config(), bus)
     traits = robot.traits()
     status = StatusReporter(Publisher(robot.name), "follower")
@@ -497,7 +692,8 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                 _send(node, "state", state)
                 _send(node, ACTION, action)
                 if trace is not None:
-                    trace.add(state.t_capture_ns, state.payload)
+                    # the tick's time (the state's own is older when a read failed)
+                    trace.add(state.t_ready_ns, state.payload)
                 intervals.append(state.payload["tick_interval_ms"])
                 clamped.append(bool(action.payload["clamped"]))
                 rejected.append(bool(state.payload["rejected"]))
@@ -515,6 +711,9 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                     "last_reject": safety.last_reject if any(rejected) else "",
                     "gc_max_ms": gc_pauses.take(),
                     "error": error,
+                    # bus reads that had to be repeated since the start (None: a bus
+                    # that does not count them)
+                    "bus_retries": getattr(getattr(bus, "bus", bus), "retries", None),
                     **_home_fields(safety),
                     "torque_off": traits.torque_off,
                     "unattended": traits.unattended,
@@ -670,6 +869,10 @@ def _estimator(node, estimator: Estimator):
             _send(node, "status", status.make(fields, level, now))
 
 
+WARMUP_SETTLE_NS = 100_000_000  # 100 ms: past any first-message dora stall
+SLOW_TICK_NS = 10_000_000  # 10 ms: a tick that blocked the event loop (sync infer)
+
+
 def _policy(node, controller: PolicyController):
     """Infer and send commands on the node's timer while an episode runs.
 
@@ -677,119 +880,173 @@ def _policy(node, controller: PolicyController):
     configured policy, so `roboloom infer --policy` needs no edited YAML."""
     status = StatusReporter(Publisher(controller.name), "controller")
     kwargs = os.environ.get("ROBOLOOM_POLICY_KWARGS")
+    warm_sent: dict[str, int] = {}
+    warmed: set[str] = set()
+    received: dict[str, int] = {}  # when each follower's state last arrived
+
+    def handle_sample(event_id: str, msg: Envelope | None) -> bool:
+        if msg is None:
+            return False
+        if event_id.startswith(STATE_PREFIX):
+            follower = event_id.removeprefix(STATE_PREFIX)
+            if follower not in controller.followers:
+                return False
+            now = time.monotonic_ns()
+            received[follower] = now
+            controller.observe(follower, msg)
+            if follower not in warm_sent:
+                # The first message on a dora connection stalls the receiving follower
+                # loop (130-500 ms measured in mock). Send it now, while the follower is
+                # not armed and ignores commands, and wait until a fresh state confirms
+                # the follower finished stalling before reporting ready.
+                warm_sent[follower] = now
+                _send(
+                    node,
+                    command_output(follower),
+                    controller.command(follower, list(msg.payload["positions"]), now),
+                )
+            elif (
+                follower not in warmed
+                and msg.t_ready_ns - warm_sent[follower] >= WARMUP_SETTLE_NS
+            ):
+                warmed.add(follower)
+                return len(warmed) == len(controller.followers)
+        elif event_id.startswith("observe_"):
+            controller.observe(event_id.removeprefix("observe_"), msg)
+        return False
+
     try:
-        controller.load(
-            os.environ.get("ROBOLOOM_POLICY") or None,
-            json.loads(kwargs) if kwargs else None,
+        loaded = _prepare(
+            node,
+            lambda: controller.load(
+                os.environ.get("ROBOLOOM_POLICY") or None,
+                json.loads(kwargs) if kwargs else None,
+            ),
+            on_event=handle_sample,
         )
+        if not loaded:  # quit while loading
+            return
     except Exception as exc:  # noqa: BLE001 - shown on the operator screen; start refused
         controller.state, controller.error = "failed", f"loading the policy: {exc}"
     commands: deque[int] = deque(
         maxlen=1000
     )  # send times; command_hz counts the last second
-    warmed: set[str] = set()
-    received: dict[str, int] = {}  # when each follower's state last arrived
     stale_ns = int(controller.cfg.get("follower_timeout_ms", 150) * 1e6)
     stopped = ""  # why the running episode was stopped: a silent follower
+    tick_done_ns: int | None = None
     while True:
-        event_id, msg = _event(node)
-        if _quit(event_id, msg):
-            return
-        follower = (
-            event_id.removeprefix(STATE_PREFIX)
-            if event_id is not None and event_id.startswith(STATE_PREFIX)
-            else None
-        )
-        if follower in controller.followers and msg is not None:
-            received[follower] = time.monotonic_ns()
-            controller.observe(follower, msg)
-            if controller.control == "teleop" and msg.payload.get("mode") in (
-                "FAULT",
-                "ESTOP",
+        for event_id, msg in _events(node):
+            if _quit(event_id, msg):
+                return
+            if (
+                event_id is not None
+                and event_id.startswith(STATE_PREFIX)
+                and msg is not None
             ):
-                controller.reset()  # teleop re-aligns after a latched follower
-                stopped = f"{follower} {msg.payload.get('mode')}"
-            if follower not in warmed:
-                # The first message on a dora connection stalls the receiving follower
-                # loop about 130 ms (measured in mock). Send it now, while the follower
-                # is not armed and ignores commands, not at the first episode's start.
-                _send(
-                    node,
-                    command_output(follower),
-                    controller.command(
-                        follower, list(msg.payload["positions"]), time.monotonic_ns()
-                    ),
+                follower = event_id.removeprefix(STATE_PREFIX)
+                if follower in controller.followers:
+                    if handle_sample(event_id, msg):
+                        status.last_ns = None
+                    if controller.control == "teleop" and msg.payload.get("mode") in (
+                        "FAULT",
+                        "ESTOP",
+                    ):
+                        controller.reset()  # teleop re-aligns after a latched follower
+                        stopped = f"{follower} {msg.payload.get('mode')}"
+            elif (
+                event_id is not None
+                and event_id.startswith("observe_")
+                and msg is not None
+            ):
+                handle_sample(event_id, msg)
+            elif (
+                event_id is not None
+                and event_id.startswith(INTENT_PREFIX)
+                and msg is not None
+            ):
+                sent = controller.teleop_update(
+                    event_id.removeprefix(INTENT_PREFIX), msg
                 )
-                warmed.add(follower)
-        elif (
-            event_id is not None and event_id.startswith("observe_") and msg is not None
-        ):
-            controller.observe(event_id.removeprefix("observe_"), msg)
-        elif (
-            event_id is not None
-            and event_id.startswith(INTENT_PREFIX)
-            and msg is not None
-        ):
-            sent = controller.teleop_update(event_id.removeprefix(INTENT_PREFIX), msg)
-            for name, command in sent.items():
-                _send(node, command_output(name), command)
-            if sent:
-                commands.append(time.monotonic_ns())
-        elif event_id == "session" and msg is not None:
-            command = msg.payload["command"]
-            if controller.state != "failed":
-                controller.error = (
-                    ""  # a refused teleop/policy shows until the next one
-                )
-            try:
-                if command in ("stop", "discard", "estop", "release"):
-                    controller.stop()
-                elif command == "teleop":  # works also when the policy failed to load
-                    controller.begin_teleop()
-                    stopped = ""
-                elif command == "stop_teleop":
-                    controller.end_teleop()
-                elif controller.state == "failed":
-                    pass
-                elif command == "start":
-                    controller.start(msg.payload.get("task", ""))
-                    stopped = ""
-                elif command == "policy":
-                    controller.resume_policy()
-            except RuntimeError as exc:  # shown on the screen; the followers hold
-                controller.error = f"{command}: {exc}"
-        elif event_id == "tick":
-            now = time.monotonic_ns()
-            silent = [
-                n
-                for n in controller.followers
-                if n in received and now - received[n] > stale_ns
-            ]
-            if silent and (controller.running or controller.control):
-                # a frozen state would make the policy act on a robot that is not there
-                controller.reset()
-                stopped = f"{silent[0]} silent"
-            try:
-                sent = controller.tick()
-            except Exception as exc:  # noqa: BLE001 - a bad policy output stops the episode
-                controller.stop()
-                controller.state, controller.error = "failed", str(exc)
-                sent = {}
-            for name, command in sent.items():
-                _send(node, command_output(name), command)
-            if sent:
-                commands.append(time.monotonic_ns())
+                for name, command in sent.items():
+                    _send(node, command_output(name), command)
+                if sent:
+                    commands.append(time.monotonic_ns())
+            elif event_id == "session" and msg is not None:
+                command = msg.payload["command"]
+                if command in ("start", "teleop", "policy", "stop_teleop") and (
+                    controller.policy is not None
+                ):
+                    # what the last episode failed with, or a refused teleop/policy,
+                    # shows until the next attempt
+                    controller.error = ""
+                try:
+                    if command in ("stop", "discard", "estop", "release"):
+                        controller.stop()  # also ends a failed episode: ready again
+                    elif (
+                        command == "teleop"
+                    ):  # works also when the policy failed to load
+                        controller.begin_teleop()
+                        stopped = ""
+                    elif command == "stop_teleop":
+                        controller.end_teleop()
+                    elif controller.policy is None:
+                        pass  # it did not load: nothing to start
+                    elif command == "start":
+                        controller.start(msg.payload.get("task", ""))
+                        stopped = ""
+                    elif command == "policy":
+                        controller.resume_policy()
+                except (
+                    RuntimeError
+                ) as exc:  # refused: shown on the screen, the followers hold
+                    controller.error = f"{command}: {exc}"
+                except Exception as exc:  # noqa: BLE001 - e.g. the policy's reset() raised
+                    controller.fail(f"{command}: {type(exc).__name__}: {exc}")
+            elif event_id == "tick":
+                now = time.monotonic_ns()
+                silent = [
+                    n
+                    for n in controller.followers
+                    if n in received and now - received[n] > stale_ns
+                ]
+                if silent and (controller.running or controller.control):
+                    if tick_done_ns is not None and now - tick_done_ns < stale_ns:
+                        sent = {}
+                    else:
+                        # a frozen state would make the policy act on a robot that is not there
+                        controller.reset()
+                        stopped = f"{silent[0]} silent"
+                        sent = {}
+                else:
+                    began_tick = now
+                    try:
+                        sent = controller.tick()
+                    except Exception as exc:  # noqa: BLE001 - a bad policy output stops the episode
+                        controller.fail(f"{type(exc).__name__}: {exc}")
+                        sent = {}
+                    done_tick = time.monotonic_ns()
+                    if done_tick - began_tick > SLOW_TICK_NS:
+                        tick_done_ns = done_tick
+                for name, command in sent.items():
+                    _send(node, command_output(name), command)
+                if sent:
+                    commands.append(time.monotonic_ns())
         now = time.monotonic_ns()
         if status.due(now):
             fields = controller.status()
+            if fields.get("state") == "ready" and warmed != set(controller.followers):
+                fields["state"] = "warming"
+                fields["waiting_state"] = ", ".join(
+                    n for n in controller.followers if n not in warmed
+                )
             fields["command_hz"] = len([t for t in commands if now - t < 1e9])
             if stopped:
                 fields["stopped_by"] = stopped
             level = (
                 "error"
-                if controller.state == "failed"
+                if fields.get("state") == "failed"
                 else "ok"
-                if controller.state in ("ready", "running")
+                if fields.get("state") in ("ready", "running")
                 else "warn"
             )
             _send(node, "status", status.make(fields, level, now))
@@ -800,7 +1057,10 @@ def _recorder(node, cfg: RobotConfig):
     draining dora events; otherwise queued frames exceed dora's per-reply size limit and are lost."""
     p = Publisher("recorder")
     writer = EpisodeRecorder(cfg, **cfg.recorder)
-    writer.open_dataset()  # creating/resuming takes ~1 s; never inside an episode
+    # creating/resuming takes ~1 s (more with the first import of LeRobot); never
+    # inside an episode
+    if not _prepare(node, writer.open_dataset):
+        return
     follower_modes: dict[str, str | None] = {}
     saving: threading.Thread | None = None
     done: queue.Queue[dict] = queue.Queue()
@@ -814,17 +1074,23 @@ def _recorder(node, cfg: RobotConfig):
             }
         )
 
-    def save(metrics: dict, ident: object) -> None:
+    def save(metrics: dict, request: dict) -> None:
+        ident = request.get("id")
         try:
-            done.put(
-                {
-                    "command": "save",
-                    "id": ident,
-                    "saved_frames": writer.save(),
-                    "episodes": writer.episodes,
-                    "metrics": metrics,
-                }
-            )
+            saved = {
+                "command": "save",
+                "id": ident,
+                "saved_frames": writer.save(
+                    request.get("label"),
+                    request.get("note"),
+                    request.get("controllers"),
+                ),
+                "episodes": writer.episodes,
+                "metrics": metrics,
+            }
+            if request.get("label"):
+                saved["label"] = request["label"]
+            done.put(saved)
         except Exception as exc:  # noqa: BLE001 - report session failure to operator
             failed = {"command": "save", "id": ident, "error": str(exc)}
             if isinstance(exc, SaveFailed):  # the episode is gone: nothing to retry
@@ -902,9 +1168,10 @@ def _recorder(node, cfg: RobotConfig):
                     elif command == "save":
                         if not writer.stopped:
                             raise RuntimeError("stop the episode first")
+                        check_label(msg.payload.get("label"))
                         saving = threading.Thread(
                             target=save,
-                            args=(writer.metrics(), ident),
+                            args=(writer.metrics(), dict(msg.payload)),
                             name="save-episode",
                         )
                         saving.start()
@@ -952,9 +1219,15 @@ def config_from_env(path: str, env: Mapping[str, str]) -> RobotConfig:
         sensors=json.loads(env["ROBOLOOM_SENSORS"])
         if "ROBOLOOM_SENSORS" in env
         else None,
+        experiment=json.loads(env["ROBOLOOM_EXPERIMENT"])
+        if "ROBOLOOM_EXPERIMENT" in env
+        else None,
     )
     for controller, selected in json.loads(env.get("ROBOLOOM_OBSERVE", "{}")).items():
-        tree["controllers"][controller]["observe"] = selected
+        node = tree["controllers"][controller]
+        # only where the parent could have changed it: a controller that observes
+        if node.get("type") == "policy" or "observe" in node:
+            node["observe"] = selected
     if "ROBOLOOM_VIDEO_CODEC" in env:  # the parent's choice, None included
         tree["recorder"]["video_codec"] = json.loads(env["ROBOLOOM_VIDEO_CODEC"])
     return parse_config(tree)

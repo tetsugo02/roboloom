@@ -18,6 +18,15 @@ from ..base import JointInput
 
 
 class RakudaMini(JointInput):
+    keys = (
+        "type",
+        "poll_hz",
+        "control",
+        "bus_watchdog_ms",
+        "port",
+        "motor_ids",
+        "registers",
+    )
     # the arms fall without torque; closing the reader releases every joint
     safety_traits = SafetyTraits(torque_off="falls", unattended="torque_off")
 

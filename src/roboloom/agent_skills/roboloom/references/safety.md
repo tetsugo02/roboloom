@@ -11,10 +11,23 @@ an agent should repeat the relevant parts whenever it prepares a hardware run.
   over `max_jump`. HOLD keeps sending the last target (re-targeting the measured position
   would sag under gravity).
 - **Health → `FAULT`**: hardware error, temperature, sustained over-current, Bus Watchdog
-  fired, stale feedback (PiPER/Pika).
+  fired, stale feedback (PiPER/Pika), a bus that cannot be read or written. A Dynamixel
+  read that fails is repeated once first (`bus reads repeated: N` on the follower's row;
+  a growing count means a cable or adapter problem). FAULT stops writing but keeps the
+  torque on.
+- **One process per bus**: a serial port is locked by the process that opened it; a
+  second one (`probe` or `tune-gravity` during a run, two runs) stops with `... is in use
+  by another process`.
 - `FAULT`, `ESTOP`, `RELEASED` **latch**; nothing recovers automatically.
 - Runaway detection on control laws (velocity/range) sets current 0 and torque off.
 - Policies get the same checks as teleoperation.
+- **The operator's process ends** (killed, crashed, its terminal or SSH session closed):
+  within about a second the dataflow discards the episode in progress, the followers
+  hold with torque on, and the dataflow ends. A robot never keeps following a policy
+  nobody watches. Support or lower the arms before cutting their power, as after any
+  quit with holding.
+- **A policy raises** during an episode: the controller turns `failed`, the followers
+  hold, and the episode is discarded (not saved).
 
 ## Startup checks
 

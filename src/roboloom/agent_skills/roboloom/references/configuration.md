@@ -42,7 +42,7 @@ options: {}                     # see below
 
 | Controller | Drives | Notes |
 | --- | --- | --- |
-| `joint` | exactly one follower | follower joints follow the input joints of the same name (optional `joints` table of `{leader, follower, sign, offset}` for other names/signs/offsets; optional `unit`, must equal input and follower); `alignment_tolerance`, `max_speed`, `command_deadline_ms`, `input_timeout_ms`, `follower_timeout_ms` (150), optional `couplings`, `home` |
+| `joint` | exactly one follower | follower joints follow the input joints of the same name (optional `joints` table of `{leader, follower, sign, offset}` for other names/signs/offsets, plus `scale` on every joint for a leader of another gear ratio or unit: target = sign × scale × leader + offset; optional `unit`, the follower's); `alignment_tolerance`, `max_speed`, `command_deadline_ms`, `input_timeout_ms`, `follower_timeout_ms` (150), optional `couplings`, `home` |
 | `pose_ik` | one arm + optional gripper | hand-held pose → IK (in development) |
 | `parts` | exactly one, split into parts (mock-verified only) | `parts: [a.yaml, b.yaml]` (inner controller files); each inner controller has `followers: [<follower>.<part>, ...]` and its own `input`; parts come from the follower model (Rakuda2: `body`, `right_arm`, `right_gripper`, `left_arm`, `left_gripper`) or the follower YAML's `parts: {name: [joints]}`; a joint has at most one inner controller, undriven joints hold, and a part whose controller stopped commanding (input lost, released, or past its `command_deadline_ms`) gets the follower's held target, not its old one; no inner `home`/`feedback` |
 | `policy` | every follower, in configuration order | `factory`, `kwargs`, `observe`, `rate_hz`, `interpolation_multiplier`, `action_horizon`, `max_speed` per follower, `command_deadline_ms`, optional `observation_history` (1), `hold` ([]), `inference` (sync\|async), `replan_at` (auto), `interpolation` (linear\|pchip) |
@@ -65,6 +65,27 @@ input's and follower's; a follower refuses commands in another unit.
 | `joint` controller `max_speed` | teleoperation target change per period |
 | `policy` controller `max_speed: {follower: value}` | policy target change per period |
 | controller `home.max_speed` | move to a saved pose (≤ controller `max_speed`); `home.tolerance` required |
+
+## Node files built on another (`extends`)
+
+A node file may start from another one in the same directory and say only what differs:
+
+```yaml
+# nodes/leader_gravity.yaml
+extends: leader.yaml
+without: [registers.operating_mode]   # optional: dotted keys of the base to drop
+registers: {current_limit: {r_arm_sh_pitch1: 150}}
+control:
+- group: right_arm        # same-named group of the base; its joints stay as written there
+  law: gravity_comp
+```
+
+Mappings merge key by key; lists of mappings named by `group` or `name` (`control`,
+`limits`) merge entry by entry, new names last; everything else is replaced. Chains are
+allowed, circles and bases in another directory refused. To remove or reorder base
+entries: `without: [control]` and write the list again. Prefer this over copying a node
+file: keep ports, motor ids and registers in the base only. The Rakuda2 template's
+`leader_gravity.yaml` and `policy_teleop.yaml` are built this way.
 
 ## Launch options
 
@@ -101,6 +122,40 @@ options:
 Rules: unknown names are errors; two options setting one node differently is an error
 unless one requires the other (the dependent wins); disabling an option disables those
 that require it; an option that changes recorded features **must** have a `dataset`.
+
+### Experiment files
+
+Keep `.roboloom/<robot>/` for the robot's own settings (ports, measured values, limits,
+poses). What an experiment changes goes into `configs/roboloom/<name>.yaml` of the
+project; run it with `roboloom infer --experiment <name>` (also `record`, `validate`,
+`check-dataset`, `label`; a word with `/` or ending `.yaml` is a path).
+
+```yaml
+help: evaluation of the drawer policy
+robot: rakuda2                      # .roboloom/rakuda2; a robot on the command line wins
+options: [policy, digit]            # launch options
+dataset: {root: data/roboloom/drawer, repo_id: local/rakuda2-drawer}  # optional
+nodes:
+  controllers.policy:               # mapping: laid over the node's settings (as extends)
+    factory: my_lab.policies:load
+    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    rate_hz: 10
+  inputs.leader: nodes/leader_fixed_head.yaml   # text: another node file of the robot
+task: open the drawer               # --task
+steps: 200                          # --steps (infer; or seconds: 40)
+episodes: 10                        # --episodes
+home: true                          # --home
+```
+
+`dataset.root` is relative to the directory the command runs in; with `dataset` the
+options' names are not appended. `nodes` may name only nodes present after the options,
+never `followers.*` (their limits guard every command). Unknown keys are refused;
+command-line values win; `seconds` or `steps` must be in one of the two. Python:
+`Session.launch(experiment=<name|path|mapping>)` (pass what Hydra composed as a
+mapping; roboloom does not depend on Hydra). A `backend: server` policy is served from
+the same file: `roboloom serve-policy --experiment <file>`. In the operator screen the
+episode count is a goal: after it, Home/Teleop/Start run further episodes; the top line
+shows `episode 2/10  step 137/500  [bar] 27%`.
 
 Choosing options: CLI `--with a,b` / `--without a,b` (added to / removed from the
 defaults); Python `options=[...]` is the **whole set** (not added to defaults), `None`

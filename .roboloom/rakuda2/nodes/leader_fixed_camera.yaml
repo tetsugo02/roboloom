@@ -1,0 +1,16 @@
+# The gravity-compensated leader (leader_gravity.yaml, which this file extends) with the
+# camera's joints held by position: `home` moves the torso and head to the pose and they
+# stay there, so the follower keeps the camera angle while Teleop moves the arms.
+# The arms follow `home` by the `homing` spring of leader_gravity.yaml, then go back to
+# gravity compensation.
+# Not checked on hardware: the three motors must be in position mode (Operating Mode 3);
+# the node checks it at startup and names the motors that are not (fix: roboloom commission).
+extends: leader_gravity.yaml
+registers:
+  operating_mode:
+    torso_yaw: 3
+    head_yaw: 3
+    head_pitch: 3
+control:
+- group: body
+  law: position

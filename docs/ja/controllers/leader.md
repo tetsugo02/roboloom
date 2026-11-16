@@ -1,5 +1,8 @@
 # Leader
 
+!!! note "状態：実機検証済み"
+    <span class="status status--verified">実機検証済み</span> Rakuda2のleader（通常と重力補償付き）による収集は実機で確かめています．関節の固定（`law: position`），関節間の相殺（`couplings`）とその組み合わせは <span class="status status--mock">模擬のみ</span> です．力の逆送は <span class="status status--mock">模擬のみ</span>（中断中）です．
+
 Rakuda2の遠隔操作では，`inputs` の `leader` ノード（機器は `type: rakuda_mini`，Rakuda-mini）が関節位置を読み，`controllers` の `joint` ノードがfollowerの目標へ変換します．leaderはfollowerと同じ関節名と単位を持つので，followerの各関節は同じ名前のleaderの関節に追従します．ほかに書くことはありません．
 
 ```yaml
@@ -19,7 +22,7 @@ input_timeout_ms: 150
 | 項目 | 意味 |
 | --- | --- |
 | `alignment_tolerance` | 追従を始める前と，毎回のエピソード開始（`start`）の前に許すleaderとfollowerの関節差（counts）．超えていると `start` を拒否します |
-| `joints` | 任意．書かなければ，followerの各関節は同じ名前の入力の関節に追従する（入力がfollowerの関節をすべて持つこと）．書くときは，followerの関節ごとに `{leader, follower, sign, offset}` を，followerの順に並べる．名前が違う，向きが逆（`sign: -1`），ずれがある（目標＝leader × sign ＋ offset）場合に使う |
+| `joints` | 任意．書かなければ，followerの各関節は同じ名前の入力の関節に追従する（入力がfollowerの関節をすべて持つこと）．書くときは，followerの関節ごとに `{leader, follower, sign, offset}` を，followerの順に並べる．名前が違う，向きが逆（`sign: -1`），ずれがある（目標＝leader × sign ＋ offset）場合に使う．減速比や単位がfollowerと違うleader（カウントで読むGELLO型のleaderと，radの腕など）は，各関節に `scale`（正の数）を足す：目標＝sign × scale × leader ＋ offset．全関節に `scale` を書けば，入力とfollowerの単位は違ってよい（`offset`，`max_speed`，`alignment_tolerance` はfollowerの単位）．力の逆送（`feedback`）とは併用できない |
 | `unit` | 任意．入力とfollowerの単位は同じでなければならない（Rakuda2は `dynamixel_count`）．書いた場合は両方と一致させる |
 | `max_speed` | 目標値の変化速度の上限（followerの単位/s．Rakuda2はcounts/s） |
 | `followers` | 動かすフォロワ．`joint` controllerはちょうど1台です |
@@ -31,11 +34,17 @@ input_timeout_ms: 150
 
 leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`InProcessSession.from_yaml()` は制御則を実行するleaderを受け付けません．
 
-具体的なセットアップは [Rakuda2 Quick start](../quick-start/rakuda2.md) にあります．
+具体的なセットアップは [Rakuda2 Quick start](../tutorials/rakuda2-setup.md) にあります．
+
+## 対応する機体 { #supported-robots }
+
+| 機体 | 入力 | 状態 | 設定例 |
+| --- | --- | --- | --- |
+| Rakuda2 | Rakuda-mini（`rakuda_mini`） | <span class="status status--verified">実機検証済み</span> | [Rakuda2のcontroller](../robots/rakuda2/controllers.md#leader) |
 
 ## leaderの関節を固定する
 
-使用する `nodes/leader.yaml` または `nodes/leader_gravity.yaml` の `control` で，固定する関節を `law: position` のグループへ移します．例えば，テンプレートの `body` グループを次の2グループに置き換えると，腰は手で動かせ，首のyawとpitchは固定されます．腕とトリガーのグループは残してください．既存の設定で胴体・頭部が `hand` に含まれる場合は，この3関節を `hand` から取り除きます．全関節がちょうど1グループに含まれる必要があります．
+使用する `nodes/leader.yaml` または `nodes/leader_gravity.yaml` を土台にしたファイル（[`extends`](../reference/configuration/index.md#extends)）を作るか，そのファイル自体の `control` で，固定する関節を `law: position` のグループへ移します．例えば，テンプレートの `body` グループを次の2グループに置き換えると，腰は手で動かせ，首のyawとpitchは固定されます．腕とトリガーのグループは残してください．既存の設定で胴体・頭部が `hand` に含まれる場合は，この3関節を `hand` から取り除きます．全関節がちょうど1グループに含まれる必要があります．
 
 ```yaml
 control:
@@ -147,4 +156,4 @@ home:
     kd: 0.0
 ```
 
-どの関節に返すかは，controllerの `feedback.gain` で選びます．逆送は重力補償などの出力に足してから `max_current_mA` で制限し，gateは `ramp_s` かけて開閉します．estop・release・quitでは即座に0になります．キーの意味と安全の仕組みは [設定](../reference/configuration.md) の「力の逆送」，Rakuda2での組み合わせは [Rakuda2](../robots/rakuda2.md) の「バイラテラル」を参照してください．
+どの関節に返すかは，controllerの `feedback.gain` で選びます．逆送は重力補償などの出力に足してから `max_current_mA` で制限し，gateは `ramp_s` かけて開閉します．estop・release・quitでは即座に0になります．キーの意味と安全の仕組みは [設定](../reference/configuration/index.md) の「力の逆送」，Rakuda2での組み合わせは [Rakuda2](../robots/rakuda2/index.md) の「バイラテラル」を参照してください．

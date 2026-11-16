@@ -1,0 +1,9 @@
+type: mel_mono
+device: SET_AUDIO_DEVICE
+channels: 1
+sample_rate: 44100
+window_seconds: 1.0
+n_mels: 64
+n_fft: 2048
+hop_length: 690
+fmax: 15000

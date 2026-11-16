@@ -2,7 +2,10 @@
 
 Created by `roboloom init rakuda2`. Everything measured on *this* robot is written into
 these files; values still to fill are `SET_...` and every command refuses to run until
-they are set. Commit the YAML files; `.roboloom/.gitignore` keeps out the raw
+they are set. With mock devices (`--mock`) the project runs before that: `mock.yaml`
+holds a stand-in for each `SET_...` value, never used with the hardware. A key a node
+does not read is refused when the configuration is loaded, so a misspelled key is not
+ignored in silence. Commit the YAML files; `.roboloom/.gitignore` keeps out the raw
 measurements (`*.npz`), logs and datasets.
 
 ## Installation and project directory
@@ -17,10 +20,16 @@ uv run roboloom --help
 
 This README and the robot configuration are copied from the installed package by
 `uv run roboloom init rakuda2`. Package updates do not overwrite existing configuration.
+`uv run roboloom init rakuda2 --update` brings this project up to the installed
+template: it adds files the project lacks, replaces files still as they were copied,
+and lists what the template has that your edited files do not (they are never
+overwritten; `.template.json` records how each file was copied).
 
-The [Rakuda2 Quick start](https://tetsugo02.github.io/roboloom/en/quick-start/rakuda2/)
-([日本語](https://tetsugo02.github.io/roboloom/ja/quick-start/rakuda2/)) walks through setup,
-gravity compensation, and teleoperation recording. Sensor/controller combinations are in
+The Rakuda2 tutorials walk through
+[setup](https://tetsugo02.github.io/roboloom/en/tutorials/rakuda2-setup/)
+([日本語](https://tetsugo02.github.io/roboloom/ja/tutorials/rakuda2-setup/)),
+[gravity compensation](https://tetsugo02.github.io/roboloom/en/tutorials/rakuda2-gravity/), and
+[teleoperation recording](https://tetsugo02.github.io/roboloom/en/tutorials/rakuda2-collect/). Sensor/controller combinations are in
 [Rakuda2](https://tetsugo02.github.io/roboloom/en/robots/rakuda2/).
 Before the first run, change `nodes/follower.yaml` from its default `torque: true` to
 `torque: false` to check the recording path without moving the follower. This does not
@@ -95,19 +104,22 @@ Both options are disabled by default. They have been checked with mock buses and
 controllers; check motor directions, travel, and tracking on your robot before use.
 Existing projects are not changed by a package update.
 
-In the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml`, replace `body` with:
+Write a leader file of your own that extends the one you use, and name it in the
+option's `set` (`inputs.leader`) in `config.yaml`:
 
 ```yaml
+# nodes/leader_fixed_head.yaml
+extends: leader_gravity.yaml   # or leader.yaml
+control:
 - group: body
-  law: free
   joints: [torso_yaw]
 - group: fixed_head
   law: position
   joints: [head_yaw, head_pitch]
 ```
 
-Keep the arm and trigger groups. In older files, remove these three joints from
-`hand` instead. Every joint must occur exactly once. `position` seeds the measured
+A file with `extends` says only what differs from its base; groups of the same name are
+laid over the base's. Every joint must occur exactly once. `position` seeds the measured
 startup pose before torque enable and holds it; align these leader joints with the
 follower before launch. Locking starts at Session launch, persists through `stop`,
 and releases on `estop`, `release`, or `quit`. The motors must already be in position
@@ -160,7 +172,7 @@ need `homing:` (set in `leader_gravity.yaml`). Hands off the arms while they mov
    leader's values back the same way.
 7. `uv run roboloom tune-gravity leader right_arm --with gravity`, then `left_arm`:
    joint by joint, set how much weight is removed (gain) and how hard a push must be before
-   the arm moves (hold). What the numbers mean: [Gravity tuning](https://tetsugo02.github.io/roboloom/en/reference/gravity-tuning/).
+   the arm moves (hold). What the numbers mean: [Gravity tuning](https://tetsugo02.github.io/roboloom/en/explanation/gravity-compensation/).
 
 Then run with `uv run roboloom run --with gravity` (or tick it in the launcher). To record
 DIGIT as well, fill the serials in `nodes/digit_*.yaml` and enable the `digit` option
@@ -212,6 +224,9 @@ is **not verified on hardware**; check every step with the arms supported. Files
    Then pass yours: `--policy my_lab.policies:load --policy-kwargs '{"checkpoint": "..."}'`
    (or set `factory`/`kwargs` in `nodes/policy.yaml`). Add `--task` to record the run into
    `datasets/rakuda2-eval` (`datasets/rakuda2-digit-eval` with `--with digit`).
+   Keep each run's verdict with `uv run roboloom label --with policy <episode> success`
+   (or `failure`; typing `save success` in the operator screen does it while saving);
+   `uv run roboloom check-dataset --with policy` counts them.
 
 Set `observe` in `nodes/policy.yaml` to the sources used during training: `[camera]`
 (default), `[camera, digit_left, digit_right]` with the `digit` option, or `[]` for
@@ -221,8 +236,33 @@ from `sensors` in `config.yaml`. LeRobot checkpoints requiring missing inputs ar
 refused before an episode starts. Use `action_horizon: 1` with LeRobot `mode: step`.
 
 Existing project files are not overwritten by package updates. To migrate an older
-configuration, remove `requires: [digit]` from `options.policy` in `config.yaml` and
-set `observe: [camera]` in `nodes/policy.yaml`.
+configuration, run `uv run roboloom init rakuda2 --update` (it adds `nodes/policy.yaml`
+and lists the options `config.yaml` lacks), remove `requires: [digit]` from
+`options.policy` in `config.yaml` and set `observe: [camera]` in `nodes/policy.yaml`.
+
+### One file per experiment
+
+This directory holds the robot's own settings. What an experiment changes (the policy
+and its checkpoint, the options, where the episodes go, the task, the length) goes into
+`configs/roboloom/<name>.yaml` of your project, and
+`uv run roboloom infer --experiment <name>` runs it:
+
+```yaml
+robot: rakuda2
+options: [policy]                   # add digit for a policy that reads the DIGITs
+dataset: {root: data/roboloom/drawer, repo_id: local/rakuda2-drawer}
+nodes:
+  controllers.policy:               # laid over nodes/policy.yaml
+    factory: my_lab.policies:load
+    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    rate_hz: 10
+task: open the drawer               # with a task the runs are saved
+steps: 200                          # actions of the policy (or seconds: 40)
+episodes: 10
+home: true                          # needs `home:` in the policy's settings
+```
+
+Values on the command line win (`--experiment drawer --seconds 10`).
 
 ## Operator screen
 
@@ -236,7 +276,10 @@ a divider for arrow-key resizing and Ctrl-R reset. Proportions persist for the
 session across tab changes and terminal resizing; they are not saved to disk. Node selection changes the display only; experiment
 operations target all configured nodes. Record/infer show readiness, remaining
 time, episode count, and results; select Start for each episode. `record --home`
-moves home before every episode. Inference saves only with `--task`.
+moves home before every episode. Inference saves only with `--task`. The episode count
+is a goal: after it, close the quit dialog and Home, Teleop and Start run further
+episodes. `infer --steps <n>` (or `steps:` in an experiment file) ends an episode after
+that many actions of the policy; the top line shows the progress.
 
 `run --plain` uses line input; `record --plain` and `infer --plain` run without
 key input. Non-TTY runs select these paths automatically. Tuning requires a TTY

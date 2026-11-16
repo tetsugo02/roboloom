@@ -63,8 +63,15 @@ explicit one is refused ([configuration](configuration.md#video-codec)).
 - `meta/roboloom.json` holds the roboloom version, the unit of each `action` /
   `observation.state` entry, and each recording run's options and configuration
   (`meta/roboloom_config/`).
+- `meta/roboloom_episodes.jsonl` gets one JSON line per saved episode: `episode`,
+  `saved`, `task`, `frames`, `metrics`, `controllers` (each controller's status when it
+  was saved: a policy's `infer_max_ms`, `dropped`, `error`), `label` (`success` /
+  `failure` / null) and `note`. Set the verdict when saving (`save(label=...)`,
+  `record(..., label=...)`, typed `save success`) or afterwards with
+  `roboloom label [robot] <episode> success|failure` (appends a line; later lines win).
+  Read it with `roboloom.recording.episodes.read(root)`; LeRobot ignores the file.
 - `roboloom check-dataset [robot|dataset dir]` reads a dataset only and lists what is
-  broken (exit code 1) and the share of rows whose `valid` is 0. Run it before training
+  broken (exit code 1), the share of rows whose `valid` is 0 and the count of verdicts. Run it before training
   and after a crash. **Do not repair a dataset by editing its files.**
 
 ## Training

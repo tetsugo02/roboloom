@@ -20,17 +20,28 @@ from rich.text import Text
 
 from ..errors import Cancelled
 from ..runtime.node import start_warning
-from ..runtime.session import EpisodeResult, Session, SessionError, Task
+from ..runtime.session import (
+    EpisodeResult,
+    Session,
+    SessionError,
+    Task,
+    steps_done,
+)
 from .live import KeyReader
 from .render import command_line
 
 KEYS = ("Enter: start", "h: home", "q: discard and quit", "e: emergency stop")
+PLAIN_PROGRESS_S = 5.0  # without a screen: one progress line this often
 
 
 def describe(result: EpisodeResult) -> str:
     if not result.saved:
         return f"discarded '{result.task}' ({result.frames} rows)"
-    return f"saved episode {result.index}: '{result.task}', {result.frames} frames"
+    verdict = f", labelled {result.label}" if result.label else ""
+    return (
+        f"saved episode {result.index}: '{result.task}', {result.frames} frames"
+        f"{verdict}"
+    )
 
 
 def record(
@@ -40,11 +51,82 @@ def record(
     episodes: int = 1,
     keep: Callable[[EpisodeResult], bool] | None = None,
     home: bool = False,
+    steps: int | None = None,
 ) -> list[EpisodeResult]:
-    """Run `episodes` episodes of `seconds`; `keep` and `home` as in `Session.record`."""
+    """Run `episodes` episodes of `seconds`; `keep`, `home` and `steps` as in
+    `Session.record`."""
     if session.screen is None or not sys.stdin.isatty():
-        return _plain(session, task, seconds, episodes, keep, home)
-    return _keys(session, task, seconds, episodes, keep, home)
+        return _plain(session, task, seconds, episodes, keep, home, steps)
+    return _keys(session, task, seconds, episodes, keep, home, steps)
+
+
+BAR = 20  # characters of the progress bar
+
+
+def progress(
+    index: int,
+    planned: int,
+    elapsed: float,
+    seconds: float,
+    step: int | None = None,
+    steps: int | None = None,
+) -> str:
+    """One line on how far episode `index` (from 0) of `planned` is: by the policy's
+    actions when the episode has `steps`, else by time.
+
+        episode 2/10  step 137/500  [█████░░░░░░░░░░░░░░░] 27%  72.6 s left
+    """
+    number = (
+        f"episode {index + 1}/{planned}"
+        if index < planned
+        else f"episode {index + 1} ({planned} planned)"
+    )
+    if steps:
+        done = min(1.0, (step or 0) / steps)
+        count = f"  step {min(step or 0, steps)}/{steps}"
+    else:
+        done = min(1.0, elapsed / seconds) if seconds > 0 else 1.0
+        count = ""
+    filled = int(done * BAR)
+    bar = "█" * filled + "░" * (BAR - filled)
+    left = max(0.0, seconds - elapsed)
+    limit = "at most " if steps else ""
+    return f"{number}{count}  [{bar}] {done:.0%}  {limit}{left:.1f} s left"
+
+
+class _Progress:
+    """Prints the progress line of an episode every PLAIN_PROGRESS_S (`on_tick`)."""
+
+    def __init__(self, index: int, planned: int, seconds: float, steps: int | None):
+        self.index, self.planned, self.seconds, self.steps = (
+            index,
+            planned,
+            seconds,
+            steps,
+        )
+        self.began: float | None = None  # the first tick: the episode has started
+        self.shown = 0.0
+        self.step = 0
+
+    def __call__(self, status: dict) -> None:
+        self.step = steps_done(status)
+        now = time.monotonic()
+        if self.began is None:  # not while moving home or waiting to be ready
+            self.began = self.shown = now
+        if now - self.shown >= PLAIN_PROGRESS_S:
+            self.shown = now
+            elapsed = now - self.began
+            print(
+                progress(
+                    self.index,
+                    self.planned,
+                    elapsed,
+                    self.seconds,
+                    self.step,
+                    self.steps,
+                ),
+                flush=True,
+            )
 
 
 def _plain(
@@ -54,6 +136,7 @@ def _plain(
     episodes: int,
     keep: Callable[[EpisodeResult], bool] | None,
     home: bool,
+    steps: int | None = None,
 ) -> list[EpisodeResult]:
     print("waiting until the controller is ready ...", flush=True)
     session.wait_ready(timeout=120)
@@ -61,8 +144,18 @@ def _plain(
     for k in range(episodes):
         if home:
             print("moving home ...", flush=True)
-        print(f"episode {k + 1}/{episodes}: recording {seconds:g} s", flush=True)
-        results.append(session.record(task, seconds, keep=keep, home=home))
+        length = (
+            f"{steps} steps (at most {seconds:.0f} s)" if steps else f"{seconds:g} s"
+        )
+        print(f"episode {k + 1}/{episodes}: recording {length}", flush=True)
+        watch = _Progress(k, episodes, seconds, steps)
+        results.append(
+            session.record(
+                task, seconds, keep=keep, home=home, steps=steps, on_tick=watch
+            )
+        )
+        if steps and watch.step < steps:
+            print(f"ended by time at {watch.step}/{steps} steps", flush=True)
         print(describe(results[-1]), flush=True)
         for warning in results[-1].warnings:
             print(f"  quality: {warning}", flush=True)
@@ -76,6 +169,7 @@ def _keys(
     episodes: int,
     keep: Callable[[EpisodeResult], bool] | None,
     home: bool,
+    steps: int | None = None,
 ) -> list[EpisodeResult]:
     screen = session.screen
     assert screen is not None
@@ -145,15 +239,18 @@ def _keys(
                 if pressed in ("\r", "\n") and warning is None:
                     break
                 time.sleep(0.1)
-            end = time.monotonic() + seconds
-            label = f"episode {k + 1}/{episodes}: recording"
+            began = time.monotonic()
 
-            def tick(_status: dict, end: float = end, label: str = label) -> None:
+            def tick(status: dict, k: int = k, began: float = began) -> None:
                 key()
-                prompt(f"{label}, {max(0.0, end - time.monotonic()):.0f} s left")
+                elapsed = time.monotonic() - began
+                done = steps_done(status)
+                prompt(progress(k, episodes, elapsed, seconds, done, steps))
 
-            prompt(f"{label}, {seconds:.0f} s left")
-            results.append(session.record(task, seconds, keep=keep, on_tick=tick))
+            prompt(progress(k, episodes, 0.0, seconds, 0, steps))
+            results.append(
+                session.record(task, seconds, keep=keep, on_tick=tick, steps=steps)
+            )
             session.note(describe(results[-1]), "info" if results[-1].saved else "warn")
         prompt("done")
     return results

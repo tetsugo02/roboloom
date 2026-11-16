@@ -13,6 +13,8 @@ stop, save, ...) and reads the nodes' reports and status. The CLI (`run`, `recor
 
 from __future__ import annotations
 
+import contextlib
+import errno
 import itertools
 import json
 import os
@@ -24,17 +26,24 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
-from ..config import NO_OPTIONS, RobotConfig, load_config
+from ..config import (
+    NO_OPTIONS,
+    Experiment,
+    RobotConfig,
+    load_config,
+    load_experiment,
+)
 from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
+from ..recording.episodes import check_label
 from ..recording.metrics import assess
 from ..recording.video import check_video_encoding
 from ..ui.client import SessionClient
@@ -72,9 +81,21 @@ class SessionError(RoboloomError):
         self.report = report or {}
 
 
+class EpisodeFailed(SessionError):
+    """The episode could not go on (a controller failed, a follower latched FAULT or
+    ESTOP); it was discarded. A failed policy is ready again for the next episode."""
+
+
 @dataclass
 class EpisodeInfo:
-    """What a task-naming function knows about the episode it names."""
+    """What a task-naming function knows about the episode it names.
+
+    Attributes:
+        index: The episode's index in the dataset (the episodes already saved).
+        number: The episodes this session has recorded so far.
+        dataset: The dataset's name, e.g. `rakuda2-digit` (it tells the options).
+        previous: The tasks this session has saved, oldest first.
+    """
 
     index: int  # episode index in the dataset (episodes already saved)
     number: int  # episodes recorded by this session so far
@@ -84,19 +105,36 @@ class EpisodeInfo:
 
 @dataclass
 class EpisodeResult:
+    """A stopped episode, saved or not (`Session.stop`, `save`, `record`).
+
+    Attributes:
+        task: The episode's task text.
+        saved: Whether the episode was written to the dataset.
+        frames: The rows recorded.
+        index: The episode's index in the dataset once saved, else None.
+        metrics: The recorder's quality metrics (missing rates, the share of valid
+            actions, the control interval distribution).
+        warnings: The quality limits (`quality:` of the recorder YAML) it exceeded.
+        label: The verdict it was saved with, `"success"` or `"failure"`, else None.
+    """
+
     task: str
     saved: bool
     frames: int  # rows recorded
     index: int | None = None  # dataset episode index when saved
     metrics: dict = field(default_factory=dict)  # EpisodeRecorder.metrics()
     warnings: list[str] = field(default_factory=list)  # quality limits exceeded
+    label: str | None = None  # the verdict it was saved with: "success" / "failure"
 
     @property
     def ok(self) -> bool:
+        """True when no quality limit was exceeded (`warnings` is empty)."""
         return not self.warnings
 
 
 Task = str | Callable[[EpisodeInfo], str]
+# the verdict of an episode: fixed, or decided from the stopped episode (None: none)
+Label = str | Callable[[EpisodeResult], str | None] | None
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 FAILED = ("exited with code", "exited with error")  # dora's node-failure lines
@@ -141,10 +179,38 @@ def validate_flow(cfg: RobotConfig, directory: Path) -> Path:
     return flow
 
 
+def steps_done(status: Mapping[str, Any]) -> int:
+    """How many actions the policy has executed in the running episode, from the nodes'
+    status (`Session.status()`): the `step` a policy controller reports."""
+    counts = [
+        node.get("fields", {}).get("step")
+        for node in status.values()
+        if isinstance(node, Mapping)
+    ]
+    return max((int(c) for c in counts if isinstance(c, int | float)), default=0)
+
+
+def steps_timeout(cfg: RobotConfig, steps: int) -> float:
+    """The longest an episode of `steps` policy actions may take, in seconds: half as
+    long again as the actions at the policy's rate, plus 5 s (waiting for inference)."""
+    rates = [c.rate_hz for c in cfg.controllers.values() if hasattr(c, "rate_hz")]
+    if not rates:
+        raise ConfigError(
+            f"{cfg.path}: steps count a policy's actions, and no controller here is a "
+            "policy; give seconds instead"
+        )
+    return steps / min(rates) * 1.5 + 5.0
+
+
 def config_env(cfg: RobotConfig) -> dict[str, str]:
     """The choices the nodes need to reload `cfg` from `cfg.path` as the parent loaded
     it (read back by `runtime.node.config_from_env`)."""
     return {
+        **(
+            {"ROBOLOOM_EXPERIMENT": json.dumps(cfg.experiment)}
+            if cfg.experiment
+            else {}
+        ),
         "ROBOLOOM_OPTIONS": ",".join(cfg.options) or NO_OPTIONS,
         "ROBOLOOM_MODE": cfg.mode,
         "ROBOLOOM_SENSORS": json.dumps(list(cfg.sensors)),
@@ -165,7 +231,33 @@ def fifo_for(cfg: RobotConfig) -> Path:
     return Path(cfg.path).resolve().with_suffix(".fifo")
 
 
+STARTING_S = 30.0  # a FIFO this young without a reader belongs to a run still starting
+
+
+def _fifo_in_use(fifo: Path) -> bool:
+    """Whether a running dataflow reads `fifo` (or one is just starting). A FIFO nobody
+    reads was left by a run that did not end properly."""
+    try:
+        fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError as exc:
+        if exc.errno != errno.ENXIO:  # not "no reader": do not touch it
+            return True
+        return time.time() - fifo.stat().st_mtime < STARTING_S
+    os.close(fd)
+    return True
+
+
 class Session:
+    """A robot's running dora dataflow, directed from this process.
+
+    The control loops, sensors, recorder and policy run in their own processes; a
+    Session only starts the dataflow and sends it events (start, stop, save, the
+    task), so a slow or stopped script never delays a control loop. Create one with
+    `Session.launch` and use it as a context manager: leaving the `with` block discards
+    an unfinished episode, asks the operator to support the arms (when `operator` is
+    set) and stops the dataflow (`close`).
+    """
+
     def __init__(
         self,
         cfg: RobotConfig,
@@ -191,14 +283,17 @@ class Session:
         self.operator: Operator | None = (
             None  # asked before an actuated leader goes limp
         )
+        # the FIFO held open for writing; see `_attach`
+        self._lifeline: int | None = None
 
     # -- lifecycle --------------------------------------------------------------
 
     @classmethod
     def launch(
         cls,
-        config: str | Path | RobotConfig,
+        config: str | Path | RobotConfig | None = None,
         *,
+        experiment: str | Path | Mapping[str, Any] | Experiment | None = None,
         options: Iterable[str] | None = None,
         mock: bool | None = None,
         sensors: Iterable[str] | None = None,
@@ -216,6 +311,11 @@ class Session:
         - `options`: the launch options to enable (None: their defaults); `mock`:
           True runs mock devices, False real ones (None: the YAML's `mode`, default
           hardware). Both apply only when `config` is a path or name.
+        - `experiment`: an experiment's name (`configs/roboloom/<name>.yaml`), its
+          file, a mapping with the same keys (e.g. what Hydra composed) or an
+          `Experiment`. It gives the robot (when `config` is left out), the options
+          (when `options` is left out), what is laid over the nodes and where the
+          episodes go. Its task, seconds or steps are yours to pass to `record`.
         - `sensors`, `observe`, `video_codec`: as in `load_config` (None: the YAML);
           with a `RobotConfig`, choose them in `load_config` instead.
         - `policy` ("module:callable") and `policy_kwargs` replace the policy of a
@@ -226,12 +326,24 @@ class Session:
           go limp ("auto": a TerminalOperator when stdin is a terminal; None: no question).
         """
         if isinstance(config, RobotConfig) and (
-            sensors is not None or observe is not None or video_codec is not None
+            sensors is not None
+            or observe is not None
+            or video_codec is not None
+            or experiment is not None
         ):
             raise ConfigError(
-                "select sensors, observe and video_codec in load_config before "
-                "passing RobotConfig"
+                "select sensors, observe, the experiment and video_codec in load_config "
+                "before passing RobotConfig"
             )
+        chosen = (
+            experiment
+            if experiment is None or isinstance(experiment, Experiment)
+            else load_experiment(experiment)
+        )
+        if chosen is not None and not isinstance(config, RobotConfig):
+            config = config if config is not None else chosen.robot
+            if options is None and chosen.options is not None:
+                options = chosen.options
         cfg = (
             config
             if isinstance(config, RobotConfig)
@@ -242,6 +354,7 @@ class Session:
                 sensors=sensors,
                 observe=observe,
                 video_codec=video_codec,
+                experiment=chosen,
             )
         )
         check_video_encoding(cfg)  # before any node opens the dataset
@@ -253,10 +366,12 @@ class Session:
         fifo = fifo_for(cfg)
         fifo.parent.mkdir(parents=True, exist_ok=True)
         if fifo.exists():
-            raise SessionError(
-                f"session FIFO already exists: {fifo} (another run of this robot, "
-                "or a stale file to delete)"
-            )
+            if _fifo_in_use(fifo):
+                raise SessionError(
+                    f"another run of this robot is using {fifo}; end it first "
+                    "(`roboloom session quit`)"
+                )
+            fifo.unlink()  # left by a run that did not end properly
         workdir = tempfile.TemporaryDirectory(prefix="roboloom-flow-")
         directory = Path(workdir.name)
         try:
@@ -316,14 +431,32 @@ class Session:
                 )
                 session.screen.start()
             session._wait_nodes(timeout)
+            session._attach()
         except BaseException:
             session.close()
             raise
         session._cancel_local.event = None
         return session
 
+    def _attach(self) -> None:
+        """Hold the FIFO open for writing for as long as this process lives. When its
+        last writer is gone, however this process ended (killed, crashed, its terminal
+        closed), the session node discards the episode, lets the followers hold and
+        ends the dataflow: a robot never keeps following a policy nobody watches."""
+        for attempt in range(50):
+            try:
+                held = os.open(self.fifo, os.O_WRONLY | os.O_NONBLOCK)
+                break
+            except OSError:  # the session node has not opened it yet
+                if attempt == 49:
+                    raise
+                time.sleep(0.1)
+        self._lifeline = held
+        os.write(held, b'{"command": "attach"}\n')
+
     @property
     def alive(self) -> bool:
+        """True while the dataflow process is running."""
         return self.process.poll() is None
 
     @property
@@ -406,6 +539,10 @@ class Session:
         finally:
             if self.screen is not None:
                 self.screen.stop()
+            if self._lifeline is not None:  # kept until the dataflow has ended
+                with contextlib.suppress(OSError):
+                    os.close(self._lifeline)
+                self._lifeline = None
             self.fifo.unlink(missing_ok=True)
             self._workdir.cleanup()
 
@@ -520,6 +657,7 @@ class Session:
         from .node import start_warning
 
         deadline = time.monotonic() + timeout
+        failed_since: float | None = None
         while True:
             self._check_alive()
             status = self.status()
@@ -530,7 +668,11 @@ class Session:
                 status.get(name, {}).get("fields", {}).get("state") == "failed"
                 for name in self.cfg.controllers
             )
-            if failed:  # a controller that failed does not recover by waiting
+            # A policy that failed in the last episode is ready again once that
+            # episode was stopped or discarded (its status follows within a moment);
+            # one that did not load stays failed, and waiting does not help.
+            failed_since = (failed_since or time.monotonic()) if failed else None
+            if failed_since is not None and time.monotonic() - failed_since > 1.5:
                 raise SessionError(warning)
             if time.monotonic() > deadline:
                 raise SessionError(f"not ready after {timeout:g} s: {warning}")
@@ -538,11 +680,13 @@ class Session:
 
     # -- commands ---------------------------------------------------------------
 
-    def send(self, command: str, task: str = "") -> int:
-        """Send one command to every node; returns its id (echoed in the reports)."""
+    def send(self, command: str, task: str = "", **extra: str) -> int:
+        """Send one command to every node; returns its id (echoed in the reports).
+        `extra`: what else the command carries (`save`: label, note)."""
         self._check_alive()
         ident = next(self._ids)
-        self.client.send(json.dumps({"id": ident, "command": command, "task": task}))
+        request = {"id": ident, "command": command, "task": task, **extra}
+        self.client.send(json.dumps(request))
         return ident
 
     def wait_report(self, ident: int, timeout: float = 10.0) -> dict:
@@ -568,10 +712,48 @@ class Session:
                 raise SessionError(f"no answer to command {ident} within {timeout:g} s")
             time.sleep(0.05)
 
+    def _check_running(self) -> None:
+        """While an episode runs: the dataflow is alive, no controller failed and no
+        follower latched. Raises EpisodeFailed when the episode cannot go on."""
+        self._check_alive()
+        status = self.status()
+        for name in self.cfg.controllers:
+            fields = status.get(name, {}).get("fields", {})
+            if fields.get("state") == "failed":
+                raise EpisodeFailed(
+                    f"{name} failed during the episode: "
+                    f"{fields.get('error') or 'see its log'}"
+                )
+        for name in self.cfg.followers:
+            fields = status.get(name, {}).get("fields", {})
+            if fields.get("mode") in ("FAULT", "ESTOP"):
+                raise EpisodeFailed(
+                    f"{name} is {fields['mode']}"
+                    + (f" ({fields['reason']})" if fields.get("reason") else "")
+                )
+
     def start(self, task: str) -> None:
+        """Start recording an episode of `task` and let the controllers drive.
+
+        Raises SessionError when a controller refuses (e.g. the leader is not aligned
+        with the follower, `alignment_tolerance`) or while the previous episode is
+        recording, stopped but not saved, or being saved. When the recorder could not take the
+        start, the followers and the policy are stopped too, so no episode runs that
+        nobody records.
+        """
         if not task.strip():
             raise ValueError("task is required")
-        self.wait_report(self.send("start", task))
+        ident = self.send("start", task)
+        try:
+            self.wait_report(ident)
+        except SessionError as exc:
+            # A warning means the session node sent `start` to nobody. Otherwise some
+            # nodes took it and the recorder did not (or did not answer): the followers
+            # and the policy must not run an episode nobody records.
+            if "warning" not in exc.report:
+                with contextlib.suppress(OSError, SessionError):
+                    self.send("stop")
+            raise
         self._episode = task
 
     def stop(self) -> EpisodeResult:
@@ -587,13 +769,30 @@ class Session:
             warnings=assess(metrics, self.cfg.quality),
         )
 
-    def save(self, timeout: float = 300.0) -> EpisodeResult:
+    def save(
+        self,
+        timeout: float = 300.0,
+        *,
+        label: str | None = None,
+        note: str | None = None,
+    ) -> EpisodeResult:
         """Write the stopped episode (video encoding can take a while). When the
         write fails the episode is dropped (SessionError); the dataset keeps the
-        episodes saved before it and the next one can be recorded."""
+        episodes saved before it and the next one can be recorded.
+
+        `label` ("success" or "failure") and `note` are the verdict of an evaluation
+        episode. They go into the dataset's `meta/roboloom_episodes.jsonl` with the
+        task, the metrics and what the controllers reported; `roboloom label` sets
+        the verdict afterwards."""
         task = self._episode or ""
+        extra: dict[str, str] = {}
+        verdict = check_label(label)  # a mistyped one: before anything is sent
+        if verdict:
+            extra["label"] = verdict
+        if note:
+            extra["note"] = note
         try:
-            report = self.wait_report(self.send("save"), timeout)
+            report = self.wait_report(self.send("save", **extra), timeout)
         except SessionError as exc:
             if exc.report.get("dropped"):  # nothing left to save or discard
                 self._episode = None
@@ -609,6 +808,7 @@ class Session:
             int(report.get("episodes", 0)) - 1,
             metrics,
             assess(metrics, self.cfg.quality),
+            report.get("label"),
         )
         for warning in result.warnings:
             self.note(f"episode {result.index} quality: {warning}", "warn")
@@ -734,8 +934,11 @@ class Session:
         self.wait_report(self.send("stop_teleop"))
 
     def estop(self) -> None:
-        """Latch the follower in ESTOP (stays until the dataflow restarts)."""
-        self.send("estop")
+        """Latch the follower in ESTOP (stays until the dataflow restarts). Written
+        straight to the FIFO: it must also go out when a node has failed, which every
+        other command refuses."""
+        command = {"id": next(self._ids), "command": "estop", "task": ""}
+        self.client.send(json.dumps(command), attempts=3)
 
     def release(self, *, confirm: bool = False) -> None:
         """Torque off the actuated inputs and the followers after stopping; first do what
@@ -749,6 +952,7 @@ class Session:
     # -- episodes ---------------------------------------------------------------
 
     def next_info(self) -> EpisodeInfo:
+        """What a task-naming function is given for the next episode."""
         return EpisodeInfo(
             self.episodes,
             len(self._recorded),
@@ -766,17 +970,30 @@ class Session:
         tick_s: float = 0.2,
         ready_timeout: float = 60.0,
         home: bool = False,
+        label: Label = None,
+        note: str | None = None,
+        steps: int | None = None,
     ) -> EpisodeResult:
         """One episode: wait until it may start (leader aligned with the follower, at most
         `ready_timeout` s), start, record for `seconds`, stop, then save it unless `keep`
         rejects the stopped episode (default: keep every one; quality warnings are in the
         result either way).
 
+        `steps`: end as soon as the policy has executed this many actions (`steps_done`);
+        `seconds` is then the longest the episode may take (`steps_timeout`).
+
         `task` is a string or a function of `EpisodeInfo`. `on_tick(status)` is called
-        every `tick_s` while recording. An exception or Ctrl-C discards the episode.
+        every `tick_s` while recording. An exception or Ctrl-C discards the episode, and
+        so does a controller that fails or a follower that latches FAULT or ESTOP while
+        it runs (EpisodeFailed): an episode that broke off is not saved.
         `home=True` first moves to the saved home pose (`home`), so every episode starts
         from the same pose.
+        `label` is the verdict saved with the episode ("success" / "failure"), or a
+        function of the stopped episode returning it (None: no verdict); `note` is
+        free text (`save`).
         """
+        if not callable(label):
+            check_label(label)  # a mistyped verdict: before the robot moves
         name = task(self.next_info()) if callable(task) else task
         if home:
             self.home()
@@ -787,9 +1004,12 @@ class Session:
         try:
             end = time.monotonic() + seconds
             while time.monotonic() < end:
-                self._check_alive()
+                self._check_running()
+                status = self.status()
                 if on_tick is not None:
-                    on_tick(self.status())
+                    on_tick(status)
+                if steps is not None and steps_done(status) >= steps:
+                    break
                 time.sleep(min(tick_s, max(0.0, end - time.monotonic())))
             stopped = self.stop()
         except BaseException:
@@ -800,7 +1020,14 @@ class Session:
         if keep is not None and not keep(stopped):
             self.discard()
             return stopped
-        return self.save()
+        try:
+            verdict = check_label(label(stopped) if callable(label) else label)
+        except BaseException:  # nothing decided: the stopped episode is not left over
+            if self.alive:
+                with self._cancellable(None):
+                    self.discard()
+            raise
+        return self.save(label=verdict, note=note)
 
 
 def _node_ids(cfg: RobotConfig) -> list[dict]:

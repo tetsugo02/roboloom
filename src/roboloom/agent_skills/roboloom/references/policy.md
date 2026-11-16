@@ -73,9 +73,15 @@ command_deadline_ms: 300
   (`stale_observation`, followers hold, also mid-interpolation); when fresh again it restarts with `reset()`.
 
 - A model that cannot share roboloom's environment (other torch) or runs elsewhere:
-  serve it with `roboloom serve-policy <module:callable> --kwargs '{...}'` (or
-  `python -m roboloom.policy.remote ...`; needs only numpy + roboloom without extras) and
-  set `factory: roboloom.policy.remote:connect`, `kwargs: {address: "127.0.0.1:18765"}`.
+  keep the policy's own `factory`/`kwargs` in the YAML and add `backend: server`
+  (default `backend: process`: the policy node loads it) with
+  `server: {address: "127.0.0.1:18765"}` (also `timeout_s`, `connect_timeout_s`,
+  `authkey_env`). Start the server in the model's environment and directory with
+  `roboloom serve-policy --from <that YAML>` (or, when an experiment file gives the
+  policy, `--experiment <file>`; also `python -m roboloom.policy.remote --from
+  ...`; needs only numpy + roboloom without extras). `--policy`/`--policy-kwargs` are
+  refused with `backend: server`. The older `factory: roboloom.policy.remote:connect`
+  with `kwargs: {address: ...}` still works.
   Both sides need the same `ROBOLOOM_POLICY_AUTHKEY`. `bind`/`reset`/`infer`/`options` are
   forwarded; policy errors show on the controller line. Not encrypted: loopback or a
   trusted network only.
@@ -91,6 +97,10 @@ command_deadline_ms: 300
   policy path: checks the path without a model. Names and rate are checked at load;
   `home` to the first pose first, low `max_speed`.
 
+- With `teleop:` and `home:`, `home` moves the teleop leader to the pose as well; leader
+  joints in a `law: position` group stay there afterwards (e.g. torso and head, to keep
+  the camera angle while Teleop moves the arms). Order: `home`, Teleop if needed, `start`.
+
 ## Writing a policy
 
 Rakuda2 defaults to joint state + RealSense without DIGIT. Set `observe: []` for joint
@@ -100,8 +110,9 @@ inputs. All observed sensors must exist in `sensors`. To avoid opening unused se
 also remove their nodes from `config.yaml`. A checkpoint requiring DIGIT cannot run
 unchanged without it; LeRobot checks this at load, custom policies can use `bind`.
 
-Existing project files are not overwritten on update. Migrate older Rakuda2 configs by
-removing `options.policy.requires: [digit]` and setting `observe: [camera]` in
+Existing project files are not overwritten on update. Migrate older Rakuda2 configs
+with `roboloom init rakuda2 --update` (adds `nodes/policy.yaml`, lists the options
+`config.yaml` lacks), then by removing `options.policy.requires: [digit]` and setting `observe: [camera]` in
 `nodes/policy.yaml`. Evaluation datasets are `rakuda2-eval` without DIGIT and
 `rakuda2-digit-eval` with the `digit` option.
 
@@ -140,12 +151,17 @@ def load(checkpoint: str) -> MyPolicy:
   **units** of the recorded `action` (Rakuda2: 17 counts; PiPER+Pika mock: 14 rad).
 - A failing `bind` marks the controller `failed`; `infer` and `Session.wait_ready` stop
   with the reason.
+- `infer` or `reset` raising during an episode: the controller turns `failed`, the
+  followers hold, the episode is discarded (`EpisodeFailed`). After `stop`/`discard`
+  the policy is `ready` again; the error stays on its row until the next `start`.
 
 ## Running
 
 ```bash
 uv run roboloom infer --seconds 30 --policy my_lab.policies:load \
   --policy-kwargs '{"checkpoint": "outputs/act/last"}' --task "pick up the cup"
+# or everything in the project's configs/roboloom/cup.yaml (configuration.md):
+uv run roboloom infer --experiment cup
 ```
 
 ```python
@@ -159,8 +175,16 @@ with Session.launch(
 ) as s:
     s.wait_ready()
     for k in range(10):
-        s.record(f"pick up the cup (eval {k})", seconds=30)
+        # judge(ep: EpisodeResult) -> "success" | "failure" | None: your own check
+        s.record(f"pick up the cup (eval {k})", seconds=30, label=judge)
 ```
+
+`label`: `"success"` / `"failure"`, or a function of the stopped `EpisodeResult`
+returning one (None: no verdict). The verdict, the policy's status (`infer_max_ms`,
+`dropped`, `error`) and the metrics go to the evaluation dataset's
+`meta/roboloom_episodes.jsonl`; `roboloom label [robot] --with policy <episode>
+success|failure` sets it afterwards and `roboloom check-dataset --with policy` counts
+them. From the operator screen: type `save success` / `save failure`.
 
 By default inference is synchronous: no command is sent during `infer`; if it exceeds
 `command_deadline_ms` the followers HOLD and wait (`inference: async` avoids the pause). Targets are clipped to `max_speed` and

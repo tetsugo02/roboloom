@@ -1,7 +1,7 @@
 # Bilateral control design (FACTR 2)
 
 !!! warning "Partly implemented design proposal"
-    This page is a design proposal that lays out the implementation steps. Stages 1–5 of §7 are implemented and pass the mock tests. Nothing has been verified on hardware. The settings that work are under "Force feedback" in [Configuration](../reference/configuration.md). Configuration keys, commands and node names for stage 6 onward (`sensor`, `next`, gripper feedback, etc.) are proposals and do not work in the current roboloom.
+    This page is a design proposal that lays out the implementation steps. Stages 1–5 of §7 are implemented and pass the mock tests. Nothing has been verified on hardware. The settings that work are under "Force feedback" in [Configuration](../reference/configuration/index.md). Configuration keys, commands and node names for stage 6 onward (`sensor`, `next`, gripper feedback, etc.) are proposals and do not work in the current roboloom.
 
 Written 2026-10-27. Sources studied (code was read, not run):
 
@@ -385,7 +385,7 @@ The symmetric approach (robopy's `bilateral_joint`) can also be added later as a
 
 ## 9. Open issues
 
-- Delay: Rakuda2's bus runs at 1 Mbps and reads the state in 4 ms (Fast Sync Read). With it and the skipped wait before writes, the leader and follower went from 60 Hz to 120 Hz, checked on the hardware ([Configuration](../reference/configuration.md), Control rate). The feedback path goes through one follower period, estimation, the controller and one leader period, so the delay is expected to be a few periods (about 20–30 ms at 120 Hz). That is still slower than FACTR's 500 Hz, so start with the gate, ramp, damping and weak gains. Raising the bus to 4 Mbps would allow higher rates, but it means rewriting the EEPROM of every motor and is not done here.
+- Delay: Rakuda2's bus runs at 1 Mbps and reads the state in 4 ms (Fast Sync Read). With it and the skipped wait before writes, the leader and follower went from 60 Hz to 120 Hz, checked on the hardware ([Configuration](../reference/configuration/index.md), Control rate). The feedback path goes through one follower period, estimation, the controller and one leader period, so the delay is expected to be a few periods (about 20–30 ms at 120 Hz). That is still slower than FACTR's 500 Hz, so start with the gate, ramp, damping and weak gains. Raising the bus to 4 Mbps would allow higher rates, but it means rewriting the EEPROM of every motor and is not done here.
 - Estimation accuracy: friction and inertia remain in `model_residual`. Fast motion produces residual without contact. The contact threshold suppresses it, but replacing it with NEXT is the plan.
 - Current limit: the leader's Current Limit must be raised by the feedback amount. More force remains when the host stops.
 - Use in policies: roboloom's scope ends at recording external force. FACTR's curriculum and FIRST belong to training.

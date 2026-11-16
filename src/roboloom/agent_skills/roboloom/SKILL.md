@@ -40,7 +40,11 @@ outdated, run `uv run roboloom skills install --force`.
 - **Real hardware is the default.** `--mock` (CLI) / `mock=True` (Python) runs mock
   devices. `mode: mock` in YAML also works; the flag wins.
 - `SET_...` values in the template are per-robot measurements (ports, serials, limits).
-  Nothing runs while one remains; `roboloom validate` lists them with their location.
+  Nothing runs on hardware while one remains; `roboloom validate` lists them with their
+  location. With `--mock` the project's `mock.yaml` stands in for them, so a fresh
+  `init` runs in mock at once.
+- A key a node does not read is refused on loading (`unknown keys torqe (did you mean
+  torque?)`): fix the spelling or remove the key, do not look for a way around it.
 - Three entry points:
   - `roboloom.Session` – launches the dataflow and sends start/stop/save/task. Control
     loops run in their own processes, so a slow user script never disturbs them.
@@ -79,7 +83,7 @@ outdated, run `uv run roboloom skills install --force`.
 | Rakuda2 follower + Rakuda-mini leader (`joint` controller), gravity-compensated leader | Hardware-verified | [robots/rakuda2.md](references/robots/rakuda2.md) |
 | RealSense RGB (`realsense_rgb`), DIGIT (`digit`) | Hardware-verified | [sensors.md](references/sensors.md) |
 | Leader joint locking (`law: position`), `couplings`, `home` moves | Mock only | [robots/rakuda2.md](references/robots/rakuda2.md) |
-| Own policies (`type: policy`) | Used with Rakuda2 config and mock | [policy.md](references/policy.md) |
+| Own policies (`type: policy`): inference and intervention (`policy`, `policy_teleop`) on Rakuda2 | Hardware-verified | [policy.md](references/policy.md) |
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | Mock only (PiPER + Pika) | [policy.md](references/policy.md) |
 | PiPER follower, Pika Gripper, Pika Sense + `pose_ik` | In development, mock only | [robots/piper-pika.md](references/robots/piper-pika.md) |
 | Hand-held Pika Sense collection, `convert-handheld` | In development, mock only | [robots/handheld.md](references/robots/handheld.md) |

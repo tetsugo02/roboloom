@@ -11,10 +11,17 @@ from .core.source import Sample
 from .errors import ConfigError, HardwareError, RoboloomError, SetupError
 from .policy import Policy
 from .project import init_project
-from .runtime.session import EpisodeInfo, EpisodeResult, Session, SessionError
+from .runtime.session import (
+    EpisodeFailed,
+    EpisodeInfo,
+    EpisodeResult,
+    Session,
+    SessionError,
+)
 
 __all__ = [
     "ConfigError",
+    "EpisodeFailed",
     "EpisodeInfo",
     "EpisodeResult",
     "HardwareError",

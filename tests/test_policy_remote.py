@@ -201,3 +201,82 @@ def test_a_served_policy_drives_the_mock_robot(tmp_path, monkeypatch):
         policy = s.status()["policy"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert policy["state"] in ("ready", "running") and "infer_ms" in policy, policy
+
+
+# -- backend: server ------------------------------------------------------------------
+
+NODE = """\
+type: policy
+followers: [follower]
+factory: policies:creep
+kwargs: {step: 5.0}
+backend: server
+server: {address: "ADDRESS", timeout_s: 5}
+observe: [camera]
+rate_hz: 15
+action_horizon: 1
+max_speed: {follower: 1024}
+command_deadline_ms: 300
+"""
+
+
+def test_the_node_file_says_what_the_server_loads_and_where(tmp_path):
+    file = tmp_path / "policy.yaml"
+    file.write_text(NODE.replace("ADDRESS", "127.0.0.1:19001"))
+    factory, kwargs, server = R.served(str(file))
+    assert (factory, kwargs) == ("policies:creep", {"step": 5.0})
+    assert server == {"address": "127.0.0.1:19001", "timeout_s": 5}
+    with pytest.raises(ConfigError, match="unknown keys adress"):
+        R.server_settings({"adress": "127.0.0.1:1"})
+    with pytest.raises(ConfigError, match="expected host:port"):
+        R.server_settings({"address": "localhost"})
+    file.write_text("factory: roboloom.policy.remote:connect\n")
+    with pytest.raises(ConfigError, match="write the policy's own factory"):
+        R.served(str(file))
+    with pytest.raises(SystemExit, match="give one of"):
+        R.main(["policies:creep", "--from", str(file)])
+    with pytest.raises(SystemExit, match="give module:callable, --from"):
+        R.main([])
+
+
+def test_the_backend_is_the_process_unless_the_file_says_server(tmp_path):
+    from roboloom.config import load_config
+
+    project = mock_project(tmp_path / ".roboloom")
+    node = project / "nodes" / "policy.yaml"
+    cfg = load_config(project / "config.yaml", options=["policy"])
+    assert cfg.controllers["policy"].backend == "process"
+    node.write_text(node.read_text() + "backend: sever\n")
+    with pytest.raises(ConfigError, match="backend must be one of process, server"):
+        load_config(project / "config.yaml", options=["policy"])
+    node.write_text(NODE.replace("ADDRESS", "127.0.0.1:19001"))
+    controller = load_config(project / "config.yaml", options=["policy"]).controllers[
+        "policy"
+    ]
+    assert controller.backend == "server"
+    with pytest.raises(ConfigError, match="the policy server loads the policy"):
+        controller.load("policies:creep")
+
+
+def test_one_file_starts_the_server_and_the_node_that_connects(tmp_path, monkeypatch):
+    import os
+    from pathlib import Path
+
+    from roboloom.runtime.session import Session
+
+    monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
+    project = mock_project(tmp_path / ".roboloom")
+    node = project / "nodes" / "policy.yaml"
+    node.write_text(NODE.replace("ADDRESS", _free_address()))
+    tests = str(Path(__file__).resolve().parent)
+    env = {**os.environ, "PYTHONPATH": tests}
+    command = [sys.executable, "-m", "roboloom.policy.remote", "--from", str(node)]
+    server = subprocess.Popen(command, env=env, cwd=tmp_path)
+    try:
+        with Session.launch(project / "config.yaml", options=["policy"]) as s:
+            s.wait_ready(30)
+            result = s.record("creep", 1.5)
+    finally:
+        server.terminate()
+        server.wait(10)
+    assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics

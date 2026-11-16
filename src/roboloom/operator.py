@@ -11,6 +11,9 @@ from typing import Protocol
 
 
 class Operator(Protocol):
+    """The person at the robot, asked by setup steps and by `Session` before the arms
+    go limp: confirmations, prompts and progress lines."""
+
     def confirm(self, message: str) -> bool:
         """Ask before torquing a motor or writing EEPROM; False cancels."""
         ...
@@ -33,6 +36,8 @@ class Operator(Protocol):
 
 
 class TerminalOperator:
+    """An `Operator` in a terminal: confirmations need `yes`, prompts wait for Enter."""
+
     def confirm(self, message: str) -> bool:
         return input(f"{message} Type yes to continue: ").strip() == "yes"
 

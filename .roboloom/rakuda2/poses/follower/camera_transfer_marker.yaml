@@ -1,0 +1,26 @@
+# The first frame of master_proj's transfer_marker episode 6_9 (robopy positions): the
+# camera angles (torso, head) and the arm pose the task's data starts from.
+# robopy's counts are this follower's: a roboloom episode's torso and head read the same
+# values as the training data, and its arm joints move in the same ranges (2026-11-15).
+# Not yet moved to on hardware: watch the first `home` (200 counts/s).
+follower: follower
+model: rakuda2
+unit: dynamixel_count
+pose:
+  torso_yaw: 2037
+  head_yaw: 2043
+  head_pitch: 2538
+  r_arm_sh_pitch1: 2086
+  r_arm_sh_roll: 1073
+  r_arm_sh_pitch2: 2123
+  r_arm_el_yaw: 2601
+  r_arm_wr_roll: 3083
+  r_arm_wr_yaw: 1096
+  r_arm_grip: 1623
+  l_arm_sh_pitch1: 1944
+  l_arm_sh_roll: 2992
+  l_arm_sh_pitch2: 1953
+  l_arm_el_yaw: 1587
+  l_arm_wr_roll: 995
+  l_arm_wr_yaw: 3079
+  l_arm_grip: 2592

@@ -69,6 +69,13 @@ class TuningSave:
 
 
 class TuningSession:
+    """Live gravity-compensation tuning of one `gravity_comp` group (`open_tuning`).
+
+    Call `start()` to torque the arm, then `step()` once per `period_s`; `key()` applies
+    the operator's keys (gain, hold, compare, resume, save), `rows()` gives each joint's
+    measured, model and sent currents, and `close()` turns the torque off.
+    """
+
     def __init__(
         self,
         device: JointDevice,
@@ -100,6 +107,7 @@ class TuningSession:
     # -- running ----------------------------------------------------------------
 
     def start(self) -> None:
+        """Torque the arm and start compensating (refused after an emergency stop)."""
         if self.estopped:
             raise RuntimeError("ESTOP: restart tune-gravity to re-enable torque")
         self.device.read_state()
@@ -107,6 +115,7 @@ class TuningSession:
         self.stopped = None
 
     def step(self, now_ns: int | None = None) -> None:
+        """One control tick: read the joints and send the compensation current."""
         now = time.monotonic_ns() if now_ns is None else now_ns
         self.device.read_state()  # keeps the view live while stopped, too
         if self.stopped is not None:
@@ -165,6 +174,8 @@ class TuningSession:
     # -- view -------------------------------------------------------------------
 
     def rows(self) -> list[JointRow]:
+        """One row per tuned joint: gain, hold, and the measured, model and sent
+        currents."""
         state = self.device.state
         out = []
         for k, i in enumerate(self.law.joints):

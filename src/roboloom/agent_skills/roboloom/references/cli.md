@@ -21,7 +21,7 @@ Flags of commands that open devices:
 | Command | Purpose | Opens devices |
 | --- | --- | --- |
 | `roboloom [robot]` / `roboloom launch [robot]` | launcher: pick robot, operation, options, mock | on Launch |
-| `roboloom init <robot> [--root DIR]` | create `.roboloom/<robot>/` from the template | no |
+| `roboloom init <robot> [--root DIR] [--template PKG_OR_DIR] [--update]` | create `.roboloom/<robot>/` from the template (shipped: `rakuda2`; `--template`: a package's `template/` or a directory); `--update` brings an existing project up to the installed template without overwriting edited or measured files | no |
 | `roboloom validate [robot]` | check configuration + dataflow; print options and dataset | no |
 | `roboloom probe <port> [--device dynamixel\|pika\|pika_sense] [--ids 1,2] [--baudrate N]` | read-only bus inspection (a CAN name reads a PiPER) | reads |
 | `roboloom commission [robot] <node>` | diff and write Dynamixel EEPROM after confirmation | writes |
@@ -35,10 +35,12 @@ Flags of commands that open devices:
 | `roboloom capture-pose [robot] [follower] <name> [--force]` | save current follower pose to `poses/` | reads |
 | `roboloom run [robot] [--plain]` | operator screen, many episodes | yes |
 | `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--plain]` | fixed-length episodes | yes |
-| `roboloom infer [robot] --seconds <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only with `--task` | yes |
-| `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit> [task]` | send one operation to a running `run` | no |
-| `roboloom serve-policy <module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node (`factory: roboloom.policy.remote:connect`) | no |
+| `roboloom record\|infer --experiment <name\|file>` | run as the project's `configs/roboloom/<name>.yaml` says (robot, options, node settings such as the policy, dataset, task, length; see configuration.md); words on the command line win. `validate`, `check-dataset`, `label` take `--experiment` too | yes |
+| `roboloom infer [robot] --seconds <n> \| --steps <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only with `--task` | yes |
+| `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit\|teleop\|policy\|stop_teleop> [task]` | send one operation to a running `run`; `save success` / `save failure` saves with the verdict | no |
+| `roboloom serve-policy --experiment <experiment file>` or `--from <policy YAML>` or `<module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node with `backend: server` (the file's `factory`, `kwargs`, `server.address`) | no |
 | `roboloom check-dataset [robot\|dataset dir] [--with a,b] [--recover]` | is a recorded dataset whole (exit 1 if not), which rows are not valid; `--recover` removes an episode whose save was interrupted | no |
+| `roboloom label [robot\|dataset dir] <episode> success\|failure [--note TEXT] [--with a,b]` | set or change a saved episode's evaluation verdict (appends to `meta/roboloom_episodes.jsonl`), print the counts | no |
 | `roboloom convert-handheld [robot] --action delta\|relative-chunk [--horizon 16] [--hands a,b] [--max-gap 3] [--output P] [--repo-id R]` | hand-held recording → training dataset (in development) | no |
 | `roboloom skills install\|check\|path [--agent all\|agents\|claude] [--root .] [--force]` | install / check this agent skill | no |
 

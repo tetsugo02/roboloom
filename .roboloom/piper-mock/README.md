@@ -28,5 +28,5 @@ then repeats 10 s engaged, 2 s disengaged.
 | `nodes/policy.yaml`, `demo_policy.py` | the demo policy (`--with policy`), imported from this directory |
 
 None of the PiPER, Pika Gripper and Pika Sense drivers has run on hardware; see the docs
-pages under Contribution before using them. `tool_offset` is AgileX's value for its own
+pages under Robots (PiPER, Pika) and Controllers (Pika Sense and IK) before using them. `tool_offset` is AgileX's value for its own
 gripper, not a measurement of the Pika Gripper.

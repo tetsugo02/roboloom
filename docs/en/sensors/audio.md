@@ -1,6 +1,9 @@
 # Audio
 
-Audio is an optional sensor shared by robots. Physical microphones are unverified.
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> Checked only with the mock (which returns a fixed array) and tests; not with a real microphone.
+
+Audio is an optional sensor shared by robots.
 Install sounddevice and librosa with `uv pip install 'roboloom[audio]'`.
 Specify an available PortAudio input device name.
 

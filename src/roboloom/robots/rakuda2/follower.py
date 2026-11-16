@@ -8,10 +8,10 @@ from pathlib import Path
 import yaml
 
 from ...control.device import law_class
-from ...core.checks import identity
+from ...core.checks import identity, unknown_keys
 from ...core.resources import resolve
 from ...kinematics.spec import KinematicSpec
-from ..base import Follower, JointBus, SafetyTraits
+from ..base import FOLLOWER_KEYS, Follower, JointBus, SafetyTraits
 from .spec import (
     ARM_BASE,
     ARM_TIP,
@@ -29,6 +29,15 @@ from .spec import (
 
 class RakudaFollower(Follower):
     model = "rakuda2"
+    keys = (
+        *FOLLOWER_KEYS,
+        "control",
+        "bus_watchdog_ms",
+        "port",
+        "motor_ids",
+        "registers",
+        "kinematics",
+    )
     effort_signal = ("currents_mA", "mA")
     PARTS = PARTS
 
@@ -37,6 +46,8 @@ class RakudaFollower(Follower):
         check_motor_ids(cfg, name)
         expected_registers(cfg, name)
         self.port = identity(cfg.get("port"), f"{name}.port")
+        # parts without an arm's kinematics would be ignored in silence
+        unknown_keys(cfg.get("kinematics"), tuple(ARM_TIP), f"{name}.kinematics")
 
     def declared_traits(self) -> SafetyTraits:
         # The arms and head fall without torque. Position-mode joints keep their last goal

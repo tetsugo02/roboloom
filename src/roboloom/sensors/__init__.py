@@ -18,4 +18,5 @@ SENSORS: Registry[Source] = Registry(
         "mel_mono": "roboloom.sensors.audio.microphone:MelMono",
         "pcm_mono": "roboloom.sensors.audio.microphone:SoundDeviceMic",
     },
+    base=Source,
 )

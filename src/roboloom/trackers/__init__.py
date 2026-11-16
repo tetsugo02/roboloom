@@ -15,4 +15,5 @@ TRACKERS: Registry[Tracker] = Registry(
     {
         "libsurvive": "roboloom.trackers.libsurvive:Libsurvive",
     },
+    base=Tracker,
 )

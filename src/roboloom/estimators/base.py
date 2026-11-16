@@ -38,6 +38,17 @@ class Estimator(ABC):
     kind: ClassVar[str] = "effort_estimate"
     # follower_state fields `residual` reads besides the follower's effort signal
     needs: ClassVar[tuple[str, ...]] = ()
+    # The keys of its YAML this class reads (others are refused when the configuration
+    # is loaded); a subclass that does not declare `keys` itself is not checked.
+    keys: ClassVar[tuple[str, ...]] = (
+        "type",
+        "follower",
+        "joints",
+        "smoothing_alpha",
+        "contact_on",
+        "contact_off",
+        "record",
+    )
 
     def __init__(self, name: str, cfg: dict):
         self.name, self.cfg = name, cfg
@@ -148,6 +159,8 @@ class Estimator(ABC):
 
 class NoEstimator(Estimator):
     """Never estimates: the feedback path runs end to end with the gate closed."""
+
+    keys = Estimator.keys
 
     def residual(self, state: dict) -> list[float] | None:
         return None

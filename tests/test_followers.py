@@ -532,3 +532,173 @@ def test_a_policy_stops_its_episode_when_a_follower_goes_silent(tmp_path, monkey
 
     runtime._policy(Node(), policy)
     assert stops == [True]
+
+
+def test_a_policy_node_warms_followers_and_waits_for_post_warmup_state(
+    tmp_path, monkeypatch
+):
+    import threading
+
+    from roboloom.runtime import node as runtime
+
+    cfg = parse_config(policy_tree(tmp_path))
+    policy = cfg.controllers["policy"]
+    clock = {"ns": 1_000_000_000}
+    monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: clock["ns"])
+
+    def state(name: str, at_ns: int) -> Envelope:
+        payload = {"positions": [1000.0] * 17, "target": [1000.0] * 17, "mode": "HOLD"}
+        return Envelope("follower_state", name, "boot", 0, at_ns, at_ns, payload)
+
+    sent_commands: list[str] = []
+    statuses: list[dict] = []
+
+    class Node:
+        def send_output(self, output, value):
+            if output == "status":
+                statuses.append(Envelope.decode(value).payload["fields"])
+            else:
+                sent_commands.append(output)
+
+    first_seen = threading.Event()
+    load_finished = threading.Event()
+    step = {"n": 0}
+    events = iter(
+        [
+            ("state_follower", state("follower", 1_000_000_000)),  # sent during load()
+            (
+                "state_left",
+                state("left", 1_100_000_000),
+            ),  # sent in main loop -> warming
+            # follower ticks back only 10 ms after warm_sent (1_100 ms): still warming
+            ("state_follower", state("follower", 1_110_000_000)),
+            # both tick back past WARMUP_SETTLE_NS -> ready
+            (
+                "state_follower",
+                state("follower", 1_100_000_000 + runtime.WARMUP_SETTLE_NS),
+            ),
+            ("state_left", state("left", 1_200_000_000 + runtime.WARMUP_SETTLE_NS)),
+            (
+                "session",
+                Envelope("session", "session", "b", 0, 0, 0, {"command": "quit"}),
+            ),
+        ]
+    )
+
+    def event(node):
+        if step["n"] == 1:
+            first_seen.set()
+            assert load_finished.wait(5)
+        step["n"] += 1
+        clock["ns"] += 100_000_000
+        return next(events)
+
+    def load(*_args):
+        assert first_seen.wait(5)
+        policy.state = "ready"
+        load_finished.set()
+
+    monkeypatch.setattr(runtime, "_event", event)
+    monkeypatch.setattr(policy, "load", load)
+    runtime._policy(Node(), policy)
+
+    assert sent_commands == ["command_follower", "command_left"]
+    assert statuses[0]["state"] == "warming"
+    assert "left" in statuses[0]["waiting_state"]
+    assert statuses[-1]["state"] == "ready"
+    assert "waiting_state" not in statuses[-1]
+
+
+def test_a_slow_sync_inference_drains_events_and_waits_before_declaring_silent(
+    tmp_path, monkeypatch
+):
+    from roboloom.runtime import node as runtime
+
+    cfg = parse_config(policy_tree(tmp_path))
+    policy = cfg.controllers["policy"]
+    policy.cfg["follower_timeout_ms"] = 50
+    clock = {"ns": 1_000_000_000}
+    monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: clock["ns"])
+
+    def raw_state(name: str) -> dict:
+        t = clock["ns"]
+        payload = {"positions": [1000.0] * 17, "target": [1000.0] * 17, "mode": "HOLD"}
+        return {
+            "type": "INPUT",
+            "id": f"state_{name}",
+            "value": Envelope(
+                "follower_state", name, "boot", 0, t, t, payload
+            ).encode(),
+        }
+
+    def raw_tick() -> dict:
+        return {"type": "INPUT", "id": "tick", "value": b""}
+
+    resets: list[bool] = []
+    ticks: list[int] = []
+    statuses: list[dict] = []
+
+    def slow_tick() -> dict:
+        ticks.append(clock["ns"])
+        # Blocks 80 ms (> follower_timeout_ms 50 ms) in synchronous infer()
+        clock["ns"] += 80_000_000
+        return {}
+
+    monkeypatch.setattr(policy, "load", lambda *a: setattr(policy, "state", "ready"))
+    monkeypatch.setattr(policy, "tick", slow_tick)
+    monkeypatch.setattr(policy, "reset", lambda: resets.append(True))
+    policy.running = True
+
+    class Node:
+        def __init__(self) -> None:
+            self.step = 0
+            self.drained: list[dict] = []
+
+        def next(self, timeout=0.1):
+            self.step += 1
+            if self.step == 1:
+                return raw_state("follower")
+            if self.step == 2:
+                return raw_state("left")
+            if self.step == 3:
+                return raw_tick()  # triggers slow_tick #1 (+80 ms)
+            if self.step == 4:
+                # Backlog while slow_tick #1 blocked: extra ticks + fresh states
+                self.drained = [
+                    raw_tick(),
+                    raw_tick(),
+                    raw_state("follower"),
+                    raw_state("left"),
+                    raw_tick(),
+                ]
+                return raw_tick()  # drained states arrive before tick #2 (+80 ms)
+            if self.step == 5:
+                # 10 ms after slow_tick #2, state is 90 ms old (> 50 ms), but only
+                # 10 ms elapsed since slow_tick #2 ended -> hold, do not reset yet
+                clock["ns"] += 10_000_000
+                return raw_tick()
+            if self.step == 6:
+                # Still silent past follower_timeout_ms (50 ms) and status period -> reset
+                clock["ns"] += 100_000_000
+                return raw_tick()
+            return {
+                "type": "INPUT",
+                "id": "session",
+                "value": Envelope(
+                    "session", "session", "b", 0, 0, 0, {"command": "quit"}
+                ).encode(),
+            }
+
+        def drain(self):
+            out, self.drained = self.drained, []
+            return out
+
+        def send_output(self, output, value):
+            if output == "status":
+                statuses.append(Envelope.decode(value).payload["fields"])
+
+    runtime._policy(Node(), policy)
+    # Backlog collapsed to 1 tick after slow_tick #1; step 5 held without calling tick()
+    assert len(ticks) == 2
+    assert len(resets) == 1
+    assert statuses[-1]["stopped_by"] == "follower silent"

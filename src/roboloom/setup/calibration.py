@@ -107,11 +107,21 @@ def calibrate_joints(
 
 @dataclass
 class Travel:
+    """Each joint's lowest and highest raw count seen by `measure_travel`, saved at
+    `path`.
+
+    Attributes:
+        port: The arm's bus.
+        joints: Joint -> (lowest, highest) raw count seen.
+        path: Where the travel was saved.
+    """
+
     port: str
     joints: dict[str, tuple[int, int]]  # raw counts, lowest and highest seen
     path: Path
 
     def lines(self) -> list[str]:
+        """The result as the CLI prints it, one line per item."""
         return [
             f"{j}: {a} .. {b} ({b - a} counts)" for j, (a, b) in self.joints.items()
         ] + [f"saved {self.path}"]

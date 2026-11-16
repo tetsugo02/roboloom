@@ -1,5 +1,8 @@
 # Leader
 
+!!! note "Status: hardware-verified"
+    <span class="status status--verified">Hardware-verified</span> Collection with the Rakuda2 leader (standard and gravity-compensated) is checked on hardware. Locking joints (`law: position`), cross-joint compensation (`couplings`) and their combinations are <span class="status status--mock">Mock only</span>. Force feedback is <span class="status status--mock">Mock only</span> (paused).
+
 For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_mini`, the Rakuda-mini arm) reads joint positions, and the `joint` node in `controllers` converts them into follower targets. The leader has the follower's joint names and unit, so each follower joint follows the leader joint of the same name; nothing else has to be written.
 
 ```yaml
@@ -19,7 +22,7 @@ These are the values from the distributed template. Set them after checking the 
 | Key | Meaning |
 | --- | --- |
 | `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
-| `joints` | Optional. Left out: each follower joint follows the input joint of the same name (the input must have every follower joint). Written: one `{leader, follower, sign, offset}` per follower joint, in the follower's order, for other names, flipped directions (`sign: -1`) or offsets (target = leader × sign + offset) |
+| `joints` | Optional. Left out: each follower joint follows the input joint of the same name (the input must have every follower joint). Written: one `{leader, follower, sign, offset}` per follower joint, in the follower's order, for other names, flipped directions (`sign: -1`) or offsets (target = leader × sign + offset). A leader whose gear ratio or unit differs from the follower's (a GELLO-style leader read in counts for an arm in rad) adds `scale` (a positive number) to every joint: target = sign × scale × leader + offset. With a `scale` on every joint the input's unit may differ from the follower's (`offset`, `max_speed` and `alignment_tolerance` are in the follower's unit). Not together with force feedback (`feedback`) |
 | `unit` | Optional. The input's and the follower's unit must be the same (Rakuda2: `dynamixel_count`); when written it must equal both |
 | `max_speed` | Upper limit on the rate of change of the target (follower unit/s; counts/s on Rakuda2) |
 | `followers` | The followers it drives; a `joint` controller drives exactly one |
@@ -31,11 +34,17 @@ When `aligning` appears on screen, align the leader with the follower while watc
 
 The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `InProcessSession.from_yaml()` does not accept a leader that executes control laws.
 
-The concrete setup is in [Rakuda2 Quick start](../quick-start/rakuda2.md).
+The concrete setup is in [Rakuda2 Quick start](../tutorials/rakuda2-setup.md).
+
+## Supported robots { #supported-robots }
+
+| Robot | Input | Status | Example |
+| --- | --- | --- | --- |
+| Rakuda2 | Rakuda-mini (`rakuda_mini`) | <span class="status status--verified">Hardware-verified</span> | [Rakuda2 controllers](../robots/rakuda2/controllers.md#leader) |
 
 ## Lock leader joints
 
-In `control` of the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml`, move the joints to lock into a `law: position` group. For example, replace the template's `body` group with these two groups to leave the torso free and lock neck yaw and pitch. Keep the arm and trigger groups. In older configurations where the torso and head belong to `hand`, remove these three joints from `hand`. Every joint must belong to exactly one group.
+In a file built on the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml` ([`extends`](../reference/configuration/index.md#extends)), or in `control` of that file itself, move the joints to lock into a `law: position` group. For example, replace the template's `body` group with these two groups to leave the torso free and lock neck yaw and pitch. Keep the arm and trigger groups. In older configurations where the torso and head belong to `hand`, remove these three joints from `hand`. Every joint must belong to exactly one group.
 
 ```yaml
 control:
@@ -147,4 +156,4 @@ When a current-mode group (`gravity_comp`, `impedance`) has `feedback:`, its joi
     kd: 0.0
 ```
 
-The controller's `feedback.gain` selects the joints that receive it. The feedback is added to the output of gravity compensation and the rest, then clipped at `max_current_mA`; the gate opens and closes over `ramp_s`. Estop, release and quit set it to 0 at once. For the keys and the safety mechanisms, see "Force feedback" in [Configuration](../reference/configuration.md); for the Rakuda2 combination, see "Bilateral" in [Rakuda2](../robots/rakuda2.md).
+The controller's `feedback.gain` selects the joints that receive it. The feedback is added to the output of gravity compensation and the rest, then clipped at `max_current_mA`; the gate opens and closes over `ramp_s`. Estop, release and quit set it to 0 at once. For the keys and the safety mechanisms, see "Force feedback" in [Configuration](../reference/configuration/index.md); for the Rakuda2 combination, see "Bilateral" in [Rakuda2](../robots/rakuda2/index.md).

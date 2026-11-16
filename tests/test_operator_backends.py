@@ -19,6 +19,7 @@ from roboloom.config import load_config, parse_config
 from roboloom.control.laws import GravityComp
 from roboloom.control.tuning import TuningSave, TuningSession
 from roboloom.errors import Cancelled
+from roboloom.recording.episodes import check_label
 from roboloom.runtime.session import EpisodeResult, Session, SessionError
 from roboloom.ui.backend import RecordingPlan, SessionBackend
 from roboloom.ui.client import SessionClient
@@ -144,11 +145,18 @@ class FakeSession(Session):
         self._check_cancelled()
         return EpisodeResult(self.started[-1], False, 10)
 
-    def save(self, timeout: float = 300) -> EpisodeResult:
+    def save(
+        self,
+        timeout: float = 300,
+        *,
+        label: str | None = None,
+        note: str | None = None,
+    ) -> EpisodeResult:
+        label = check_label(label)  # as Session.save: before anything is sent
         while not self.save_gate.wait(0.01):
             self._check_cancelled()
         self.saved += 1
-        return EpisodeResult(self.started[-1], True, 10, self.saved - 1)
+        return EpisodeResult(self.started[-1], True, 10, self.saved - 1, label=label)
 
     def discard(self) -> None:
         self._check_cancelled()
@@ -187,6 +195,43 @@ def test_start_refusal_does_not_disable_retry_and_close_once(tmp_path):
         backend.shutdown()
         backend.shutdown()
     assert session.closed == [True]
+
+
+def test_a_typed_verdict_is_saved_with_the_episode(tmp_path):
+    session = FakeSession(tmp_path)
+    backend = SessionBackend(lambda: session)
+    notices = Notices()
+    backend.start(notices)
+
+    def stopped(n: Notice) -> bool:
+        return isinstance(n, Snapshot) and n.phase.startswith("stopped")
+
+    try:
+        notices.wait(ready)
+        backend.submit("start task")
+        notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == "recording")
+        backend.submit("stop")
+        notices.wait(stopped)
+        backend.submit("save succes")  # mistyped: refused, the episode stays stopped
+        notices.wait(lambda n: isinstance(n, LogEvent) and "label must be" in n.text)
+        assert session.saved == 0
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot)
+                and any(o.command == "save" and o.enabled for o in n.operations)
+            )
+        )
+        backend.submit("save failure")
+        notices.wait(
+            lambda n: (
+                isinstance(n, LogEvent)
+                and "saved episode 0" in n.text
+                and "labelled failure" in n.text
+            )
+        )
+        assert session.saved == 1
+    finally:
+        backend.shutdown()
 
 
 @pytest.mark.parametrize("operation", ["save", "home"])
@@ -256,6 +301,25 @@ def test_timed_recording_progress_and_policy_save_choice(tmp_path, save: bool):
         assert session.saved == (2 if save else 0)
         assert session.discarded == (0 if save else 2)
         assert session.started == ["task", "task"]
+        assert any(
+            isinstance(n, Snapshot) and n.phase.startswith("episode 2/2  [")
+            for n in notices.items
+        )
+        # the plan is a goal, not a limit: Start is still there and runs another
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot)
+                and n.phase == "complete"
+                and any(o.command == "start" and o.enabled for o in n.operations)
+            )
+        )
+        backend.submit("start")
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot) and n.phase == "ready: episode 4 (2 planned)"
+            )
+        )
+        assert session.started == ["task"] * 3
     finally:
         backend.shutdown()
 
@@ -505,3 +569,33 @@ def test_tuning_close_releases_position_groups_before_closing_the_bus(tmp_path):
     bus.close = close_bus
     session.close()
     assert torque_at_close == [[False, False, False]]
+
+
+def test_an_episode_of_the_plan_ends_on_the_policys_steps(tmp_path):
+    session = FakeSession(tmp_path)
+    usual, since = session.status, [time.monotonic()]
+
+    def status() -> dict:  # the policy executes ten actions a second
+        step = int((time.monotonic() - since[0]) * 10)
+        return {**usual(), "policy": {"fields": {"step": step}}}
+
+    session.status = status  # type: ignore[method-assign]
+    plan = RecordingPlan("task", 30.0, 1, steps=10)  # 30 s is only the limit
+    backend = SessionBackend(lambda: session, mode="infer", recording=plan)
+    notices = Notices()
+    backend.start(notices)
+    try:
+        notices.wait(ready)
+        began = since[0] = time.monotonic()
+        backend.submit("start")
+        notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == "complete")
+        assert time.monotonic() - began < 10
+        assert any(
+            isinstance(n, Snapshot) and "  step " in n.phase and "/10  [" in n.phase
+            for n in notices.items
+        )
+        assert not any(
+            isinstance(n, LogEvent) and "ended by time" in n.text for n in notices.items
+        )
+    finally:
+        backend.shutdown()

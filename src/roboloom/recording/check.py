@@ -13,11 +13,24 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import journal, manifest
+from . import episodes, journal, manifest
 
 
 @dataclass
 class DatasetReport:
+    """What `check_dataset` found.
+
+    Attributes:
+        root: The dataset directory.
+        episodes: The episodes the dataset holds.
+        frames: The rows it holds.
+        summary: Lines describing the dataset (counts, verdicts).
+        problems: What makes the dataset wrong as it is (unreadable files, counts that
+            disagree, a video shorter or longer than its episode).
+        notes: What a training run should know (rows whose action or observation is
+            not valid).
+    """
+
     root: Path
     episodes: int = 0
     frames: int = 0
@@ -27,9 +40,11 @@ class DatasetReport:
 
     @property
     def ok(self) -> bool:
+        """True when there are no problems (notes do not count)."""
         return not self.problems
 
     def describe(self) -> str:
+        """The report as `roboloom check-dataset` prints it."""
         lines = [f"dataset: {self.root}", *self.summary]
         lines.append("problems:" if self.problems else "problems: none")
         lines += [f"  {text}" for text in self.problems]
@@ -181,6 +196,9 @@ def check_dataset(root: str | Path, recover: bool = False) -> DatasetReport:
         f"files: {len(data_files)} data, {len(files)} episode metadata, "
         f"{len(video_files)} video"
     )
+    labels = episodes.summary(root, report.episodes)
+    if labels is not None:  # the verdicts of an evaluation (recording.episodes)
+        report.summary.append(labels)
 
     # -- what training should know ------------------------------------------------
     for column, count in sorted(invalid.items()):

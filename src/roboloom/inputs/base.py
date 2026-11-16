@@ -29,6 +29,8 @@ from ..robots.base import JointBus
 class InputDevice(Source):
     """A source that drives a controller rather than only being recorded."""
 
+    keys: ClassVar[tuple[str, ...]] = ("type", "poll_hz")
+
     def rate_hz(self, dataset_fps: float) -> float | None:
         poll = self.cfg.get("poll_hz")
         return None if poll is None else positive(poll, f"{self.name}.poll_hz")
@@ -187,6 +189,14 @@ class JointInput(InputDevice):
     """
 
     kind = "joint_intent"
+    keys: ClassVar[tuple[str, ...]] = (
+        "type",
+        "poll_hz",
+        "joints",
+        "unit",
+        "control",
+        "bus_watchdog_ms",
+    )
     # What its joints do when torque goes off (core.traits); an actuated leader goes limp
     # when the session ends, so the operator is told what to support. Every model declares
     # it; a leader nobody described gets the worst case.

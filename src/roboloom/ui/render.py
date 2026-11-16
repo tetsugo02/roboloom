@@ -115,6 +115,10 @@ def follower(f: dict) -> tuple[str, Text]:
             if f.get("rejected_2s")
             else None,
             _gc(f),
+            # a bus that loses packets: check the cable and the adapter
+            Text(f"bus reads repeated: {f['bus_retries']}", style=WATCH)
+            if f.get("bus_retries")
+            else None,
             _home(f) if f.get("home") else None,
             Text(f"last error: {f['error']}", style=BAD) if f.get("error") else None,
         ]
@@ -380,6 +384,8 @@ def describe_report(report: dict) -> Text:
         text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {p99:.1f} ms max {worst:.1f} ms"
         if missing:
             text += f"  missing % {missing}"
+        if report.get("label"):
+            text += f"  labelled {report['label']}"
         return Text(text, style="green")
     if report.get("ok"):
         command = report.get("command", "")
