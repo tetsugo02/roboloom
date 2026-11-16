@@ -15,12 +15,12 @@ uv run roboloom --help
 
 既存のプロジェクトでは，そのルートで `uv add` から実行します．先に `pyproject.toml` の `project.requires-python` を `">=3.12,<3.15"` の範囲内に設定してください．Pythonの環境を選ぶだけでは，uvが解決するPythonの対応範囲は限定されません．
 
-Python 3.14 で `record` を使うときは，自分の `pyproject.toml` に次も書きます．LeRobot 0.6.1 は NumPy を `<2.3` に制限していますが（opencv-python-headless 4.12 から引き継いだ上限で，4.13 では外れています），NumPy 2.3 未満には Python 3.14 用の wheel がありません．uv の override は依存先のメタデータでは伝わらないため，roboloom の側では代わりに設定できません．LeRobot の方策の読み込み（`policy.lerobot`）と `lerobot-train` は，LeRobot の設定の解析に使う draccus が Python 3.14 に対応していないため，Python 3.12・3.13 で使います．自作の方策は 3.14 でも使えます．
+`record`・`policy`・`train` を使うときは，自分の `pyproject.toml` に次も書きます（Python 3.14 では必須，3.12・3.13 では NumPy 2.3 以上を使うために必要）．LeRobot 0.7.0 は NumPy を `<2.3` に制限していますが（opencv-python-headless 4.12 から引き継いだ上限で，4.13 では外れています），NumPy 2.3 未満には Python 3.14 用の wheel がありません．uv の override は依存先のメタデータでは伝わらないため，roboloom の側では代わりに設定できません．LeRobot の方策の読み込み（`policy.lerobot`）と `lerobot-train` は，LeRobot の設定の解析に使う draccus が Python 3.14 に対応していないため，Python 3.12・3.13 で使います．自作の方策は 3.14 でも使えます．
 
 ```toml
 [tool.uv]
 override-dependencies = [
-    "numpy>=2.0,<2.3; python_version < '3.14'",
+    "numpy>=2.0,<3; python_version < '3.14'",
     "numpy>=2.3.3,<3; python_version >= '3.14'",
 ]
 ```

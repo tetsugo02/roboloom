@@ -15,7 +15,7 @@ metadata:
 
 roboloom is a Python package (Python 3.12–3.14, `uv`) that runs a robot's teleoperation,
 sensors, recorder and policy as a **dora-rs dataflow** and saves episodes as
-**LeRobotDataset 0.6.1**. Everything the CLI does is also a Python function.
+**LeRobotDataset 0.7.0**. Everything the CLI does is also a Python function.
 
 Public docs: <https://tetsugo02.github.io/roboloom/en/> (Japanese: `/ja/`).
 Choose robot extras (`rakuda2`, or `piper,pika`) separately from shared features
@@ -101,7 +101,7 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika 
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit  # Rakuda2 collection + sensors
 ```
 
-`project.requires-python` must lie within `">=3.12,<3.15"`; on 3.14 `record` needs a NumPy override and LeRobot policies/training need 3.12 or 3.13 (installation.md). Other extras: `record`, `hardware`, `digit`, `ik`,
+`project.requires-python` must lie within `">=3.12,<3.15"`; the LeRobot extras take a NumPy override (required on 3.14), and LeRobot policies/training need 3.12 or 3.13 (installation.md). Other extras: `record`, `hardware`, `digit`, `ik`,
 `policy`, `train`. Run everything from the project root with `uv run`. Details:
 [installation.md](references/installation.md).
 
