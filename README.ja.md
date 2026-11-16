@@ -1,0 +1,128 @@
+# roboloom
+
+[English](README.md) | **日本語** · ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) | [English](https://tetsugo02.github.io/roboloom/en/)
+
+[![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/tests.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![Docs](https://github.com/tetsugo02/roboloom/actions/workflows/docs.yml/badge.svg)](https://github.com/tetsugo02.github.io/roboloom/)
+[![Python 3.12](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.12.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![Python 3.13](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.13.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![Python 3.14](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.14.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+
+[dora-rs](https://github.com/dora-rs/dora) 上で遠隔操作・マルチモーダルデータ収集・方策推論を行い，**LeRobotDataset (0.7.0)** へ直接保存する Python パッケージです．
+
+## 主な特徴
+
+- **プロセス分離されたデータフロー**: 入力・controller・フォロワ・センサー・方策・recorder を独立した dora-rs (`1.0.1`) ノードとして実行します．
+- **LeRobotDataset 0.7.0**: 関節状態・行動・RGB カメラ・DIGIT 触覚・音声を同期して記録し，そのまま `lerobot-train` で学習できます．
+- **実機安全機構と重力補償**: 関節ごとの速度制限・ジャンプ拒否・EEPROM 照合・ウォッチドッグ・leader 重力補償を備えます．
+- **対話 UI・CLI・Python API**: Textual のランチャー／操作画面，非対話 CLI（`--plain`），`Session` / `InProcessSession` Python API を提供します．
+- **高い拡張性**: roboloom 本体を変更せず，`module:Class` 指定で独自のロボット・入力・センサー・controller・方策を追加できます．
+
+```mermaid
+flowchart LR
+  S["Session<br/>操作画面・CLI・Python"]
+  I["入力<br/>leader・Pika Sense"] --> C["controller"]
+  P["方策"] --> C
+  C --> F["フォロワ<br/>Rakuda2・PiPER"]
+  X["センサー<br/>RealSense・DIGIT"] --> R["recorder"]
+  F --> R
+  I --> R
+  R --> D[("LeRobotDataset")]
+  S -. "start・stop・save" .-> C
+  S -.-> R
+```
+
+## 対応機器と検証状況
+
+| 機能・機体 | 状態 | 備考 |
+| --- | --- | --- |
+| **Rakuda2**（leader 遠隔操作，重力補償，RealSense，DIGIT，自作方策と介入） | 実機検証済み | 実機モードが既定 |
+| **LeRobot 方策**（`policy.lerobot`，`lerobot-train`），再生，`serve-policy`，非同期推論 | 模擬のみ | 模擬データフローで検証．`policy` / `train` は Python 3.12〜3.13 |
+| **PiPER**，**Pika**（Gripper，Sense，手首カメラ），Web カメラ，音声 | 開発中 | 実機未検証．`pika` 実機トラッカーは Linux x86_64 / Python 3.12 専用 |
+
+詳細は [対応表](https://tetsugo02.github.io/roboloom/ja/get-started/support-matrix/) および [状態ラベル](https://tetsugo02.github.io/roboloom/ja/reference/status-labels/) を参照してください．実機で動かす前に必ず各機体の関節範囲・EEPROM・停止動作を確認し，模擬設定の安全値を実機に流用しないでください．
+
+## インストール
+
+**Python 3.12〜3.14**，[uv](https://docs.astral.sh/uv/)，Git が必要です．自分のプロジェクトに依存として追加します．
+
+```bash
+uv init --python '>=3.12,<3.15' my-robot
+cd my-robot
+uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
+```
+
+| Extra | 用途 |
+| --- | --- |
+| *(基本)* | dora 実行基盤，設定検証，CLI，模擬デバイス |
+| `rakuda2` | Rakuda2 フォロワ・Rakuda-mini leader 用の Dynamixel SDK |
+| `record` | LeRobotDataset への保存（`lerobot[dataset]==0.7.0`） |
+| `hardware` | RealSense（`pyrealsense2`）および音声入力（`sounddevice`） |
+| `digit` | DIGIT 触覚センサー |
+| `piper`, `pika` | PiPER SDK，Pinocchio IK，Pika トラッカー／手首カメラ *(開発中)* |
+| `policy`, `train` | LeRobot 方策チェックポイント読み込みと `lerobot-train` *(Python 3.12〜3.13)* |
+
+`record`・`policy`・`train` を使う場合は，プロジェクトの `pyproject.toml` に次の NumPy override を追記してください（Python 3.14 では必須，3.12〜3.13 では NumPy 2.3 以上を許可します）：
+
+```toml
+[tool.uv]
+override-dependencies = [
+    "numpy>=2.0,<3; python_version < '3.14'",
+    "numpy>=2.3.3,<3; python_version >= '3.14'",
+]
+```
+
+コーディングエージェント向けの [Agent Skill](https://agentskills.io) も同梱しています（`uv run roboloom skills install`）．詳細は [Installation](https://tetsugo02.github.io/roboloom/ja/get-started/installation/) を参照してください．
+
+## クイックスタート
+
+### CLI
+
+```bash
+uv run roboloom init rakuda2          # .roboloom/rakuda2/ を生成
+uv run roboloom validate --mock       # 実機を開かず設定を検査
+uv run roboloom run --mock            # 対話操作画面を起動
+```
+
+一定時間のエピソードを非対話で記録する場合：
+
+```bash
+uv run roboloom record --mock --task "handover" --seconds 10
+```
+
+リポジトリを clone して動かす手順は [装置なしで一周する](https://tetsugo02.github.io/roboloom/ja/tutorials/first-run-mock/)，実機での準備は [Rakuda2：機体設定と読み取り確認](https://tetsugo02.github.io/roboloom/ja/tutorials/rakuda2-setup/) を参照してください．
+
+### Python API
+
+```python
+from roboloom import Session
+
+with Session.launch("rakuda2", options=["gravity"], mock=True) as s:
+    s.wait_ready()
+    s.record("pick up the cup", seconds=20)
+```
+
+セットアップ・計測用 API（`roboloom.setup`）や 1 プロセス実行の `InProcessSession` については [Python API リファレンス](https://tetsugo02.github.io/roboloom/ja/reference/python-api/) を参照してください．
+
+## ドキュメント
+
+日英バイリンガルのドキュメントを GitHub Pages で公開しています（[日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)）：
+
+- [Get started](https://tetsugo02.github.io/roboloom/ja/get-started/installation/) — インストール，[しくみ](https://tetsugo02.github.io/roboloom/ja/get-started/concepts/)，[対応表](https://tetsugo02.github.io/roboloom/ja/get-started/support-matrix/)
+- [Tutorials](https://tetsugo02.github.io/roboloom/ja/tutorials/) — 模擬での動作確認，Rakuda2 セットアップ・重力補償・収集・学習・独自機体／方策の追加
+- [Robots](https://tetsugo02.github.io/roboloom/ja/robots/) · [Controllers](https://tetsugo02.github.io/roboloom/ja/controllers/) · [Sensors](https://tetsugo02.github.io/roboloom/ja/sensors/)
+- [Policy](https://tetsugo02.github.io/roboloom/ja/policy/) · [Data](https://tetsugo02.github.io/roboloom/ja/data/format/) — 方策の実行・介入・評価とデータ形式
+- [Reference](https://tetsugo02.github.io/roboloom/ja/reference/configuration/) — 設定キー，[CLI](https://tetsugo02.github.io/roboloom/ja/reference/cli/)，[Python API](https://tetsugo02.github.io/roboloom/ja/reference/python-api/)，[操作画面](https://tetsugo02.github.io/roboloom/ja/reference/operator-screen/)
+
+## 開発
+
+```bash
+git clone https://github.com/tetsugo02/roboloom.git
+cd roboloom
+uv sync --extra rakuda2 --extra test --group dev --group docs
+uv run ruff check .
+uv run mypy src
+uv run pytest -m "not e2e"
+```
+
+新しい機体の追加方法，E2E テストの実行，ドキュメントのビルド手順は [Contribution](https://tetsugo02.github.io/roboloom/ja/contribution/) を参照してください．
