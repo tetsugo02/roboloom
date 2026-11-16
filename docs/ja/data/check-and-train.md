@@ -44,7 +44,7 @@ uv run lerobot-train \
   --dataset.root=.roboloom/rakuda2/datasets/rakuda2 \
   --dataset.episodes='[0, 1, 3, 4]' \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
-  --wandb.enable=false \
+  --trackio.enable=false \
   --output_dir=outputs/train/act_rakuda2
 ```
 

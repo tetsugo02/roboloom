@@ -54,7 +54,7 @@ uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \
   --dataset.root=.roboloom/piper-mock/datasets/piper-mock \
   --policy.type=act --policy.device=cpu --policy.push_to_hub=false \
-  --wandb.enable=false --steps=200 --batch_size=8 \
+  --trackio.enable=false --steps=200 --batch_size=8 \
   --output_dir=outputs/train/act_piper_mock
 ```
 

@@ -25,7 +25,7 @@ action_horizon: 1     # with mode: step
 | `rename` | Maps the checkpoint's feature names to this configuration's. Example: `{observation.images.wrist: observation.images.left_wrist}` |
 | `revision` | The Hub revision (optional) |
 
-- Loading follows LeRobot 0.6.1's rollout. The config, the weights and the saved pre- and post-processors (with the normalization statistics) all come from the checkpoint.
+- Loading follows LeRobot 0.7.0's rollout. The config, the weights and the saved pre- and post-processors (with the normalization statistics) all come from the checkpoint.
 - On loading, the checkpoint's inputs and outputs are checked against this configuration's observation and followers. A missing observation or a different size is refused, naming it.
   - The inputs checked are the ones LeRobot policies read (`observation.state`, `observation.images.*`, `observation.environment_state`).
   - LeRobot's training lists every `observation.*` of the dataset as an input (`observation.meta.*`, `observation.effort`, a Pika Sense's `observation.left_sense` and so on). LeRobot policies do not read them, so the inference configuration need not have them.
@@ -39,14 +39,14 @@ action_horizon: 1     # with mode: step
 A dataset roboloom recorded (LeRobotDataset v3.0) trains with `lerobot-train` as it is.
 
 ```bash
-# training needs lerobot[training] (accelerate, wandb)
+# training needs lerobot[training] (accelerate, trackio)
 uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train   # in your own project
 uv sync --extra policy --extra train                                                # in a checkout of the roboloom repository
 uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \
   --dataset.root=.roboloom/piper-mock/datasets/piper-mock \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
-  --wandb.enable=false \
+  --trackio.enable=false \
   --output_dir=outputs/train/act_piper_mock
 ```
 
