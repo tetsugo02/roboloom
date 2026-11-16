@@ -108,8 +108,8 @@ roboloomはモデルの形を決めません．方策には，記録と同じ観
 uv run python examples/policies/chunk_mlp.py train \
     --dataset .roboloom/rakuda2/datasets/rakuda2 --out outputs/chunk_mlp.pt \
     --history 4 --horizon 8 --stride 3 --exclude torso_yaw head_yaw head_pitch
-PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
-    --policy chunk_mlp:load --policy-kwargs '{"checkpoint": "outputs/chunk_mlp.pt"}'
+PYTHONPATH=$PWD/examples/policies uv run roboloom infer rakuda2 --seconds 20 \
+    --policy chunk_mlp:load --policy-kwargs "{\"checkpoint\": \"$PWD/outputs/chunk_mlp.pt\"}"
 ```
 
 15 fpsの記録で `--stride 3` なら，方策の周期は5 Hzです．`nodes/policy.yaml` を `rate_hz: 5` にします．学習でデータセットを読むとき，表の列（`observation.state`，`action`，`action.valid`，`episode_index`，`index`）は `LeRobotDataset(...).hf_dataset` にあります．画像は `dataset[i]` で1行ずつ復号します．`action.valid` が0の行の扱いは [欠損の扱い](../data/format.md#missing-data) にあります．

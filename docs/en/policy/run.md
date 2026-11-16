@@ -26,8 +26,11 @@ command_deadline_ms: 300
 
 ```bash
 uv run roboloom infer piper-mock --seconds 20 \
-  --policy roboloom.policy.lerobot:load --policy-kwargs '{"path": "outputs/act/pretrained_model"}'
+  --policy roboloom.policy.lerobot:load --policy-kwargs "{\"path\": \"$PWD/outputs/act/pretrained_model\"}"
 ```
+
+!!! note "Use absolute paths"
+    The dataflow starts from a temporary directory. Give checkpoint paths in `--policy-kwargs` or in the policy YAML's `kwargs`, and `PYTHONPATH`, as absolute paths (`$PWD/...` in the shell). A relative path is resolved from the temporary directory, not the project, and is not found.
 
 ## Rate and steps { #rate-and-steps }
 
@@ -72,11 +75,15 @@ def load(checkpoint: str) -> MyPolicy:
 ```
 
 ```python
+from pathlib import Path
+
+from roboloom import Session
+
 with Session.launch(
     "rakuda2",
     options=["policy"],  # joint state + RealSense by default; add "digit" if needed
     policy="my_lab.policies:load",
-    policy_kwargs={"checkpoint": "outputs/act/last"},
+    policy_kwargs={"checkpoint": str(Path("outputs/act/last").resolve())},
 ) as s:
     s.wait_ready()  # until the policy has finished loading
     for k in range(10):
@@ -124,7 +131,7 @@ The configuration is described in [Sensor selection](../reference/configuration/
     ```bash
     uv run roboloom infer piper-mock --seconds 20 --task "pick" \
       --policy roboloom.policy.lerobot:load \
-      --policy-kwargs '{"path": "outputs/train/act_piper_mock/checkpoints/last/pretrained_model"}'
+      --policy-kwargs "{\"path\": \"$PWD/outputs/train/act_piper_mock/checkpoints/last/pretrained_model\"}"
     ```
 
     With `--task`, the runs are saved as evaluation data.

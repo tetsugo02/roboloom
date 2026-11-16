@@ -10,7 +10,7 @@
 ```yaml
 factory: roboloom.policy.lerobot:load
 kwargs:
-  path: outputs/train/act_piper/checkpoints/last/pretrained_model  # HubのIDも可
+  path: /path/to/project/outputs/train/act_piper/checkpoints/last/pretrained_model  # HubのIDも可
   device: auto        # CUDAがあればcuda，なければcpu
   mode: step          # step か chunk
   rename: {}          # {チェックポイントの名前: roboloomの名前}

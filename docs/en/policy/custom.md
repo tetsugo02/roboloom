@@ -108,8 +108,8 @@ roboloom fixes no model form. It hands the policy the recorded observation, its 
 uv run python examples/policies/chunk_mlp.py train \
     --dataset .roboloom/rakuda2/datasets/rakuda2 --out outputs/chunk_mlp.pt \
     --history 4 --horizon 8 --stride 3 --exclude torso_yaw head_yaw head_pitch
-PYTHONPATH=examples/policies uv run roboloom infer rakuda2 --seconds 20 \
-    --policy chunk_mlp:load --policy-kwargs '{"checkpoint": "outputs/chunk_mlp.pt"}'
+PYTHONPATH=$PWD/examples/policies uv run roboloom infer rakuda2 --seconds 20 \
+    --policy chunk_mlp:load --policy-kwargs "{\"checkpoint\": \"$PWD/outputs/chunk_mlp.pt\"}"
 ```
 
 With `--stride 3` on a 15 fps recording the policy's rate is 5 Hz: set `rate_hz: 5` in `nodes/policy.yaml`. Reading the dataset for training: the table columns (`observation.state`, `action`, `action.valid`, `episode_index`, `index`) are in `LeRobotDataset(...).hf_dataset`; images are decoded per row with `dataset[i]`. Rows whose `action.valid` is 0 are described in [Missing data](../data/format.md#missing-data).

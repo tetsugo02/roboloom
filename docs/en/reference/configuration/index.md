@@ -236,7 +236,7 @@ dataset:                             # where the episodes go; left out: as the r
 nodes:                               # what the nodes are given on top of their files
   controllers.policy:                # a mapping: laid over the node's settings
     factory: my_lab.policies:load
-    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    kwargs: {checkpoint: /path/to/project/outputs/drawer/last.ckpt}
     rate_hz: 10
     action_horizon: 8
   inputs.leader: nodes/leader_fixed_head.yaml   # text: another node file of the robot's directory

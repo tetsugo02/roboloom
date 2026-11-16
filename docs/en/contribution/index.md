@@ -72,7 +72,7 @@ Fonts and colors are set in `docs/overrides/` (`main.html` and `assets/styleshee
 
 `.github/workflows/docs.yml` builds both languages in strict mode and publishes the entire `site/` directory to GitHub Pages. The published URLs are [Japanese](https://tetsugo02.github.io/roboloom/ja/) and [English](https://tetsugo02.github.io/roboloom/en/). The root URL redirects according to the browser language.
 
-- Push to `main`: changes to `docs/**`, `mkdocs*.yml`, `scripts/docs.py`, `pyproject.toml`, `uv.lock`, or the workflow itself trigger a build and deployment.
+- Push to `main`: changes to `docs/**`, `src/**` (the Python API pages are generated from docstrings), `mkdocs*.yml`, `scripts/docs.py`, `pyproject.toml`, `uv.lock`, or the workflow itself trigger a build and deployment.
 - Pull request targeting `main`: changes to the same files trigger build validation only.
 - Actions → `Documentation` → `Run workflow`: starts a manual build. Deployment runs only when `main` is selected.
 

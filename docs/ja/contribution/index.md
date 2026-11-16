@@ -72,7 +72,7 @@ uv run --group docs zensical serve -f mkdocs.en.yml  # 英語だけをライブ�
 
 `.github/workflows/docs.yml` が両言語をstrictでビルドし，`site/` 全体をGitHub Pagesへ公開します．公開先は [日本語](https://tetsugo02.github.io/roboloom/ja/) と [English](https://tetsugo02.github.io/roboloom/en/) です．ルートURLではブラウザの言語に応じて転送します．
 
-- `main` へのpush：`docs/**`，`mkdocs*.yml`，`scripts/docs.py`，`pyproject.toml`，`uv.lock`，workflow自身の変更でビルド・公開します．
+- `main` へのpush：`docs/**`，`src/**`（Python APIのページはdocstringから作る），`mkdocs*.yml`，`scripts/docs.py`，`pyproject.toml`，`uv.lock`，workflow自身の変更でビルド・公開します．
 - `main` 向けのpull request：同じファイル群の変更でビルドだけを検証します．
 - Actionsの `Documentation` → `Run workflow`：手動ビルドできます．公開するのは `main` を選んだ場合だけです．
 

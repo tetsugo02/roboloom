@@ -18,7 +18,8 @@
 | Rakuda2 の teleop 収集 | <span class="status status--verified">実機検証済み</span> |
 | 重力補償 | <span class="status status--verified">実機検証済み</span> |
 | DIGIT を含む収集 | <span class="status status--verified">実機検証済み</span> |
-| 方策の推論と介入（`policy`，`policy_teleop`） | <span class="status status--verified">実機検証済み</span> |
+| Rakuda2 での自作の方策による推論と介入（`policy`，`policy_teleop`） | <span class="status status--verified">実機検証済み</span> |
+| LeRobot のチェックポイント（`roboloom.policy.lerobot:load`），`lerobot-train` | <span class="status status--mock">模擬のみ</span>（PiPER＋Pika） |
 | RealSense | <span class="status status--verified">実機検証済み</span> |
 | 非同期の推論，記録の再生（replay），別プロセスの方策（`serve-policy`） | <span class="status status--mock">模擬のみ</span> |
 | PiPER，Pika（Gripper，Sense，手首カメラ），Webカメラ，音声 | <span class="status status--dev">開発中</span> |

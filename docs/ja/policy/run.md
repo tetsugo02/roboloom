@@ -26,8 +26,11 @@ command_deadline_ms: 300
 
 ```bash
 uv run roboloom infer piper-mock --seconds 20 \
-  --policy roboloom.policy.lerobot:load --policy-kwargs '{"path": "outputs/act/pretrained_model"}'
+  --policy roboloom.policy.lerobot:load --policy-kwargs "{\"path\": \"$PWD/outputs/act/pretrained_model\"}"
 ```
+
+!!! note "パスは絶対パスで"
+    dataflow は一時ディレクトリから起動します．`--policy-kwargs` や方策の YAML の `kwargs` に書くチェックポイントのパスと，`PYTHONPATH` は絶対パスにします（シェルでは `$PWD/...`）．相対パスはプロジェクトからではなく一時ディレクトリから解決され，見つかりません．
 
 ## 周期と手数 { #rate-and-steps }
 
@@ -72,11 +75,15 @@ def load(checkpoint: str) -> MyPolicy:
 ```
 
 ```python
+from pathlib import Path
+
+from roboloom import Session
+
 with Session.launch(
     "rakuda2",
     options=["policy"],  # 既定は関節状態＋RealSense．DIGITを使うなら "digit" も選ぶ
     policy="my_lab.policies:load",
-    policy_kwargs={"checkpoint": "outputs/act/last"},
+    policy_kwargs={"checkpoint": str(Path("outputs/act/last").resolve())},
 ) as s:
     s.wait_ready()  # 方策の読み込みが済むまで
     for k in range(10):
@@ -124,7 +131,7 @@ with Session.launch(
     ```bash
     uv run roboloom infer piper-mock --seconds 20 --task "pick" \
       --policy roboloom.policy.lerobot:load \
-      --policy-kwargs '{"path": "outputs/train/act_piper_mock/checkpoints/last/pretrained_model"}'
+      --policy-kwargs "{\"path\": \"$PWD/outputs/train/act_piper_mock/checkpoints/last/pretrained_model\"}"
     ```
 
     `--task` を付けると，実行した回を評価のデータとして保存します．

@@ -236,7 +236,7 @@ dataset:                             # 保存先．省略すると robot の設�
 nodes:                               # ノードの設定への上書き
   controllers.policy:                # マッピング：そのノードの設定に重ねる
     factory: my_lab.policies:load
-    kwargs: {checkpoint: outputs/drawer/last.ckpt}
+    kwargs: {checkpoint: /path/to/project/outputs/drawer/last.ckpt}
     rate_hz: 10
     action_horizon: 8
   inputs.leader: nodes/leader_fixed_head.yaml   # 文字列：robot のディレクトリの別のノードファイルにする

@@ -18,7 +18,8 @@ These four labels show how far a feature, robot or configuration key has been ch
 | Rakuda2 teleoperated collection | <span class="status status--verified">Hardware-verified</span> |
 | Gravity compensation | <span class="status status--verified">Hardware-verified</span> |
 | Collection with DIGIT | <span class="status status--verified">Hardware-verified</span> |
-| Policy inference and intervention (`policy`, `policy_teleop`) | <span class="status status--verified">Hardware-verified</span> |
+| Policy inference and intervention on Rakuda2 with your own policy (`policy`, `policy_teleop`) | <span class="status status--verified">Hardware-verified</span> |
+| LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | <span class="status status--mock">Mock only</span> (PiPER + Pika) |
 | RealSense | <span class="status status--verified">Hardware-verified</span> |
 | Asynchronous inference, replaying a recording, a policy in another process (`serve-policy`) | <span class="status status--mock">Mock only</span> |
 | PiPER, Pika (Gripper, Sense, wrist cameras), web camera, audio | <span class="status status--dev">In development</span> |
