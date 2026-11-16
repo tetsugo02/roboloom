@@ -38,7 +38,7 @@
 - **同定した g(q) は，実際に必要な電流の約半分だった**（`gravity-check`，右の sh_roll，腕を横に水平）．
   - 倍率 ×1（59 mA）は，補償なしと同じように落ちた．×2（114 mA）では留まった．×−2 では速く落ちた．
   - したがって，電流の向きは正しく，量が足りない．原因は，位置制御で保持電流を測るとギアの静止摩擦で値がゆがむこと．
-  - 当面は，関節ごとの gain（肩 1.8，肘 1.6）と，押し負けたら動く保持（`hold_mA`）で補う．調整は `tune-gravity` で行う（`docs/ja/reference/gravity-tuning.md`）．
+  - 当面は，関節ごとの gain（肩 1.8，肘 1.6）と，押し負けたら動く保持（`hold_mA`）で補う．調整は `tune-gravity` で行う（`docs/ja/explanation/gravity-compensation.md`）．
   - 未完了：電流制御での同定（電流を少しずつ上げて動き出す値と，下げて落ち始める値の中間をとる）．
 
 **2026-10-26 Python API（`Session`）と方策ノード：**
@@ -126,7 +126,7 @@
 
 ## 6．自作方策の推論と，入力・フォロワの抽象化（2026-11-14 追加）
 
-PR #26〜#30 で入れたものの残りです．入れたものはすべて模擬でしか確かめていません．方策の使い方は `docs/ja/controllers/policy.md`，部分と運動学は `docs/ja/reference/configuration.md`（フォロワの部分を別々に動かす）と `docs/ja/contribution/rakuda2-pika.md` にあります．
+PR #26〜#30 で入れたものの残りです．入れたものはすべて模擬でしか確かめていません．方策の使い方は `docs/ja/policy/index.md`，部分と運動学は `docs/ja/reference/configuration/index.md`（フォロワの部分を別々に動かす）と `docs/ja/robots/rakuda2/pika-sense-ik.md` にあります．
 
 ### 6.1 実機での確認
 
@@ -152,12 +152,12 @@ PR #26〜#30 で入れたものの残りです．入れたものはすべて模�
 - [ ] **未実装** parts の controller を方策の `teleop:`（介入）に使う．`Takeover` を parts に実装する必要がある．
 - [ ] **未実装** 位置を優先する IK，または5自由度のタスク．Rakuda2 の腕では必要（下の 6.4）．
 - [ ] **未実装** 胴体の yaw を腕の鎖に入れる（7自由度）．両腕が胴体を共有するので，1つの関節を複数の部分が動かす仕組みが要る．
-- [ ] **設計のみ** VR（Meta Quest など）と UMI 型の入力（`PoseInput` のサブクラス），シミュレーターのバス（`JointBus`）．方針は `docs/ja/contribution/rakuda2-pika.md` の「ほかの入力とシミュレーター」．`open_bus(mock: bool)` は mock と実機の2択なので，シミュレーターを足すときに見直す．
+- [ ] **設計のみ** VR（Meta Quest など）と UMI 型の入力（`PoseInput` のサブクラス），シミュレーターのバス（`JointBus`）．方針は `docs/ja/robots/rakuda2/pika-sense-ik.md` の「ほかの入力とシミュレーター」．`open_bus(mock: bool)` は mock と実機の2択なので，シミュレーターを足すときに見直す．
 - [ ] **そのまま** `control/laws.py`・`control/device.py` は Dynamixel 系のバス（カウント，mA，Operating Mode）を前提にしている．`ControlLaw.needs` で使えるバスを限定しているので今回は触っていない．別の系統のモーターで制御則を使うときに単位を一般化する．
 
 ### 6.4 Rakuda2 の腕の逆運動学（`pika` オプション）
 
-詳しい数値と再現方法は `docs/ja/contribution/rakuda2-pika.md` の「腕の逆運動学の条件の詳細」，再現は `uv run python scripts/ik_conditioning.py rakuda2`．
+詳しい数値と再現方法は `docs/ja/robots/rakuda2/pika-sense-ik.md` の「腕の逆運動学の条件の詳細」，再現は `uv run python scripts/ik_conditioning.py rakuda2`．
 
 - [ ] **未実施・最優先** 実機で follower の関節の対応表（`calibration/follower_<side>.yaml` の `urdf`，`zero`，`direction`）を確かめる．URDF の零点の姿勢は左右で鏡像になっておらず，「全関節 `zero: 2048`」は関節ごとに疑う必要がある．モーター名と URDF の関節名の種類も食い違っている（例：`r_arm_sh_pitch2` ↔ `elbow_yaw_right_dof`）．
 - [ ] **未実施** 対応表を直したあと，`scripts/ik_conditioning.py` を流し直し，条件が変わるかを見る．

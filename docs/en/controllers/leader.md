@@ -31,11 +31,11 @@ When `aligning` appears on screen, align the leader with the follower while watc
 
 The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `InProcessSession.from_yaml()` does not accept a leader that executes control laws.
 
-The concrete setup is in [Rakuda2 Quick start](../quick-start/rakuda2.md).
+The concrete setup is in [Rakuda2 Quick start](../tutorials/rakuda2.md).
 
 ## Lock leader joints
 
-In a file built on the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml` ([`extends`](../reference/configuration.md#extends)), or in `control` of that file itself, move the joints to lock into a `law: position` group. For example, replace the template's `body` group with these two groups to leave the torso free and lock neck yaw and pitch. Keep the arm and trigger groups. In older configurations where the torso and head belong to `hand`, remove these three joints from `hand`. Every joint must belong to exactly one group.
+In a file built on the active `nodes/leader.yaml` or `nodes/leader_gravity.yaml` ([`extends`](../reference/configuration/index.md#extends)), or in `control` of that file itself, move the joints to lock into a `law: position` group. For example, replace the template's `body` group with these two groups to leave the torso free and lock neck yaw and pitch. Keep the arm and trigger groups. In older configurations where the torso and head belong to `hand`, remove these three joints from `hand`. Every joint must belong to exactly one group.
 
 ```yaml
 control:
@@ -147,4 +147,4 @@ When a current-mode group (`gravity_comp`, `impedance`) has `feedback:`, its joi
     kd: 0.0
 ```
 
-The controller's `feedback.gain` selects the joints that receive it. The feedback is added to the output of gravity compensation and the rest, then clipped at `max_current_mA`; the gate opens and closes over `ramp_s`. Estop, release and quit set it to 0 at once. For the keys and the safety mechanisms, see "Force feedback" in [Configuration](../reference/configuration.md); for the Rakuda2 combination, see "Bilateral" in [Rakuda2](../robots/rakuda2.md).
+The controller's `feedback.gain` selects the joints that receive it. The feedback is added to the output of gravity compensation and the rest, then clipped at `max_current_mA`; the gate opens and closes over `ramp_s`. Estop, release and quit set it to 0 at once. For the keys and the safety mechanisms, see "Force feedback" in [Configuration](../reference/configuration/index.md); for the Rakuda2 combination, see "Bilateral" in [Rakuda2](../robots/rakuda2/index.md).

@@ -9,34 +9,38 @@ theme:
   language: en
 nav:
   - Home: index.md
-  - Quick start:
-      - Installation: quick-start/installation.md
-      - Rakuda2: quick-start/rakuda2.md
+  - Get started:
+      - Installation: get-started/installation.md
+  - Tutorials:
+      - "Rakuda2: from setup to collection": tutorials/rakuda2.md
+      - Hand-held collection with Pika Sense (in development): tutorials/pika-handheld.md
   - Robots:
       - Overview: robots/index.md
-      - Rakuda2: robots/rakuda2.md
+      - Rakuda2:
+          - Overview: robots/rakuda2/index.md
+          - With Pika Sense and IK (in development): robots/rakuda2/pika-sense-ik.md
+      - PiPER (in development): robots/piper/index.md
+      - Pika Gripper (in development): robots/pika/index.md
+  - Controllers:
+      - Overview: controllers/index.md
+      - Leader: controllers/leader.md
+      - Pika Sense and IK (in development): controllers/pose-ik.md
   - Sensors:
       - Overview: sensors/index.md
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
       - Audio: sensors/audio.md
-  - Controllers:
-      - Overview: controllers/index.md
-      - Leader: controllers/leader.md
-      - Policy: controllers/policy.md
+      - Pika wrist cameras (in development): sensors/pika-cameras.md
+      - Web camera (in development): sensors/webcam.md
+  - Policy:
+      - Running a policy: policy/index.md
   - Reference:
-      - Configuration: reference/configuration.md
+      - Configuration: reference/configuration/index.md
       - CLI: reference/cli.md
       - Operator screen: reference/operator-screen.md
       - Python API: reference/python-api.md
-      - Gravity tuning: reference/gravity-tuning.md
+  - Explanation:
+      - Gravity tuning: explanation/gravity-compensation.md
   - Contribution:
-      - Development: contribution.md
+      - Development: contribution/index.md
       - Bilateral control design: contribution/bilateral.md
-      - PiPER follower (in development): contribution/piper.md
-      - Pika Gripper follower (in development): contribution/pika-gripper.md
-      - Teleoperation with Pika Sense and IK (in development): contribution/pika-sense.md
-      - Rakuda2 with Pika Sense and IK (in development): contribution/rakuda2-pika.md
-      - Pika wrist cameras (in development): contribution/pika-cameras.md
-      - Web camera (in development): contribution/webcam.md
-      - Hand-held collection with Pika Sense (in development): contribution/pika-handheld.md

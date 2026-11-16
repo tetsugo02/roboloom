@@ -31,11 +31,11 @@ input_timeout_ms: 150
 
 leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`InProcessSession.from_yaml()` は制御則を実行するleaderを受け付けません．
 
-具体的なセットアップは [Rakuda2 Quick start](../quick-start/rakuda2.md) にあります．
+具体的なセットアップは [Rakuda2 Quick start](../tutorials/rakuda2.md) にあります．
 
 ## leaderの関節を固定する
 
-使用する `nodes/leader.yaml` または `nodes/leader_gravity.yaml` を土台にしたファイル（[`extends`](../reference/configuration.md#extends)）を作るか，そのファイル自体の `control` で，固定する関節を `law: position` のグループへ移します．例えば，テンプレートの `body` グループを次の2グループに置き換えると，腰は手で動かせ，首のyawとpitchは固定されます．腕とトリガーのグループは残してください．既存の設定で胴体・頭部が `hand` に含まれる場合は，この3関節を `hand` から取り除きます．全関節がちょうど1グループに含まれる必要があります．
+使用する `nodes/leader.yaml` または `nodes/leader_gravity.yaml` を土台にしたファイル（[`extends`](../reference/configuration/index.md#extends)）を作るか，そのファイル自体の `control` で，固定する関節を `law: position` のグループへ移します．例えば，テンプレートの `body` グループを次の2グループに置き換えると，腰は手で動かせ，首のyawとpitchは固定されます．腕とトリガーのグループは残してください．既存の設定で胴体・頭部が `hand` に含まれる場合は，この3関節を `hand` から取り除きます．全関節がちょうど1グループに含まれる必要があります．
 
 ```yaml
 control:
@@ -147,4 +147,4 @@ home:
     kd: 0.0
 ```
 
-どの関節に返すかは，controllerの `feedback.gain` で選びます．逆送は重力補償などの出力に足してから `max_current_mA` で制限し，gateは `ramp_s` かけて開閉します．estop・release・quitでは即座に0になります．キーの意味と安全の仕組みは [設定](../reference/configuration.md) の「力の逆送」，Rakuda2での組み合わせは [Rakuda2](../robots/rakuda2.md) の「バイラテラル」を参照してください．
+どの関節に返すかは，controllerの `feedback.gain` で選びます．逆送は重力補償などの出力に足してから `max_current_mA` で制限し，gateは `ramp_s` かけて開閉します．estop・release・quitでは即座に0になります．キーの意味と安全の仕組みは [設定](../reference/configuration/index.md) の「力の逆送」，Rakuda2での組み合わせは [Rakuda2](../robots/rakuda2/index.md) の「バイラテラル」を参照してください．

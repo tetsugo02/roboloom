@@ -2,7 +2,7 @@
 
 Every roboloom operation is available as a Python function. The CLI (`roboloom ...`) is only a thin layer that calls those functions and prints the result.
 
-Add roboloom to your own uv project following [Installation](../quick-start/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Configuration and `.roboloom/` paths are relative to your project root.
+Add roboloom to your own uv project following [Installation](../get-started/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Configuration and `.roboloom/` paths are relative to your project root.
 
 | Task | CLI | Python |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ roboloom takes the same structure.
 - **`Session`**: launches the dataflow and sends events. Events are start, stop, save, task name, and so on. It does not run the control loop.
   - Therefore, even if the user's script does heavy processing or stalls, the control period is not disturbed.
 
-The settings of one experiment (the policy, the options, the dataset) are passed with `Session.launch(experiment=...)`: a name (`configs/roboloom/<name>.yaml`), a file path or a mapping with the same keys ([experiment files](configuration.md#experiments)).
+The settings of one experiment (the policy, the options, the dataset) are passed with `Session.launch(experiment=...)`: a name (`configs/roboloom/<name>.yaml`), a file path or a mapping with the same keys ([experiment files](configuration/index.md#experiments)).
 
 ### Record an episode
 
@@ -70,7 +70,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - Discards any in-progress episode.
   - If an `operator` is configured, asks you to support the arms. Enter releases the follower too; typing `hold` keeps the follower holding.
   - Stops the dataflow.
-  - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target. A follower that does not hold when left alone (`unattended` other than `holds`) does not keep holding; see "Behaviour without torque and when left alone" in [Configuration](configuration.md).
+  - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target. A follower that does not hold when left alone (`unattended` other than `holds`) does not keep holding; see "Behaviour without torque and when left alone" in [Configuration](configuration/index.md).
   - To decide from a script, call `s.close(release=True)` (release) or `s.close(release=False)` (hold).
 - Logs are kept in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`).
   - `dora.log`
@@ -167,7 +167,7 @@ print(episodes.summary(s.cfg.output, s.episodes))
 ### Fine-grained control
 
 - You can call `start(task)`, `stop()`, `save()`, `discard()`, `estop()`, and `release(confirm=True)` one at a time.
-- An episode `save()` returned for stays readable even if the process stops afterwards. When the write fails, `save()` raises `SessionError` and drops that episode (the earlier ones stay and the next can be recorded; [Recording and resuming](configuration.md#recording-and-resuming)).
+- An episode `save()` returned for stays readable even if the process stops afterwards. When the write fails, `save()` raises `SessionError` and drops that episode (the earlier ones stay and the next can be recorded; [Recording and resuming](configuration/index.md#recording-and-resuming)).
   - Example: when start and end are decided by an external signal.
 - Inspecting state:
   - `status()`: latest status of each node.
@@ -178,7 +178,7 @@ print(episodes.summary(s.cfg.output, s.episodes))
 - `estop()` goes out even after a node has failed (other commands raise `SessionError` once they see a failed node).
 - When the process that called `Session.launch` ends, however it ends (killed, an exception, its terminal closed), the dataflow discards the episode in progress, lets the followers hold and ends. A robot never keeps following a policy after its script is gone, with or without `close()`. Child processes made with `multiprocessing` and the like count as the process still being there.
 - `home(timeout=None)`: move the leader and follower slowly to the initial pose chosen in the controller and wait until both arrive. Raises `SessionError` if they do not arrive or a node refuses. `record(..., home=True)` does this before every episode. See "Move to an initial pose" in [Leader](../controllers/leader.md).
-- `teleop()`, `policy()`, `stop_teleop()`: with `teleop:` in the policy, hand the followers to the leader (before an episode, or during one as an intervention), hand back to the policy, and end teleoperation outside an episode. See [teleoperation and interventions](../controllers/policy.md).
+- `teleop()`, `policy()`, `stop_teleop()`: with `teleop:` in the policy, hand the followers to the leader (before an episode, or during one as an intervention), hand back to the policy, and end teleoperation outside an episode. See [teleoperation and interventions](../policy/index.md).
 
 ```python
 s.start("wipe the table")
@@ -199,8 +199,8 @@ s.save() if stopped.ok else s.discard()
   - `observation.images.digit_left`
   - Others
 - `task` is also passed.
-- Optionally, `bind(spec)`. Right after loading it receives the observation's shapes and the action's names, and refuses when they differ from training. LeRobot checkpoints load with `roboloom.policy.lerobot:load`. See [Driving with a policy](../controllers/policy.md).
-- What `infer` returns: joint targets. Like the recorded `action`, they join every follower's joints in configuration order, each in its follower's unit. Either a single step `[n]` or an action chunk `[H, n]`. Each robot's order, size and units are on its page ([Rakuda2](../robots/rakuda2.md) and others).
+- Optionally, `bind(spec)`. Right after loading it receives the observation's shapes and the action's names, and refuses when they differ from training. LeRobot checkpoints load with `roboloom.policy.lerobot:load`. See [Driving with a policy](../policy/index.md).
+- What `infer` returns: joint targets. Like the recorded `action`, they join every follower's joints in configuration order, each in its follower's unit. Either a single step `[n]` or an action chunk `[H, n]`. Each robot's order, size and units are on its page ([Rakuda2](../robots/rakuda2/index.md) and others).
 
 **Node behavior**
 - The policy is loaded from a `"module:callable"` reference and run by the policy node inside the dataflow.
@@ -241,7 +241,7 @@ with Session.launch(
 **Notes**
 - By default (synchronous) no command is sent during `infer`.
   - If inference takes longer than `command_deadline_ms`, the robot enters HOLD. It stops and waits.
-  - `inference: async` in `nodes/policy.yaml` keeps executing the previous action chunk during inference ([Asynchronous inference](../controllers/policy.md#asynchronous-inference)).
+  - `inference: async` in `nodes/policy.yaml` keeps executing the previous action chunk during inference ([Asynchronous inference](../policy/index.md#asynchronous-inference)).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place.
   - Use it when verifying the inference path on real hardware for the first time.
 
@@ -336,9 +336,9 @@ with InProcessSession.from_components(
     session.save_episode()
 ```
 
-For the data collection procedure on real hardware, see [Rakuda2 Quick start](../quick-start/rakuda2.md).
+For the data collection procedure on real hardware, see [Rakuda2 Quick start](../tutorials/rakuda2.md).
 
-`load_config(..., video_codec="av1")` and `Session.launch(..., video_codec="av1")` record `storage: video` images as AV1 (`"h264"` for H.264, `None` for the recorder YAML's choice, else H.264). With a loaded `RobotConfig`, choose it in `load_config`. For appending with a codec that differs from the existing dataset, see [Video codec](configuration.md#video-codec).
+`load_config(..., video_codec="av1")` and `Session.launch(..., video_codec="av1")` record `storage: video` images as AV1 (`"h264"` for H.264, `None` for the recorder YAML's choice, else H.264). With a loaded `RobotConfig`, choose it in `load_config`. For appending with a codec that differs from the existing dataset, see [Video codec](configuration/index.md#video-codec).
 
 ## Sensor selection
 

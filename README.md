@@ -1,8 +1,8 @@
 # roboloom
 
-公開ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)．docs関連の変更が `main` にpushされると，GitHub Actionsが両言語をビルドしてGitHub Pagesへ公開します．初回設定とtriggerの対象は [Contribution](docs/ja/contribution.md#github-pagesへの公開) を参照してください．
+公開ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)．docs関連の変更が `main` にpushされると，GitHub Actionsが両言語をビルドしてGitHub Pagesへ公開します．初回設定とtriggerの対象は [Contribution](docs/ja/contribution/index.md#github-pagesへの公開) を参照してください．
 
-**[Quick start](docs/ja/quick-start/installation.md)**（[English](docs/en/quick-start/installation.md)）から，インストールと [Rakuda2の設定・重力補償・データ収集](docs/ja/quick-start/rakuda2.md) を進められます．[対応機器](docs/ja/robots/rakuda2.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution.md) にまとめています．
+**[Quick start](docs/ja/get-started/installation.md)**（[English](docs/en/get-started/installation.md)）から，インストールと [Rakuda2の設定・重力補償・データ収集](docs/ja/tutorials/rakuda2.md) を進められます．[対応機器](docs/ja/robots/rakuda2/index.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution/index.md) にまとめています．
 
 Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．
 
@@ -26,11 +26,11 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra rec
 uv run roboloom init rakuda2
 ```
 
-Gitソースを登録した後は，`uv add 'roboloom[rakuda2]'` や `uv add 'roboloom[piper,pika]'` の形でextrasを選べます．`rakuda2` はDynamixel SDK，`piper` はPiPER SDKとIK，`pika` はPika用のトラッカー・手首カメラを導入します．Pika／PiPERは開発中・実機未検証です．依存の内訳とシステム側の準備は [Installation](docs/ja/quick-start/installation.md) を参照してください．
+Gitソースを登録した後は，`uv add 'roboloom[rakuda2]'` や `uv add 'roboloom[piper,pika]'` の形でextrasを選べます．`rakuda2` はDynamixel SDK，`piper` はPiPER SDKとIK，`pika` はPika用のトラッカー・手首カメラを導入します．Pika／PiPERは開発中・実機未検証です．依存の内訳とシステム側の準備は [Installation](docs/ja/get-started/installation.md) を参照してください．
 
-`init` はインストール済みパッケージから，自分のプロジェクト内に `.roboloom/rakuda2/` を作ります．生成した設定を編集し，CLIもPythonスクリプトも自分のプロジェクトルートから実行します．`pyproject.toml` と `uv.lock` をGitで管理し，別の環境では `uv sync --locked` で再現します．更新・commit固定の手順は [Installation](docs/ja/quick-start/installation.md) を参照してください．
+`init` はインストール済みパッケージから，自分のプロジェクト内に `.roboloom/rakuda2/` を作ります．生成した設定を編集し，CLIもPythonスクリプトも自分のプロジェクトルートから実行します．`pyproject.toml` と `uv.lock` をGitで管理し，別の環境では `uv sync --locked` で再現します．更新・commit固定の手順は [Installation](docs/ja/get-started/installation.md) を参照してください．
 
-Claude Code・Codex などのコーディングエージェント向けに，roboloom の使い方をまとめたスキル（Agent Skill）を同梱しています．`uv run roboloom skills install` で自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーします．roboloom を更新したら `uv run roboloom skills check` で確かめます（[Installation](docs/ja/quick-start/installation.md) の「コーディングエージェントで使う」）．
+Claude Code・Codex などのコーディングエージェント向けに，roboloom の使い方をまとめたスキル（Agent Skill）を同梱しています．`uv run roboloom skills install` で自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーします．roboloom を更新したら `uv run roboloom skills check` で確かめます（[Installation](docs/ja/get-started/installation.md) の「コーディングエージェントで使う」）．
 
 ## Python interface
 
@@ -113,7 +113,7 @@ with InProcessSession.from_components(
 
 DIGIT，重力補償，バイラテラル，方策のような構成の違いは `options:` で選びます．各オプションは `help`，`default`，`requires`，`conflicts`，`set`，`dataset` を持ちます．`set` は `<役割>.<ノード名>` をノード YAML に置き換えるか，`null` で取り除きます．オプションを有効にすると `requires` のものも有効になり，`conflicts` のものは無効になります．有効なオプションの `dataset` 名は `repo_id` と `output` に付け足されます（例：`local/rakuda2` に digit で `local/rakuda2-digit`）．記録する feature が変わる構成は別の dataset に入ります．`mode:` は省略でき，既定は hardware です．
 
-以下は `init` で生成した設定を使う実機の例です．先に [Rakuda2 Quick start](docs/ja/quick-start/rakuda2.md) に従って `SET_...` を埋め，EEPROM・安全範囲・停止動作を確認します．初回はfollowerの `torque: false` で経路を確認し，leaderを含めて腕を支えられる状態で行います．
+以下は `init` で生成した設定を使う実機の例です．先に [Rakuda2 Quick start](docs/ja/tutorials/rakuda2.md) に従って `SET_...` を埋め，EEPROM・安全範囲・停止動作を確認します．初回はfollowerの `torque: false` で経路を確認し，leaderを含めて腕を支えられる状態で行います．
 
 ```bash
 uv run roboloom                       # ランチャー：ロボットを選び，run/record/infer，オプション，mock/実機を選んで起動
@@ -158,7 +158,7 @@ uv run roboloom record --task handover --seconds 10
 uv run roboloom infer --policy my_lab.policies:load --seconds 30
 ```
 
-`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．各回の成否は，保存のときに `save success`・`save failure` と書くか，あとから `uv run roboloom label --with policy <エピソード番号> success` で残せます（データセットの `meta/roboloom_episodes.jsonl`．[方策で動かす](docs/ja/controllers/policy.md)）．
+`--task` を付けると，その走行を保存します（評価データ．テンプレートでは `local/rakuda2-eval`，`digit` も有効なら `local/rakuda2-digit-eval`）．各回の成否は，保存のときに `save success`・`save failure` と書くか，あとから `uv run roboloom label --with policy <エピソード番号> success` で残せます（データセットの `meta/roboloom_episodes.jsonl`．[方策で動かす](docs/ja/policy/index.md)）．
 
 EEPROM について：
 
@@ -229,7 +229,7 @@ uv run roboloom init rakuda2 --update  # 既存のプロジェクトを新しい
 - テンプレートの `nodes/follower.yaml` は `torque: true` です．初回の収集前に `torque: false` へ変更し，followerを動かさずデータの経路を確かめます（leaderの制御は独立して通電します）．
 - 終了するときは `stop` → 腕を支えて `quit` → 確認で保持または支持後の脱力を明示選択します．初期選択はキャンセルです．
 
-leader の重力補償の調整（gain と hold の意味，`tune-gravity` の使い方）は，[docs/ja/reference/gravity-tuning.md](docs/ja/reference/gravity-tuning.md) を参照してください．
+leader の重力補償の調整（gain と hold の意味，`tune-gravity` の使い方）は，[docs/ja/explanation/gravity-compensation.md](docs/ja/explanation/gravity-compensation.md) を参照してください．
 
 recorder は取得，利用可能，受信，送信の単調時計時刻を区別します．各フレーム時刻までに recorder が受信済みの観測を選び，`action[t]` はその後最初に送信成功した tick の指令を保存します．欠損は直前の有効な値と有効フラグで表します．保存のたびにエピソードのファイルを閉じるので，保存できたエピソードはプロセスが強制終了されても読めます．保存後も同じ dataset へ次のエピソードを追記し，再起動時は既存 dataset のスキーマと FPS を確認して再開します．`roboloom check-dataset` で，記録した dataset を読むだけで検査できます．
 
@@ -274,7 +274,7 @@ src/roboloom/
 
 依存の向きは `core` ← `drivers` ← `dynamics` ← `control` ← `robots`/`inputs`/`sensors` ← `controllers` ← `recording`/`config` ← `runtime`/`api`/`cli` です．各役割のパッケージは `__init__.py` に `type` 名から実装への対応表（`FOLLOWERS`，`INPUTS`，`CONTROLLERS`，`SENSORS`，`ESTIMATORS`，`TRACKERS`）を持ちます．実装のモジュールは選ばれたときにだけ import されます．
 
-roboloom を変えずに自分のパッケージから型を足すときは，ノード YAML の `type` に `my_lab.robots:MyFollower`（`モジュール:クラス`）と書きます．テンプレートは `roboloom init <名前> --template <パッケージかディレクトリ>` で使えます（[自分のパッケージから足す](docs/ja/contribution.md#own-types)，例は `examples/own_robot/`）．roboloom 本体に足すときは，次のように実装を1つのモジュールに書き，対応表に1行追加します．
+roboloom を変えずに自分のパッケージから型を足すときは，ノード YAML の `type` に `my_lab.robots:MyFollower`（`モジュール:クラス`）と書きます．テンプレートは `roboloom init <名前> --template <パッケージかディレクトリ>` で使えます（[自分のパッケージから足す](docs/ja/contribution/index.md#own-types)，例は `examples/own_robot/`）．roboloom 本体に足すときは，次のように実装を1つのモジュールに書き，対応表に1行追加します．
 
 - **ロボット**（Koch，SO-101，xArm）：`robots/<model>/` に機体情報（`spec.py`）と `robots.base.Follower` を継承した follower を置き，`FOLLOWERS` に登録します．機体固有の機能は，汎用部分に書かずに機体の側で申告します．バスは `drivers.base` の契約（必要なら `read_state`，`read_health`，`write_goal_currents`，`set_torque`）を実装し，起動時に照合する EEPROM を `expected_eeprom`，`current_limits_mA` で示します．電流モードや watchdog を持たない機体では，その制御則が設定の読み込み時に拒否されます．leader アームがあれば `inputs/<model>/` に置いて `spec.py` を参照し，`INPUTS` に登録します．新しいバスが必要なら `drivers/` に追加します．
 - **入力**（SpaceMouse，VR）：`inputs/<device>/` に置きます．関節空間の入力なら `inputs.base.JointInput`，手に持った姿勢の入力なら `inputs.base.PoseInput` を継承します．速度（twist）の入力のような新しい種類は，現在は基底クラスがありません．追加するときは `inputs/base.py` に基底クラスを加え，固有の `kind` を持たせます．
@@ -283,7 +283,7 @@ roboloom を変えずに自分のパッケージから型を足すときは，�
 
 設定の読み込みはデバイスを開きません．1つの設定に follower を複数置けます．各 follower を駆動する controller はちょうど1個で，1個の controller が複数の follower を駆動できます（`type: policy` の controller は設定のすべての follower を駆動します）．
 
-OpenCV（`opencv-python-headless`）は共通依存に含まれます．USB／内蔵のWebカメラを読む `type: opencv_rgb`（Linux・macOS・Windows向けのドライバー）は開発中・実機未検証です．設定とPython単体の例は [Webカメラ](docs/ja/contribution/webcam.md)（[English](docs/en/contribution/webcam.md)）を参照してください．WindowsでのSession全体の対応は含みません．
+OpenCV（`opencv-python-headless`）は共通依存に含まれます．USB／内蔵のWebカメラを読む `type: opencv_rgb`（Linux・macOS・Windows向けのドライバー）は開発中・実機未検証です．設定とPython単体の例は [Webカメラ](docs/ja/sensors/webcam.md)（[English](docs/en/sensors/webcam.md)）を参照してください．WindowsでのSession全体の対応は含みません．
 
 
 センサーとデータセットについて：

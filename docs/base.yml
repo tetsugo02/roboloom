@@ -65,4 +65,15 @@ plugins:
             docstring_section_style: table
   - redirects:
       # Old page -> new page, so published links (README, templates) keep working.
-      redirect_maps: {}
+      redirect_maps:
+        quick-start/installation.md: get-started/installation.md
+        quick-start/rakuda2.md: tutorials/rakuda2.md
+        contribution/piper.md: robots/piper/index.md
+        contribution/pika-gripper.md: robots/pika/index.md
+        contribution/pika-cameras.md: sensors/pika-cameras.md
+        contribution/webcam.md: sensors/webcam.md
+        contribution/pika-sense.md: controllers/pose-ik.md
+        contribution/rakuda2-pika.md: robots/rakuda2/pika-sense-ik.md
+        contribution/pika-handheld.md: tutorials/pika-handheld.md
+        controllers/policy.md: policy/index.md
+        reference/gravity-tuning.md: explanation/gravity-compensation.md

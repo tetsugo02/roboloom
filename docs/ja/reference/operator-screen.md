@@ -8,7 +8,7 @@
 
 - Operation：`run`・`record`・`infer` から選びます．`record` と `infer` ではtask・seconds・episodesを入力し，`record` では「move home before every episode」も選べます．
 - Options：設定の `options:` を `help` の説明付きで並べます．チェックを入れると `requires` のオプションも有効になり，`conflicts` のオプションは外れます．外すと，それを必要とするオプションも外れます．競合の理由はツールチップに出ます．
-- Devices：「mock devices (no hardware)」でmockデバイスを使います．「Video codec (storage: video)」で動画の codec を選びます．`YAML / dataset` は recorder の YAML の指定（追記では保存済みの動画の codec，どちらもなければ H.264）です（[Video codec](configuration.md#video-codec)）．
+- Devices：「mock devices (no hardware)」でmockデバイスを使います．「Video codec (storage: video)」で動画の codec を選びます．`YAML / dataset` は recorder の YAML の指定（追記では保存済みの動画の codec，どちらもなければ H.264）です（[Video codec](configuration/index.md#video-codec)）．
 - 要約：操作，`mock` か `HARDWARE` か（チェックを入れなくても YAML が `mode: mock` なら `mock (mode: mock in config.yaml)`），有効なオプション，データセット名，動画の codec，置き換わるノードファイル（削除は `(removed)`）を表示します．起動できない組み合わせや入力の不足は，理由を表示してLaunchを無効にします．
 
 次の画面は，左の操作パネル（Operation・Devices），右のオプションパネル（オプションごとのカード．有効は緑，競合で外れるものは黄の線と理由），下の要約パネルに分かれます．どちらの画面もパネルの境界線を操作画面と同じように調整できます．ドラッグするか，フォーカスして矢印キーで動かし，ダブルクリックかCtrl-Rで元に戻します．幅が90桁未満の端末ではパネルを縦に並べます．
@@ -41,15 +41,15 @@ Ctrl-N / Ctrl-Pで境界にもフォーカスできます．境界にフォー�
 
 入力欄はカーソル移動，Delete，Backspace，日本語入力に対応します．履歴はセッション内だけで保持します．補完だけでは操作しません．候補表示中のEnterは候補確定で，もう一度Enterを押すと送信します．複数行の貼り付けは空白でつないだ1行になり，自動送信しません．確認の回答は履歴に入りません．
 
-入力欄・確認以外では `e`・`q`・`h`・`s`・`d` でestop・quit・home・save・discardを要求できます．方策に `teleop:` がある構成では，`t`・`p` でTeleop（leaderに切り替える）・Policy（方策に戻す）も使えます．録画中も使え，使えないときは理由を表示します（[テレオペと介入](../controllers/policy.md)）．入力中とダイアログ中は文字キーのショートカットを抑制します．確認中もCtrl-Gは使えます．
+入力欄・確認以外では `e`・`q`・`h`・`s`・`d` でestop・quit・home・save・discardを要求できます．方策に `teleop:` がある構成では，`t`・`p` でTeleop（leaderに切り替える）・Policy（方策に戻す）も使えます．録画中も使え，使えないときは理由を表示します（[テレオペと介入](../policy/index.md)）．入力中とダイアログ中は文字キーのショートカットを抑制します．確認中もCtrl-Gは使えます．
 
 F2・F6 / Shift-F6・F12・Ctrl-Endも，入力欄・ペイン移動・非常停止・ログ末尾の別名として残しています．画面下の案内は主要なCtrl系の組み合わせを表示します．
 
 ## 操作
 
-メニューと入力欄から `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` を使います．入力欄で `save success`・`save failure` と書くと，評価の成否を付けて保存します（[エピソードごとの記録と評価の成否](configuration.md#episode-records)．`success`・`failure` 以外は拒否し，エピソードは保存前のまま残ります）．`run` のStartはtask入力へ移動します．開始拒否は警告になり，状態更新は続くので準備後に再操作できます．Homeはcontrollerに初期姿勢がある場合だけ有効で，到着後も準備状態を再確認します．
+メニューと入力欄から `start <task>`・`stop`・`save`・`discard`・`home`・`release`・`estop`・`quit` を使います．入力欄で `save success`・`save failure` と書くと，評価の成否を付けて保存します（[エピソードごとの記録と評価の成否](configuration/index.md#episode-records)．`success`・`failure` 以外は拒否し，エピソードは保存前のまま残ります）．`run` のStartはtask入力へ移動します．開始拒否は警告になり，状態更新は続くので準備後に再操作できます．Homeはcontrollerに初期姿勢がある場合だけ有効で，到着後も準備状態を再確認します．
 
-Releaseでは，機器の性質（[設定](configuration.md) の「脱力したときと放置したときの性質」）から，支える機器と物を外す機器を示して確認します．終了はCancel・followerの保持（保持できるfollowerがある場合．ない場合は「脱力せずに終了」）・脱力して終了（トルクのあるfollowerがある場合）・オプションを選び直す（Quit and choose options again）から選び，初期選択はCancelです．確認文には，終了時に脱力する（またはするかもしれない）機器と，すべきことを示します．オプションはdataflowの実行中には切り替えません（制御モードが変わるためです）．選び直す場合は，followerを保持したまま終了し，ランチャーへ戻ります．CLIから起動した対話端末の場合だけ表示します．followerを保持しても，通電している入力機器は終了時に脱力します．UI異常終了時も，脱力の選択が確認済みでなければfollowerを保持します．roboloomのプロセスごと止まった場合（強制終了，端末を閉じた）も，dataflowは記録中のエピソードを破棄し，followerを保持させて終わります．非常停止は送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別します．バスやdataflowが切断されている場合の到達は保証できません．
+Releaseでは，機器の性質（[設定](configuration/index.md) の「脱力したときと放置したときの性質」）から，支える機器と物を外す機器を示して確認します．終了はCancel・followerの保持（保持できるfollowerがある場合．ない場合は「脱力せずに終了」）・脱力して終了（トルクのあるfollowerがある場合）・オプションを選び直す（Quit and choose options again）から選び，初期選択はCancelです．確認文には，終了時に脱力する（またはするかもしれない）機器と，すべきことを示します．オプションはdataflowの実行中には切り替えません（制御モードが変わるためです）．選び直す場合は，followerを保持したまま終了し，ランチャーへ戻ります．CLIから起動した対話端末の場合だけ表示します．followerを保持しても，通電している入力機器は終了時に脱力します．UI異常終了時も，脱力の選択が確認済みでなければfollowerを保持します．roboloomのプロセスごと止まった場合（強制終了，端末を閉じた）も，dataflowは記録中のエピソードを破棄し，followerを保持させて終わります．非常停止は送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別します．バスやdataflowが切断されている場合の到達は保証できません．
 
 `record`・`infer` は準備状態，回数，残り時間，保存結果を表示します．毎回，準備後にStartを選びます．`record --home` は毎回homeへ移動します．`record` は保存し，`infer` は `--task` がある場合だけ保存します．Stopで時間指定の記録を早く終えた場合も，同じ保存方針を適用します．指定回数が完了すると終了確認が開きます．
 
@@ -82,7 +82,7 @@ quit
 
 Gainは0.1刻みで[0, 3]，holdは5 mA刻みで[0, 100]です．入力欄・確認以外では `]` / `[` でgain，`=` / `-` でhold，`0` で重力の比較，`r` で支持後に通常のSTOPPEDから再開します．Ctrl-Gは次の制御処理で脱力してESTOPをラッチし，再起動までresumeでも再通電できません．
 
-機器open・通電・読み出し・値の変更・closeは，設定周期で動く1本の制御スレッドが担当します．ファイル保存は値のスナップショットを別スレッドへ渡し，保存中の変更は未保存として残します．終了はCancel・Save and quit・Discard and quitから選び，初期選択はCancelです．実機での準備と値の読み方は [重力調整](gravity-tuning.md) を参照してください．
+機器open・通電・読み出し・値の変更・closeは，設定周期で動く1本の制御スレッドが担当します．ファイル保存は値のスナップショットを別スレッドへ渡し，保存中の変更は未保存として残します．終了はCancel・Save and quit・Discard and quitから選び，初期選択はCancelです．実機での準備と値の読み方は [重力調整](../explanation/gravity-compensation.md) を参照してください．
 
 ## PlainモードとPython API
 

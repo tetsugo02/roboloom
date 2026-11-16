@@ -9,36 +9,40 @@ theme:
   language: ja
 nav:
   - ホーム: index.md
-  - Quick start:
-      - インストール: quick-start/installation.md
-      - Rakuda2: quick-start/rakuda2.md
+  - Get started:
+      - インストール: get-started/installation.md
+  - Tutorials:
+      - Rakuda2：設定から収集まで: tutorials/rakuda2.md
+      - Pika Senseを手に持った収集（開発中）: tutorials/pika-handheld.md
   - Robots:
       - 概要: robots/index.md
-      - Rakuda2: robots/rakuda2.md
+      - Rakuda2:
+          - 概要: robots/rakuda2/index.md
+          - Pika SenseとIKで動かす（開発中）: robots/rakuda2/pika-sense-ik.md
+      - PiPER（開発中）: robots/piper/index.md
+      - Pika Gripper（開発中）: robots/pika/index.md
+  - Controllers:
+      - 概要: controllers/index.md
+      - Leader: controllers/leader.md
+      - Pika SenseとIK（開発中）: controllers/pose-ik.md
   - Sensors:
       - 概要: sensors/index.md
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
       - Audio: sensors/audio.md
-  - Controllers:
-      - 概要: controllers/index.md
-      - Leader: controllers/leader.md
-      - 方策: controllers/policy.md
+      - Pikaの手首カメラ（開発中）: sensors/pika-cameras.md
+      - Webカメラ（開発中）: sensors/webcam.md
+  - Policy:
+      - 方策で動かす: policy/index.md
   - Reference:
-      - 設定: reference/configuration.md
+      - 設定: reference/configuration/index.md
       - CLI: reference/cli.md
       - 操作画面: reference/operator-screen.md
       - Python API: reference/python-api.md
-      - 重力補償の調整: reference/gravity-tuning.md
+  - Explanation:
+      - 重力補償の調整: explanation/gravity-compensation.md
   - Contribution:
-      - 開発: contribution.md
+      - 開発: contribution/index.md
       - バイラテラル制御の設計: contribution/bilateral.md
-      - PiPERフォロワ（開発中）: contribution/piper.md
-      - Pika Gripperフォロワ（開発中）: contribution/pika-gripper.md
-      - Pika SenseとIKによる遠隔操作（開発中）: contribution/pika-sense.md
-      - Rakuda2をPika SenseとIKで動かす（開発中）: contribution/rakuda2-pika.md
-      - Pikaの手首カメラ（開発中）: contribution/pika-cameras.md
-      - Webカメラ（開発中）: contribution/webcam.md
-      - Pika Senseを手に持った収集（開発中）: contribution/pika-handheld.md
 exclude_docs: |
   yam-safety-and-smoothness.md

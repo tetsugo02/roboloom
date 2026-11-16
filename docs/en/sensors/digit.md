@@ -1,6 +1,6 @@
 # DIGIT
 
-`DigitSensor` uses `digit-interface` to capture tactile images. It requires the `digit` extra ([Installation](../quick-start/installation.md)). Set different serial numbers for the left and right sensors.
+`DigitSensor` uses `digit-interface` to capture tactile images. It requires the `digit` extra ([Installation](../get-started/installation.md)). Set different serial numbers for the left and right sensors.
 
 ```yaml
 type: digit
@@ -23,7 +23,7 @@ Captured images are converted from BGR to RGB. When the node names are `digit_le
 
 Each DIGIT node also needs a `max_age_ms` entry in `nodes/recorder.yaml`; see "Recorder entry" in [Sensors](index.md).
 
-The supported Rakuda2 configurations and how to combine DIGIT with gravity compensation are on the [robot page](../robots/rakuda2.md).
+The supported Rakuda2 configurations and how to combine DIGIT with gravity compensation are on the [robot page](../robots/rakuda2/index.md).
 
 ### Image storage
 
@@ -33,6 +33,6 @@ PNG generally needs more disk space and PNG compression/write work; actual size 
 
 Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
 
-The codec of `video` MP4s (H.264 by default, or AV1) is chosen with the recorder's [`video_codec`](../reference/configuration.md#video-codec).
+The codec of `video` MP4s (H.264 by default, or AV1) is chosen with the recorder's [`video_codec`](../reference/configuration/index.md#video-codec).
 
-[Configuration](../reference/configuration.md#image-storage)
+[Configuration](../reference/configuration/index.md#image-storage)

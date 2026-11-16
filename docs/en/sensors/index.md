@@ -5,7 +5,7 @@
 | [RealSense](realsense.md) | `realsense_rgb` | RGB camera image |
 | [DIGIT](digit.md) | `digit` | Tactile RGB image |
 
-Supported combinations are listed in [Rakuda2](../robots/rakuda2.md). Images are handled as HWC, 3-channel RGB. A sensor's `fps` is its capture rate; the configuration's `dataset_fps` is the recording rate.
+Supported combinations are listed in [Rakuda2](../robots/rakuda2/index.md). Images are handled as HWC, 3-channel RGB. A sensor's `fps` is its capture rate; the configuration's `dataset_fps` is the recording rate.
 
 ## Recorder entry
 
@@ -22,6 +22,6 @@ max_age_ms:
 
 The Rakuda2 template already has the entries for `camera`, `digit_left` and `digit_right`. When you add a sensor or rename its node, add or rename its entry as well. Entries for nodes that are not in the configuration are ignored, so the template keeps the entries of every option (such as `digit_left` without the `digit` option); a misspelled name is ignored in the same way, and loading then reports the correctly named node's entry as missing.
 
-The codec of `storage: video` images (AV1 or H.264) is chosen with `video_codec` in the same `nodes/recorder.yaml` ([Video codec](../reference/configuration.md#video-codec)).
+The codec of `storage: video` images (AV1 or H.264) is chosen with `video_codec` in the same `nodes/recorder.yaml` ([Video codec](../reference/configuration/index.md#video-codec)).
 
 [Audio](audio.md): PCM and mel, shared across robots; hardware unverified.

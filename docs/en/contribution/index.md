@@ -1,0 +1,121 @@
+# Contribution
+
+## Development environment and checks
+
+For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git` in [Installation](../get-started/installation.md). The following is for developers changing roboloom itself or its docs. Use Python 3.12 and uv, clone the repository, and run commands from its root.
+
+```bash
+git clone https://github.com/tetsugo02/roboloom.git
+cd roboloom
+uv sync --extra rakuda2 --extra test --group dev --group docs
+uv run ruff format .
+uv run ruff check .
+uv run mypy src
+uv run pyright
+uv run pytest
+uv run --group docs python scripts/docs.py build
+```
+
+On pull requests and pushes to `main`, GitHub Actions (`.github/workflows/test.yml`) runs `ruff check .`, `mypy src` and `pytest`. The dataflow tests start dora processes with mock devices; no hardware is used.
+
+Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/config.yaml` and `uv run roboloom run examples/mock/config.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
+
+The mock configuration saves to `datasets/rakuda-mock` (`datasets/rakuda-mock-bilateral` with the option `bilateral`). After a change to the recorded layout (feature names or shapes), old data cannot be appended to; move it or change `output`. Do not delete existing data to check the screen.
+
+Do not include formatting changes unrelated to your change. Report mock tests, real-data checks, and hardware verification separately.
+
+Package authors, keywords, and project URLs are managed in `project.authors`, `project.keywords`, and `project.urls` in `pyproject.toml`. The documentation author and repository link are configured through `site_author`, `repo_name`, and `repo_url` in `docs/base.yml`. Keep both files consistent when changing author information or published URLs.
+
+## Update features and docs together
+
+Update the affected pages in `docs/` in the same change that adds a feature or changes behavior. Update both Japanese (`docs/ja/`) and English (`docs/en/`) in that change, and keep page structure, headings, code examples, and link targets identical. Keep configuration, defaults, CLI, Python API, and limitations consistent with the implementation.
+
+| Change | Pages to update |
+| --- | --- |
+| Installation or first-time operation | Quick start |
+| Robots or supported combinations | The robot page under Robots and the robot's Quick start |
+| Sensor configuration or formats | Sensors and the affected robot pages |
+| Operator input or start conditions | Controllers and the affected robot pages |
+| API, CLI, or configuration changes | Reference and related examples |
+| Public API, CLI, configuration, or supported devices | The agent skill in `src/roboloom/agent_skills/roboloom/` (`SKILL.md` and `references/`) |
+
+Put a new page at the same path in both languages and register it in the `nav` of `mkdocs.yml` (Japanese) and `mkdocs.en.yml` (English). When instructions are affected, also update the README and the README of the template that `roboloom init` distributes. If the existing code and the docs disagree, fix the docs to follow the code's conventions and list the disagreement in your change report.
+
+Robot pages list the supported sensors and controllers and link to their chapters for detailed settings. The current guides cover Rakuda2, the leader, RealSense RGB, and DIGIT. Do not present design proposals or past investigation notes as implemented or hardware-verified behavior.
+
+## Editing and previewing the docs
+
+The docs use [Zensical's MkDocs compatibility](https://zensical.org/docs/compatibility/mkdocs/). Each language has its own config; shared settings live in `docs/base.yml`.
+
+| Language | Markdown | Config | Output |
+| --- | --- | --- | --- |
+| Japanese | `docs/ja/` | `mkdocs.yml` | `site/ja/` |
+| English | `docs/en/` | `mkdocs.en.yml` | `site/en/` |
+
+```bash
+uv run --group docs python scripts/docs.py build   # strict build of both languages
+uv run --group docs python scripts/docs.py serve   # build both and serve at http://127.0.0.1:8000
+uv run --group docs zensical serve                 # Japanese only, with live reload
+uv run --group docs zensical serve -f mkdocs.en.yml  # English only, with live reload
+```
+
+The language switcher at the top right moves to the selected language's home page when both languages are built side by side under `site/`. When only one language is open with `zensical serve`, the other language is not available. `site/index.html` redirects to `ja/` or `en/` according to the browser language. Do not commit build output.
+
+Fonts and colors are set in `docs/overrides/` (`main.html` and `assets/stylesheets/roboloom.css`).
+
+`docs/ja/yam-safety-and-smoothness.md` is kept as a past investigation and design note and is excluded from the guide build. Design proposals for unimplemented features, such as the [bilateral control design](bilateral.md), go under Contribution and state at the top that they are not implemented.
+
+## Publishing to GitHub Pages
+
+`.github/workflows/docs.yml` builds both languages in strict mode and publishes the entire `site/` directory to GitHub Pages. The published URLs are [Japanese](https://tetsugo02.github.io/roboloom/ja/) and [English](https://tetsugo02.github.io/roboloom/en/). The root URL redirects according to the browser language.
+
+- Push to `main`: changes to `docs/**`, `mkdocs*.yml`, `scripts/docs.py`, `pyproject.toml`, `uv.lock`, or the workflow itself trigger a build and deployment.
+- Pull request targeting `main`: changes to the same files trigger build validation only.
+- Actions → `Documentation` → `Run workflow`: starts a manual build. Deployment runs only when `main` is selected.
+
+The workflow uses Python 3.12 and uv, installing only the locked documentation dependencies with `uv sync --locked --only-group docs`. It then runs `uv run --no-sync python scripts/docs.py build` and publishes the successful output. Robot and sensor dependencies and hardware connections are not required.
+
+For the initial setup, set the repository's **Settings → Pages → Build and deployment → Source** to **GitHub Actions** ([GitHub setup instructions](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)). Once the workflow reaches `main`, it publishes the site; the URL appears in the `github-pages` environment and the Actions deployment result. Failed builds are not deployed.
+
+## Adding a follower { #adding-a-follower }
+
+A follower model (a `Follower` subclass) must declare its safety traits, `safety_traits` (or `declared_traits()` when they depend on the configuration). A class without them raises TypeError on import. The values are explained in "Behaviour without torque and when left alone" in [Configuration](../reference/configuration/index.md). Declare what has not been established as `unknown`. Input models that run control laws (`JointInput` subclasses) declare `safety_traits` too. An arm driven by poses (`pose_ik`) returns its URDF chain from `kinematics()` (a `KinematicSpec`: the URDF, base, tip and joints).
+
+### From your own package, without changing roboloom { #own-types }
+
+A robot, input device, sensor, controller or estimator roboloom does not ship can stay in your own code.
+
+- Write the class as `module:Class` in the node YAML's `type`. It is imported from the installed packages first, then from the robot's directory (`.roboloom/<robot>/`).
+- Every node runs as a process of its own and loads the configuration again. That is why a class is named by reference (`module:Class`): registering it in a registry inside one process is not seen by the other nodes.
+- The class subclasses the base class of its role (`roboloom.robots.base.Follower`, `roboloom.inputs.base.JointInput` and `PoseInput`, `roboloom.core.source.Source`, `roboloom.controllers.base.Controller`, `roboloom.estimators.base.Estimator`). A class that does not is refused on loading.
+- List the YAML keys the class reads in `keys`, and any other key is refused on loading (a misspelled key is not ignored in silence). A class without `keys` is not checked.
+
+    ```python
+    from roboloom.robots.base import FOLLOWER_KEYS, Follower
+
+    class MyArm(Follower):
+        keys = (*FOLLOWER_KEYS, "address")
+    ```
+
+- A follower needs its joint names and unit, `safety_traits`, and the bus `open_bus(mock)` returns (`read_positions`, `write_positions`, `enable_torque`, `close`; `roboloom.drivers.base.JointBus`). With `mock` true it returns a mock bus.
+- A simulator is another bus behind the same follower class. Speak the real robot's unit and the datasets and policies are shared.
+- The `control:` laws (`roboloom.control`) assume a Dynamixel-like bus (counts, mA, operating modes). A robot with its own position control does not use them.
+
+The template can live on your side too. Put `config.yaml`, the node YAML, the module with the class and `mock.yaml` in one directory (or in a package's `template/`) and make a project from it:
+
+```bash
+uv run roboloom init lab_arm --template my_lab.robots.arm   # a package's template/
+uv run roboloom init lab_arm --template path/to/template    # a directory
+uv run roboloom init lab_arm --update                       # after the template changed
+```
+
+`examples/own_robot/` in the repository is the smallest working example (the follower class `my_arm.py`, a configuration in which a policy holds the pose, a mock bus).
+
+```bash
+uv run roboloom init lab_arm --template examples/own_robot
+uv run roboloom infer lab_arm --mock --seconds 5 --plain
+```
+
+## Operator UI extensions
+
+For new device kinds, keep device access in the backend and publish standard status fields. Optional explicit kind/role presenters, backend contracts, and Pilot/MockBus verification are described in [Operator screen](../reference/operator-screen.md).

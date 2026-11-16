@@ -13,17 +13,17 @@
 | `--with a,b` | 起動オプションを有効にする（`requires` も有効になり，`conflicts` は無効になる） |
 | `--without a,b` | 起動オプションを無効にする（`default: true` のものも．これを必要とするオプションも無効になる） |
 | `--mock` | 実機の代わりにmockデバイスを使う |
-| `--video-codec av1\|h264` | `storage: video` の画像の codec（省略時は recorder の YAML．[Video codec](configuration.md#video-codec)） |
+| `--video-codec av1\|h264` | `storage: video` の画像の codec（省略時は recorder の YAML．[Video codec](configuration/index.md#video-codec)） |
 
-`--hardware` は廃止しました．指定すると `--mock` を使うよう促すエラーになります．起動オプションの定義と規則は [設定](configuration.md) の「起動オプション」を参照してください．
+`--hardware` は廃止しました．指定すると `--mock` を使うよう促すエラーになります．起動オプションの定義と規則は [設定](configuration/index.md) の「起動オプション」を参照してください．
 
 ## コマンド
 
 | コマンド | 用途 |
 | --- | --- |
 | `roboloom [robot]` | ランチャーを開く（`roboloom launch [robot]` と同じ） |
-| `init <robot> [--template <パッケージかディレクトリ>] [--update]` | 機体設定を生成する（同梱のテンプレートは `rakuda2`）．`--template` は，roboloomに入っていないテンプレートから作る（[自分のパッケージから足す](../contribution.md#own-types)）．`--update` は，既存のプロジェクトを今の版のテンプレートに追いつかせる：ないファイルを足し，コピーしたままのファイルを置き換え，編集済み・測定済みのファイルは変えずに，テンプレートだけにあるキーとオプションを一覧にする |
-| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る．`can_left` のようなCANインターフェースを渡すと，PiPER（[開発中](../contribution/piper.md)）のファームウェア・関節角・状態・有効化・温度・異常を読む（有効化も移動もしない）．`--device pika` を付けると，シリアルポートのPika Gripper（[開発中](../contribution/pika-gripper.md)）の版・角度・状態のビット・温度・フィードバックの周期を読む．`--device pika_sense` では，Pika Sense（[開発中](../contribution/pika-sense.md)）のシリアルの版・挟みの角度・`Command`・フィードバックの周期を読む |
+| `init <robot> [--template <パッケージかディレクトリ>] [--update]` | 機体設定を生成する（同梱のテンプレートは `rakuda2`）．`--template` は，roboloomに入っていないテンプレートから作る（[自分のパッケージから足す](../contribution/index.md#own-types)）．`--update` は，既存のプロジェクトを今の版のテンプレートに追いつかせる：ないファイルを足し，コピーしたままのファイルを置き換え，編集済み・測定済みのファイルは変えずに，テンプレートだけにあるキーとオプションを一覧にする |
+| `probe <port>` | DynamixelのID・モデル・レジスタと読み出し時間（目安の周期上限）を読み取る．`can_left` のようなCANインターフェースを渡すと，PiPER（[開発中](../robots/piper/index.md)）のファームウェア・関節角・状態・有効化・温度・異常を読む（有効化も移動もしない）．`--device pika` を付けると，シリアルポートのPika Gripper（[開発中](../robots/pika/index.md)）の版・角度・状態のビット・温度・フィードバックの周期を読む．`--device pika_sense` では，Pika Sense（[開発中](../controllers/pose-ik.md)）のシリアルの版・挟みの角度・`Command`・フィードバックの周期を読む |
 | `validate [robot]` | デバイスを開かず設定とdataflowを検証する（有効なオプションとデータセット名を表示） |
 | `calibrate-joints <calibration>` | URDF零姿勢の実測カウントをcalibrationに保存する |
 | `measure-travel <calibration> --out <path>` | 手で動かした可動域を保存する |
@@ -36,14 +36,14 @@
 | `gravity-check [robot] leader <group> --with gravity` | 補償の有無による姿勢の変化を測る |
 | `run [robot]` | 操作画面で収集する |
 | `record [robot] --task <text> --seconds <n>` | 一定時間のエピソードを収集する（`--episodes` で回数指定，`--home` で毎回初期姿勢へ動かしてから開始） |
-| `record --experiment <名前>`，`infer --experiment <名前>` | プロジェクトの `configs/roboloom/<名前>.yaml`（またはファイルのパス）のとおりに走らせる（robot，オプション，方策などノードへの上書き，保存先，task，長さ，回数，home．[実験ファイル](configuration.md#experiments)）．コマンドラインに書いた値が優先．`validate`・`check-dataset`・`label` も `--experiment` を受ける |
-| `infer [robot] --seconds <n>`，`infer [robot] --steps <n>` | 時間指定，または方策の行動の手数（`--steps`）指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../controllers/policy.md)） |
+| `record --experiment <名前>`，`infer --experiment <名前>` | プロジェクトの `configs/roboloom/<名前>.yaml`（またはファイルのパス）のとおりに走らせる（robot，オプション，方策などノードへの上書き，保存先，task，長さ，回数，home．[実験ファイル](configuration/index.md#experiments)）．コマンドラインに書いた値が優先．`validate`・`check-dataset`・`label` も `--experiment` を受ける |
+| `infer [robot] --seconds <n>`，`infer [robot] --steps <n>` | 時間指定，または方策の行動の手数（`--steps`）指定の方策実行．オプション `policy` を自動で有効にする．`--task` がある場合だけ保存．`--home` で毎回初期姿勢へ動かしてから開始（[方策の home](../policy/index.md)） |
 | `session [robot] <operation> [task]` | 起動済みの `run` へ操作を送る：`start <task>`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も．`save success`・`save failure` は，成否を付けて保存する |
-| `serve-policy --experiment <実験ファイル>`，`serve-policy --from <方策のYAML>`，`serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | この環境の方策を，`backend: server` の方策ノードへ提供する（[別のプロセス](../controllers/policy.md#running-the-policy-in-another-process)）．`--experiment` は実験ファイルが方策に与える `factory`，`kwargs`，`server.address` を，`--from` は方策のYAMLのものを使う．秘密の文字列は `ROBOLOOM_POLICY_AUTHKEY` から読む |
-| `check-dataset [robot]` | 記録したデータセットを読むだけで検査する：エピソード数とファイルの整合，動画の長さと行数，`valid` が0の行の割合，成否の数．問題があれば終了コード1．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ．`--recover` は保存の途中で止まったエピソードを取り除く（[記録と再開](configuration.md#recording-and-resuming)） |
-| `label [robot] <episode> success\|failure` | 保存済みのエピソードに，評価の成否を付ける・付け直す（`--note <text>` でメモ）．データセットの `meta/roboloom_episodes.jsonl` に追記し，成否の数を表示する．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ（[評価の成否](configuration.md#episode-records)） |
-| `convert-handheld [robot] --action delta\|relative-chunk` | フォロワのない構成で手に持って記録したデータセットを，相対の姿勢の行動を持つ学習用のデータセットに変換する（[開発中](../contribution/pika-handheld.md)．`--horizon`，`--hands`，`--max-gap`，`--output`，`--repo-id`） |
-| `skills install\|check\|path` | コーディングエージェント向けのスキル（Agent Skill）を自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーする・コピーが今の版と合っているか確かめる（合わなければ終了コード1）・同梱の場所を表示する（`--agent all\|agents\|claude`，`--root`，`--force`．[Installation](../quick-start/installation.md) の「コーディングエージェントで使う」）．デバイスは開かない |
+| `serve-policy --experiment <実験ファイル>`，`serve-policy --from <方策のYAML>`，`serve-policy <module:callable> [--kwargs JSON] [--address host:port]` | この環境の方策を，`backend: server` の方策ノードへ提供する（[別のプロセス](../policy/index.md#running-the-policy-in-another-process)）．`--experiment` は実験ファイルが方策に与える `factory`，`kwargs`，`server.address` を，`--from` は方策のYAMLのものを使う．秘密の文字列は `ROBOLOOM_POLICY_AUTHKEY` から読む |
+| `check-dataset [robot]` | 記録したデータセットを読むだけで検査する：エピソード数とファイルの整合，動画の長さと行数，`valid` が0の行の割合，成否の数．問題があれば終了コード1．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ．`--recover` は保存の途中で止まったエピソードを取り除く（[記録と再開](configuration/index.md#recording-and-resuming)） |
+| `label [robot] <episode> success\|failure` | 保存済みのエピソードに，評価の成否を付ける・付け直す（`--note <text>` でメモ）．データセットの `meta/roboloom_episodes.jsonl` に追記し，成否の数を表示する．`[robot]` の代わりにデータセットのディレクトリも渡せる．オプションで名前が変わるデータセットは `--with` で選ぶ（[評価の成否](configuration/index.md#episode-records)） |
+| `convert-handheld [robot] --action delta\|relative-chunk` | フォロワのない構成で手に持って記録したデータセットを，相対の姿勢の行動を持つ学習用のデータセットに変換する（[開発中](../tutorials/pika-handheld.md)．`--horizon`，`--hands`，`--max-gap`，`--output`，`--repo-id`） |
+| `skills install\|check\|path` | コーディングエージェント向けのスキル（Agent Skill）を自分のプロジェクトの `.agents/skills/` と `.claude/skills/` にコピーする・コピーが今の版と合っているか確かめる（合わなければ終了コード1）・同梱の場所を表示する（`--agent all\|agents\|claude`，`--root`，`--force`．[Installation](../get-started/installation.md) の「コーディングエージェントで使う」）．デバイスは開かない |
 
 `calibrate-joints`，`measure-travel`，`identify-gravity`，`commission`，`watchdog-test`，`tune-gravity`，`gravity-check` はDynamixelの機体専用です（`probe` はDynamixel，PiPER，Pika Gripper，Pika Senseを読めます）．Dynamixelでないノードを指定すると，理由を示して拒否します．
 
@@ -95,7 +95,7 @@ Launch（Ctrl-S）で起動し，Cancelで何も起動せずに終わります�
 Textualの操作メニューは使えない操作も理由付きで表示し，初期姿勢がない `home` も含めます．Ctrl-Lで編集可能なコマンド欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．キー・ペイン・確認・時間指定モード・拡張契約は [操作画面](operator-screen.md) を参照してください．
 
 `run --plain` は行入力を維持し，`record --plain`・`infer --plain` はキー入力なしで収集します．非TTYも同じ経路です（ランチャーは開きません）．`tune-gravity` はデバイスを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
-`stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../quick-start/rakuda2.md) にあります．既存の方策APIなど，leader以外の詳細は [Python API](python-api.md) を参照してください．
+`stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../tutorials/rakuda2.md) にあります．既存の方策APIなど，leader以外の詳細は [Python API](python-api.md) を参照してください．
 
 ## センサー選択
 

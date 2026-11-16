@@ -2,7 +2,7 @@
 
 roboloom の操作は，どれも Python の関数として使えます．CLI（`roboloom ...`）は，その関数を呼んで結果を表示するだけの薄い層です．
 
-[インストール](../quick-start/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．設定や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
+[インストール](../get-started/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．設定や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
 
 | やること | CLI | Python |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ roboloom も同じ構成をとります．
 - **`Session`**：dataflow を起動し，出来事を送ります．出来事とは，開始，停止，保存，task 名などです．制御のループは回しません．
   - そのため，利用者のスクリプトが重い処理をしたり，止まったりしても，制御の周期は乱れません．
 
-実験ごとの設定（方策，オプション，保存先）は，`Session.launch(experiment=...)` で渡せます．名前（`configs/roboloom/<名前>.yaml`），ファイルのパス，同じキーのマッピングのどれかです（[実験ファイル](configuration.md#experiments)）．
+実験ごとの設定（方策，オプション，保存先）は，`Session.launch(experiment=...)` で渡せます．名前（`configs/roboloom/<名前>.yaml`），ファイルのパス，同じキーのマッピングのどれかです（[実験ファイル](configuration/index.md#experiments)）．
 
 ### エピソードを録る
 
@@ -70,7 +70,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   - 途中のエピソードがあれば破棄する．
   - `operator` が設定されていれば，腕を支えるように求める．Enter で follower も脱力し，`hold` と入力すると follower は保持を続ける．
   - dataflow を止める．
-  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．ただし，放置したときに保持しない（`unattended` が `holds` でない）follower は保持しない．性質は [設定](configuration.md) の「脱力したときと放置したときの性質」にある．
+  - leader は脱力する．follower は，脱力を選んだときだけトルクを切り，それ以外はトルクと最後の目標を保持する．ただし，放置したときに保持しない（`unattended` が `holds` でない）follower は保持しない．性質は [設定](configuration/index.md) の「脱力したときと放置したときの性質」にある．
   - スクリプトから決めるときは `s.close(release=True)`（脱力）または `s.close(release=False)`（保持）を呼ぶ．
 - ログは，設定ファイルの隣の `logs/<データセット名>-<時刻>/` に残ります（例：`logs/rakuda2-digit-20261102-101500/`）．
   - `dora.log`
@@ -167,7 +167,7 @@ print(episodes.summary(s.cfg.output, s.episodes))
 ### 細かく操作する
 
 - `start(task)`，`stop()`，`save()`，`discard()`，`estop()`，`release(confirm=True)` を，1 つずつ呼べます．
-- `save()` が返ったエピソードは，そのあとプロセスが止まっても読めます．書き込みに失敗すると `SessionError` を上げ，そのエピソードを破棄します（それまでのエピソードは残り，次を録れます．[記録と再開](configuration.md#recording-and-resuming)）．
+- `save()` が返ったエピソードは，そのあとプロセスが止まっても読めます．書き込みに失敗すると `SessionError` を上げ，そのエピソードを破棄します（それまでのエピソードは残り，次を録れます．[記録と再開](configuration/index.md#recording-and-resuming)）．
   - 例：外部の合図で開始と終了を決めるとき．
 - 状態を見る：
   - `status()`：各ノードの最新の状態．
@@ -178,7 +178,7 @@ print(episodes.summary(s.cfg.output, s.episodes))
 - `estop()` は，ノードが落ちたあとでも送れます（ほかのコマンドは，ノードの障害を見つけると `SessionError` になります）．
 - `Session.launch` を呼んだプロセスが終わると，どう終わった場合でも（強制終了，例外，端末を閉じた），dataflowは記録中のエピソードを破棄し，フォロワを保持させて終わります．`close()` を呼ばずに放置しても，ロボットが方策で動き続けることはありません．`multiprocessing` などで作った子プロセスが残っている間は，終わったと見なされません．
 - `home(timeout=None)`：leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かし，両方が着くまで待ちます．着かないときや拒否されたときは `SessionError` です．`record(..., home=True)` は毎回のエピソードの前にこれを行います．詳しくは [Leader](../controllers/leader.md) の「初期姿勢へ動かす」を参照してください．
-- `teleop()`，`policy()`，`stop_teleop()`：方策に `teleop:` があるとき，leaderに切り替え（エピソードの前，または途中の介入），方策に戻し，エピソードの外のテレオペを終えます．詳しくは [テレオペと介入](../controllers/policy.md) を参照してください．
+- `teleop()`，`policy()`，`stop_teleop()`：方策に `teleop:` があるとき，leaderに切り替え（エピソードの前，または途中の介入），方策に戻し，エピソードの外のテレオペを終えます．詳しくは [テレオペと介入](../policy/index.md) を参照してください．
 
 ```python
 s.start("wipe the table")
@@ -199,8 +199,8 @@ s.save() if stopped.ok else s.discard()
   - `observation.images.digit_left`
   - その他
 - `task` も渡されます．
-- 任意で `bind(spec)` を持てます．読み込みの直後に，観測の形と行動の名前を受け取り，学習したときと違えば断ります．LeRobotのチェックポイントは `roboloom.policy.lerobot:load` で読み込めます．詳しくは [方策で動かす](../controllers/policy.md) を参照してください．
-- `infer` が返すもの：関節の目標値．記録した `action` と同じく，全フォロワの関節を設定の順につないだ並びで，単位は各フォロワの単位です．1 手 `[n]` か，まとめた行動 `[H, n]`．ロボットごとの並び・要素数・単位は，各ロボットのページ（[Rakuda2](../robots/rakuda2.md) など）にあります．
+- 任意で `bind(spec)` を持てます．読み込みの直後に，観測の形と行動の名前を受け取り，学習したときと違えば断ります．LeRobotのチェックポイントは `roboloom.policy.lerobot:load` で読み込めます．詳しくは [方策で動かす](../policy/index.md) を参照してください．
+- `infer` が返すもの：関節の目標値．記録した `action` と同じく，全フォロワの関節を設定の順につないだ並びで，単位は各フォロワの単位です．1 手 `[n]` か，まとめた行動 `[H, n]`．ロボットごとの並び・要素数・単位は，各ロボットのページ（[Rakuda2](../robots/rakuda2/index.md) など）にあります．
 
 **ノードの動き**
 - 方策は，dataflow の中の方策ノードが，`"module:callable"` の参照から読み込んで動かします．
@@ -241,7 +241,7 @@ with Session.launch(
 **注意**
 - 既定（同期）では，`infer` の間は command を送りません．
   - 推論が `command_deadline_ms` より長くかかると，robot は HOLD に入ります．止まって待つ動きになります．
-  - `nodes/policy.yaml` の `inference: async` にすると，推論中も前のまとめた行動を実行し続けます（[非同期の推論](../controllers/policy.md#asynchronous-inference)）．
+  - `nodes/policy.yaml` の `inference: async` にすると，推論中も前のまとめた行動を実行し続けます（[非同期の推論](../policy/index.md#asynchronous-inference)）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．
   - 実機で，推論の経路を初めて確かめるときに使います．
 
@@ -336,9 +336,9 @@ with InProcessSession.from_components(
     session.save_episode()
 ```
 
-実機の収集手順は [Rakuda2 Quick start](../quick-start/rakuda2.md) を参照してください．
+実機の収集手順は [Rakuda2 Quick start](../tutorials/rakuda2.md) を参照してください．
 
-`load_config(..., video_codec="av1")` と `Session.launch(..., video_codec="av1")` で，`storage: video` の画像を AV1 で記録します（`"h264"` は H.264，`None` は recorder の YAML の指定．どちらもなければ H.264）．構成済みの `RobotConfig` を渡すときは `load_config` で選びます．既存のデータセットと codec が違うときの扱いは [Video codec](configuration.md#video-codec) を参照してください．
+`load_config(..., video_codec="av1")` と `Session.launch(..., video_codec="av1")` で，`storage: video` の画像を AV1 で記録します（`"h264"` は H.264，`None` は recorder の YAML の指定．どちらもなければ H.264）．構成済みの `RobotConfig` を渡すときは `load_config` で選びます．既存のデータセットと codec が違うときの扱いは [Video codec](configuration/index.md#video-codec) を参照してください．
 
 ## センサー選択
 
