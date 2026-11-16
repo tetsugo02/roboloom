@@ -53,28 +53,3 @@ jobs:
         run: uv run --no-sync mypy src
       - name: Unit tests
         run: uv run --no-sync pytest -q -m "not e2e"
-
-  e2e:
-    name: e2e (${{ matrix.shard }}/3, mock dora dataflow)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-      - name: Set up uv and Python
-        uses: astral-sh/setup-uv@v10.3.2
-        with:
-          version: "0.8.15"
-          python-version: "3.12"
-          enable-cache: true
-      - name: Install FFmpeg's shared libraries
-        # LeRobot decodes dataset videos with torchcodec, which loads the system's FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - name: Install the locked test and development dependencies
-        run: uv sync --locked --extra rakuda2 --extra test --group dev
-      - name: E2E tests (shard ${{ matrix.shard }}/3)
-        run: uv run --no-sync pytest -q -m e2e --shard=${{ matrix.shard }}/3
