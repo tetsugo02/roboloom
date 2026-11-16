@@ -25,7 +25,7 @@ action_horizon: 1     # mode: step のとき
 | `rename` | チェックポイントの特徴量の名前を，この構成の名前に対応させます．例：`{observation.images.wrist: observation.images.left_wrist}` |
 | `revision` | Hubのリビジョン（任意） |
 
-- 読み込みは，LeRobot 0.6.1のrolloutと同じ手順です．設定と重み，保存された前処理と後処理（正規化の統計を含む）をチェックポイントから読みます．
+- 読み込みは，LeRobot 0.7.0のrolloutと同じ手順です．設定と重み，保存された前処理と後処理（正規化の統計を含む）をチェックポイントから読みます．
 - 読み込むときに，チェックポイントの入力と出力を，この構成の観測とフォロワと照らします．足りない観測や大きさの違いがあれば，名前を挙げて断ります．
   - 入力として照らすのは，LeRobotの方策が読むもの（`observation.state`，`observation.images.*`，`observation.environment_state`）です．
   - LeRobotの学習は，データセットの `observation.*` をすべて入力として記録します（`observation.meta.*`，`observation.effort`，Pika Senseの `observation.left_sense` など）．LeRobotの方策はこれらを読まないので，推論の構成になくても構いません．
@@ -39,14 +39,14 @@ action_horizon: 1     # mode: step のとき
 roboloomが記録したデータセット（LeRobotDataset v3.0）は，そのまま `lerobot-train` で学習できます．
 
 ```bash
-# 学習に lerobot[training]（accelerate，wandb）が要ります
+# 学習に lerobot[training]（accelerate，trackio）が要ります
 uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train   # 自分のプロジェクトで
 uv sync --extra policy --extra train                                                # roboloomのリポジトリをcloneした中で
 uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \
   --dataset.root=.roboloom/piper-mock/datasets/piper-mock \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
-  --wandb.enable=false \
+  --trackio.enable=false \
   --output_dir=outputs/train/act_piper_mock
 ```
 

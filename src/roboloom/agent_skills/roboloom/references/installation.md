@@ -14,12 +14,12 @@ uv run roboloom --help
 For an existing project, first set `project.requires-python` in `pyproject.toml` to a range
 within `">=3.12,<3.15"`. Selecting an interpreter alone does not restrict what uv resolves.
 
-To use `record` on Python 3.14, also add the following to your own `pyproject.toml`. LeRobot 0.6.1 caps NumPy at `<2.3` (a bound inherited from opencv-python-headless 4.12 and dropped in 4.13), and NumPy below 2.3 has no Python 3.14 wheels. uv overrides do not travel in a dependency's metadata, so roboloom cannot set this for you. Loading LeRobot policies (`policy.lerobot`) and `lerobot-train` need Python 3.12 or 3.13: draccus, which LeRobot uses to parse its configs, does not support Python 3.14. Custom policies work on 3.14.
+When using `record`, `policy` or `train`, also add the following to your own `pyproject.toml` (required on Python 3.14; on 3.12 and 3.13 it allows NumPy 2.3 and later). LeRobot 0.7.0 caps NumPy at `<2.3` (a bound inherited from opencv-python-headless 4.12 and dropped in 4.13), and NumPy below 2.3 has no Python 3.14 wheels. uv overrides do not travel in a dependency's metadata, so roboloom cannot set this for you. Loading LeRobot policies (`policy.lerobot`) and `lerobot-train` need Python 3.12 or 3.13: draccus, which LeRobot uses to parse its configs, does not support Python 3.14. Custom policies work on 3.14.
 
 ```toml
 [tool.uv]
 override-dependencies = [
-    "numpy>=2.0,<2.3; python_version < '3.14'",
+    "numpy>=2.0,<3; python_version < '3.14'",
     "numpy>=2.3.3,<3; python_version >= '3.14'",
 ]
 ```
@@ -32,12 +32,12 @@ override-dependencies = [
 | `rakuda2` | dynamixel-sdk | Rakuda2 follower and Rakuda-mini leader hardware |
 | `piper` | piper_sdk 0.6, pinocchio (`pin`) | PiPER follower and `pose_ik` (in development) |
 | `pika` | pysurvive | Pika Sense tracking (in development); cameras and serial use core dependencies |
-| `record` | `lerobot[dataset]==0.6.1` | saving episodes (also mock collection that saves) |
+| `record` | `lerobot[dataset]==0.7.0` | saving episodes (also mock collection that saves) |
 | `hardware` | pyrealsense2, sounddevice | RealSense, microphone |
 | `digit` | digit-interface 0.2.1 (fork wheel, opencv-python-headless) | DIGIT |
 | `ik` | pinocchio (`pin`) | standalone IK without the PiPER SDK; also included in `piper` |
-| `policy` | `lerobot==0.6.1` (brings torch) | `roboloom.policy.lerobot:load` |
-| `train` | `lerobot[training]==0.6.1` | `lerobot-train` on roboloom datasets |
+| `policy` | `lerobot==0.7.0` (brings torch) | `roboloom.policy.lerobot:load` |
+| `train` | `lerobot[training]==0.7.0` | `lerobot-train` on roboloom datasets |
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit

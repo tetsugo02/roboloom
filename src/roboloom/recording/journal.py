@@ -1,6 +1,6 @@
 """Keep a dataset readable whatever happens to the recording process.
 
-LeRobot 0.6.1 writes the footer of its parquet files (the rows, and the episodes'
+LeRobot 0.7.0 (as 0.6.1) writes the footer of its parquet files (the rows, and the episodes'
 metadata) only in `finalize()`, and appends each video to the previous one. A process
 killed before that leaves `info.json` counting episodes whose files cannot be read. Two
 steps avoid it:
@@ -34,7 +34,7 @@ WRITTEN = ("data", "videos", "meta/episodes")
 # rewritten by every save
 REWRITTEN = ("meta/info.json", "meta/stats.json", "meta/tasks.parquet")
 STAGING = "images"  # frames waiting to be encoded; nothing is kept there between saves
-CHECKPOINT_VERSION = "0.6.1"  # the LeRobot whose writer `checkpoint` knows
+CHECKPOINT_VERSION = "0.7.0"  # the LeRobot whose writer `checkpoint` knows
 
 
 def _files(root: Path) -> list[str]:

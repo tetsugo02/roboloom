@@ -1,6 +1,6 @@
 # データの形式
 
-`record` extraでLeRobotDataset 0.6.1に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損は直前の有効な値と有効フラグで表します．`task` はフレームに記録されます．列名・dtype・shapeの一覧は [データセットの特徴量](../reference/dataset-features.md) にあります．
+`record` extraでLeRobotDataset 0.7.0に保存します．取得・利用可能・受信・指令送信の単調時計時刻を区別して整列し，欠損は直前の有効な値と有効フラグで表します．`task` はフレームに記録されます．列名・dtype・shapeの一覧は [データセットの特徴量](../reference/dataset-features.md) にあります．
 
 ## 記録するもの { #features }
 

@@ -1,4 +1,4 @@
-"""Causal frame alignment and LeRobotDataset 0.6.1 writing.
+"""Causal frame alignment and LeRobotDataset 0.7.0 writing.
 
 Rows are finalized while the episode runs, so memory stays bounded:
 
@@ -78,7 +78,7 @@ class EpisodeRecorder:
         self.sources = cfg.sources
         self.followers = cfg.followers
         self.streams = {action_stream(name): name for name in self.followers}
-        self.dataset: Any = dataset  # LeRobotDataset 0.6.1 has no py.typed marker.
+        self.dataset: Any = dataset  # LeRobotDataset 0.7.0 has no py.typed marker.
         # where `open_dataset` opened it; None for a dataset the caller passed in
         self.root: Path | None = None
         # episodes in the dataset; kept here because a failed save replaces `dataset`
@@ -179,7 +179,7 @@ class EpisodeRecorder:
                 features=expected,
                 root=root,
                 robot_type=cfg.robot,
-                # LeRobot 0.6.1 preserves each feature dtype; this permits video
+                # LeRobot 0.7.0 preserves each feature dtype; this permits video
                 # keys alongside image keys (and also accepts image-only schemas).
                 use_videos=True,
                 rgb_encoder=video_encoder(cfg, self.video_codec),

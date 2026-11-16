@@ -1,6 +1,6 @@
 # Recording and datasets
 
-With the `record` extra, episodes are saved as **LeRobotDataset 0.6.1** (format v3.0) at
+With the `record` extra, episodes are saved as **LeRobotDataset 0.7.0** (format v3.0) at
 `output` (relative to `config.yaml`) under `repo_id`, both suffixed by enabled options'
 `dataset` names. `task` is stored in every frame and works as the language instruction.
 
@@ -82,7 +82,7 @@ uv run lerobot-train \
   --dataset.repo_id=local/rakuda2-digit \
   --dataset.root=.roboloom/rakuda2/datasets/rakuda2-digit \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
-  --wandb.enable=false --output_dir=outputs/train/act_rakuda2
+  --trackio.enable=false --output_dir=outputs/train/act_rakuda2
 ```
 
 `--dataset.repo_id` = the configuration's `repo_id` (with option suffixes);
