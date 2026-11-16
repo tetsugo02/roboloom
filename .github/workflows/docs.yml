@@ -8,7 +8,6 @@ on:
       - "src/**"  # the Python API pages are generated from docstrings
       - "mkdocs*.yml"
       - "scripts/docs.py"
-      - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/docs.yml"
   pull_request:
@@ -18,7 +17,6 @@ on:
       - "src/**"  # the Python API pages are generated from docstrings
       - "mkdocs*.yml"
       - "scripts/docs.py"
-      - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
