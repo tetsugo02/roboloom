@@ -100,6 +100,6 @@ uv run python main.py
 uv run roboloom init rakuda2
 ```
 
-`init` generates `.roboloom/rakuda2/` in your project from templates shipped in the installed package. It does not open devices. Until you fill in the `SET_...` values, `validate` reports missing configuration. Continue with [Rakuda2 Quick start](../tutorials/rakuda2.md) to use the generated configuration on hardware. Do not use mock values as hardware safety limits.
+`init` generates `.roboloom/rakuda2/` in your project from templates shipped in the installed package. It does not open devices. Until you fill in the `SET_...` values, `validate` reports missing configuration. Continue with [Rakuda2: configuration and read check](../tutorials/rakuda2-setup.md) to use the generated configuration on hardware. Do not use mock values as hardware safety limits.
 
 See [Contribution](../contribution/index.md) for source changes, tests, and docs builds. The repository's top-level `examples/` and `scripts/` are not installed as package resources when adding the Git dependency.

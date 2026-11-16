@@ -1,5 +1,8 @@
 # Leader
 
+!!! note "Status: hardware-verified"
+    <span class="status status--verified">Hardware-verified</span> Collection with the Rakuda2 leader (standard and gravity-compensated) is checked on hardware. Locking joints (`law: position`), cross-joint compensation (`couplings`) and their combinations are <span class="status status--mock">Mock only</span>. Force feedback is <span class="status status--mock">Mock only</span> (paused).
+
 For Rakuda2 teleoperation, the `leader` node in `inputs` (device `type: rakuda_mini`, the Rakuda-mini arm) reads joint positions, and the `joint` node in `controllers` converts them into follower targets. The leader has the follower's joint names and unit, so each follower joint follows the leader joint of the same name; nothing else has to be written.
 
 ```yaml
@@ -31,7 +34,13 @@ When `aligning` appears on screen, align the leader with the follower while watc
 
 The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `InProcessSession.from_yaml()` does not accept a leader that executes control laws.
 
-The concrete setup is in [Rakuda2 Quick start](../tutorials/rakuda2.md).
+The concrete setup is in [Rakuda2 Quick start](../tutorials/rakuda2-setup.md).
+
+## Supported robots { #supported-robots }
+
+| Robot | Input | Status | Example |
+| --- | --- | --- | --- |
+| Rakuda2 | Rakuda-mini (`rakuda_mini`) | <span class="status status--verified">Hardware-verified</span> | [Rakuda2 controllers](../robots/rakuda2/controllers.md#leader) |
 
 ## Lock leader joints
 

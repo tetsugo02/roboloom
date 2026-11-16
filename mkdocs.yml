@@ -11,19 +11,35 @@ nav:
   - ホーム: index.md
   - Get started:
       - インストール: get-started/installation.md
+      - しくみ: get-started/concepts.md
+      - 対応表: get-started/support-matrix.md
   - Tutorials:
-      - Rakuda2：設定から収集まで: tutorials/rakuda2.md
+      - 一覧: tutorials/index.md
+      - 装置なしで一周する: tutorials/first-run-mock.md
+      - Rakuda2：機体設定と読み取り確認: tutorials/rakuda2-setup.md
+      - Rakuda2：重力補償: tutorials/rakuda2-gravity.md
+      - Rakuda2：teleopで収集: tutorials/rakuda2-collect.md
+      - Rakuda2：収集から推論まで: tutorials/rakuda2-train-infer.md
+      - Rakuda2：介入しながら評価する: tutorials/rakuda2-intervention.md
+      - 自作の方策を動かす: tutorials/custom-policy.md
+      - 自分のロボットを足す: tutorials/own-robot.md
+      - PiPER＋Pikaを模擬で（開発中）: tutorials/piper-pika-mock.md
       - Pika Senseを手に持った収集（開発中）: tutorials/pika-handheld.md
   - Robots:
       - 概要: robots/index.md
       - Rakuda2:
           - 概要: robots/rakuda2/index.md
+          - Controllers: robots/rakuda2/controllers.md
+          - Sensors: robots/rakuda2/sensors.md
           - Pika SenseとIKで動かす（開発中）: robots/rakuda2/pika-sense-ik.md
-      - PiPER（開発中）: robots/piper/index.md
+      - PiPER（開発中）:
+          - 概要: robots/piper/index.md
+          - Controllers: robots/piper/controllers.md
       - Pika Gripper（開発中）: robots/pika/index.md
   - Controllers:
       - 概要: controllers/index.md
       - Leader: controllers/leader.md
+      - 方策: controllers/policy.md
       - Pika SenseとIK（開発中）: controllers/pose-ik.md
   - Sensors:
       - 概要: sensors/index.md

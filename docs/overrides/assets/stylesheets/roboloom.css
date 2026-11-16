@@ -284,3 +284,24 @@ html[lang="ja"] .md-typeset h3 {
 [data-md-color-scheme="slate"] .md-typeset .status--mock {
   --rl-status: #86b1dc;
 }
+
+/* Tutorial gallery (tutorials/index.md): <div class="grid cards gallery" markdown>.
+   The thumbnail fills the card's width on a surface tint; the tag row is small and muted. */
+.md-typeset .gallery > ul > li > p:first-child,
+.md-typeset .gallery > ol > li > p:first-child {
+  margin: 0 0 0.6em;
+}
+
+.md-typeset .gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.3rem;
+  background-color: var(--rl-surface);
+}
+
+.md-typeset .gallery-tags {
+  color: var(--rl-fg-muted);
+  font-size: 0.8em;
+}

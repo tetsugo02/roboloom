@@ -1,7 +1,14 @@
-# Pika SenseとIKによる遠隔操作（開発中・実機未検証）
+# Pika SenseとIKによる遠隔操作
 
-!!! warning "開発中"
-    手に持ったAgileX Pika Senseの姿勢を，IKでPiPERの関節角に変えて遠隔操作する仕組みの，開発中の記録です．模擬のSenseと偽の機器を使った試験だけで確かめています．実機では動かしていません．通信と座標の変換は，AgileXのpika_sdk，pika_ros，PikaAnyArmのソースから読み取ったものです．
+!!! warning "状態：開発中"
+    <span class="status status--dev">開発中</span> 手に持ったAgileX Pika Senseの姿勢を，IKでPiPERの関節角に変えて遠隔操作する仕組みの，開発中の記録です．模擬のSenseと偽の機器を使った試験だけで確かめています．実機では動かしていません．通信と座標の変換は，AgileXのpika_sdk，pika_ros，PikaAnyArmのソースから読み取ったものです．
+
+## 対応する機体 { #supported-robots }
+
+| 機体 | 動かす部分 | 状態 | 設定例 |
+| --- | --- | --- | --- |
+| PiPER＋Pika Gripper | 腕1台とグリッパー1台（Senseごと） | <span class="status status--dev">開発中</span> | [PiPERのcontroller](../robots/piper/controllers.md#pose-ik) |
+| Rakuda2 | 腕ごとの関節とグリッパー（`type: parts`） | <span class="status status--dev">開発中</span> | [Rakuda2のcontroller](../robots/rakuda2/controllers.md#pika) |
 
 ## 構成
 

@@ -11,19 +11,35 @@ nav:
   - Home: index.md
   - Get started:
       - Installation: get-started/installation.md
+      - Concepts: get-started/concepts.md
+      - Support matrix: get-started/support-matrix.md
   - Tutorials:
-      - "Rakuda2: from setup to collection": tutorials/rakuda2.md
+      - Gallery: tutorials/index.md
+      - First run without devices: tutorials/first-run-mock.md
+      - "Rakuda2: configuration and read check": tutorials/rakuda2-setup.md
+      - "Rakuda2: gravity compensation": tutorials/rakuda2-gravity.md
+      - "Rakuda2: teleoperated collection": tutorials/rakuda2-collect.md
+      - "Rakuda2: from collection to inference": tutorials/rakuda2-train-infer.md
+      - "Rakuda2: evaluating with interventions": tutorials/rakuda2-intervention.md
+      - Running your own policy: tutorials/custom-policy.md
+      - Adding your own robot: tutorials/own-robot.md
+      - PiPER + Pika on mock devices (in development): tutorials/piper-pika-mock.md
       - Hand-held collection with Pika Sense (in development): tutorials/pika-handheld.md
   - Robots:
       - Overview: robots/index.md
       - Rakuda2:
           - Overview: robots/rakuda2/index.md
+          - Controllers: robots/rakuda2/controllers.md
+          - Sensors: robots/rakuda2/sensors.md
           - With Pika Sense and IK (in development): robots/rakuda2/pika-sense-ik.md
-      - PiPER (in development): robots/piper/index.md
+      - PiPER (in development):
+          - Overview: robots/piper/index.md
+          - Controllers: robots/piper/controllers.md
       - Pika Gripper (in development): robots/pika/index.md
   - Controllers:
       - Overview: controllers/index.md
       - Leader: controllers/leader.md
+      - Policy: controllers/policy.md
       - Pika Sense and IK (in development): controllers/pose-ik.md
   - Sensors:
       - Overview: sensors/index.md

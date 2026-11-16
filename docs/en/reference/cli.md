@@ -46,7 +46,7 @@ A running `run` takes these operations from the operator screen or from [`robolo
 The Textual operations menu shows unavailable actions with reasons, including `home` without a configured pose. Ctrl-L opens the editable command input; Ctrl-G requests emergency stop. Ctrl-C and Ctrl-Q open the same exit dialog, initially selecting Cancel. See [Operator screen](operator-screen.md) for keys, panes, confirmations, fixed-duration modes, and extension contracts.
 
 `run --plain` retains line input; `record --plain` and `infer --plain` collect without key input. Non-TTY invocation selects these paths automatically (no launcher). `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
-`stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Quick start](../tutorials/rakuda2.md).
+`stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Rakuda2: teleoperated collection](../tutorials/rakuda2-collect.md).
 
 ## Sensor selection { #sensor-selection }
 

@@ -1,7 +1,7 @@
-# Pikaの手首カメラ（開発中・実機未検証）
+# Pikaの手首カメラ
 
-!!! warning "開発中"
-    Pika GripperとPika Senseに付いたカメラを記録するための，開発中の記録です．魚眼カメラは偽のOpenCVを使った試験と模擬だけで確かめています．D405はコードを変えずに `realsense_rgb` で読む見込みですが，実機では確かめていません．
+!!! warning "状態：開発中"
+    <span class="status status--dev">開発中</span> Pika GripperとPika Senseに付いたカメラを記録するための，開発中の記録です．魚眼カメラは偽のOpenCVを使った試験と模擬だけで確かめています．D405はコードを変えずに `realsense_rgb` で読む見込みですが，実機では確かめていません．
 
 ## カメラ
 

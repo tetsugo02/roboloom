@@ -203,7 +203,7 @@ with InProcessSession.from_components(
     session.save_episode()
 ```
 
-For the data collection procedure on real hardware, see [Rakuda2 Quick start](../../tutorials/rakuda2.md).
+For the data collection procedure on real hardware, see [Rakuda2: teleoperated collection](../../tutorials/rakuda2-collect.md).
 
 ## API { #api }
 

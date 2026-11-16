@@ -1,7 +1,17 @@
-# Pika Gripperフォロワ（開発中・実機未検証）
+# Pika Gripperフォロワ
 
-!!! warning "開発中"
-    AgileX Pika Gripperをフォロワとして動かすドライバの開発中の記録です．模擬のバスと，偽のシリアルを使った試験だけで確かめています．実機では動かしていません．通信の仕様は，AgileXのpika_sdkとpika_rosのソースから読み取ったものです．
+!!! warning "状態：開発中"
+    <span class="status status--dev">開発中</span> AgileX Pika Gripperをフォロワとして動かすドライバの開発中の記録です．模擬のバスと，偽のシリアルを使った試験だけで確かめています．実機では動かしていません．通信の仕様は，AgileXのpika_sdkとpika_rosのソースから読み取ったものです．
+
+## Pikaの機器 { #pika-devices }
+
+| 機器 | 役割 | ページ | 状態 |
+| --- | --- | --- | --- |
+| Pika Gripper | フォロワ（このページ）．PiPERの先に付ける | — | <span class="status status--dev">開発中</span> |
+| Pika Sense | 手に持つ入力．Viveトラッカーの姿勢と挟みの角度 | [Pika SenseとIK](../../controllers/pose-ik.md) | <span class="status status--dev">開発中</span> |
+| 手首カメラ | GripperとSenseの魚眼カメラとD405 | [Pikaの手首カメラ](../../sensors/pika-cameras.md) | <span class="status status--dev">開発中</span> |
+
+PiPERと組にした構成は [PiPERのcontroller](../piper/controllers.md)，Senseを手に持って集める構成は [Pika Senseを手に持った収集](../../tutorials/pika-handheld.md) にあります．
 
 ## 必要なもの
 

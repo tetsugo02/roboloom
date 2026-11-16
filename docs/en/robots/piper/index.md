@@ -1,7 +1,9 @@
-# PiPER follower (in development, not verified on hardware)
+# PiPER follower
 
-!!! warning "In development"
-    A record of the driver, in development, that runs an AgileX PiPER as a follower. It is checked only with the mock bus and tests against a stand-in for piper_sdk; it has not run on hardware. There is no robot template (`roboloom init`) or Quick start yet.
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> A record of the driver, in development, that runs an AgileX PiPER as a follower. It is checked only with the mock bus and tests against a stand-in for piper_sdk; it has not run on hardware. There is no robot template (`roboloom init`) or Quick start yet.
+
+The controllers it can use (Pika Sense and IK, a policy) are in [PiPER controllers](controllers.md); a run through on mock devices is in [PiPER + Pika on mock devices](../../tutorials/piper-pika-mock.md).
 
 ## Requirements
 
@@ -60,7 +62,7 @@ limits:                  # rad; each joint inside the PiPER range
 
 Because of `unknown`, the exit confirmation offers no "quit with followers holding". It offers supporting the arms and quitting with the torque off, or quitting without releasing (the arms may fall). The values are explained in "Behaviour without torque and when left alone" in [Configuration](../../reference/configuration/index.md).
 
-## Observation and action (`.roboloom/piper-mock/`)
+## Observation and action (`.roboloom/piper-mock/`) { #observation-and-action }
 
 With two PiPER arms and two Pika Grippers, the recorded dataset and the policy's inputs and outputs share the same order and units. The order is that of `followers:`.
 

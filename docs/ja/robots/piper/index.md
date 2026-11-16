@@ -1,7 +1,9 @@
-# PiPERフォロワ（開発中・実機未検証）
+# PiPERフォロワ
 
-!!! warning "開発中"
-    AgileX PiPERをフォロワとして動かすドライバの開発中の記録です．模擬のバスと，piper_sdkを模した試験だけで確かめています．実機では動かしていません．機体のテンプレート（`roboloom init`）とQuick startはまだありません．
+!!! warning "状態：開発中"
+    <span class="status status--dev">開発中</span> AgileX PiPERをフォロワとして動かすドライバの開発中の記録です．模擬のバスと，piper_sdkを模した試験だけで確かめています．実機では動かしていません．機体のテンプレート（`roboloom init`）とQuick startはまだありません．
+
+使えるcontroller（Pika SenseとIK，方策）は [PiPERのcontroller](controllers.md)，模擬で一周する手順は [PiPER＋Pikaを模擬で](../../tutorials/piper-pika-mock.md) にあります．
 
 ## 必要なもの
 
@@ -60,7 +62,7 @@ limits:                  # rad．各関節はPiPERの範囲の内側に
 
 `unknown` のため，終了の確認に「保持したまま終了」は出ません．終了の確認では，支えてから脱力して終了するか，脱力せずに終了する（腕は落ちるかもしれない）かを選びます．値の意味は [設定](../../reference/configuration/index.md) の「脱力したときと放置したときの性質」にあります．
 
-## 観測と行動（`.roboloom/piper-mock/`）
+## 観測と行動（`.roboloom/piper-mock/`） { #observation-and-action }
 
 PiPER 2台とPika Gripper 2台の構成で，記録するデータセットと方策の入出力は同じ並びと単位です．並びは `followers:` に書いた順です．
 

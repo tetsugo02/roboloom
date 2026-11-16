@@ -1,7 +1,7 @@
-# Web camera (in development, not tested on hardware)
+# Web camera
 
-!!! warning "In development"
-    Notes on capturing USB / built-in web cameras through OpenCV. The driver targets Linux, macOS and Windows, but has been checked only with tests against a fake OpenCV and with mock devices, not on hardware on any OS. Windows support for the full `Session` / recording runtime is out of scope (the current `Session` uses Unix FIFOs and process control).
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> Notes on capturing USB / built-in web cameras through OpenCV. The driver targets Linux, macOS and Windows, but has been checked only with tests against a fake OpenCV and with mock devices, not on hardware on any OS. Windows support for the full `Session` / recording runtime is out of scope (the current `Session` uses Unix FIFOs and process control).
 
 ## Installation
 

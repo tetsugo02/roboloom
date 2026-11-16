@@ -2,7 +2,7 @@
 
 公開ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)．docs関連の変更が `main` にpushされると，GitHub Actionsが両言語をビルドしてGitHub Pagesへ公開します．初回設定とtriggerの対象は [Contribution](docs/ja/contribution/index.md#github-pagesへの公開) を参照してください．
 
-**[Quick start](docs/ja/get-started/installation.md)**（[English](docs/en/get-started/installation.md)）から，インストールと [Rakuda2の設定・重力補償・データ収集](docs/ja/tutorials/rakuda2.md) を進められます．[対応機器](docs/ja/robots/rakuda2/index.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution/index.md) にまとめています．
+**[Quick start](docs/ja/get-started/installation.md)**（[English](docs/en/get-started/installation.md)）から，インストールと Rakuda2の[設定](docs/ja/tutorials/rakuda2-setup.md)・[重力補償](docs/ja/tutorials/rakuda2-gravity.md)・[データ収集](docs/ja/tutorials/rakuda2-collect.md) を進められます．[対応機器](docs/ja/robots/rakuda2/index.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution/index.md) にまとめています．
 
 Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．
 
@@ -113,7 +113,7 @@ with InProcessSession.from_components(
 
 DIGIT，重力補償，バイラテラル，方策のような構成の違いは `options:` で選びます．各オプションは `help`，`default`，`requires`，`conflicts`，`set`，`dataset` を持ちます．`set` は `<役割>.<ノード名>` をノード YAML に置き換えるか，`null` で取り除きます．オプションを有効にすると `requires` のものも有効になり，`conflicts` のものは無効になります．有効なオプションの `dataset` 名は `repo_id` と `output` に付け足されます（例：`local/rakuda2` に digit で `local/rakuda2-digit`）．記録する feature が変わる構成は別の dataset に入ります．`mode:` は省略でき，既定は hardware です．
 
-以下は `init` で生成した設定を使う実機の例です．先に [Rakuda2 Quick start](docs/ja/tutorials/rakuda2.md) に従って `SET_...` を埋め，EEPROM・安全範囲・停止動作を確認します．初回はfollowerの `torque: false` で経路を確認し，leaderを含めて腕を支えられる状態で行います．
+以下は `init` で生成した設定を使う実機の例です．先に [Rakuda2：機体設定と読み取り確認](docs/ja/tutorials/rakuda2-setup.md) に従って `SET_...` を埋め，EEPROM・安全範囲・停止動作を確認します．初回はfollowerの `torque: false` で経路を確認し，leaderを含めて腕を支えられる状態で行います．
 
 ```bash
 uv run roboloom                       # ランチャー：ロボットを選び，run/record/infer，オプション，mock/実機を選んで起動

@@ -1,7 +1,7 @@
 # Hand-held collection with Pika Sense
 
-!!! warning "In development"
-    Notes on collecting with Pika Senses held in the hands, without a robot (after UMI). Checked only with mock Senses and mock cameras; not run on hardware. Inference that drives PiPER with the collected data does not exist yet.
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> Notes on collecting with Pika Senses held in the hands, without a robot (after UMI). Checked only with mock Senses and mock cameras; not run on hardware. Inference that drives PiPER with the collected data does not exist yet.
 
 ## How it works
 

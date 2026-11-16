@@ -25,9 +25,11 @@ template: it adds files the project lacks, replaces files still as they were cop
 and lists what the template has that your edited files do not (they are never
 overwritten; `.template.json` records how each file was copied).
 
-The [Rakuda2 Quick start](https://tetsugo02.github.io/roboloom/en/quick-start/rakuda2/)
-([日本語](https://tetsugo02.github.io/roboloom/ja/quick-start/rakuda2/)) walks through setup,
-gravity compensation, and teleoperation recording. Sensor/controller combinations are in
+The Rakuda2 tutorials walk through
+[setup](https://tetsugo02.github.io/roboloom/en/tutorials/rakuda2-setup/)
+([日本語](https://tetsugo02.github.io/roboloom/ja/tutorials/rakuda2-setup/)),
+[gravity compensation](https://tetsugo02.github.io/roboloom/en/tutorials/rakuda2-gravity/), and
+[teleoperation recording](https://tetsugo02.github.io/roboloom/en/tutorials/rakuda2-collect/). Sensor/controller combinations are in
 [Rakuda2](https://tetsugo02.github.io/roboloom/en/robots/rakuda2/).
 Before the first run, change `nodes/follower.yaml` from its default `torque: true` to
 `torque: false` to check the recording path without moving the follower. This does not
@@ -170,7 +172,7 @@ need `homing:` (set in `leader_gravity.yaml`). Hands off the arms while they mov
    leader's values back the same way.
 7. `uv run roboloom tune-gravity leader right_arm --with gravity`, then `left_arm`:
    joint by joint, set how much weight is removed (gain) and how hard a push must be before
-   the arm moves (hold). What the numbers mean: [Gravity tuning](https://tetsugo02.github.io/roboloom/en/reference/gravity-tuning/).
+   the arm moves (hold). What the numbers mean: [Gravity tuning](https://tetsugo02.github.io/roboloom/en/explanation/gravity-compensation/).
 
 Then run with `uv run roboloom run --with gravity` (or tick it in the launcher). To record
 DIGIT as well, fill the serials in `nodes/digit_*.yaml` and enable the `digit` option

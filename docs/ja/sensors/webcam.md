@@ -1,7 +1,7 @@
-# Webカメラ（開発中・実機未検証）
+# Webカメラ
 
-!!! warning "開発中"
-    USB／内蔵のWebカメラをOpenCVで取得するための，開発中の記録です．Linux・macOS・Windows向けのドライバーを実装していますが，偽のOpenCVを使った試験と模擬だけで確かめており，どのOSでも実機では確かめていません．Windowsでの `Session`・録画全体は対象外です（今の `Session` はUnixのFIFOとプロセス制御を使います）．
+!!! warning "状態：開発中"
+    <span class="status status--dev">開発中</span> USB／内蔵のWebカメラをOpenCVで取得するための，開発中の記録です．Linux・macOS・Windows向けのドライバーを実装していますが，偽のOpenCVを使った試験と模擬だけで確かめており，どのOSでも実機では確かめていません．Windowsでの `Session`・録画全体は対象外です（今の `Session` はUnixのFIFOとプロセス制御を使います）．
 
 ## インストール
 

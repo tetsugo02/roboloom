@@ -46,7 +46,7 @@
 Textualの操作メニューは使えない操作も理由付きで表示し，初期姿勢がない `home` も含めます．Ctrl-Lで編集可能なコマンド欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．キー・ペイン・確認・時間指定モード・拡張契約は [操作画面](operator-screen.md) を参照してください．
 
 `run --plain` は行入力を維持し，`record --plain`・`infer --plain` はキー入力なしで収集します．非TTYも同じ経路です（ランチャーは開きません）．`tune-gravity` はデバイスを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
-`stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Quick start](../tutorials/rakuda2.md) にあります．
+`stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Rakuda2：teleopで収集](../tutorials/rakuda2-collect.md) にあります．
 
 ## センサー選択 { #sensor-selection }
 

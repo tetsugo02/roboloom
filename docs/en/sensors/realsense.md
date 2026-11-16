@@ -1,5 +1,8 @@
 # RealSense
 
+!!! note "Status: hardware-verified"
+    <span class="status status--verified">Hardware-verified</span> Color capture and recording are checked in real collection on Rakuda2.
+
 `RealSenseRGB` uses `pyrealsense2` to capture **only the color stream**. It requires the `hardware` extra.
 
 ```yaml

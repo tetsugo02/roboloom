@@ -1,5 +1,8 @@
 # DIGIT
 
+!!! note "状態：実機検証済み"
+    <span class="status status--verified">実機検証済み</span> Rakuda2の実機で，左右のDIGITを含む収集を確かめています．
+
 `DigitSensor` は `digit-interface` を使って触覚画像を取得します．`digit` extraが必要です（[インストール](../get-started/installation.md)）．左右のセンサーには異なるシリアル番号を設定します．
 
 ```yaml

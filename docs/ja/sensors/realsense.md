@@ -1,5 +1,8 @@
 # RealSense
 
+!!! note "状態：実機検証済み"
+    <span class="status status--verified">実機検証済み</span> Rakuda2の実機の収集で，カラーの取得と記録を確かめています．
+
 `RealSenseRGB` は `pyrealsense2` で **カラーストリームのみ** を取得します．`hardware` extraが必要です．
 
 ```yaml

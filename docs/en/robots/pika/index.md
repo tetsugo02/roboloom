@@ -1,7 +1,17 @@
-# Pika Gripper follower (in development, not tested on hardware)
+# Pika Gripper follower
 
-!!! warning "In development"
-    Notes on the driver that runs an AgileX Pika Gripper as a follower. It has been checked only with the mock bus and with tests against a fake serial port, never on hardware. The protocol was read from the source of AgileX's pika_sdk and pika_ros.
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> Notes on the driver that runs an AgileX Pika Gripper as a follower. It has been checked only with the mock bus and with tests against a fake serial port, never on hardware. The protocol was read from the source of AgileX's pika_sdk and pika_ros.
+
+## Pika devices { #pika-devices }
+
+| Device | Role | Page | Status |
+| --- | --- | --- | --- |
+| Pika Gripper | follower (this page), mounted on a PiPER | — | <span class="status status--dev">In development</span> |
+| Pika Sense | hand-held input: the Vive tracker's pose and the jaw angle | [Pika Sense and IK](../../controllers/pose-ik.md) | <span class="status status--dev">In development</span> |
+| Wrist cameras | the fisheye camera and D405 on the Gripper and the Sense | [Pika wrist cameras](../../sensors/pika-cameras.md) | <span class="status status--dev">In development</span> |
+
+The configuration with a PiPER is in [PiPER controllers](../piper/controllers.md); collecting with a Sense in the hand is in [Hand-held collection with Pika Sense](../../tutorials/pika-handheld.md).
 
 ## Requirements
 

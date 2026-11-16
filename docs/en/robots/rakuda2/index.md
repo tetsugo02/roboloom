@@ -1,29 +1,34 @@
 # Rakuda2
 
+<span class="status status--verified">Hardware-verified</span>
+
 Rakuda2 has **17 joints**: 3 torso/head joints, plus 6 arm joints and 1 gripper joint on each of the left and right sides. Joint values are raw Dynamixel position counts, and current is in mA.
 
 The follower is `type: rakuda2_follower` and the operator input, in the `leader` role, is the Rakuda-mini arm (`type: rakuda_mini`). The leader and follower use separate Dynamixel buses, each owned exclusively by its node. Create the configuration with `roboloom init rakuda2`.
 
-## Supported controllers
+## Supported controllers { #controllers }
 
-The current operation guide covers the [Leader](../../controllers/leader.md). Joint positions are read via `inputs.leader`, and a `type: joint` controller converts them for the follower.
+| Controller | Options | Status |
+| --- | --- | --- |
+| Leader (`joint`) | none | <span class="status status--verified">Hardware-verified</span> |
+| Gravity-compensated leader | `gravity` | <span class="status status--verified">Hardware-verified</span> |
+| Policy | `policy` | <span class="status status--verified">Hardware-verified</span> |
+| Policy with interventions | `policy`, `policy_teleop` | <span class="status status--verified">Hardware-verified</span> |
+| Pika Sense and IK | `pika` | <span class="status status--dev">In development</span> |
 
-- Standard leader: the arms, torso, and head have torque off; the trigger is controlled as a spring.
-- Leader with gravity compensation: the left and right arms are controlled with `gravity_comp`, using the identified gravity model, range of motion, and tuning values.
-- Selected leader joints can be locked at their startup pose with `position`. Configure torso-yaw compensation for the neck camera through `couplings` in the `joint` controller. Both standard and gravity-compensated leaders can use these options; they are disabled by default. See the [examples and limitations](../../controllers/leader.md). The combination has been verified only in mock environments.
-- Align the leader and follower before starting. While in `aligning`, start is refused and the joint differences are shown as a warning. You can retry after aligning.
+Configuration examples are in [Rakuda2 controllers](controllers.md).
 
-## Supported sensors
+## Supported sensors { #sensors }
 
-| Sensor | Node name | Config | Recorded values |
+| Sensor | Node name | How to enable | Status |
 | --- | --- | --- | --- |
-| [RealSense](../../sensors/realsense.md) | `camera` | `nodes/camera.yaml` | RGB image (depth is not captured) |
-| [DIGIT](../../sensors/digit.md) | `digit_left`, `digit_right` | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | Left and right tactile RGB images |
-| [Audio](../../sensors/audio.md) | `audio` | `nodes/audio.yaml` | Mel spectrogram of one microphone (off by default; select it with `--sensors`) |
+| [RealSense](../../sensors/realsense.md) | `camera` | on by default | <span class="status status--verified">Hardware-verified</span> |
+| [DIGIT](../../sensors/digit.md) | `digit_left`, `digit_right` | option `digit` | <span class="status status--verified">Hardware-verified</span> |
+| [Audio](../../sensors/audio.md) | `audio` | choose with `--sensors` | <span class="status status--dev">In development</span> |
 
-Set the sensor serial numbers to match the hardware. Sensor names are also used as feature names in the dataset.
+Combinations and how to choose are in [Rakuda2 sensors](sensors.md).
 
-## Observation and action
+## Observation and action { #observation-and-action }
 
 The recorded dataset and the policy's inputs and outputs share the same order and units.
 
@@ -47,7 +52,7 @@ The recorded dataset and the policy's inputs and outputs share the same order an
 - `storage: video` images are H.264 by default; `video_codec: av1` in `nodes/recorder.yaml` or `--video-codec av1` records AV1 ([Video codec](../../reference/configuration/recorder.md#video-codec)).
 - The template's default policy `roboloom.policy:hold` keeps the arms in place. How to write a policy is in [Driving with a policy](../../policy/index.md).
 
-## Launch options and combinations
+## Launch options and combinations { #options }
 
 There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enabled it uses the standard leader, the `joint` controller, and the RealSense. The template has the following launch options (all disabled by default). See [CLI](../../reference/cli.md) for choosing them and "Launch options" in [Configuration](../../reference/configuration/index.md) for the rules.
 
@@ -73,7 +78,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 
 Limitations:
 
-- Use `gravity` only after the measurement steps of the [Quick start](../../tutorials/rakuda2.md) (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`). Loading is refused while measured values are still `SET_...`.
+- Use `gravity` only after the measurement steps of the [Rakuda2: gravity compensation](../../tutorials/rakuda2-gravity.md) (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`). Loading is refused while measured values are still `SET_...`.
 - Enabling or disabling `gravity` changes the leader's Operating Mode. On a hardware launch from a terminal, the CLI shows the EEPROM differences and writes them after confirmation.
 - `policy` works without DIGIT. To pass DIGIT images to the policy, enable `digit` and change `observe` in `nodes/policy.yaml` to `[camera, digit_left, digit_right]`. Enabling `digit` alone does not change the policy inputs. Match the inputs used for training. Loading a LeRobot checkpoint that needs DIGIT without DIGIT is refused before starting.
 - For a policy using joint state only, set `observe: []`. To avoid opening sensors, also remove their nodes from `sensors` in `config.yaml`.
@@ -106,33 +111,4 @@ Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits 
 
 The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Control rate](../../reference/configuration/followers.md#control-rate).
 
-For the steps from setup to data collection, see [Rakuda2 Quick start](../../tutorials/rakuda2.md); for the meaning of the control values, see [Gravity tuning](../../explanation/gravity-compensation.md).
-
-## Sensor selection
-
-`load_config(..., sensors=[...], observe=[...])` and
-`Session.launch(..., sensors=[...], observe=[...])` select sensors independently
-from policy observations. None keeps configuration defaults; [] selects none.
-Follower state is always observed. When passing RobotConfig, select in load_config;
-Session.launch rejects additional selection arguments.
-
-```python
-with Session.launch(
-    "rakuda2",
-    options=["policy"],
-    sensors=["camera", "audio"],
-    observe=["camera"],
-    policy="my_lab.policies:load",
-) as session:
-    session.wait_ready()
-    session.record("pick", seconds=20)
-```
-
-`--sensors camera,audio --observe camera` makes the same CLI selection;
-`--sensors "" --observe ""` selects none. The launcher provides separate
-sensor and observation checkboxes and remembers selections.
-Unselected sensor YAML files are not loaded. Observing an inactive sensor fails.
-Sensors introduced by options can also be selected individually, including either DIGIT.
-An optional sensor uses `{file: nodes/audio.yaml, default: false}`; string paths
-remain enabled by default. Options apply first. Recording includes every active sensor,
-even those omitted from observe. See [Audio](../../sensors/audio.md).
+For the steps from setup to data collection, see [Rakuda2: configuration and read check](../../tutorials/rakuda2-setup.md); for the meaning of the control values, see [Gravity tuning](../../explanation/gravity-compensation.md).

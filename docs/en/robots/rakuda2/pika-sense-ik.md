@@ -1,7 +1,7 @@
-# Rakuda2 with Pika Sense and IK (in development)
+# Rakuda2 with Pika Sense and IK
 
-!!! warning "In development, mock only"
-    The option `pika` of the Rakuda2 template has been checked with mock devices only. The joint map of the arms (zero counts and directions), the gripper map, the tool offset and the workspace are first guesses, and the arm's inverse kinematics is poorly conditioned in some directions (see [Limitations](#limitations)). Do not run it on hardware before the checks under [Before hardware](#before-hardware).
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> The option `pika` of the Rakuda2 template has been checked with mock devices only. The joint map of the arms (zero counts and directions), the gripper map, the tool offset and the workspace are first guesses, and the arm's inverse kinematics is poorly conditioned in some directions (see [Limitations](#limitations)). Do not run it on hardware before the checks under [Before hardware](#before-hardware).
 
 One Pika Sense per arm drives Rakuda2 through inverse kinematics, in place of the leader. It is the first use of two mechanisms that are not specific to Rakuda2 or the Pika: [parts of a follower](../../reference/configuration/controllers.md#parts) and kinematics in the follower's own joint unit.
 

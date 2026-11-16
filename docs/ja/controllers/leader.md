@@ -1,5 +1,8 @@
 # Leader
 
+!!! note "状態：実機検証済み"
+    <span class="status status--verified">実機検証済み</span> Rakuda2のleader（通常と重力補償付き）による収集は実機で確かめています．関節の固定（`law: position`），関節間の相殺（`couplings`）とその組み合わせは <span class="status status--mock">模擬のみ</span> です．力の逆送は <span class="status status--mock">模擬のみ</span>（中断中）です．
+
 Rakuda2の遠隔操作では，`inputs` の `leader` ノード（機器は `type: rakuda_mini`，Rakuda-mini）が関節位置を読み，`controllers` の `joint` ノードがfollowerの目標へ変換します．leaderはfollowerと同じ関節名と単位を持つので，followerの各関節は同じ名前のleaderの関節に追従します．ほかに書くことはありません．
 
 ```yaml
@@ -31,7 +34,13 @@ input_timeout_ms: 150
 
 leaderのトリガーは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleaderノード自身が実行するモーター制御則です．実機では `Session` / CLIのdataflowで動かします．`InProcessSession.from_yaml()` は制御則を実行するleaderを受け付けません．
 
-具体的なセットアップは [Rakuda2 Quick start](../tutorials/rakuda2.md) にあります．
+具体的なセットアップは [Rakuda2 Quick start](../tutorials/rakuda2-setup.md) にあります．
+
+## 対応する機体 { #supported-robots }
+
+| 機体 | 入力 | 状態 | 設定例 |
+| --- | --- | --- | --- |
+| Rakuda2 | Rakuda-mini（`rakuda_mini`） | <span class="status status--verified">実機検証済み</span> | [Rakuda2のcontroller](../robots/rakuda2/controllers.md#leader) |
 
 ## leaderの関節を固定する
 

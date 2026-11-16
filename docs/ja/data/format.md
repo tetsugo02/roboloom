@@ -31,6 +31,30 @@
 - フォロワのない構成（手に持った装置，センサーだけ）には `action*` の特徴量はありません．
 - 記録する特徴量を変えるオプションには `dataset` を付け，データセットを分けます（[起動オプション](../reference/configuration/index.md#launch-options)）．
 
+## 行の割り当て { #row-assignment }
+
+recorderは，エピソードを `dataset_fps` の周期の行に区切り，各ノードの出力を因果的に（その時刻までに届いたものだけで）割り当てます．
+
+```mermaid
+sequenceDiagram
+  participant X as センサー
+  participant F as フォロワ
+  participant R as recorder
+  Note over R: 行 k は t_k から t_k+1 まで
+  X->>R: 観測（t_k までに届いた最新）
+  F->>R: 状態（t_k までに届いた最新）
+  F->>R: 指令（t_k から t_k+1 の最初の1つ）
+  Note over R: 全フォロワの指令が t_k+1 を過ぎたら確定
+  R->>R: 行 k を書く
+```
+
+- 行 k は `[t_k, t_{k+1})`，`t_k = t0 + k / dataset_fps` です．
+- 観測は，recorderが `t_k` までに受け取ったものから選びます．`max_age_ms` より古いものは使わず，直前の有効な値を繰り返して `observation.meta.<ノード>.valid` を0にします．
+- `action[k]` は，フォロワごとに `[t_k, t_{k+1})` で最初に送った指令です．送らなかったフォロワは保持している目標で埋め，`action.meta.<フォロワ>.valid` を0にします．
+- 行は，全フォロワの指令の流れが `t_{k+1}` を過ぎたとき（黙っているフォロワがあれば `t_{k+1}` から `grace_ms` 後）に確定します．
+- `start` の直前に届いた最新のサンプルを残しておくので，行0は空になりません．
+- フォロワのない構成（手に持つ機器，センサーだけ）では `action*` がなく，`t_{k+1}` を過ぎた行から確定します．
+
 ## 有効フラグ { #valid }
 
 | 列 | 1の意味 | 0の意味 |

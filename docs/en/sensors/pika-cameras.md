@@ -1,7 +1,7 @@
-# Pika wrist cameras (in development, not tested on hardware)
+# Pika wrist cameras
 
-!!! warning "In development"
-    Notes on recording the cameras on the Pika Gripper and Pika Sense. The fisheye camera has been checked only with tests against a fake OpenCV and with mock devices. The D405 is expected to work with `realsense_rgb` unchanged, but this has not been checked on hardware.
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> Notes on recording the cameras on the Pika Gripper and Pika Sense. The fisheye camera has been checked only with tests against a fake OpenCV and with mock devices. The D405 is expected to work with `realsense_rgb` unchanged, but this has not been checked on hardware.
 
 ## Cameras
 

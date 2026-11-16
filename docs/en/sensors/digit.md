@@ -1,5 +1,8 @@
 # DIGIT
 
+!!! note "Status: hardware-verified"
+    <span class="status status--verified">Hardware-verified</span> Collection with the left and right DIGIT is checked on Rakuda2.
+
 `DigitSensor` uses `digit-interface` to capture tactile images. It requires the `digit` extra ([Installation](../get-started/installation.md)). Set different serial numbers for the left and right sensors.
 
 ```yaml

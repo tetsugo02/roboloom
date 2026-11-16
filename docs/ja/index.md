@@ -1,16 +1,61 @@
 # roboloom
 
-roboloom は，ロボットのteleoperationとセンサー観測を収集し，LeRobotDatasetに保存するPythonパッケージです．現在のガイドは **Rakuda2・leader・RealSense RGB・DIGIT** を対象にしています．
+roboloomは，ロボットのteleoperationで観測と行動を集め，LeRobotDataset（0.6.1）に保存し，学習した方策で同じロボットを動かすPythonパッケージです．
 
-実機の収集では `Session` がdora dataflowを起動し，leader，follower，センサー，recorderを別プロセスで動かします．Python 3.12，dora-rs / dora-rs-cli 1.0.1，LeRobotDataset 0.6.1を使います．
+- **収集**：leaderや手に持つ機器でフォロワを動かし，カメラや触覚と一緒に記録する．
+- **学習**：記録をそのまま `lerobot-train` や自作のモデルで学習する．
+- **推論と評価**：方策でフォロワを動かし，途中で人が介入し，成否を残す．
 
-| 章 | 内容 |
-| --- | --- |
-| [Quick start](get-started/installation.md) | インストール，Rakuda2の設定，重力補償，teleoperationでのデータ収集 |
-| [Robots](robots/index.md) | 機体の構成と対応するセンサー・controller |
-| [Sensors](sensors/index.md) | RealSenseとDIGITの設定・画像形式 |
-| [Controllers](controllers/index.md) | leaderによる操作，姿勢合わせ，入力の期限 |
-| [Reference](reference/configuration/index.md) | 設定，CLI，Python API，重力補償の詳細 |
-| [Contribution](contribution/index.md) | 開発環境，検証，機能変更に合わせたdocs更新 |
+各ノードはdora-rsのdataflowで別のプロセスとして動きます．`Session`（操作画面，CLI，Python）がdataflowを起動し，エピソードの開始・停止・保存を送ります．
 
-まず [インストール](get-started/installation.md)，次に [Rakuda2 Quick start](tutorials/rakuda2.md) に進んでください．ガイドの実機コマンドには，操作者による設定値の照合と機体ごとの動作確認が必要です．模擬実行やdocsのビルド成功は，実機検証を意味しません．
+```mermaid
+flowchart LR
+  S["Session<br/>操作画面・CLI・Python"]
+  I["入力<br/>leader・Pika Sense"] --> C["controller"]
+  P["方策"] --> C
+  C --> F["フォロワ<br/>Rakuda2・PiPER"]
+  X["センサー<br/>RealSense・DIGIT"] --> R["recorder"]
+  F --> R
+  I --> R
+  R --> D[("LeRobotDataset")]
+  S -. "start・stop・save" .-> C
+  S -.-> R
+```
+
+<div class="grid cards" markdown>
+
+-   **[Get started](get-started/installation.md)**
+
+    ---
+
+    インストール，[しくみ](get-started/concepts.md)，[対応表](get-started/support-matrix.md)．
+
+-   **[Tutorials](tutorials/index.md)**
+
+    ---
+
+    装置なしで一周する手順から，Rakuda2の収集・学習・推論まで．
+
+-   **[Robots](robots/index.md)**
+
+    ---
+
+    機体ごとの関節，使えるcontrollerとセンサー．
+
+-   **[Policy](policy/index.md)**
+
+    ---
+
+    方策の書き方，LeRobotの方策，介入，評価．
+
+-   **[Reference](reference/configuration/index.md)**
+
+    ---
+
+    設定のキー，CLI，Python API，データセットの列．
+
+</div>
+
+## 状態ラベル { #status }
+
+機能ごとに，どこまで確かめたかをラベルで示します：<span class="status status--verified">実機検証済み</span> <span class="status status--mock">模擬のみ</span> <span class="status status--dev">開発中</span> <span class="status status--design">設計のみ</span>．定義は [状態ラベル](reference/status-labels.md) にあります．実機のコマンドは，操作者が設定値を照合し，機体ごとに動作を確かめてから使います．模擬の実行やdocsのビルドの成功は，実機の検証ではありません．

@@ -1,7 +1,14 @@
-# Teleoperation with Pika Sense and IK (in development, not tested on hardware)
+# Teleoperation with Pika Sense and IK
 
-!!! warning "In development"
-    Notes on teleoperating the PiPER by turning the pose of a hand-held AgileX Pika Sense into joint angles with IK. It has been checked only with a mock Sense and tests against fake devices, never on hardware. The protocol and the frame transforms were read from the source of AgileX's pika_sdk, pika_ros and PikaAnyArm.
+!!! warning "Status: in development"
+    <span class="status status--dev">In development</span> Notes on teleoperating the PiPER by turning the pose of a hand-held AgileX Pika Sense into joint angles with IK. It has been checked only with a mock Sense and tests against fake devices, never on hardware. The protocol and the frame transforms were read from the source of AgileX's pika_sdk, pika_ros and PikaAnyArm.
+
+## Supported robots { #supported-robots }
+
+| Robot | What it drives | Status | Example |
+| --- | --- | --- | --- |
+| PiPER + Pika Gripper | one arm and one gripper per Sense | <span class="status status--dev">In development</span> | [PiPER controllers](../robots/piper/controllers.md#pose-ik) |
+| Rakuda2 | each arm's joints and gripper (`type: parts`) | <span class="status status--dev">In development</span> | [Rakuda2 controllers](../robots/rakuda2/controllers.md#pika) |
 
 ## Parts
 

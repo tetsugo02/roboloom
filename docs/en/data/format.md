@@ -31,6 +31,30 @@ Which features exist depends on the nodes that ran in the recording.
 - A configuration without followers (a hand-held device, sensors only) has no `action*` features.
 - An option that changes the recorded features gets a `dataset` of its own ([Launch options](../reference/configuration/index.md#launch-options)).
 
+## How rows are filled { #row-assignment }
+
+The recorder cuts an episode into rows at the `dataset_fps` period and fills each row causally, only from what had arrived by its time.
+
+```mermaid
+sequenceDiagram
+  participant X as sensor
+  participant F as follower
+  participant R as recorder
+  Note over R: row k covers t_k to t_k+1
+  X->>R: observation (latest by t_k)
+  F->>R: state (latest by t_k)
+  F->>R: command (first in t_k to t_k+1)
+  Note over R: final once every follower is past t_k+1
+  R->>R: write row k
+```
+
+- Row k covers `[t_k, t_{k+1})`, with `t_k = t0 + k / dataset_fps`.
+- Observations are chosen from what the recorder had received by `t_k`. One older than `max_age_ms` is not used: the last valid value repeats and `observation.meta.<node>.valid` is 0.
+- `action[k]` joins, per follower, the first command it sent in `[t_k, t_{k+1})`. A follower that sent none fills its part with the target it held, and `action.meta.<follower>.valid` is 0.
+- A row is final once every follower's command stream has passed `t_{k+1}` (or `grace_ms` after `t_{k+1}` when a follower is silent).
+- The newest sample received before `start` is kept, so row 0 is not empty.
+- Without followers (a hand-held device, sensors only) there are no `action*` features, and a row is final once `t_{k+1}` has passed.
+
 ## Validity flags { #valid }
 
 | Column | 1 means | 0 means |

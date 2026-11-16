@@ -1,29 +1,34 @@
 # Rakuda2
 
+<span class="status status--verified">実機検証済み</span>
+
 Rakuda2は，胴体・頭部3関節，左右それぞれ腕6関節とグリッパー1関節の **17関節** を持つ構成です．関節値はDynamixelの生の位置カウント，電流はmAで扱います．
 
 followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRakuda-miniアーム（`type: rakuda_mini`）です．leaderとfollowerは別のDynamixelバスを使い，それぞれのノードが専有します．設定は `roboloom init rakuda2` で作成します．
 
-## 対応controller
+## 対応controller { #controllers }
 
-現在の操作ガイドは [Leader](../../controllers/leader.md) を対象にします．`inputs.leader` で関節位置を読み，`type: joint` のcontrollerがfollowerへ変換します．
+| Controller | オプション | 状態 |
+| --- | --- | --- |
+| Leader（`joint`） | なし | <span class="status status--verified">実機検証済み</span> |
+| 重力補償付きleader | `gravity` | <span class="status status--verified">実機検証済み</span> |
+| 方策 | `policy` | <span class="status status--verified">実機検証済み</span> |
+| 方策＋介入 | `policy`，`policy_teleop` | <span class="status status--verified">実機検証済み</span> |
+| Pika SenseとIK | `pika` | <span class="status status--dev">開発中</span> |
 
-- 通常のleader：腕・胴体・頭部は脱力，トリガーはばねとして制御します．
-- 重力補償付きleader：左右腕を `gravity_comp` で制御し，同定した重力モデル・可動域・調整値を使います．
-- 必要なleader関節は `position` で起動時の姿勢に固定できます．首カメラの腰yaw相殺は `joint` controllerの `couplings` で指定します．通常・重力補償付きleaderのどちらでも設定でき，既定は無効です．[設定例と制約](../../controllers/leader.md)を参照してください．組み合わせの検証は模擬環境までです．
-- 開始前にleaderとfollowerを揃えます．`aligning` の間は開始が拒否され，関節差が警告表示されます．揃えてから再試行できます．
+設定例は [Rakuda2のcontroller](controllers.md) にあります．
 
-## 対応センサー
+## 対応センサー { #sensors }
 
-| センサー | ノード名 | 設定 | 記録する値 |
+| センサー | ノード名 | 有効にする方法 | 状態 |
 | --- | --- | --- | --- |
-| [RealSense](../../sensors/realsense.md) | `camera` | `nodes/camera.yaml` | RGB画像（深度は取得しません） |
-| [DIGIT](../../sensors/digit.md) | `digit_left`, `digit_right` | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | 左右の触覚RGB画像 |
-| [音声](../../sensors/audio.md) | `audio` | `nodes/audio.yaml` | マイク1本のメルスペクトログラム（既定は無効．`--sensors` で選ぶ） |
+| [RealSense](../../sensors/realsense.md) | `camera` | 既定で有効 | <span class="status status--verified">実機検証済み</span> |
+| [DIGIT](../../sensors/digit.md) | `digit_left`，`digit_right` | オプション `digit` | <span class="status status--verified">実機検証済み</span> |
+| [音声](../../sensors/audio.md) | `audio` | `--sensors` で選ぶ | <span class="status status--dev">開発中</span> |
 
-センサーのシリアル番号は実機に合わせて設定します．センサー名はデータセットのfeature名にも使われます．
+組み合わせと選び方は [Rakuda2のセンサー](sensors.md) にあります．
 
-## 観測と行動
+## 観測と行動 { #observation-and-action }
 
 記録するデータセットと方策の入出力は，同じ並びと単位です．
 
@@ -47,7 +52,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 - `storage: video` の画像は既定で H.264 です．`nodes/recorder.yaml` の `video_codec: av1` か `--video-codec av1` で AV1 にできます（[Video codec](../../reference/configuration/recorder.md#video-codec)）．
 - テンプレートの既定の方策 `roboloom.policy:hold` は，腕をその場に留めます．方策の書き方は [方策で動かす](../../policy/index.md) にあります．
 
-## 起動オプションと組み合わせ
+## 起動オプションと組み合わせ { #options }
 
 設定は `.roboloom/rakuda2/config.yaml` の1つです．オプションを何も有効にしない構成は，通常leader・`joint` controller・RealSenseです．テンプレートは次の起動オプションを持ちます（既定はすべて無効）．選び方は [CLI](../../reference/cli.md)，規則は [設定](../../reference/configuration/index.md) の「起動オプション」を参照してください．
 
@@ -73,7 +78,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 制約：
 
-- `gravity` は，[Quick start](../../tutorials/rakuda2.md) の測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）を済ませてから使います．測定値が `SET_...` のままだと読み込みを拒否します．
+- `gravity` は，[Rakuda2：重力補償](../../tutorials/rakuda2-gravity.md) の測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）を済ませてから使います．測定値が `SET_...` のままだと読み込みを拒否します．
 - `gravity` の有無でleaderのOperating Modeが変わります．端末から実機で起動するとき，CLIはEEPROMの差分を表示し，確認してから書きます．
 - `policy` はDIGITなしで使えます．DIGITを方策に渡すときは，`digit` を有効にし，`nodes/policy.yaml` の `observe` を `[camera, digit_left, digit_right]` に変更します．`digit` の有効化だけでは方策の入力は変わりません．学習時の入力と一致させてください．DIGITが必要なLeRobotチェックポイントをDIGITなしで読み込むと，開始前に拒否します．
 - 関節状態のみの方策は `observe: []` にします．センサーを開かない場合は，`config.yaml` の `sensors` から該当ノードも外します．
@@ -106,33 +111,4 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 制御周期はテンプレートで120 Hzです．前提条件と下げ方は [制御周期](../../reference/configuration/followers.md#control-rate) を参照してください．
 
-セットアップから収集までの手順は [Rakuda2 Quick start](../../tutorials/rakuda2.md)，制御値の意味は [Gravity tuning](../../explanation/gravity-compensation.md) を参照してください．
-
-## センサー選択
-
-`load_config(..., sensors=[...], observe=[...])` と
-`Session.launch(..., sensors=[...], observe=[...])` で起動・記録と policy 観測を
-独立に指定します。None は設定の既定、[] は選択なしです。フォロワ状態は常に渡します。
-RobotConfig を渡す場合は load_config で選択を確定してください。
-
-```python
-with Session.launch(
-    "rakuda2",
-    options=["policy"],
-    sensors=["camera", "audio"],
-    observe=["camera"],
-    policy="my_lab.policies:load",
-) as session:
-    session.wait_ready()
-    session.record("pick", seconds=20)
-```
-
-CLI は `--sensors camera,audio --observe camera`、
-空の選択は `--sensors "" --observe ""` です。ランチャーにはセンサー起動と
-policy 観測の独立したチェック欄があり、前回の選択を保存します。
-未選択センサーの YAML は読み込みません。未起動センサーの観測指定はエラーです。
-左右の DIGIT を含め、オプションで追加されるセンサーも個別選択できます。
-任意センサーは `{file: nodes/audio.yaml, default: false}` と宣言し、
-従来の文字列パスは既定で有効です。オプション適用後に選択を解決します。
-observe に含めないセンサーも、起動すれば記録対象になります。
-[音声](../../sensors/audio.md)も参照してください。
+セットアップから収集までの手順は [Rakuda2：機体設定と読み取り確認](../../tutorials/rakuda2-setup.md)，制御値の意味は [Gravity tuning](../../explanation/gravity-compensation.md) を参照してください．
