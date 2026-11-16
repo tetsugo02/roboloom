@@ -18,7 +18,7 @@ uv run pytest -m e2e         # mockデバイスでdoraを起動するe2eのみ
 uv run --group docs python scripts/docs.py build
 ```
 
-Pull Requestと `main` へのpushでは，GitHub Actions（`.github/workflows/test.yml`）が `ruff check .`・`mypy src`・軽量テスト（`pytest -m "not e2e"`）を実行します（`docs/**` や `mkdocs*.yml` などのドキュメントのみの変更では実行されません）．mockデバイスでdoraのプロセスを起動するE2Eテスト（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
+Pull Requestと `main` へのpushでは，GitHub Actions（`.github/workflows/test.yml`）が Python 3.12〜3.14 で `ruff check .`・`mypy src`・軽量テスト（`pytest -m "not e2e"`）を実行し，`main` へのpush時には `badges` ブランチ上の Python バージョン別ステータスバッジ JSON も更新します（`docs/**` や `mkdocs*.yml` などのドキュメントのみの変更では実行されません）．mockデバイスでdoraのプロセスを起動するE2Eテスト（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
 
 checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
@@ -44,7 +44,7 @@ checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.y
 | 機能の検証の状態 | `reference/status-labels.md` と，そのラベルを付けたページ |
 | 公開API・CLI・設定・対応機器の変更 | `src/roboloom/agent_skills/roboloom/` のスキル（`SKILL.md` と `references/`） |
 
-新しいページは両言語の同じパスに置き，`mkdocs.yml`（日本語）と `mkdocs.en.yml`（英語）の `nav` に登録します．READMEと `roboloom init` が配布するテンプレートのREADMEも，手順に影響があれば同時に更新します．現行コードとドキュメントが食い違っていた場合は，コードの規約を基準に修正し，食い違いを変更報告に記載します．
+新しいページは両言語の同じパスに置き，`mkdocs.yml`（日本語）と `mkdocs.en.yml`（英語）の `nav` に登録します．`README.md`（英語）・`README.ja.md`（日本語）と `roboloom init` が配布するテンプレートのREADMEも，手順に影響があれば同時に更新します．現行コードとドキュメントが食い違っていた場合は，コードの規約を基準に修正し，食い違いを変更報告に記載します．
 
 ページを移したり消したりしたら，`docs/base.yml` の `redirect_maps` に旧パスを登録します．Tutorials は手順，Reference は表による記述だけ，Explanation は背景と理由，と書き分けます．実機で確かめていない機能も載せますが，ページの冒頭か表の行に [状態ラベル](../reference/status-labels.md) を付けます．設計案や過去の調査メモを，実機検証済みの仕様として案内しないでください．
 

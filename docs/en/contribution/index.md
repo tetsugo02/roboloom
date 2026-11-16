@@ -18,7 +18,7 @@ uv run pytest -m e2e         # e2e tests launching dora dataflows with mock devi
 uv run --group docs python scripts/docs.py build
 ```
 
-On pull requests and pushes to `main`, GitHub Actions (`.github/workflows/test.yml`) runs `ruff check .`, `mypy src`, and unit tests (`pytest -m "not e2e"`), skipping changes limited to documentation (`docs/**`, `mkdocs*.yml`, and related files). The E2E tests that start dora processes with mock devices (`.github/workflows/e2e.yml`, 3 sharded jobs) run manually via `workflow_dispatch`; no hardware is used.
+On pull requests and pushes to `main`, GitHub Actions (`.github/workflows/test.yml`) runs `ruff check .`, `mypy src`, and unit tests (`pytest -m "not e2e"`) across Python 3.12–3.14, skipping changes limited to documentation (`docs/**`, `mkdocs*.yml`, and related files). Pushes to `main` also update the per-Python status badge JSON files on the `badges` branch. The E2E tests that start dora processes with mock devices (`.github/workflows/e2e.yml`, 3 sharded jobs) run manually via `workflow_dispatch`; no hardware is used.
 
 Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/config.yaml` and `uv run roboloom run examples/mock/config.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
 
@@ -44,7 +44,7 @@ Update the affected pages in `docs/` in the same change that adds a feature or c
 | A feature's verification status | `reference/status-labels.md` and the pages carrying that label |
 | Public API, CLI, configuration, or supported devices | The agent skill in `src/roboloom/agent_skills/roboloom/` (`SKILL.md` and `references/`) |
 
-Put a new page at the same path in both languages and register it in the `nav` of `mkdocs.yml` (Japanese) and `mkdocs.en.yml` (English). When instructions are affected, also update the README and the README of the template that `roboloom init` distributes. If the existing code and the docs disagree, fix the docs to follow the code's conventions and list the disagreement in your change report.
+Put a new page at the same path in both languages and register it in the `nav` of `mkdocs.yml` (Japanese) and `mkdocs.en.yml` (English). When instructions are affected, also update `README.md`, `README.ja.md`, and the README of the template that `roboloom init` distributes. If the existing code and the docs disagree, fix the docs to follow the code's conventions and list the disagreement in your change report.
 
 When you move or remove a page, register the old path in `redirect_maps` in `docs/base.yml`. Tutorials give steps, Reference only describes (in tables), and Explanation gives background and reasons. Features not verified on hardware are documented too, with a [status label](../reference/status-labels.md) at the top of the page or in the table row. Do not present design proposals or past investigation notes as hardware-verified behavior.
 

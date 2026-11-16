@@ -57,3 +57,92 @@ jobs:
         run: uv run --no-sync mypy src
       - name: Unit tests
         run: uv run --no-sync pytest -q -m "not e2e"
+      - name: Write Python badge JSON
+        if: >-
+          always() &&
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          (job.status == 'success' || job.status == 'failure')
+        shell: bash
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p "${{ runner.temp }}/badge-out"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          ver = os.environ["PYTHON_VERSION"]
+          ok = os.environ["JOB_STATUS"] == "success"
+          payload = {
+              "schemaVersion": 1,
+              "label": f"Python {ver}",
+              "message": "passing" if ok else "failing",
+              "color": "brightgreen" if ok else "red",
+              "namedLogo": "python",
+              "logoColor": "white",
+          }
+          out = Path(os.environ["RUNNER_TEMP"]) / "badge-out" / f"python-{ver}.json"
+          out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+      - name: Upload Python badge JSON
+        if: >-
+          always() &&
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          (job.status == 'success' || job.status == 'failure')
+        uses: actions/upload-artifact@v7
+        with:
+          name: badge-python-${{ matrix.python }}
+          path: ${{ runner.temp }}/badge-out/python-${{ matrix.python }}.json
+          retention-days: 1
+
+  badges:
+    name: Update Python status badges
+    needs: [unit]
+    if: >-
+      always() &&
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download Python badge JSONs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: badge-python-*
+          path: ${{ runner.temp }}/badges
+          merge-multiple: true
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Publish badges to badges branch
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=("${{ runner.temp }}/badges"/python-*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No badge payloads to publish."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin badges:badges 2>/dev/null; then
+            git switch badges
+          else
+            git switch --orphan badges
+          fi
+          cp "${files[@]}" .
+          git add python-*.json
+          if git diff --cached --quiet; then
+            echo "Badge JSONs are unchanged."
+            exit 0
+          fi
+          git commit -m "chore(ci): update Python status badges"
+          git push origin HEAD:badges

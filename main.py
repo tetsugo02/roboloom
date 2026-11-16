@@ -1,4 +1,4 @@
-"""Minimal Python entry point; see README for the full InProcessSession API."""
+"""Minimal Python entry point; see the Python API docs for InProcessSession."""
 
 from roboloom import InProcessSession
 
