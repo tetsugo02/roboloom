@@ -29,12 +29,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python3 - <<'PY'
-          import fnmatch
           import os
           import subprocess
+          import tomllib
           from pathlib import Path
 
           out_path = Path(os.environ["GITHUB_OUTPUT"])
@@ -69,19 +71,70 @@ jobs:
               write_output(True)
               raise SystemExit(0)
 
-          def is_ignored(path: str) -> bool:
-              if path.startswith(("docs/", ".claude/")):
+          COSMETIC_PROJECT_KEYS = {
+              "authors",
+              "classifiers",
+              "description",
+              "keywords",
+              "license",
+              "license-files",
+              "maintainers",
+              "readme",
+              "urls",
+          }
+
+          def load_pyproject(sha: str) -> dict:
+              out = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      f"repos/{repo}/contents/pyproject.toml?ref={sha}",
+                      "-H",
+                      "Accept: application/vnd.github.raw",
+                  ],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              data = tomllib.loads(out.stdout)
+              project = data.get("project")
+              if isinstance(project, dict):
+                  for key in COSMETIC_PROJECT_KEYS:
+                      project.pop(key, None)
+              groups = data.get("dependency-groups")
+              if isinstance(groups, dict):
+                  groups.pop("docs", None)
+                  if not groups:
+                      data.pop("dependency-groups", None)
+              return data
+
+          def pyproject_affects_tests() -> bool:
+              try:
+                  base = load_pyproject(os.environ["BASE_SHA"])
+                  head = load_pyproject(os.environ["HEAD_SHA"])
+                  return base != head
+              except Exception as exc:
+                  print(f"Could not diff pyproject.toml cleanly ({exc}); running tests.")
                   return True
-              if path in ("scripts/docs.py", ".github/workflows/docs.yml"):
+
+          def needs_tests(path: str) -> bool:
+              if path == "pyproject.toml":
+                  return pyproject_affects_tests()
+              if path == "scripts/docs.py":
+                  return False
+              if path.endswith(".py"):
                   return True
-              if "/" not in path and (
-                  path.endswith(".md") or fnmatch.fnmatchcase(path, "mkdocs*.yml")
+              if path in (
+                  "uv.lock",
+                  ".python-version",
+                  ".github/workflows/test.yml",
+                  "skills/roboloom",
               ):
                   return True
-              return False
+              return path.startswith(("src/", "tests/", "examples/"))
 
-          need = [p for p in files if not is_ignored(p)]
-          print("Non-ignored files:", need)
+          need = [p for p in files if needs_tests(p)]
+          print("Files requiring tests:", need)
           write_output(bool(need))
           PY
 
