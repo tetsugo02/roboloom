@@ -1,19 +1,29 @@
 # Installation
 
-Python **3.12** とuv，Gitを使います．roboloomは，自分のプロジェクトの依存としてGitHubから追加します．以下のコマンドは自分のプロジェクトルートで実行します．
+Python **3.12〜3.14** とuv，Gitを使います．roboloomは，自分のプロジェクトの依存としてGitHubから追加します．以下のコマンドは自分のプロジェクトルートで実行します．
 
 ## uvでインストール
 
 新しくプロジェクトを作る場合：
 
 ```bash
-uv init --python '>=3.12,<3.13' my-robot
+uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
 uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-既存のプロジェクトでは，そのルートで `uv add` から実行します．先に `pyproject.toml` の `project.requires-python` を `">=3.12,<3.13"` に設定してください．Python 3.12の環境を選ぶだけでは，uvが解決するPythonの対応範囲は限定されません．
+既存のプロジェクトでは，そのルートで `uv add` から実行します．先に `pyproject.toml` の `project.requires-python` を `">=3.12,<3.15"` の範囲内に設定してください．Pythonの環境を選ぶだけでは，uvが解決するPythonの対応範囲は限定されません．
+
+`record`・`policy`・`train` を使うときは，自分の `pyproject.toml` に次も書きます（Python 3.14 では必須，3.12・3.13 では NumPy 2.3 以上を使うために必要）．LeRobot 0.7.0 は NumPy を `<2.3` に制限していますが（opencv-python-headless 4.12 から引き継いだ上限で，4.13 では外れています），NumPy 2.3 未満には Python 3.14 用の wheel がありません．uv の override は依存先のメタデータでは伝わらないため，roboloom の側では代わりに設定できません．LeRobot の方策の読み込み（`policy.lerobot`）と `lerobot-train` は，LeRobot の設定の解析に使う draccus が Python 3.14 に対応していないため，Python 3.12・3.13 で使います．自作の方策は 3.14 でも使えます．
+
+```toml
+[tool.uv]
+override-dependencies = [
+    "numpy>=2.0,<3; python_version < '3.14'",
+    "numpy>=2.3.3,<3; python_version >= '3.14'",
+]
+```
 
 基本のインストールには共通の実行環境（dora，YAML，NumPy，OpenCV，シリアル通信，UI）が入ります．ロボットごとのextrasを選び，記録，RealSense，DIGITは独立したextrasで追加します．以下は同じGit依存に対する構成例です．
 
@@ -35,7 +45,7 @@ uv add 'roboloom[piper,pika,record]'
 
 `rakuda2` は `dynamixel-sdk`，`piper` は `piper_sdk` と `pose_ik` 用のPinocchio（`pin`），`pika` は `pysurvive` を追加します．OpenCVと `pyserial` は画像処理・カメラ取得やシリアル機器で共有する共通依存です．OpenCVは，`record` のLeRobotと同じGUIなしの `opencv-python-headless` を入れます．DIGITの `digit` extraもheadlessを使います（下記）．PiPER SDKなしでIKだけを使う `ik` extraも残しています．リポジトリをcloneした中では，同じextrasを `uv sync --extra rakuda2` または `uv sync --extra piper --extra pika` で選びます．
 
-`pysurvive` が必要なのは実機のPika Senseのトラッカーの姿勢だけで，PiPERの関節制御，Pikaのシリアル通信・カメラ，模擬では使いません．`pika` extraはPika一式の依存を追加します．[PyPI](https://pypi.org/project/pysurvive/) にPython 3.12用のwheelとソース配布がないため，[libsurviveのfork](https://github.com/tetsugo02/libsurvive/tree/roboloom)がビルドしたwheel（[リリース](https://github.com/tetsugo02/libsurvive/releases)．CPython 3.12，Linux x86_64，libusb同梱）を使います．インストール時のビルドはなく，コンパイラやlibusbの開発用ファイルは要りません．forkが上流から変えたのはPythonのパッケージだけで，上流が必須にしているGooey／wxPython（roboloomは使わないGUIの起動用）を任意のextra `pysurvive[gui]` にしています．x86_64以外のLinuxやほかのOSでは `pika` extraにpysurviveは入りません．extraはOSの設定やトラッカーのudev規則（`81-vive.rules`），CANの設定までは行いません．udev規則は管理者に導入してもらいます．
+`pysurvive` が必要なのは実機のPika Senseのトラッカーの姿勢だけで，PiPERの関節制御，Pikaのシリアル通信・カメラ，模擬では使いません．`pika` extraはPika一式の依存を追加します．[PyPI](https://pypi.org/project/pysurvive/) にPython 3.12用のwheelとソース配布がないため，[libsurviveのfork](https://github.com/tetsugo02/libsurvive/tree/roboloom)がビルドしたwheel（[リリース](https://github.com/tetsugo02/libsurvive/releases)．CPython 3.12，Linux x86_64，libusb同梱）を使います．インストール時のビルドはなく，コンパイラやlibusbの開発用ファイルは要りません．forkが上流から変えたのはPythonのパッケージだけで，上流が必須にしているGooey／wxPython（roboloomは使わないGUIの起動用）を任意のextra `pysurvive[gui]` にしています．Python 3.12以外，x86_64以外のLinux，ほかのOSでは `pika` extraにpysurviveは入りません．extraはOSの設定やトラッカーのudev規則（`81-vive.rules`），CANの設定までは行いません．udev規則は管理者に導入してもらいます．
 
 `hardware` extraはRealSenseと音声用のライブラリ，`digit` extraはDIGITのdigit-interfaceを追加します．このガイドではRealSenseとDIGITを扱います．USBデバイスへのアクセス権，RealSenseのシステム側のドライバ・USB 3接続は実機を接続する環境で確認してください．
 

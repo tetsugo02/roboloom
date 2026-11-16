@@ -9,13 +9,13 @@ description = "Dora based Rakuda teleoperation and LeRobot recording"
 readme = "README.md"
 authors = [{ name = "tetsugo", email = "tetsugou2002@gmail.com" }]
 keywords = ["robotics", "teleoperation", "data-collection", "lerobot", "dora"]
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "dora-rs==1.0.1",
     "dora-rs-cli==1.0.1",
     "PyYAML>=6,<7",
     "numpy>=1.26,<3",
-    "opencv-python-headless>=4.9,<4.14",  # same package and range as lerobot 0.6.1, so both share one cv2
+    "opencv-python-headless>=4.9,<4.14",  # same package and range as lerobot 0.7.0, so both share one cv2
     "pyserial>=3.5,<4",  # shared by Dynamixel and Pika serial links
     "rich>=13,<16",
     "textual>=8,<9",
@@ -38,10 +38,10 @@ pika = [
     # PyPI has no Python 3.12 wheels/sdist. A wheel from the libsurvive fork
     # (github.com/tetsugo02/libsurvive, branch roboloom): libusb bundled, nothing built at
     # install time, the GUI (gooey/wxPython) is its optional `gui` extra. Linux x86_64 only.
-    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.12'",
 ]
 # Shared features, independent of the robot.
-record = ["lerobot[dataset]==0.6.1"]
+record = ["lerobot[dataset]==0.7.0"]
 hardware = [
     "pyrealsense2>=2.55,<3",
     "sounddevice>=0.4,<1",
@@ -54,18 +54,27 @@ digit = [
     "digit-interface @ https://github.com/tetsugo02/digit-interface/releases/download/roboloom-1/digit_interface-0.2.1-py3-none-any.whl",
 ]
 ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
-policy = ["lerobot==0.6.1"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
-train = ["lerobot[training]==0.6.1"]  # lerobot-train on roboloom datasets (accelerate, wandb)
+policy = ["lerobot==0.7.0"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
+train = ["lerobot[training]==0.7.0"]  # lerobot-train on roboloom datasets (accelerate, trackio)
 test = [
     "pytest>=8,<9",
     "dynamixel-sdk>=3.7,<4",
-    "lerobot[dataset]==0.6.1",
+    "lerobot[dataset]==0.7.0",
     "pytest-asyncio>=1,<2",
     "pin>=4.1,<5",
 ]
 
 [project.scripts]
 roboloom = "roboloom.cli:main"
+
+[tool.uv]
+# LeRobot 0.7.0 caps numpy<2.3, a bound inherited from opencv-python-headless 4.12 (4.13
+# dropped it). Lift it everywhere (NumPy <2.3 also has no CPython 3.14 wheels). Not published
+# in the package metadata: a project using roboloom's LeRobot extras needs the same override.
+override-dependencies = [
+    "numpy>=2.0,<3; python_version < '3.14'",
+    "numpy>=2.3.3,<3; python_version >= '3.14'",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/roboloom"]

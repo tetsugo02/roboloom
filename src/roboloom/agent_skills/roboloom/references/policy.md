@@ -217,7 +217,7 @@ mismatches by name. ACT temporal ensembling works only with `mode: step`.
 uv add 'roboloom[policy,train]'
 uv run lerobot-train --dataset.repo_id=<repo_id> --dataset.root=<output from project root> \
   --policy.type=act --policy.device=cuda --policy.push_to_hub=false \
-  --wandb.enable=false --output_dir=outputs/train/act
+  --trackio.enable=false --output_dir=outputs/train/act
 ```
 
 - Checkpoint: `<output_dir>/checkpoints/last/pretrained_model` → `path`; no `rename`

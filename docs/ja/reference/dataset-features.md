@@ -1,6 +1,6 @@
 # データセットの列
 
-roboloom が LeRobotDataset 0.6.1 に書く列（特徴量）の一覧です．どの列があるかは，設定の followers・inputs・sensors・記録する estimators と，有効なオプションで決まります．`roboloom validate` で検証した設定の列は `roboloom.recording.features(cfg)` で確かめられます（[Recording](python-api/recording.md#features)）．行の割り当てと欠損の扱いは [データの形式](../data/format.md) にあります．
+roboloom が LeRobotDataset 0.7.0 に書く列（特徴量）の一覧です．どの列があるかは，設定の followers・inputs・sensors・記録する estimators と，有効なオプションで決まります．`roboloom validate` で検証した設定の列は `roboloom.recording.features(cfg)` で確かめられます（[Recording](python-api/recording.md#features)）．行の割り当てと欠損の扱いは [データの形式](../data/format.md) にあります．
 
 - `<follower>`，`<input>`，`<sensor>`，`<estimator>`，`<source>` は，設定でのノードの名前です（Rakuda2 のテンプレートでは `follower`，`leader`，`camera`，`digit_left` など）．
 - `<source>` は記録するノードすべて（inputs，followers，sensors，`record: true` の estimators）を指します．

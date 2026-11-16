@@ -90,13 +90,13 @@ uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra trai
 # delta
 uv run lerobot-train --dataset.repo_id=local/pika-handheld-mock-delta \
   --dataset.root=.roboloom/pika-handheld-mock/datasets/pika-handheld-mock-delta \
-  --policy.type=act --policy.push_to_hub=false --wandb.enable=false \
+  --policy.type=act --policy.push_to_hub=false --trackio.enable=false \
   --output_dir=outputs/train/act_handheld_delta
 # relative-chunk
 uv run lerobot-train --dataset.repo_id=local/pika-handheld-mock-relative-chunk \
   --dataset.root=.roboloom/pika-handheld-mock/datasets/pika-handheld-mock-relative-chunk \
   --policy.type=act --policy.chunk_size=1 --policy.n_action_steps=1 \
-  --policy.push_to_hub=false --wandb.enable=false \
+  --policy.push_to_hub=false --trackio.enable=false \
   --output_dir=outputs/train/act_handheld_chunk
 ```
 

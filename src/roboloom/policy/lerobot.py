@@ -9,7 +9,7 @@
                             # chunk: predict_action_chunk, [H, n] per call
       rename: {}            # {checkpoint feature: roboloom feature}
 
-Loading follows LeRobot 0.6.1's own rollout: the config and weights from the checkpoint,
+Loading follows LeRobot 0.7.0's own rollout: the config and weights from the checkpoint,
 then its saved pre- and post-processors, which hold the normalization statistics.
 `bind` checks the checkpoint's input and output features against what the configuration
 observes and drives, so a policy trained on other cameras or joints is refused at load.
@@ -22,6 +22,7 @@ history). `mode: chunk` returns the whole predicted chunk for roboloom's
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Mapping
 from typing import Any
 
@@ -36,6 +37,13 @@ READ = ("observation.state", "observation.environment_state")
 
 
 def _import():
+    if sys.version_info >= (3, 14):
+        # draccus 0.11.6 (LeRobot's config parser, the latest release) passes a type
+        # annotation as argparse's `type`, which Python 3.14 rejects as not callable.
+        raise ConfigError(
+            "LeRobot 0.7.0 cannot load policy configs on Python 3.14 (its config parser "
+            "draccus does not support it); load LeRobot checkpoints on Python 3.12 or 3.13"
+        )
     try:
         import torch
         from lerobot.configs.policies import PreTrainedConfig

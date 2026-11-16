@@ -1,6 +1,6 @@
 # roboloom
 
-roboloom is a Python package that collects observations and actions by teleoperating a robot, saves them as a LeRobotDataset (0.6.1), and drives the same robot with the policy you train on them.
+roboloom is a Python package that collects observations and actions by teleoperating a robot, saves them as a LeRobotDataset (0.7.0), and drives the same robot with the policy you train on them.
 
 - **Collect**: drive the follower with a leader or a hand-held device and record it with cameras and tactile sensors.
 - **Train**: train on the recording as it is, with `lerobot-train` or your own model.

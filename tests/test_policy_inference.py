@@ -127,6 +127,8 @@ def test_a_policy_without_bind_loads_as_before():
 @pytest.fixture(scope="module")
 def act_checkpoint(tmp_path_factory):
     """An untrained, tiny ACT for the mock (state 14, the left wrist camera), on CPU."""
+    if sys.version_info >= (3, 14):
+        pytest.skip("LeRobot 0.7.0 (draccus) cannot parse policy configs on Python 3.14")
     pytest.importorskip("lerobot.policies.act.modeling_act")
     from lerobot.configs.types import FeatureType, PolicyFeature
     from lerobot.policies.act.configuration_act import ACTConfig
@@ -274,8 +276,10 @@ def test_a_failed_controller_says_why_instead_of_asking_to_wait():
 
 @pytest.mark.e2e
 def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
-    """The path of `lerobot-train` (LeRobot 0.6.1) on a dataset roboloom recorded: the
+    """The path of `lerobot-train` (LeRobot 0.7.0) on a dataset roboloom recorded: the
     metadata and stats it reads, a training step, and the checkpoint back in roboloom."""
+    if sys.version_info >= (3, 14):
+        pytest.skip("LeRobot 0.7.0 (draccus) cannot parse policy configs on Python 3.14")
     pytest.importorskip("lerobot.policies.act.modeling_act")
     import shutil
 
@@ -353,3 +357,11 @@ def test_visual_checkpoint_accepts_sensor_storage(act_checkpoint, storage):
     spec = controller.spec()
     assert spec.observation["observation.images.left_wrist"]["dtype"] == storage
     load(act_checkpoint, device="cpu", rename=RENAME).bind(spec)
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="the Python 3.14 refusal")
+def test_a_lerobot_policy_on_python_3_14_says_why():
+    from roboloom.policy.lerobot import load
+
+    with pytest.raises(ConfigError, match="Python 3.14"):
+        load("unused")

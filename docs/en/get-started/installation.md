@@ -1,19 +1,29 @@
 # Installation
 
-Use Python **3.12**, uv, and Git. Add roboloom from GitHub as a dependency of your own project. Run the commands below from your project root.
+Use Python **3.12–3.14**, uv, and Git. Add roboloom from GitHub as a dependency of your own project. Run the commands below from your project root.
 
 ## Install with uv
 
 To create a new project:
 
 ```bash
-uv init --python '>=3.12,<3.13' my-robot
+uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
 uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-For an existing project, start with `uv add` from its root. First set `project.requires-python` in `pyproject.toml` to `">=3.12,<3.13"`. Selecting a Python 3.12 environment alone does not limit the Python compatibility range that uv resolves.
+For an existing project, start with `uv add` from its root. First set `project.requires-python` in `pyproject.toml` to a range within `">=3.12,<3.15"`. Selecting a Python environment alone does not limit the Python compatibility range that uv resolves.
+
+When using `record`, `policy` or `train`, also add the following to your own `pyproject.toml` (required on Python 3.14; on 3.12 and 3.13 it allows NumPy 2.3 and later). LeRobot 0.7.0 caps NumPy at `<2.3` (a bound inherited from opencv-python-headless 4.12 and dropped in 4.13), and NumPy below 2.3 has no Python 3.14 wheels. uv overrides do not travel in a dependency's metadata, so roboloom cannot set this for you. Loading LeRobot policies (`policy.lerobot`) and `lerobot-train` need Python 3.12 or 3.13: draccus, which LeRobot uses to parse its configs, does not support Python 3.14. Custom policies work on 3.14.
+
+```toml
+[tool.uv]
+override-dependencies = [
+    "numpy>=2.0,<3; python_version < '3.14'",
+    "numpy>=2.3.3,<3; python_version >= '3.14'",
+]
+```
 
 The base install contains the shared runtime (dora, YAML, NumPy, OpenCV, serial communication, and the UI). Choose robot extras separately; recording, RealSense and DIGIT remain independent extras. These are configuration examples for the same Git dependency.
 
@@ -35,7 +45,7 @@ uv add 'roboloom[piper,pika,record]'
 
 `rakuda2` adds `dynamixel-sdk`; `piper` adds `piper_sdk` and Pinocchio (`pin`) for `pose_ik`; `pika` adds `pysurvive`. OpenCV and `pyserial` are core dependencies shared by camera processing and serial devices. OpenCV is installed as `opencv-python-headless` (no GUI), the same package LeRobot in `record` uses. The `digit` extra for DIGIT uses headless as well (below). The standalone `ik` extra remains available for IK without the PiPER SDK. In a repository checkout, select the same extras with `uv sync --extra rakuda2` or `uv sync --extra piper --extra pika`.
 
-`pysurvive` is needed only for real Pika Sense tracker poses, not for PiPER joint control, Pika serial commands/cameras, or mocks. The `pika` extra installs the complete Pika dependency set. [PyPI](https://pypi.org/project/pysurvive/) has no Python 3.12 wheel or source distribution, so it uses a wheel built by a [fork of libsurvive](https://github.com/tetsugo02/libsurvive/tree/roboloom) ([releases](https://github.com/tetsugo02/libsurvive/releases); CPython 3.12, Linux x86_64, libusb bundled). Nothing is built at install time, so no compiler or libusb development files are needed. The fork changes only the Python packaging: upstream's required Gooey/wxPython (the launcher of a GUI roboloom does not use) becomes the optional extra `pysurvive[gui]`. On Linux other than x86_64 and on other systems, the `pika` extra does not install pysurvive. The extra does not change OS settings, install the tracker's udev rules (`81-vive.rules`), or configure CAN; ask an administrator for the udev rules.
+`pysurvive` is needed only for real Pika Sense tracker poses, not for PiPER joint control, Pika serial commands/cameras, or mocks. The `pika` extra installs the complete Pika dependency set. [PyPI](https://pypi.org/project/pysurvive/) has no Python 3.12 wheel or source distribution, so it uses a wheel built by a [fork of libsurvive](https://github.com/tetsugo02/libsurvive/tree/roboloom) ([releases](https://github.com/tetsugo02/libsurvive/releases); CPython 3.12, Linux x86_64, libusb bundled). Nothing is built at install time, so no compiler or libusb development files are needed. The fork changes only the Python packaging: upstream's required Gooey/wxPython (the launcher of a GUI roboloom does not use) becomes the optional extra `pysurvive[gui]`. On Python other than 3.12, on Linux other than x86_64 and on other systems, the `pika` extra does not install pysurvive. The extra does not change OS settings, install the tracker's udev rules (`81-vive.rules`), or configure CAN; ask an administrator for the udev rules.
 
 The `hardware` extra adds RealSense and audio libraries, and the `digit` extra adds digit-interface for DIGIT. This guide covers RealSense and DIGIT. Check USB device access permissions, the RealSense system-side driver, and the USB 3 connection on the machine the hardware is connected to.
 
