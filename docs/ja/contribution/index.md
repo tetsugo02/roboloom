@@ -2,7 +2,7 @@
 
 ## 開発環境とチェック
 
-通常利用は [インストール](../get-started/installation.md) の `uv add git+https://github.com/tetsugo02/roboloom.git` を使います．以下はroboloom本体やdocsを変更する開発者向けです．Python 3.12とuvを使い，リポジトリをcloneしてそのルートで実行します．
+通常利用は [インストール](../get-started/installation.md) の `uv add git+https://github.com/tetsugo02/roboloom.git` を使います．以下はroboloom本体やdocsを変更する開発者向けです．Python 3.12〜3.14とuvを使い，リポジトリをcloneしてそのルートで実行します．
 
 ```bash
 git clone https://github.com/tetsugo02/roboloom.git

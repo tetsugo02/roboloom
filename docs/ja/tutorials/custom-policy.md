@@ -3,7 +3,7 @@
 <span class="status status--mock">模擬のみ</span>
 
 - **目的**：見本の方策 `chunk_mlp.py` を模擬の記録で学習し，`roboloom infer` で動かす．自分のモデルに置き換える場所を知る．
-- **前提**：Python 3.12とuv，roboloomのリポジトリのclone（隣の `../roboloom`）．[インストール](../get-started/installation.md) を読んでいる．実機は使わない．
+- **前提**：Python 3.12〜3.14とuv，roboloomのリポジトリのclone（隣の `../roboloom`）．[インストール](../get-started/installation.md) を読んでいる．実機は使わない．
 - **所要**：30分．
 - **結果**：模擬のRakuda2で方策が動き，評価のデータセット `datasets/rakuda2-eval` に1エピソードが保存される．
 
@@ -20,7 +20,7 @@ flowchart LR
 ## 1. 試しのプロジェクトを作る
 
 ```bash
-uv init --python '>=3.12,<3.13' my_policy_trial && cd my_policy_trial
+uv init --python '>=3.12,<3.15' my_policy_trial && cd my_policy_trial
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra policy
 uv run roboloom init rakuda2
 cp ../roboloom/examples/policies/chunk_mlp.py .roboloom/rakuda2/   # cloneしたリポジトリから

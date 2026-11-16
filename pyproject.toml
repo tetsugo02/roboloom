@@ -9,7 +9,7 @@ description = "Dora based Rakuda teleoperation and LeRobot recording"
 readme = "README.md"
 authors = [{ name = "tetsugo", email = "tetsugou2002@gmail.com" }]
 keywords = ["robotics", "teleoperation", "data-collection", "lerobot", "dora"]
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "dora-rs==1.0.1",
     "dora-rs-cli==1.0.1",
@@ -38,7 +38,7 @@ pika = [
     # PyPI has no Python 3.12 wheels/sdist. A wheel from the libsurvive fork
     # (github.com/tetsugo02/libsurvive, branch roboloom): libusb bundled, nothing built at
     # install time, the GUI (gooey/wxPython) is its optional `gui` extra. Linux x86_64 only.
-    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.12'",
 ]
 # Shared features, independent of the robot.
 record = ["lerobot[dataset]==0.6.1"]
@@ -66,6 +66,15 @@ test = [
 
 [project.scripts]
 roboloom = "roboloom.cli:main"
+
+[tool.uv]
+# LeRobot 0.6.1 caps numpy<2.3 (inherited from opencv-python-headless 4.12; 4.13 dropped it).
+# NumPy <2.3 has no CPython 3.14 wheels, so lift the cap on 3.14 only. Not published in the
+# package metadata: a project using roboloom's LeRobot extras on 3.14 needs the same override.
+override-dependencies = [
+    "numpy>=2.0,<2.3; python_version < '3.14'",
+    "numpy>=2.3.3,<3; python_version >= '3.14'",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/roboloom"]
