@@ -7,6 +7,7 @@
 [![Python 3.12](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.12.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.13](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.13.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.14](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.14.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [dora-rs](https://github.com/dora-rs/dora) 上で遠隔操作・マルチモーダルデータ収集・方策推論を行い，**LeRobotDataset (0.7.0)** へ直接保存する Python パッケージです．
 
@@ -126,3 +127,7 @@ uv run pytest -m "not e2e"
 ```
 
 新しい機体の追加方法，E2E テストの実行，ドキュメントのビルド手順は [Contribution](https://tetsugo02.github.io/roboloom/ja/contribution/) を参照してください．
+
+## ライセンス
+
+[MIT License](LICENSE) のもとで公開しています．同梱しているサードパーティ製のロボットモデルはそれぞれのライセンスに従います（`src/roboloom/robots/piper/model/LICENSE.piper_ros` を参照）．

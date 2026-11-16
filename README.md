@@ -7,6 +7,7 @@
 [![Python 3.12](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.12.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.13](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.13.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.14](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.14.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Teleoperation, multimodal data collection, and policy inference on [dora-rs](https://github.com/dora-rs/dora), saving directly to **LeRobotDataset (0.7.0)**.
 
@@ -126,3 +127,7 @@ uv run pytest -m "not e2e"
 ```
 
 See [Contribution](https://tetsugo02.github.io/roboloom/en/contribution/) for adding robots, running E2E tests, and building the documentation.
+
+## License
+
+Released under the [MIT License](LICENSE). Bundled third-party robot models retain their own licenses (see `src/roboloom/robots/piper/model/LICENSE.piper_ros`).
