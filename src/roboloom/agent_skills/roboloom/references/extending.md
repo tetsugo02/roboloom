@@ -124,10 +124,11 @@ Steps for a new robot (compare `robots/rakuda2`, `robots/piper`, `robots/pika`):
    `SET_` placeholders for per-unit values, plus an entry in `TEMPLATES`
    (`src/roboloom/project.py`) so `roboloom init <model>` works.
 5. Mock tests in `tests/`. Then `ruff check .`, `mypy src`, `pytest`.
-6. Docs in both languages with the same paths: while unverified on hardware, a page under
-   `docs/{en,ja}/contribution/` marked in development; once verified, Robots and Quick
-   start pages. Add pages to `nav` in `mkdocs.yml` and `mkdocs.en.yml`; build with
-   `uv run --group docs python scripts/docs.py build`.
+6. Docs in both languages with the same paths: pages under `docs/{en,ja}/robots/<robot>/`
+   (overview, controllers, sensors), a row in `get-started/support-matrix.md`, and a
+   tutorial; label anything not verified on hardware with a status from
+   `reference/status-labels.md`. Add pages to `nav` in `mkdocs.yml` and `mkdocs.en.yml`;
+   build with `uv run --group docs python scripts/docs.py build`.
 7. This skill: `references/robots/<robot>.md`, a row in SKILL.md's status and reference
    tables, the extra in [installation.md](installation.md); `tests/test_agent_skills.py`
    checks links, imports and CLI commands.

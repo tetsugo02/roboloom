@@ -2,7 +2,7 @@
 
 公開ドキュメント: [日本語](https://tetsugo02.github.io/roboloom/ja/) / [English](https://tetsugo02.github.io/roboloom/en/)．docs関連の変更が `main` にpushされると，GitHub Actionsが両言語をビルドしてGitHub Pagesへ公開します．初回設定とtriggerの対象は [Contribution](docs/ja/contribution/index.md#github-pagesへの公開) を参照してください．
 
-**[Quick start](docs/ja/get-started/installation.md)**（[English](docs/en/get-started/installation.md)）から，インストールと Rakuda2の[設定](docs/ja/tutorials/rakuda2-setup.md)・[重力補償](docs/ja/tutorials/rakuda2-gravity.md)・[データ収集](docs/ja/tutorials/rakuda2-collect.md) を進められます．[対応機器](docs/ja/robots/rakuda2/index.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution/index.md) にまとめています．
+**[Get started](docs/ja/get-started/installation.md)**（[English](docs/en/get-started/installation.md)）から，インストールと Rakuda2の[設定](docs/ja/tutorials/rakuda2-setup.md)・[重力補償](docs/ja/tutorials/rakuda2-gravity.md)・[データ収集](docs/ja/tutorials/rakuda2-collect.md) を進められます．[対応機器](docs/ja/robots/rakuda2/index.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution/index.md) にまとめています．
 
 Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．
 

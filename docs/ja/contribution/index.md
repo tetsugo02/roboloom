@@ -32,16 +32,19 @@ checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.y
 
 | 変更 | 更新するページ |
 | --- | --- |
-| インストールや初回操作 | Quick start |
-| 機体や対応する組み合わせ | Robotsの機体ページと機体別Quick start |
-| センサーの設定・形式 | Sensorsと対応機体ページ |
-| 操作入力・開始条件 | Controllersと対応機体ページ |
-| API・CLI・設定の変更 | Referenceと関連するサンプル |
+| インストールや初回操作 | Get started と関係するチュートリアル |
+| 機体や対応する組み合わせ | `robots/<機体>/` のページ，対応表（`get-started/support-matrix.md`），機体のチュートリアル |
+| センサーの設定・形式 | Sensors と対応機体の `sensors.md` |
+| 操作入力・開始条件 | Controllers と対応機体の `controllers.md` |
+| 方策・推論 | Policy |
+| 記録の形式・データセット | Data と `reference/dataset-features.md` |
+| API・CLI・設定の変更 | Reference（表の形）と関連するサンプル |
+| 機能の検証の状態 | `reference/status-labels.md` と，そのラベルを付けたページ |
 | 公開API・CLI・設定・対応機器の変更 | `src/roboloom/agent_skills/roboloom/` のスキル（`SKILL.md` と `references/`） |
 
 新しいページは両言語の同じパスに置き，`mkdocs.yml`（日本語）と `mkdocs.en.yml`（英語）の `nav` に登録します．READMEと `roboloom init` が配布するテンプレートのREADMEも，手順に影響があれば同時に更新します．現行コードとドキュメントが食い違っていた場合は，コードの規約を基準に修正し，食い違いを変更報告に記載します．
 
-機体ページには対応センサーとcontrollerを記載し，詳しい設定をそれぞれの章へリンクします．現在のガイドの対象はRakuda2，leader，RealSense RGB，DIGITです．設計案や過去の調査メモを，実装済み・実機検証済みの仕様として案内しないでください．
+ページを移したり消したりしたら，`docs/base.yml` の `redirect_maps` に旧パスを登録します．Tutorials は手順，Reference は表による記述だけ，Explanation は背景と理由，と書き分けます．実機で確かめていない機能も載せますが，ページの冒頭か表の行に [状態ラベル](../reference/status-labels.md) を付けます．設計案や過去の調査メモを，実機検証済みの仕様として案内しないでください．
 
 ## docsの編集とプレビュー
 

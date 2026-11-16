@@ -32,16 +32,19 @@ Update the affected pages in `docs/` in the same change that adds a feature or c
 
 | Change | Pages to update |
 | --- | --- |
-| Installation or first-time operation | Quick start |
-| Robots or supported combinations | The robot page under Robots and the robot's Quick start |
-| Sensor configuration or formats | Sensors and the affected robot pages |
-| Operator input or start conditions | Controllers and the affected robot pages |
-| API, CLI, or configuration changes | Reference and related examples |
+| Installation or first-time operation | Get started and the related tutorials |
+| Robots or supported combinations | The pages under `robots/<robot>/`, the support matrix (`get-started/support-matrix.md`), and the robot's tutorials |
+| Sensor configuration or formats | Sensors and the robot's `sensors.md` |
+| Operator input or start conditions | Controllers and the robot's `controllers.md` |
+| Policies or inference | Policy |
+| Recording format or datasets | Data and `reference/dataset-features.md` |
+| API, CLI, or configuration changes | Reference (as tables) and related examples |
+| A feature's verification status | `reference/status-labels.md` and the pages carrying that label |
 | Public API, CLI, configuration, or supported devices | The agent skill in `src/roboloom/agent_skills/roboloom/` (`SKILL.md` and `references/`) |
 
 Put a new page at the same path in both languages and register it in the `nav` of `mkdocs.yml` (Japanese) and `mkdocs.en.yml` (English). When instructions are affected, also update the README and the README of the template that `roboloom init` distributes. If the existing code and the docs disagree, fix the docs to follow the code's conventions and list the disagreement in your change report.
 
-Robot pages list the supported sensors and controllers and link to their chapters for detailed settings. The current guides cover Rakuda2, the leader, RealSense RGB, and DIGIT. Do not present design proposals or past investigation notes as implemented or hardware-verified behavior.
+When you move or remove a page, register the old path in `redirect_maps` in `docs/base.yml`. Tutorials give steps, Reference only describes (in tables), and Explanation gives background and reasons. Features not verified on hardware are documented too, with a [status label](../reference/status-labels.md) at the top of the page or in the table row. Do not present design proposals or past investigation notes as hardware-verified behavior.
 
 ## Editing and previewing the docs
 
