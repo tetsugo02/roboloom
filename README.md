@@ -4,7 +4,7 @@
 
 **[Get started](docs/ja/get-started/installation.md)**（[English](docs/en/get-started/installation.md)）から，インストールと Rakuda2の[設定](docs/ja/tutorials/rakuda2-setup.md)・[重力補償](docs/ja/tutorials/rakuda2-gravity.md)・[データ収集](docs/ja/tutorials/rakuda2-collect.md) を進められます．[対応機器](docs/ja/robots/rakuda2/index.md) も参照してください．roboloom本体の開発やdocsのビルド・プレビューは [Contribution](docs/ja/contribution/index.md) にまとめています．
 
-Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12，dora-rs と dora-rs-cli 1.0.1 を固定しています．
+Rakuda の leader 操作，RGB，左右 DIGIT，モノラル PCM を収集し，LeRobotDataset 0.6.1 に保存する Python パッケージです．Python 3.12〜3.14，dora-rs と dora-rs-cli 1.0.1 を固定しています．
 
 leaderの関節固定は `control` の `law: position`，首カメラの腰yaw相殺はjoint controllerの `couplings` で設定できます（既定は無効，組み合わせは模擬検証まで）．設定例と制約は [Leader](docs/ja/controllers/leader.md)（[English](docs/en/controllers/leader.md)）にあります．
 
@@ -13,13 +13,13 @@ leaderの関節固定は `control` の `law: position`，首カメラの腰yaw�
 自分のuvプロジェクトに，GitHubからroboloomを追加します．新規プロジェクトの場合：
 
 ```bash
-uv init --python '>=3.12,<3.13' my-robot
+uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
 uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-既存プロジェクトでは `project.requires-python` を `">=3.12,<3.13"` に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，RealSenseには `hardware`，DIGITには `digit` を追加します．
+既存プロジェクトでは `project.requires-python` を `">=3.12,<3.15"` の範囲内に設定してから `uv add` を実行します．ロボットごとのextrasを選び，記録には `record`，RealSenseには `hardware`，DIGITには `digit` を追加します．Python 3.14 では `record` に NumPy の override が要り，LeRobot の方策の読み込みと学習は 3.12・3.13 で使います（[Installation](docs/ja/get-started/installation.md)）．
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit

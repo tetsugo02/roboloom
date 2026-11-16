@@ -33,9 +33,13 @@ concurrency:
 
 jobs:
   unit:
-    name: ruff, mypy and unit tests
+    name: ruff, mypy and unit tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -43,7 +47,7 @@ jobs:
         uses: astral-sh/setup-uv@v10.3.2
         with:
           version: "0.8.15"
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           enable-cache: true
       - name: Install the locked test and development dependencies
         run: uv sync --locked --extra rakuda2 --extra test --group dev

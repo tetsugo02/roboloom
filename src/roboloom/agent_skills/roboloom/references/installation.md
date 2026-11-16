@@ -1,18 +1,28 @@
 # Installation
 
-roboloom is installed from GitHub into the user's own uv project. Python **3.12** only.
+roboloom is installed from GitHub into the user's own uv project. Python **3.12–3.14**.
 
 ## New or existing project
 
 ```bash
-uv init --python '>=3.12,<3.13' my-robot   # new project
+uv init --python '>=3.12,<3.15' my-robot   # new project
 cd my-robot
 uv add git+https://github.com/tetsugo02/roboloom.git
 uv run roboloom --help
 ```
 
-For an existing project, first set `project.requires-python = ">=3.12,<3.13"` in
-`pyproject.toml`. Selecting a 3.12 interpreter alone does not restrict what uv resolves.
+For an existing project, first set `project.requires-python` in `pyproject.toml` to a range
+within `">=3.12,<3.15"`. Selecting an interpreter alone does not restrict what uv resolves.
+
+To use `record` on Python 3.14, also add the following to your own `pyproject.toml`. LeRobot 0.6.1 caps NumPy at `<2.3` (a bound inherited from opencv-python-headless 4.12 and dropped in 4.13), and NumPy below 2.3 has no Python 3.14 wheels. uv overrides do not travel in a dependency's metadata, so roboloom cannot set this for you. Loading LeRobot policies (`policy.lerobot`) and `lerobot-train` need Python 3.12 or 3.13: draccus, which LeRobot uses to parse its configs, does not support Python 3.14. Custom policies work on 3.14.
+
+```toml
+[tool.uv]
+override-dependencies = [
+    "numpy>=2.0,<2.3; python_version < '3.14'",
+    "numpy>=2.3.3,<3; python_version >= '3.14'",
+]
+```
 
 ## Extras
 
@@ -49,7 +59,7 @@ administrator (sudo). Robot extras do not install udev rules or configure interf
 no Python 3.12 wheel or sdist: CPython 3.12, Linux x86_64 only, libusb bundled, nothing
 is compiled at install time. The fork changes only packaging: Gooey/wxPython (a GUI
 launcher roboloom does not use) is the optional extra `pysurvive[gui]`. On other
-platforms `pika` does not install pysurvive. Only the tracker's udev rules need an
+Python versions and platforms `pika` does not install pysurvive. Only the tracker's udev rules need an
 administrator.
 Pysurvive is needed only for real Pika Sense tracker poses, not PiPER joint control,
 Pika serial/cameras or mock operation. `pika` deliberately installs the complete set;

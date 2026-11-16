@@ -11,7 +11,7 @@ measurements (`*.npz`), logs and datasets.
 ## Installation and project directory
 
 Run commands from your own uv project root, which contains `pyproject.toml` and
-`.roboloom/`. Set `project.requires-python` to `">=3.12,<3.13"` and add roboloom from GitHub:
+`.roboloom/`. Set `project.requires-python` within `">=3.12,<3.15"` and add roboloom from GitHub:
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
