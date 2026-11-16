@@ -12,8 +12,8 @@ the tool in the tool's frame.
     followers: [left, left_gripper]
     arm: left                     # the follower whose kinematics() the IK solves
     gripper: left_gripper         # optional: a one-joint follower set from the jaw angle
-    tool_offset: {xyz: [0, 0, 0.19], rpy: [0, -1.5708, 0]}  # tool frame on the flange
-    workspace: {min: [x, y, z], max: [x, y, z]}  # m, in the arm's base frame
+    tool_offset: {xyz: [0, 0, 0.19], rpy: [0, -1.5708, 0]}  # optional: tool frame on the flange
+    workspace: {min: [x, y, z], max: [x, y, z]}  # optional: m, in the arm's base frame
     max_input_jump: {position_m: 0.05, rotation_rad: 0.5}
     ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005,
          rotation_tolerance_rad: 0.05}
@@ -24,7 +24,9 @@ the tool in the tool's frame.
     input_timeout_ms: 150
 
 Nothing is sent (the followers hold) while the target leaves `workspace` or the IK does
-not reach it. Teleoperation stops, and waits for the operator to engage again, when the
+not reach it. For a first run both may be left out: without `tool_offset` the tool is the
+flange itself, and without `workspace` only the joint limits and the IK bound the target
+(`status()` shows `workspace: none`; narrow it once the robot's surroundings are known). Teleoperation stops, and waits for the operator to engage again, when the
 pose is lost or stale, when it jumps by more than `max_input_jump` between samples, while
 a follower moves home, and after `reset()` (a follower latched FAULT or ESTOP). `home`
 gives followers a saved pose to move to (`Move home` on the operator screen) while the
@@ -144,16 +146,24 @@ class PoseIkController(Controller):
             and len(self.followers[self.gripper].joint_names) != 1
         ):
             raise ValueError(f"{name}.gripper: expected a follower with one joint")
-        offset = _mapping(cfg, "tool_offset", name)
-        self.tool = pose_xyz_rpy(
-            _vector(offset.get("xyz"), 3, f"{name}.tool_offset.xyz"),
-            _vector(offset.get("rpy"), 3, f"{name}.tool_offset.rpy"),
-        )
-        box = _mapping(cfg, "workspace", name)
-        self.low = np.asarray(_vector(box.get("min"), 3, f"{name}.workspace.min"))
-        self.high = np.asarray(_vector(box.get("max"), 3, f"{name}.workspace.max"))
-        if not np.all(self.low < self.high):
-            raise ValueError(f"{name}.workspace: min must be below max on every axis")
+        if cfg.get("tool_offset") is None:
+            self.tool = pose_xyz_rpy([0.0] * 3, [0.0] * 3)  # the flange
+        else:
+            offset = _mapping(cfg, "tool_offset", name)
+            self.tool = pose_xyz_rpy(
+                _vector(offset.get("xyz"), 3, f"{name}.tool_offset.xyz"),
+                _vector(offset.get("rpy"), 3, f"{name}.tool_offset.rpy"),
+            )
+        # no workspace: the joint limits and the IK alone bound the target
+        self.low = self.high = None
+        if cfg.get("workspace") is not None:
+            box = _mapping(cfg, "workspace", name)
+            self.low = np.asarray(_vector(box.get("min"), 3, f"{name}.workspace.min"))
+            self.high = np.asarray(_vector(box.get("max"), 3, f"{name}.workspace.max"))
+            if not np.all(self.low < self.high):
+                raise ValueError(
+                    f"{name}.workspace: min must be below max on every axis"
+                )
         jump = _mapping(cfg, "max_input_jump", name)
         self.jump_m = positive(
             jump.get("position_m"), f"{name}.max_input_jump.position_m"
@@ -224,6 +234,16 @@ class PoseIkController(Controller):
                 "calibration file after checking each joint on the robot)"
             )
 
+    def notes(self) -> list[str]:
+        """What a first-run configuration leaves open (shown by `roboloom validate`)."""
+        out = []
+        if self.low is None:
+            out.append(
+                f"{self.name}: no workspace; only the joint limits and the IK bound the "
+                "target (narrow it before working near people or obstacles)"
+            )
+        return out
+
     def _stop(self, state: str) -> dict[str, Envelope]:
         """Stop following; the operator engages again to continue."""
         self.anchor = self.previous = None
@@ -235,6 +255,8 @@ class PoseIkController(Controller):
 
     def status(self) -> dict:
         out: dict = {"state": self.state, "engaged": self.anchor is not None}
+        if self.low is None:
+            out["workspace"] = "none"
         if self.errors is not None:
             out["position_error_mm"] = round(self.errors[0] * 1000, 1)
             out["rotation_error_deg"] = round(math.degrees(self.errors[1]), 1)
@@ -317,7 +339,9 @@ class PoseIkController(Controller):
                 return self._stop("input_jump")
         self.previous = sense
         target = self.anchor @ sense
-        if np.any(target[:3, 3] < self.low) or np.any(target[:3, 3] > self.high):
+        if self.low is not None and (
+            np.any(target[:3, 3] < self.low) or np.any(target[:3, 3] > self.high)
+        ):
             self.state = "out_of_workspace"
             return self._withhold(now)
         # the IK works in the URDF's rad; the follower's unit only at its two ends

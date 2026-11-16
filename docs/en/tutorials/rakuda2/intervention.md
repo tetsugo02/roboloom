@@ -3,7 +3,7 @@
 <span class="status status--verified">Hardware-verified</span>
 
 - **Goal**: drive Rakuda2 with a policy, take over with the leader when it is about to fail, and hand back to the policy. The rows a person drove are recorded apart.
-- **Prerequisites**: a policy runs as in [Rakuda2: from collection to inference](rakuda2-train-infer.md). Someone can support the leader and the follower.
+- **Prerequisites**: a policy runs as in [Rakuda2: from collection to inference](train-infer.md). Someone can support the leader and the follower.
 - **Time**: 1 hour.
 - **Result**: `datasets/rakuda2-eval-teleop` holds episodes with `action.intervention` and `observation.leader`.
 
@@ -44,7 +44,7 @@ task: pick up the cup
 
 - Use an absolute path in `kwargs`.
 - `nodes/policy_teleop.yaml` is `nodes/policy.yaml` plus `teleop: [controller.yaml]`. During an intervention the leader drives through the `joint` controller of `controller.yaml`.
-- The format is in [Experiment files](../reference/configuration/index.md#experiments).
+- The format is in [Experiment files](../../reference/configuration/index.md#experiments).
 
 ```bash
 uv run roboloom validate --experiment cup-teleop
@@ -69,7 +69,7 @@ uv run roboloom run --experiment cup-teleop
 - On Teleop every follower joint stops at its current target. Each joint follows the leader once the leader joint comes close or crosses its value. The policy row on the screen shows the joints not yet picked up and their differences (`pickup`).
 - The gripper does not move until the trigger is squeezed as far as the follower is open.
 - From another terminal, `uv run roboloom session teleop` and `uv run roboloom session policy` send the same operations.
-- The behaviour in detail is in [Teleoperation and interventions](../policy/intervention.md).
+- The behaviour in detail is in [Teleoperation and interventions](../../policy/intervention.md).
 
 ## 3. Check the recording
 
@@ -88,5 +88,5 @@ uv run roboloom check-dataset --experiment cup-teleop
 
 ## Next
 
-- How intervened rows are treated in training: [Dataset format](../data/format.md#valid)
-- Counting the verdicts: [Evaluation and replay](../policy/evaluation.md)
+- How intervened rows are treated in training: [Dataset format](../../data/format.md#valid)
+- Counting the verdicts: [Evaluation and replay](../../policy/evaluation.md)

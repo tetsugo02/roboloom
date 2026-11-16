@@ -3,11 +3,11 @@
 <span class="status status--verified">Hardware-verified</span>
 
 - **Goal**: create `.roboloom/rakuda2/`, read the leader and the follower, and go once through the collection path with the follower's torque off.
-- **Prerequisites**: [Installation](../get-started/installation.md) is done; Rakuda2, the Rakuda-mini leader and the RealSense are connected.
+- **Prerequisites**: [Installation](../../get-started/installation.md) is done; Rakuda2, the Rakuda-mini leader and the RealSense are connected.
 - **Time**: 1–2 hours (including checking ports and values).
 - **Result**: `validate` passes, every node runs in the `run` screen, and you can save or discard an episode.
 
-This assumes you have added roboloom and the robot/hardware-collection extras (`rakuda2` / `record` / `hardware` / `digit`) to your own uv project following [Installation](../get-started/installation.md). Commands and configuration paths are relative to your project root. For supported devices and configurations, see [Rakuda2](../robots/rakuda2/index.md).
+This assumes you have added roboloom and the robot/hardware-collection extras (`rakuda2` / `record` / `hardware` / `digit`) to your own uv project following [Installation](../../get-started/installation.md). Commands and configuration paths are relative to your project root. For supported devices and configurations, see [Rakuda2](../../robots/rakuda2/index.md).
 
 ## 1. Robot configuration and read check
 
@@ -33,7 +33,7 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | Left and right DIGIT `serial` |
 | `calibration/leader_right.yaml`, `calibration/leader_left.yaml` | Leader `port`, joint-to-URDF mapping, zero points, directions |
 
-`config.yaml` is the robot's configuration; gravity compensation, DIGIT, force feedback, policy execution and other features are launch options in it (see [Configuration](../reference/configuration/index.md)). The node files for each option are kept separately under `nodes/`.
+`config.yaml` is the robot's configuration; gravity compensation, DIGIT, force feedback, policy execution and other features are launch options in it (see [Configuration](../../reference/configuration/index.md)). The node files for each option are kept separately under `nodes/`.
 
 Apply values such as each joint's `homing_offset` from the `probe` results to the configuration. Gravity compensation deliberately changes the operating mode and Current Limit, so do not copy the current EEPROM as-is; check the difference from the configuration with `commission`, described below.
 
@@ -59,7 +59,7 @@ uv run roboloom commission leader
 uv run roboloom run
 ```
 
-In a terminal, `run` first opens the [launcher](../reference/cli.md). Choose the operation `run`, leave every option unticked, and press Launch (Ctrl-S). To start without the launcher, use `uv run roboloom run --plain` (a line-input screen).
+In a terminal, `run` first opens the [launcher](../../reference/cli.md). Choose the operation `run`, leave every option unticked, and press Launch (Ctrl-S). To start without the launcher, use `uv run roboloom run --plain` (a line-input screen).
 
 IDs, models, and EEPROM are also checked at startup, and startup is refused on a mismatch. Check the status of all nodes and the sensor acquisition rates on the screen. Align the leader to the follower's pose, and once the controller is `following`, enter the following in order.
 
@@ -75,5 +75,5 @@ At the `release` confirmation, support the follower arms. `quit` also releases t
 
 ## Next
 
-- To use gravity compensation: [Rakuda2: gravity compensation](rakuda2-gravity.md)
-- To collect right away: [Rakuda2: teleoperated collection](rakuda2-collect.md)
+- To use gravity compensation: [Rakuda2: gravity compensation](gravity.md)
+- To collect right away: [Rakuda2: teleoperated collection](collect.md)

@@ -67,8 +67,13 @@ plugins:
       # Old page -> new page, so published links (README, templates) keep working.
       redirect_maps:
         quick-start/installation.md: get-started/installation.md
-        quick-start/rakuda2.md: tutorials/rakuda2-setup.md
-        tutorials/rakuda2.md: tutorials/rakuda2-setup.md
+        quick-start/rakuda2.md: tutorials/rakuda2/setup.md
+        tutorials/rakuda2-setup.md: tutorials/rakuda2/setup.md
+        tutorials/rakuda2-gravity.md: tutorials/rakuda2/gravity.md
+        tutorials/rakuda2-collect.md: tutorials/rakuda2/collect.md
+        tutorials/rakuda2-train-infer.md: tutorials/rakuda2/train-infer.md
+        tutorials/rakuda2-intervention.md: tutorials/rakuda2/intervention.md
+        tutorials/piper-pika-mock.md: tutorials/piper-pika/mock.md
         contribution/piper.md: robots/piper/index.md
         contribution/pika-gripper.md: robots/pika/index.md
         contribution/pika-cameras.md: sensors/pika-cameras.md

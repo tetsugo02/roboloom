@@ -53,8 +53,10 @@ CONFIGURED = {
     "gravity-check",
     "tune-gravity",
     "capture-pose",
+    "setup",
 }
 ONLY_CONFIG = {
+    "setup",
     "launch",
     "run",
     "record",
@@ -245,6 +247,23 @@ def main(argv: list[str] | None = None) -> None:
         "--ids", type=lambda text: [int(x) for x in text.split(",")], default=None
     )
     probe_cmd.add_argument("--baudrate", type=int, default=1_000_000)
+    setup_cmd = sub.add_parser(
+        "setup",
+        parents=[configured],
+        help=(
+            "find which CAN interface, serial port and tracker is which PiPER, Pika "
+            "Gripper and Pika Sense, and write them into the configuration (read-only "
+            "on the devices)"
+        ),
+    )
+    setup_cmd.add_argument(
+        "--step",
+        type=_names,
+        default=None,
+        metavar="A,B",
+        help="run only these steps: check, can, arms, senses, trackers, grippers, "
+        "validate (default: all, in this order)",
+    )
     com = sub.add_parser(
         "commission",
         parents=[configured, devices],
@@ -613,6 +632,17 @@ def _dispatch(args: argparse.Namespace) -> None:
 
         print(probe(args.port, args.ids, args.baudrate, device=args.device))
         return
+    if args.command == "setup":
+        from .setup.wizard import run_setup
+
+        report = run_setup(resolve_config(args.config), operator, args.step)
+        print(
+            f"\nsetup: wrote {len(report.written)} value(s)"
+            + (f", {len(report.notes)} note(s) above" if report.notes else "")
+        )
+        if report.valid is False:
+            raise SystemExit(1)
+        return
     if args.command == "commission":
         plan = setup.plan_commission(_load(args), args.node)
         if not plan.changes:
@@ -754,6 +784,9 @@ def _dispatch(args: argparse.Namespace) -> None:
             + (f"; video codec: {codec}" if codec else "")
             + ")"
         )
+        for controller in cfg.controllers.values():
+            for note in getattr(controller, "notes", list)():
+                print(f"note: {note}")
         return
     _operate(args)
 

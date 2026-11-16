@@ -41,7 +41,7 @@ couplings: []
 
 - 開始前にleaderとfollowerを揃えます．`aligning` の間は開始を拒否し，関節差を表示します．
 - leaderの関節の固定（`law: position`）と腰yawの相殺（`couplings`）は <span class="status status--mock">模擬のみ</span> です．
-- 詳しい設定：[Leader](../../controllers/leader.md)．手順：[Rakuda2：teleopで収集](../../tutorials/rakuda2-collect.md)．
+- 詳しい設定：[Leader](../../controllers/leader.md)．手順：[Rakuda2：teleopで収集](../../tutorials/rakuda2/collect.md)．
 
 ## 重力補償付きleader { #gravity }
 
@@ -53,7 +53,7 @@ couplings: []
 uv run roboloom run --with gravity
 ```
 
-- 測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）が済むまで読み込みを拒否します．手順：[Rakuda2：重力補償](../../tutorials/rakuda2-gravity.md)．
+- 測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）が済むまで読み込みを拒否します．手順：[Rakuda2：重力補償](../../tutorials/rakuda2/gravity.md)．
 - `policy` と同時には使えません．
 
 ## 方策 { #policy }
@@ -80,7 +80,7 @@ uv run roboloom infer --seconds 20 --policy my_lab.policies:load
 ```
 
 - 観測と行動は17関節のカウントです（[観測と行動](index.md#observation-and-action)）．
-- 共通の説明：[方策（controller）](../../controllers/policy.md)，[方策を動かす](../../policy/run.md)．手順：[Rakuda2：収集から推論まで](../../tutorials/rakuda2-train-infer.md)．
+- 共通の説明：[方策（controller）](../../controllers/policy.md)，[方策を動かす](../../policy/run.md)．手順：[Rakuda2：収集から推論まで](../../tutorials/rakuda2/train-infer.md)．
 
 ## 方策＋介入 { #policy-teleop }
 
@@ -99,7 +99,7 @@ uv run roboloom run --with policy,policy_teleop
 ```
 
 - 人が動かした行は `action.intervention` が1になります．データセット名は `-eval-teleop` です．
-- 共通の説明：[テレオペと介入](../../policy/intervention.md)．手順：[Rakuda2：介入しながら評価する](../../tutorials/rakuda2-intervention.md)．
+- 共通の説明：[テレオペと介入](../../policy/intervention.md)．手順：[Rakuda2：介入しながら評価する](../../tutorials/rakuda2/intervention.md)．
 
 ## Pika SenseとIK { #pika }
 

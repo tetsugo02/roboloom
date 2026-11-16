@@ -1,20 +1,20 @@
 # PiPER follower
 
 !!! warning "Status: in development"
-    <span class="status status--dev">In development</span> A record of the driver, in development, that runs an AgileX PiPER as a follower. It is checked only with the mock bus and tests against a stand-in for piper_sdk; it has not run on hardware. There is no robot template (`roboloom init`) or Quick start yet.
+    <span class="status status--dev">In development</span> A record of the driver, in development, that runs an AgileX PiPER as a follower. It is checked only with the mock bus and tests against a stand-in for piper_sdk; it has not run on hardware. A template for two PiPER arms with two Pika sets is created with `roboloom init piper-pika` ([PiPER + Pika path](../../tutorials/piper-pika/index.md)).
 
-The controllers it can use (Pika Sense and IK, a policy) are in [PiPER controllers](controllers.md); a run through on mock devices is in [PiPER + Pika on mock devices](../../tutorials/piper-pika-mock.md).
+The controllers it can use (Pika Sense and IK, a policy) are in [PiPER controllers](controllers.md); a run through on mock devices is in [PiPER + Pika on mock devices](../../tutorials/piper-pika/mock.md).
 
 ## Requirements
 
 - piper_sdk (`uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper`). The V2 interface of the stable 0.6 line is used. Only joint position control (MOVE J), state and enabling are used, and their frames are the same with V3 firmware.
-- One CAN interface (1 Mbps) per arm, named for the arm, such as `can_left` and `can_right`. Creating the interfaces and naming them by USB port needs sudo; ask an administrator.
+- One CAN interface (1 Mbps) per arm. Bringing it up needs sudo; ask an administrator. The names can stay `can0` and `can1`. The configuration holds the serial number of the USB-CAN adapter (`can: {serial: ...}`), and the current interface name is looked up when the bus is opened.
 
 ## Configuration
 
 ```yaml
 type: piper_follower
-can: can_left            # this arm's CAN interface
+can: {serial: "0029002F5746570A20383839"}  # serial of the USB-CAN adapter (written by roboloom setup); a name such as can0 also works
 control_hz: 100
 speed_percent: 30        # share of the firmware's joint speed (1-100)
 stale_ms: 50             # optional; older feedback latches FAULT
@@ -90,11 +90,13 @@ uv run roboloom run piper-mock --with policy
 
 ## First steps on hardware
 
-1. Ask an administrator to create the CAN interfaces (1 Mbps, one name per arm).
+The full steps are in [PiPER + Pika: robot setup](../../tutorials/piper-pika/setup.md) and [First teleoperation](../../tutorials/piper-pika/first-teleop.md). This section covers only the parts that concern the arm.
+
+1. Ask an administrator to bring the CAN interfaces up at 1 Mbps. The `can` step of `roboloom setup` shows their state and the commands to run. Which CAN belongs to which arm is found in the `arms` step, by turning the arm's joint1 by hand.
 2. With the arm powered, check its state read-only. Nothing is enabled or moved.
 
     ```bash
-    uv run roboloom probe can_left
+    uv run roboloom probe can0
     ```
 
     It shows the firmware, joint angles (rad and degrees), control mode, enabling, temperatures, faults and feedback rates.
@@ -102,7 +104,7 @@ uv run roboloom run piper-mock --with policy
 3. Measure whether it holds when left alone. Be ready to support the arm and clear the space around it. It holds the current pose for 2 s, stops writing with the motors enabled, and only reads the joints for up to `--seconds` (the state after quitting with holding, an ESTOP or a FAULT). The bus stays open, because closing and reopening CAN within one process is not reliable with piper_sdk; the PiPER driver does not disable the motors on close, so closing leaves the same state. A short `--seconds` can miss an arm that sags slowly. A change beyond `--tolerance` (rad) or a disabled motor means `torque_off`; otherwise `holds`. Typing `record` writes `unattended:` to the follower YAML. Finally, choose `release` to turn the torque off, or leave it as it is.
 
     ```bash
-    uv run roboloom check-hold left --tolerance 0.02
+    uv run roboloom check-hold piper-pika left --tolerance 0.02
     ```
 
 ## To check on hardware

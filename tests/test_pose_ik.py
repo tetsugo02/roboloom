@@ -239,3 +239,22 @@ def test_held_time_gives_no_extra_speed_budget():
     rig.send(pose_xyz_rpy([0.0, 0.0, 0.03], [0, 0, 0]))
     limit = rig.c.max_speed["left"] * rig.c.input_timeout_ms / 1000
     assert max(abs(a - b) for a, b in zip(rig.arm, held, strict=True)) <= limit + 1e-9
+
+
+def test_without_workspace_and_tool_offset_the_flange_follows_inside_the_joint_limits():
+    from roboloom.controllers.pose_ik import PoseIkController
+
+    cfg = load_config(CONFIG)
+    first = cfg.controllers["left_ik"]
+    raw = {k: v for k, v in first.cfg.items() if k not in ("workspace", "tool_offset")}
+    rig = Rig()
+    rig.c = PoseIkController("left_ik", raw, cfg.inputs["left_sense"], first.followers)
+    assert np.allclose(rig.c.tool, np.eye(4))  # the flange itself
+    assert rig.c.status()["workspace"] == "none"
+    assert "no workspace" in rig.c.notes()[0]
+    assert Rig().c.notes() == [] and "workspace" not in Rig().c.status()
+    rig.c.jump_m = rig.c.jump_rad = 5.0
+    rig.send(engaged=False)
+    rig.send()
+    rig.send(pose_xyz_rpy([0.0, 0.0, -0.4], [0, 0, 0]))  # out of the mock's box
+    assert rig.c.state in ("following", "unreachable")

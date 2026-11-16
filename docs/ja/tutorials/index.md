@@ -36,27 +36,29 @@ flowchart LR
 
 ## Rakuda2 { #rakuda2 }
 
+順番は [Rakuda2の道筋](rakuda2/index.md) にあります．
+
 <div class="grid cards gallery" markdown>
 
--   [![Rakuda2：機体設定と読み取り確認](../assets/gallery/rakuda2-setup.svg)](rakuda2-setup.md)
+-   [![Rakuda2：機体設定と読み取り確認](../assets/gallery/rakuda2-setup.svg)](rakuda2/setup.md)
 
-    **[Rakuda2：機体設定と読み取り確認](rakuda2-setup.md)**
+    **[Rakuda2：機体設定と読み取り確認](rakuda2/setup.md)**
 
     設定を作り，ポートを読み，トルクを切って経路を一周する．
 
     <span class="gallery-tags">Rakuda2 · 1〜2時間 · <span class="status status--verified">実機検証済み</span></span>
 
--   [![Rakuda2：重力補償](../assets/gallery/rakuda2-gravity.svg)](rakuda2-gravity.md)
+-   [![Rakuda2：重力補償](../assets/gallery/rakuda2-gravity.svg)](rakuda2/gravity.md)
 
-    **[Rakuda2：重力補償](rakuda2-gravity.md)**
+    **[Rakuda2：重力補償](rakuda2/gravity.md)**
 
     零点，可動域，重力モデルを測り，leaderの補償を調整する．
 
     <span class="gallery-tags">Rakuda2 · 1〜2時間 · <span class="status status--verified">実機検証済み</span></span>
 
--   [![Rakuda2：teleopで収集](../assets/gallery/rakuda2-collect.svg)](rakuda2-collect.md)
+-   [![Rakuda2：teleopで収集](../assets/gallery/rakuda2-collect.svg)](rakuda2/collect.md)
 
-    **[Rakuda2：teleopで収集](rakuda2-collect.md)**
+    **[Rakuda2：teleopで収集](rakuda2/collect.md)**
 
     leaderで動かし，RealSenseとDIGITと一緒に記録する．
 
@@ -68,17 +70,17 @@ flowchart LR
 
 <div class="grid cards gallery" markdown>
 
--   [![Rakuda2：収集から推論まで](../assets/gallery/rakuda2-train-infer.svg)](rakuda2-train-infer.md)
+-   [![Rakuda2：収集から推論まで](../assets/gallery/rakuda2-train-infer.svg)](rakuda2/train-infer.md)
 
-    **[Rakuda2：収集から推論まで](rakuda2-train-infer.md)**
+    **[Rakuda2：収集から推論まで](rakuda2/train-infer.md)**
 
     検査，LeRobotで学習，推論，成否の記録までを通す．
 
     <span class="gallery-tags">Rakuda2 · 学習＋1時間 · <span class="status status--verified">実機検証済み</span></span>
 
--   [![Rakuda2：介入しながら評価する](../assets/gallery/rakuda2-intervention.svg)](rakuda2-intervention.md)
+-   [![Rakuda2：介入しながら評価する](../assets/gallery/rakuda2-intervention.svg)](rakuda2/intervention.md)
 
-    **[Rakuda2：介入しながら評価する](rakuda2-intervention.md)**
+    **[Rakuda2：介入しながら評価する](rakuda2/intervention.md)**
 
     方策の途中でleaderに代わり，介入した行を区別して記録する．
 
@@ -96,11 +98,21 @@ flowchart LR
 
 ## 開発中の機体 { #in-development }
 
+PiPER＋Pikaの順番は [PiPER＋Pikaの道筋](piper-pika/index.md) にあります．機体を立ち上げる段階は，どのロボットも [同じ順](../explanation/robot-setup-flow.md) です．
+
 <div class="grid cards gallery" markdown>
 
--   [![PiPER＋Pikaを模擬で](../assets/gallery/piper-pika-mock.svg)](piper-pika-mock.md)
+-   [![PiPER＋Pika：機体設定から遠隔操作まで](../assets/gallery/piper-pika-mock.svg)](piper-pika/setup.md)
 
-    **[PiPER＋Pikaを模擬で](piper-pika-mock.md)**
+    **[PiPER＋Pika：機体設定から遠隔操作まで](piper-pika/setup.md)**
+
+    `roboloom setup` で機器を特定し，ゆるい設定で初めての遠隔操作をする．
+
+    <span class="gallery-tags">PiPER＋Pika · 1時間 · <span class="status status--dev">開発中</span></span>
+
+-   [![PiPER＋Pikaを模擬で](../assets/gallery/piper-pika-mock.svg)](piper-pika/mock.md)
+
+    **[PiPER＋Pikaを模擬で](piper-pika/mock.md)**
 
     模擬のPika SenseとIKで記録し，LeRobotの方策で動かす．
 

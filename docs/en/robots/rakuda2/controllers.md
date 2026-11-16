@@ -41,7 +41,7 @@ couplings: []
 
 - Align the leader with the follower before starting. While `aligning`, a start is refused and the joint difference is shown.
 - Locking leader joints (`law: position`) and the torso-yaw compensation (`couplings`) are <span class="status status--mock">Mock only</span>.
-- Settings in detail: [Leader](../../controllers/leader.md). Steps: [Rakuda2: teleoperated collection](../../tutorials/rakuda2-collect.md).
+- Settings in detail: [Leader](../../controllers/leader.md). Steps: [Rakuda2: teleoperated collection](../../tutorials/rakuda2/collect.md).
 
 ## Gravity-compensated leader { #gravity }
 
@@ -53,7 +53,7 @@ The option `gravity` replaces the leader node `nodes/leader.yaml` with `nodes/le
 uv run roboloom run --with gravity
 ```
 
-- Loading is refused until the measurements (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`) are done. Steps: [Rakuda2: gravity compensation](../../tutorials/rakuda2-gravity.md).
+- Loading is refused until the measurements (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`) are done. Steps: [Rakuda2: gravity compensation](../../tutorials/rakuda2/gravity.md).
 - It cannot be combined with `policy`.
 
 ## Policy { #policy }
@@ -80,7 +80,7 @@ uv run roboloom infer --seconds 20 --policy my_lab.policies:load
 ```
 
 - Observation and action are the 17 joints in counts ([Observation and action](index.md#observation-and-action)).
-- Shared description: [Policy (controller)](../../controllers/policy.md), [Running a policy](../../policy/run.md). Steps: [Rakuda2: from collection to inference](../../tutorials/rakuda2-train-infer.md).
+- Shared description: [Policy (controller)](../../controllers/policy.md), [Running a policy](../../policy/run.md). Steps: [Rakuda2: from collection to inference](../../tutorials/rakuda2/train-infer.md).
 
 ## Policy with interventions { #policy-teleop }
 
@@ -99,7 +99,7 @@ uv run roboloom run --with policy,policy_teleop
 ```
 
 - Rows a person drove have `action.intervention` 1. The dataset name gets `-eval-teleop`.
-- Shared description: [Teleoperation and interventions](../../policy/intervention.md). Steps: [Rakuda2: evaluating with interventions](../../tutorials/rakuda2-intervention.md).
+- Shared description: [Teleoperation and interventions](../../policy/intervention.md). Steps: [Rakuda2: evaluating with interventions](../../tutorials/rakuda2/intervention.md).
 
 ## Pika Sense and IK { #pika }
 

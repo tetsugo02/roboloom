@@ -93,5 +93,5 @@ def load(checkpoint: str) -> MyPolicy:
 
 ## 次へ
 
-- 実機のRakuda2で動かす：[Rakuda2：収集から推論まで](rakuda2-train-infer.md)
+- 実機のRakuda2で動かす：[Rakuda2：収集から推論まで](rakuda2/train-infer.md)
 - 別の環境で方策を動かす：[別のプロセスで動かす](../policy/remote.md)

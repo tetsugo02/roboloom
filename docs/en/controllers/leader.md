@@ -34,7 +34,7 @@ When `aligning` appears on screen, align the leader with the follower while watc
 
 The leader trigger is configured with `law: spring`, and gravity compensation with `law: gravity_comp`. These are motor control laws executed by the leader node itself. On hardware, run them in the `Session` / CLI dataflow. `InProcessSession.from_yaml()` does not accept a leader that executes control laws.
 
-The concrete setup is in [Rakuda2 Quick start](../tutorials/rakuda2-setup.md).
+The concrete setup is in [Rakuda2 Quick start](../tutorials/rakuda2/setup.md).
 
 ## Supported robots { #supported-robots }
 
