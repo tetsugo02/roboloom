@@ -7,7 +7,7 @@ The controllers it can use (Pika Sense and IK, a policy) are in [PiPER controlle
 
 ## Requirements
 
-- piper_sdk (`uv add git+https://github.com/tetsugo02/roboloom.git --extra piper`). The V2 interface of the stable 0.6 line is used. Only joint position control (MOVE J), state and enabling are used, and their frames are the same with V3 firmware.
+- piper_sdk (`uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper`). The V2 interface of the stable 0.6 line is used. Only joint position control (MOVE J), state and enabling are used, and their frames are the same with V3 firmware.
 - One CAN interface (1 Mbps) per arm, named for the arm, such as `can_left` and `can_right`. Creating the interfaces and naming them by USB port needs sudo; ask an administrator.
 
 ## Configuration

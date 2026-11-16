@@ -30,6 +30,7 @@ from .errors import Cancelled, ConfigError, RoboloomError
 from .recording.episodes import LABELS
 from .recording.video import check_video_encoding, video_codec_names
 from .runtime.flow import build_flow
+from .version import version
 
 if TYPE_CHECKING:
     from .ui.launcher import LaunchPlan
@@ -104,10 +105,29 @@ def _names(text: str) -> list[str]:
     return [n.strip() for n in text.split(",") if n.strip()]
 
 
+class _VersionAction(argparse.Action):
+    """Evaluate `version()` only when `--version` is requested."""
+
+    def __init__(
+        self,
+        option_strings,
+        dest=argparse.SUPPRESS,
+        default=argparse.SUPPRESS,
+        **kwargs,
+    ):
+        super().__init__(option_strings, dest=dest, default=default, nargs=0, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        print(f"{parser.prog} {version()}")
+        parser.exit()
+
+
 def _with_config(argv: list[str]) -> list[str]:
     """Move an optional leading configuration word into `--config`, so `roboloom run`,
     `roboloom run rakuda2` and `roboloom commission follower` all parse."""
-    if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
+    if not argv or (
+        argv[0].startswith("-") and argv[0] not in ("-h", "--help", "-V", "--version")
+    ):
         argv = ["launch", *argv]  # `roboloom`, `roboloom --mock`: the launcher
     elif argv[0] not in CONFIGURED and is_configuration(argv[0]):
         argv = ["launch", *argv]  # `roboloom rakuda2`
@@ -129,6 +149,12 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="roboloom",
         description="Without a command: the launcher (choose operation and options).",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action=_VersionAction,
+        help="show program's version number and exit",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     # --config: the robot under .roboloom/ (optional when there is only one) or a YAML file

@@ -9,8 +9,8 @@ To create a new project:
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git
-uv run roboloom --help
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0
+uv run roboloom --version
 ```
 
 For an existing project, start with `uv add` from its root. First set `project.requires-python` in `pyproject.toml` to a range within `">=3.12,<3.15"`. Selecting a Python environment alone does not limit the Python compatibility range that uv resolves.
@@ -29,11 +29,11 @@ The base install contains the shared runtime (dora, YAML, NumPy, OpenCV, serial 
 
 | Setup | Command | Purpose |
 | --- | --- | --- |
-| Base | `uv add git+https://github.com/tetsugo02/roboloom.git` | Configuration loading, CLI, mock devices |
-| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2` | Dynamixel SDK for the follower and Rakuda-mini leader |
-| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika` | PiPER SDK, IK, Pika tracking and wrist cameras (in development, hardware unverified) |
-| Recording | `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` | Saving to LeRobotDataset, mock collection |
-| Rakuda2 hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2, recording, RealSense (`hardware`), DIGIT (`digit`) |
+| Base | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0` | Configuration loading, CLI, mock devices |
+| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2` | Dynamixel SDK for the follower and Rakuda-mini leader |
+| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper --extra pika` | PiPER SDK, IK, Pika tracking and wrist cameras (in development, hardware unverified) |
+| Recording | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` | Saving to LeRobotDataset, mock collection |
+| Rakuda2 hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2, recording, RealSense (`hardware`), DIGIT (`digit`) |
 
 Once the Git source is registered, extras can also be added by package name. Quote the brackets in shells such as zsh:
 
@@ -53,19 +53,28 @@ The `digit` extra uses a wheel built by a [fork of digit-interface](https://gith
 
 `uv add` registers the dependency and Git source in your `pyproject.toml` and records the resolved commit in `uv.lock`. Commit both files and reproduce the environment elsewhere with `uv sync --locked`. See [uv's Git dependency documentation](https://docs.astral.sh/uv/concepts/projects/dependencies/#git) for details.
 
-## Updating and pinning a commit
+## Updating and pinning a release
 
-To update to a newer commit on the default branch:
+To switch to another release tag (`<tag>` from [GitHub Releases](https://github.com/tetsugo02/roboloom/releases), e.g. `v0.1.0`):
 
 ```bash
-uv lock --upgrade-package roboloom
+uv add git+https://github.com/tetsugo02/roboloom.git --tag <tag>
 uv sync --locked
 ```
 
-To use a specific commit, replace `<commit-sha>` with an actual commit SHA. This example includes the recording extra.
+To track the default branch or pin an exact commit during development:
 
 ```bash
+uv add git+https://github.com/tetsugo02/roboloom.git                      # track main
+uv lock --upgrade-package roboloom && uv sync --locked                  # upgrade tracked branch
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commit-sha>
+```
+
+Each release attaches the built wheel (`.whl`), source distribution (`.tar.gz`), and `SHA256SUMS.txt`. To install from a downloaded wheel after verifying its checksum:
+
+```bash
+sha256sum -c SHA256SUMS.txt --ignore-missing
+uv add ./roboloom-<version>-py3-none-any.whl
 ```
 
 Updating the package does not overwrite existing configuration under `.roboloom/`. To bring a project up to a newer template, run `roboloom init rakuda2 --update`: it adds the files the project lacks and replaces files that are still as they were copied. Files you edited and files holding measured values are left alone; for those it lists the keys and options only the template has, to copy by hand.

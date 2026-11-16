@@ -1,6 +1,6 @@
 # CLI
 
-Prefix with `uv run` and run from the project root. `roboloom <command> --help` lists the
+Prefix with `uv run` and run from the project root. `roboloom --version` prints the version; `roboloom <command> --help` lists the
 arguments. `[robot]` is optional when `.roboloom/` holds one robot; a robot name or YAML
 path also works. For commands with other positional words the first word is the robot only
 when it names one (`roboloom commission follower` = `roboloom commission rakuda2 follower`).

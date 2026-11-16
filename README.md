@@ -7,6 +7,7 @@
 [![Python 3.12](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.12.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.13](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.13.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.14](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.14.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/tetsugo02/roboloom)](https://github.com/tetsugo02/roboloom/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Teleoperation, multimodal data collection, and policy inference on [dora-rs](https://github.com/dora-rs/dora), saving directly to **LeRobotDataset (0.7.0)**.
@@ -50,7 +51,7 @@ Requires **Python 3.12–3.14**, [uv](https://docs.astral.sh/uv/), and Git. Add 
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit
 ```
 
 | Extra | Purpose |
@@ -73,7 +74,7 @@ override-dependencies = [
 ]
 ```
 
-roboloom also ships an [Agent Skill](https://agentskills.io) for coding agents (`uv run roboloom skills install`). See [Installation](https://tetsugo02.github.io/roboloom/en/get-started/installation/) for details.
+roboloom also ships an [Agent Skill](https://agentskills.io) for coding agents (`uv run roboloom skills install`). Prebuilt wheels and `SHA256SUMS.txt` for each release tag are attached on [GitHub Releases](https://github.com/tetsugo02/roboloom/releases). See [Installation](https://tetsugo02.github.io/roboloom/en/get-started/installation/) for details.
 
 ## Quick Start
 

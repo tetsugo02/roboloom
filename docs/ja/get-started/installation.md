@@ -9,8 +9,8 @@ Python **3.12〜3.14** とuv，Gitを使います．roboloomは，自分のプ�
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git
-uv run roboloom --help
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0
+uv run roboloom --version
 ```
 
 既存のプロジェクトでは，そのルートで `uv add` から実行します．先に `pyproject.toml` の `project.requires-python` を `">=3.12,<3.15"` の範囲内に設定してください．Pythonの環境を選ぶだけでは，uvが解決するPythonの対応範囲は限定されません．
@@ -29,11 +29,11 @@ override-dependencies = [
 
 | 構成 | コマンド | 用途 |
 | --- | --- | --- |
-| 基本 | `uv add git+https://github.com/tetsugo02/roboloom.git` | 設定の読み込み，CLI，模擬デバイス |
-| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2` | followerとRakuda-mini leader用のDynamixel SDK |
-| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --extra piper --extra pika` | PiPER SDK，IK，Pikaのトラッカー・手首カメラ（開発中・実機未検証） |
-| 記録 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` | LeRobotDatasetへの保存，模擬収集 |
-| Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2，記録，RealSense（`hardware`），DIGIT（`digit`） |
+| 基本 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0` | 設定の読み込み，CLI，模擬デバイス |
+| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2` | followerとRakuda-mini leader用のDynamixel SDK |
+| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper --extra pika` | PiPER SDK，IK，Pikaのトラッカー・手首カメラ（開発中・実機未検証） |
+| 記録 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` | LeRobotDatasetへの保存，模擬収集 |
+| Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2，記録，RealSense（`hardware`），DIGIT（`digit`） |
 
 Gitソースを登録した後は，パッケージ名でextrasを追加することもできます．zshなどのシェルでは角括弧を引用符で囲みます．
 
@@ -53,19 +53,28 @@ DIGITの `digit` extraは，上流のdigit-interface 0.2.1（アーカイブ済�
 
 `uv add` は自分の `pyproject.toml` に依存とGitソースを登録し，`uv.lock` に解決したcommitを記録します．両方をGitで管理し，別の環境では `uv sync --locked` で再現します．詳細は [uvのGit依存の説明](https://docs.astral.sh/uv/concepts/projects/dependencies/#git) を参照してください．
 
-## 更新とcommitの固定
+## 更新とバージョンの固定
 
-既定ブランチの新しいcommitへ更新する場合：
+新しいリリースタグへ切り替える場合（`<tag>` は [GitHub Releases](https://github.com/tetsugo02/roboloom/releases) のタグ，例：`v0.1.0`）：
 
 ```bash
-uv lock --upgrade-package roboloom
+uv add git+https://github.com/tetsugo02/roboloom.git --tag <tag>
 uv sync --locked
 ```
 
-特定のcommitを使う場合は，`<commit-sha>` を実際のcommit SHAへ置き換えます．記録用extrasを使う例です．
+開発中の最新 commit を使う場合（既定ブランチ追従・更新・commit SHA 固定）：
 
 ```bash
+uv add git+https://github.com/tetsugo02/roboloom.git                      # main 追従
+uv lock --upgrade-package roboloom && uv sync --locked                  # 追従先の最新へ更新
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commit-sha>
+```
+
+各リリースのページには，ビルド済み wheel（`.whl`）・ソース配布物（`.tar.gz`）および `SHA256SUMS.txt` を添付しています．wheel を直接使う場合はチェックサムを照合してから追加します：
+
+```bash
+sha256sum -c SHA256SUMS.txt --ignore-missing
+uv add ./roboloom-<version>-py3-none-any.whl
 ```
 
 パッケージを更新しても，生成済みの `.roboloom/` の設定は書き換わりません．新しい版のテンプレートに追いつかせるときは `roboloom init rakuda2 --update` を使います．プロジェクトにないファイルを足し，コピーしたまま触っていないファイルを置き換えます．編集したファイルと測定値の入ったファイルは変えず，テンプレートだけにあるキーとオプションを一覧にします（手で写します）．

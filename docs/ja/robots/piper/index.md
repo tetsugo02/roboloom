@@ -7,7 +7,7 @@
 
 ## 必要なもの
 
-- piper_sdk（`uv add git+https://github.com/tetsugo02/roboloom.git --extra piper`）．安定版の0.6系のV2インターフェースを使います．使うのは関節の位置制御（MOVE J）・状態・有効化だけで，これらはV3のファームウェアでも同じ形です．
+- piper_sdk（`uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper`）．安定版の0.6系のV2インターフェースを使います．使うのは関節の位置制御（MOVE J）・状態・有効化だけで，これらはV3のファームウェアでも同じ形です．
 - 腕ごとに1つのCANインターフェース（1 Mbps）．名前は `can_left`，`can_right` のように腕で決めます．インターフェースの作成と，USBポートによる名前付けにはsudoが要るので，管理者に頼みます．
 
 ## 設定

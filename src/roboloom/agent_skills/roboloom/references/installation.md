@@ -7,8 +7,8 @@ roboloom is installed from GitHub into the user's own uv project. Python **3.12â
 ```bash
 uv init --python '>=3.12,<3.15' my-robot   # new project
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git
-uv run roboloom --help
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0
+uv run roboloom --version
 ```
 
 For an existing project, first set `project.requires-python` in `pyproject.toml` to a range
@@ -40,7 +40,7 @@ override-dependencies = [
 | `train` | `lerobot[training]==0.7.0` | `lerobot-train` on roboloom datasets |
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit
 uv add 'roboloom[rakuda2]'  # after registering the Git source
 uv add 'roboloom[piper,pika]'  # PiPER + Pika Sense/Gripper
 uv add 'roboloom[policy]'   # once roboloom is already a dependency, extras can be added like this
@@ -72,7 +72,8 @@ include `survive-cli`; calibrate from Python with `pysurvive.SimpleContext([...,
 `uv.lock`. Commit both; elsewhere run `uv sync --locked`.
 
 ```bash
-uv lock --upgrade-package roboloom && uv sync --locked                                  # newest commit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag <tag>                         # pin or switch to a release tag (e.g. v0.1.0)
+uv lock --upgrade-package roboloom && uv sync --locked                                  # newest commit when tracking a branch
 uv add git+https://github.com/tetsugo02/roboloom.git --extra record --rev <commit-sha>   # pin a commit
 ```
 

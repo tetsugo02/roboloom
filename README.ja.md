@@ -7,6 +7,7 @@
 [![Python 3.12](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.12.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.13](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.13.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.14](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.14.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/tetsugo02/roboloom)](https://github.com/tetsugo02/roboloom/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [dora-rs](https://github.com/dora-rs/dora) 上で遠隔操作・マルチモーダルデータ収集・方策推論を行い，**LeRobotDataset (0.7.0)** へ直接保存する Python パッケージです．
@@ -50,7 +51,7 @@ flowchart LR
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git --extra rakuda2 --extra record --extra hardware --extra digit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit
 ```
 
 | Extra | 用途 |
@@ -73,7 +74,7 @@ override-dependencies = [
 ]
 ```
 
-コーディングエージェント向けの [Agent Skill](https://agentskills.io) も同梱しています（`uv run roboloom skills install`）．詳細は [Installation](https://tetsugo02.github.io/roboloom/ja/get-started/installation/) を参照してください．
+コーディングエージェント向けの [Agent Skill](https://agentskills.io) も同梱しています（`uv run roboloom skills install`）．各リリースタグのビルド済み wheel と `SHA256SUMS.txt` は [GitHub Releases](https://github.com/tetsugo02/roboloom/releases) に添付しています．詳細は [Installation](https://tetsugo02.github.io/roboloom/ja/get-started/installation/) を参照してください．
 
 ## クイックスタート
 

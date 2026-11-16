@@ -2,7 +2,7 @@
 
 roboloom の操作は，どれも Python の関数として使えます．CLI（`roboloom ...`）は，その関数を呼んで結果を表示するだけの薄い層です．各ページの API の説明は docstring から生成していて，英語です．
 
-[インストール](../../get-started/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．設定や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
+[インストール](../../get-started/installation.md) に従って自分のuvプロジェクトへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` を使います．以下のコードは自分のPythonスクリプトに保存して `uv run python <script.py>` で実行します．設定や `.roboloom/` のパスは自分のプロジェクトルートを基準にします．
 
 ## 公開している API { #modules }
 

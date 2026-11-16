@@ -15,7 +15,7 @@
 | `pose_ik` (controller) | Sense pose → arm joints by IK, jaw → gripper angle | follower units | Pinocchio, included in `piper` or standalone `ik`; also for mock and `validate` |
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra piper --extra pika
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record --extra piper --extra pika
 ```
 
 After registering the Git source: `uv add 'roboloom[piper,pika]'`. `pysurvive` is needed
