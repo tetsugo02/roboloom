@@ -7,6 +7,8 @@ name = "roboloom"
 version = "0.1.0"
 description = "Dora based Rakuda teleoperation and LeRobot recording"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "src/roboloom/robots/piper/model/LICENSE.piper_ros"]
 authors = [{ name = "tetsugo", email = "tetsugou2002@gmail.com" }]
 keywords = ["robotics", "teleoperation", "data-collection", "lerobot", "dora"]
 requires-python = ">=3.12,<3.15"
