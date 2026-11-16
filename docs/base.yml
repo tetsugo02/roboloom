@@ -44,5 +44,25 @@ extra:
 markdown_extensions:
   - admonition
   - attr_list  # `## Heading { #anchor }`: a stable anchor for a Japanese heading
-  - pymdownx.superfences
+  - md_in_html  # grid cards: <div class="grid cards" markdown>
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - tables
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            docstring_section_style: table
+  - redirects:
+      # Old page -> new page, so published links (README, templates) keep working.
+      redirect_maps: {}
