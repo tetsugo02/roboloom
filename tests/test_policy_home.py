@@ -174,6 +174,7 @@ def test_infer_takes_home(tmp_path, monkeypatch):
     assert [p.home for p in plans] == [True, False]
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_the_policy_moves_home_then_infers_from_there(tmp_path):
     from roboloom.runtime.session import Session
@@ -191,6 +192,7 @@ def test_the_policy_moves_home_then_infers_from_there(tmp_path):
     assert result.saved and result.frames > 5
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_home_takes_the_teleop_leader_along_and_its_locked_joints_stay(tmp_path):
     """With `teleop:`, `home` moves the leader too: joints it holds by position (the

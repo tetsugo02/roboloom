@@ -244,6 +244,7 @@ def test_a_missing_sample_repeats_the_last_valid_one():
     )  # frames() is repeatable
 
 
+@pytest.mark.e2e
 def test_an_episode_saved_through_the_dataflow_survives_killing_it(tmp_path):
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 

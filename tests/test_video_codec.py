@@ -324,6 +324,7 @@ async def test_launcher_chooses_the_codec(tmp_path, initial):
     assert config_from_env(cfg.path, config_env(cfg)).recorder["video_codec"] == "h264"
 
 
+@pytest.mark.e2e
 def test_session_records_with_the_chosen_codec(tmp_path):
     """The dora recorder node encodes with the codec chosen in the parent; a different
     codec for the same dataset is refused before the dataflow starts."""

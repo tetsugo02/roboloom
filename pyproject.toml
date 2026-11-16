@@ -75,6 +75,9 @@ allow-direct-references = true  # the pysurvive wheel URL of the pika extra
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests that launch a dora dataflow (Session.launch / CLI)",
+]
 
 [[tool.mypy.overrides]]
 module = ["dynamixel_sdk", "piper_sdk", "serial", "pinocchio", "lerobot.*", "pyarrow.*"]

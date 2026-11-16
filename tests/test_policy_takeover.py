@@ -241,6 +241,7 @@ def test_operations_say_when_they_can_be_used():
 # -- the dataflow ------------------------------------------------------------------
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_teleop_before_and_during_an_episode_is_recorded(tmp_path):
     import pandas as pd

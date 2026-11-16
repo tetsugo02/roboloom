@@ -190,6 +190,7 @@ def test_capture_pose_needs_the_follower_when_there_are_several(tmp_path):
         capture_pose(path, "ready", follower="right")
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_two_followers_record_one_episode_in_mock(tmp_path):
     from roboloom.runtime.session import Session
@@ -425,6 +426,7 @@ def test_a_silent_follower_resets_the_group(tmp_path, monkeypatch):
     assert controller.resets == 1 and controller.updates == 0 and sent == []
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_one_policy_drives_two_followers_in_mock(tmp_path, monkeypatch):
     import os

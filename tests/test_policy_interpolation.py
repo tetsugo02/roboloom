@@ -225,6 +225,7 @@ def test_a_rate_that_is_not_whole_hz_keeps_one_action_per_command(tmp_path):
     assert cfg.controllers["policy"].multiplier == 1
 
 
+@pytest.mark.e2e
 def test_the_node_commands_at_the_interpolated_rate(tmp_path):
     from roboloom.runtime.flow import build_flow
     from roboloom.runtime.session import Session

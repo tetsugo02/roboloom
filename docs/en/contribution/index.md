@@ -12,11 +12,13 @@ uv run ruff format .
 uv run ruff check .
 uv run mypy src
 uv run pyright
-uv run pytest
+uv run pytest                # all tests (unit + e2e)
+uv run pytest -m "not e2e"   # unit tests only (no dora dataflow startup)
+uv run pytest -m e2e         # e2e tests launching dora dataflows with mock devices
 uv run --group docs python scripts/docs.py build
 ```
 
-On pull requests and pushes to `main`, GitHub Actions (`.github/workflows/test.yml`) runs `ruff check .`, `mypy src` and `pytest`. The dataflow tests start dora processes with mock devices; no hardware is used.
+On pull requests and pushes to `main`, GitHub Actions (`.github/workflows/test.yml`) runs `unit` (`ruff check .`, `mypy src`, and `pytest -m "not e2e"`) in parallel with `e2e` (3 sharded jobs starting dora processes with mock devices; no hardware is used). Changes limited to documentation (`docs/**`, `mkdocs*.yml`, and related files) are skipped.
 
 Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/config.yaml` and `uv run roboloom run examples/mock/config.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.
 

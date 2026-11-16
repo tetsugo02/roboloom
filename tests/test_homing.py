@@ -298,6 +298,7 @@ def test_session_refuses_home_while_recording_and_start_while_moving(tmp_path):
     assert start_warning(cfg, moving, now) is None
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_session_moves_home_then_records_from_there(tmp_path):
     from roboloom.runtime.session import Session

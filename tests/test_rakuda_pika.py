@@ -130,6 +130,7 @@ def test_hardware_refuses_an_unconfirmed_joint_map(tmp_path):
     assert cfg.controllers["controller"].inner["pika_right"].spec.confirmed
 
 
+@pytest.mark.e2e
 def test_the_option_runs_in_the_mock_dataflow(tmp_path):
     from roboloom.runtime.session import Session
 

@@ -264,6 +264,7 @@ def test_what_an_experiment_changes_is_not_blamed_on_an_option(tmp_path, monkeyp
     assert "quiet" in cfg.options  # loaded: the camera size is the experiment's doing
 
 
+@pytest.mark.e2e
 @needs_dora
 def test_an_episode_ends_when_the_policy_has_taken_its_steps(tmp_path, monkeypatch):
     _project(tmp_path, monkeypatch)
@@ -281,6 +282,7 @@ def test_an_episode_ends_when_the_policy_has_taken_its_steps(tmp_path, monkeypat
     assert episodes.read(tmp_path / "data" / "drawer")[0]["task"] == "creep"
 
 
+@pytest.mark.e2e
 @needs_dora
 def test_an_experiment_runs_with_its_server_and_saves_where_it_says(
     tmp_path, monkeypatch, capsys

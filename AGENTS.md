@@ -15,7 +15,7 @@
 ## Subagent
 
 - When using subagents, you may use another coding agent as a subagent.
-  - e.g. If you are Claude Code, you may use Codex as a subagent during the implementation step.
+  - e.g. A coding agent may delegate an implementation step to another coding agent.
 
 ## Paused work
 

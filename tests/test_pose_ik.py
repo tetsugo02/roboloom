@@ -160,6 +160,7 @@ def test_the_configuration_is_checked():
         PoseIkController("left_ik", base.cfg, cfg.followers["left"], followers)  # type: ignore[arg-type]
 
 
+@pytest.mark.e2e
 def test_two_senses_teleoperate_the_mock_and_the_dataset_records_them(tmp_path):
     import json
     import shutil

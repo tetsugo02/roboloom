@@ -328,6 +328,7 @@ def test_probe_reads_a_pika_gripper_without_enabling_it(monkeypatch):
         probe("/dev/fake", device="gello")
 
 
+@pytest.mark.e2e
 def test_a_policy_drives_two_pipers_and_two_grippers(tmp_path, monkeypatch):
     """The Pika Grippers are followers of their own beside the PiPER arms."""
     import json
