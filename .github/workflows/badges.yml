@@ -3,15 +3,18 @@ name: Badges
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "mkdocs*.yml"
-      - "scripts/docs.py"
-      - "README.md"
-      - "AGENTS.md"
-      - "*.md"
-      - ".claude/**"
-      - ".github/workflows/docs.yml"
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "**.py"
+      - "!scripts/docs.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "skills/roboloom"
+      - ".github/workflows/test.yml"
+      - ".github/workflows/badges.yml"
 
 permissions:
   contents: read

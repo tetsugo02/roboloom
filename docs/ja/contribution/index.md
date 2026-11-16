@@ -18,7 +18,7 @@ uv run pytest -m e2e         # mockデバイスでdoraを起動するe2eのみ
 uv run --group docs python scripts/docs.py build
 ```
 
-Pull Request では，GitHub Actions（`.github/workflows/test.yml`）が変更対象を確認し，コードや設定が変わっている場合のみ Python 3.12〜3.14 で `ruff check .`・`mypy src`・軽量テスト（`pytest -m "not e2e"`）を実行して必須チェック用ジョブ `Tests status` を報告します（`docs/**` や `mkdocs*.yml` などのドキュメントのみの変更時はテストをスキップして `Tests status` を成功扱いにするため，必須チェックを有効にしてもマージが詰まりません）．`main` へマージされた後はテストを再実行せず，`.github/workflows/badges.yml` がマージ元 PR のテスト結果から `badges` ブランチ上のステータスバッジ JSON を更新します（`workflow_dispatch` で手動実行した場合も更新します）．mockデバイスでdoraのプロセスを起動するE2Eテスト（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
+Pull Request では，GitHub Actions（`.github/workflows/test.yml`）が変更対象を確認し，ソースコードやテスト・実行時依存・CI 設定等が変わっている場合のみ Python 3.12〜3.14 で `ruff check .`・`mypy src`・軽量テスト（`pytest -m "not e2e"`）を実行して必須チェック用ジョブ `Tests status` を報告します（`docs/**`・`README*.md`・`LICENSE`・`pyproject.toml` のメタデータのみ等の変更時はテストをスキップして `Tests status` を成功扱いにするため，必須チェックを有効にしてもマージが詰まりません）．`main` へマージされた後はテストを再実行せず，`.github/workflows/badges.yml` がマージ元 PR のテスト結果から `badges` ブランチ上のステータスバッジ JSON を更新します（`workflow_dispatch` で手動実行した場合も更新します）．mockデバイスでdoraのプロセスを起動するE2Eテスト（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
 
 checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
@@ -74,7 +74,7 @@ uv run --group docs zensical serve -f mkdocs.en.yml  # 英語だけをライブ�
 
 `.github/workflows/docs.yml` が両言語をstrictでビルドし，`site/` 全体をGitHub Pagesへ公開します．公開先は [日本語](https://tetsugo02.github.io/roboloom/ja/) と [English](https://tetsugo02.github.io/roboloom/en/) です．ルートURLではブラウザの言語に応じて転送します．
 
-- `main` へのpush：`docs/**`，`src/**`（Python APIのページはdocstringから作る），`mkdocs*.yml`，`scripts/docs.py`，`pyproject.toml`，`uv.lock`，workflow自身の変更でビルド・公開します．
+- `main` へのpush：`docs/**`，`src/**`（Python APIのページはdocstringから作る），`mkdocs*.yml`，`scripts/docs.py`，`uv.lock`，workflow自身の変更でビルド・公開します．
 - `main` 向けのpull request：同じファイル群の変更でビルドだけを検証します．
 - Actionsの `Documentation` → `Run workflow`：手動ビルドできます．公開するのは `main` を選んだ場合だけです．
 
