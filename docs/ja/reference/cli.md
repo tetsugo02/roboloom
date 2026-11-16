@@ -1,6 +1,6 @@
 # CLI
 
-`roboloom` コマンドの一覧です．uv環境では先頭に `uv run` を付けます．各コマンドの引数は `roboloom <command> --help` でも確認できます．CLIは [Python API](python-api/index.md) の関数を呼んで結果を表示するだけの薄い層です．
+`roboloom` コマンドの一覧です．uv環境では先頭に `uv run` を付けます．`roboloom --version`（`-V`）で版を表示し，各コマンドの引数は `roboloom <command> --help` で確認できます．CLIは [Python API](python-api/index.md) の関数を呼んで結果を表示するだけの薄い層です．
 
 ## 設定とデバイスの選び方 { #choosing-the-configuration }
 

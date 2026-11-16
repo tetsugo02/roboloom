@@ -1,0 +1,215 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to verify, build, and publish (e.g. v0.1.0)"
+        required: true
+      draft:
+        description: "Create as a draft release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-and-build:
+    name: Verify tag, run tests, and build distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Resolve release tag
+        id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$REF_NAME"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "Invalid release tag: $tag (expected vX.Y.Z...)" >&2
+            exit 1
+          fi
+          prerelease="false"
+          if [[ "$tag" =~ (a|b|rc|alpha|beta|dev|-) ]]; then
+            prerelease="true"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag=$tag prerelease=$prerelease"
+
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: "0.8.15"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Verify version consistency with tag
+        run: python3 scripts/release.py check --tag "${{ steps.meta.outputs.tag }}"
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Install locked test and development dependencies
+        run: uv sync --locked --extra rakuda2 --extra test --group dev
+
+      - name: Lint
+        run: uv run --no-sync ruff check .
+
+      - name: Type-check
+        run: uv run --no-sync mypy src
+
+      - name: Lightweight unit tests
+        run: uv run --no-sync pytest -q -m "not e2e"
+
+      - name: Build wheel and sdist
+        run: uv build --out-dir dist
+
+      - name: Smoke-test built wheel in isolated environment
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [ ${#wheels[@]} -ne 1 ]; then
+            echo "Expected 1 wheel in dist/, found ${#wheels[@]}" >&2
+            exit 1
+          fi
+          wheel_abs="$(realpath "${wheels[0]}")"
+          expected_ver="${TAG_NAME#v}"
+          actual_ver="$(cd /tmp && uv run --isolated --no-project --with "$wheel_abs" roboloom --version)"
+          echo "Isolated wheel version output: $actual_ver"
+          if [ "$actual_ver" != "roboloom $expected_ver" ]; then
+            echo "Expected 'roboloom $expected_ver', got '$actual_ver'" >&2
+            exit 1
+          fi
+          (cd /tmp && uv run --isolated --no-project --with "$wheel_abs" roboloom --help >/dev/null)
+          (cd /tmp && uv run --isolated --no-project --with "$wheel_abs" roboloom skills path)
+
+      - name: Generate SHA256SUMS.txt
+        shell: bash
+        run: |
+          cd dist
+          sha256sum *.whl *.tar.gz > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dist
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.test-and-build.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: "0.8.15"
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+
+      - name: Build release notes
+        shell: bash
+        env:
+          TAG_NAME: ${{ needs.test-and-build.outputs.tag }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          uvx git-cliff --config cliff.toml --current --strip header -o "${{ runner.temp }}/notes.md"
+          if [ ! -s "${{ runner.temp }}/notes.md" ]; then
+            echo "Release ${TAG_NAME}" > "${{ runner.temp }}/notes.md"
+          fi
+          cat >> "${{ runner.temp }}/notes.md" <<EOF
+
+          ---
+
+          ### Installation
+
+          \`\`\`bash
+          uv add git+https://github.com/${GITHUB_REPOSITORY}.git --tag ${TAG_NAME}
+          \`\`\`
+
+          ### Checksums (\`SHA256SUMS.txt\`)
+
+          \`\`\`text
+          $(cat dist/SHA256SUMS.txt)
+          \`\`\`
+          EOF
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.test-and-build.outputs.tag }}
+          IS_PRERELEASE: ${{ needs.test-and-build.outputs.prerelease }}
+          IS_DRAFT: ${{ inputs.draft || false }}
+          NOTES_FILE: ${{ runner.temp }}/notes.md
+        run: |
+          args=()
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          if [ "$IS_DRAFT" = "true" ]; then
+            args+=(--draft)
+          fi
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" dist/*.whl dist/*.tar.gz dist/SHA256SUMS.txt --clobber
+            gh release edit "$TAG_NAME" --notes-file "$NOTES_FILE" "${args[@]}"
+          else
+            gh release create "$TAG_NAME" \
+              dist/*.whl dist/*.tar.gz dist/SHA256SUMS.txt \
+              --title "$TAG_NAME" \
+              --notes-file "$NOTES_FILE" \
+              --verify-tag \
+              "${args[@]}"
+          fi

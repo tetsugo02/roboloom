@@ -2,7 +2,7 @@
 
 ## Development environment and checks
 
-For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git` in [Installation](../get-started/installation.md). The following is for developers changing roboloom itself or its docs. Use Python 3.12–3.14 and uv, clone the repository, and run commands from its root.
+For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0` in [Installation](../get-started/installation.md). The following is for developers changing roboloom itself or its docs. Use Python 3.12–3.14 and uv, clone the repository, and run commands from its root.
 
 ```bash
 git clone https://github.com/tetsugo02/roboloom.git
@@ -124,3 +124,23 @@ uv run roboloom infer lab_arm --mock --seconds 5 --plain
 ## Operator UI extensions
 
 For new device kinds, keep device access in the backend and publish standard status fields. Optional explicit kind/role presenters, backend contracts, and Pilot/MockBus verification are described in [Operator screen](../reference/operator-screen.md).
+
+## Release process { #release-process }
+
+Use [`scripts/release.py`](https://github.com/tetsugo02/roboloom/blob/main/scripts/release.py) to update the version across `pyproject.toml`, `uv.lock`, `src/roboloom/agent_skills/roboloom/SKILL.md`, `--tag` snippets in `README*.md` and `docs/`, and `CHANGELOG.md`, then merge the release PR to `main` and push tag `vX.Y.Z`.
+
+```mermaid
+flowchart LR
+  P["scripts/release.py<br/>bump / set"] --> PR["Release PR<br/>test.yml (3.12-3.14) + docs.yml"]
+  PR --> M["Merge to main"]
+  M --> T["git tag -a vX.Y.Z<br/>git push origin vX.Y.Z"]
+  T --> R["release.yml<br/>consistency + unit tests + uv build"]
+  R --> G["GitHub Release<br/>.whl / .tar.gz / SHA256SUMS.txt /<br/>attestation + git-cliff notes"]
+```
+
+| Step | Command / Trigger | What happens |
+| --- | --- | --- |
+| 1. Prepare | `uv run python scripts/release.py bump minor` (or `set X.Y.Z`) | Updates `pyproject.toml`, `uv.lock`, `SKILL.md`, `--tag` references, and `CHANGELOG.md` (`cliff.toml`) |
+| 2. Verify | `uv run python scripts/release.py check` plus test and docs builds | Confirms version consistency and PR checks locally |
+| 3. Merge PR | Merge the release PR into `main` | `test.yml` (Python 3.12–3.14) and `badges.yml` complete |
+| 4. Publish | `git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin vX.Y.Z` | `.github/workflows/release.yml` verifies tag alignment, runs `ruff`/`mypy`/`pytest -m "not e2e"`, builds with `uv build`, smoke-tests the wheel in isolation, generates `SHA256SUMS.txt`, attests provenance, and publishes the GitHub Release |

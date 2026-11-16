@@ -2,7 +2,7 @@
 
 ## 開発環境とチェック
 
-通常利用は [インストール](../get-started/installation.md) の `uv add git+https://github.com/tetsugo02/roboloom.git` を使います．以下はroboloom本体やdocsを変更する開発者向けです．Python 3.12〜3.14とuvを使い，リポジトリをcloneしてそのルートで実行します．
+通常利用は [インストール](../get-started/installation.md) の `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0` を使います．以下はroboloom本体やdocsを変更する開発者向けです．Python 3.12〜3.14とuvを使い，リポジトリをcloneしてそのルートで実行します．
 
 ```bash
 git clone https://github.com/tetsugo02/roboloom.git
@@ -124,3 +124,23 @@ uv run roboloom infer lab_arm --mock --seconds 5 --plain
 ## 操作画面の拡張
 
 新しい機種の機器アクセスはBackendへ置き，標準の状態項目を通知します．任意の機種別・役割別Presenterの明示登録，Backend契約，Pilot/MockBusでの検証は [操作画面](../reference/operator-screen.md) を参照してください．
+
+## リリース手順 { #release-process }
+
+バージョン番号（`pyproject.toml`・`uv.lock`・`src/roboloom/agent_skills/roboloom/SKILL.md`・`README*.md`・`docs/` の `--tag`）と `CHANGELOG.md` は [`scripts/release.py`](https://github.com/tetsugo02/roboloom/blob/main/scripts/release.py) でまとめて更新し，Release PR を `main` へマージした後にタグ `vX.Y.Z` を push して公開します．
+
+```mermaid
+flowchart LR
+  P["scripts/release.py<br/>bump / set"] --> PR["Release PR<br/>test.yml (3.12-3.14) + docs.yml"]
+  PR --> M["main へマージ"]
+  M --> T["git tag -a vX.Y.Z<br/>git push origin vX.Y.Z"]
+  T --> R["release.yml<br/>整合確認・軽量テスト・uv build"]
+  R --> G["GitHub Release<br/>.whl / .tar.gz / SHA256SUMS.txt /<br/>attestation + git-cliff ノート"]
+```
+
+| 段階 | コマンド / トリガー | 内容 |
+| --- | --- | --- |
+| 1. 準備 | `uv run python scripts/release.py bump minor`（または `set X.Y.Z`） | `pyproject.toml`・`uv.lock`・`SKILL.md`・`--tag` 参照・`CHANGELOG.md`（`cliff.toml`）を更新 |
+| 2. 検証 | `uv run python scripts/release.py check` ＋テスト・docs ビルド | 全ファイルのバージョン一致と PR 向けチェックを確認 |
+| 3. PR マージ | Release PR を `main` へマージ | `test.yml`（Python 3.12〜3.14）と `badges.yml` が通過 |
+| 4. 公開 | `git tag -a vX.Y.Z -m "Release vX.Y.Z" && git push origin vX.Y.Z` | `.github/workflows/release.yml` がタグ整合・`ruff`/`mypy`/`pytest -m "not e2e"`・`uv build`・wheel 隔離検証・`SHA256SUMS.txt`・build provenance attestation を実行し，GitHub Release を公開 |

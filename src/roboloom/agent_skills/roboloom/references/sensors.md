@@ -6,7 +6,7 @@ The node name becomes the dataset feature name. RealSense uses the `hardware` ex
 from a fork that depends on opencv-python-headless; see [installation.md](installation.md)):
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --extra record --extra hardware --extra digit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record --extra hardware --extra digit
 ```
 
 OpenCV (`opencv-python-headless`) is a core dependency for `opencv_rgb` and `v4l2_rgb`.
@@ -125,7 +125,7 @@ The MP4 codec of `video` (H.264 by default, or AV1) is `video_codec` in the reco
 
 ## Web camera (`opencv_rgb`)
 
-Install `uv add git+https://github.com/tetsugo02/roboloom.git`; OpenCV is a core dependency. Required: `device` (non-negative integer;
+Install `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0`; OpenCV is a core dependency. Required: `device` (non-negative integer;
 Linux also accepts `/dev/` paths), positive integer `width`, `height`, and positive `fps`.
 Optional `backend: auto` selects Linux V4L2, macOS AVFoundation, Windows MSMF;
 Windows also allows `dshow`. No fallback. Optional `format: MJPG | YUYV` defaults to

@@ -85,7 +85,7 @@ P[t] を行tのSenseの姿勢とします．相対の姿勢は，位置（3）�
 # roboloomのリポジトリをcloneした中で
 uv sync --extra policy --extra train
 # 自分のプロジェクトで（recordなど，使っているextrasはそのまま残る）
-uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra policy --extra train
 
 # delta
 uv run lerobot-train --dataset.repo_id=local/pika-handheld-mock-delta \

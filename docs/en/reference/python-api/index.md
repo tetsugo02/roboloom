@@ -2,7 +2,7 @@
 
 Every roboloom operation is available as a Python function. The CLI (`roboloom ...`) is only a thin layer that calls those functions and prints the result. The API descriptions on these pages are generated from the docstrings.
 
-Add roboloom to your own uv project following [Installation](../../get-started/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Configuration and `.roboloom/` paths are relative to your project root.
+Add roboloom to your own uv project following [Installation](../../get-started/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Configuration and `.roboloom/` paths are relative to your project root.
 
 ## Public API { #modules }
 

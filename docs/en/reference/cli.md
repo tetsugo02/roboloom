@@ -1,6 +1,6 @@
 # CLI
 
-The `roboloom` commands. In a uv environment, prefix them with `uv run`. You can also check each command's arguments with `roboloom <command> --help`. The CLI is a thin layer that calls the [Python API](python-api/index.md) and prints the result.
+The `roboloom` commands. In a uv environment, prefix them with `uv run`. `roboloom --version` (`-V`) prints the version, and `roboloom <command> --help` lists each command's arguments. The CLI is a thin layer that calls the [Python API](python-api/index.md) and prints the result.
 
 ## Choosing the configuration and devices { #choosing-the-configuration }
 

@@ -85,7 +85,7 @@ Let P[t] be the Sense's pose in row t. A relative pose is 9 numbers: the positio
 # in a checkout of the roboloom repository
 uv sync --extra policy --extra train
 # in your own project (extras you already use, such as record, are kept)
-uv add git+https://github.com/tetsugo02/roboloom.git --extra policy --extra train
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra policy --extra train
 
 # delta
 uv run lerobot-train --dataset.repo_id=local/pika-handheld-mock-delta \
