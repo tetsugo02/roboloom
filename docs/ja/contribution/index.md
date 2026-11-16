@@ -18,7 +18,7 @@ uv run pytest -m e2e         # mockデバイスでdoraを起動するe2eのみ
 uv run --group docs python scripts/docs.py build
 ```
 
-Pull Requestと `main` へのpushでは，GitHub Actions（`.github/workflows/test.yml`）が Python 3.12〜3.14 で `ruff check .`・`mypy src`・軽量テスト（`pytest -m "not e2e"`）を実行し，`main` へのpush時には `badges` ブランチ上の Python バージョン別ステータスバッジ JSON も更新します（`docs/**` や `mkdocs*.yml` などのドキュメントのみの変更では実行されません）．mockデバイスでdoraのプロセスを起動するE2Eテスト（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
+Pull Request では，GitHub Actions（`.github/workflows/test.yml`）が変更対象を確認し，コードや設定が変わっている場合のみ Python 3.12〜3.14 で `ruff check .`・`mypy src`・軽量テスト（`pytest -m "not e2e"`）を実行して必須チェック用ジョブ `Tests status` を報告します（`docs/**` や `mkdocs*.yml` などのドキュメントのみの変更時はテストをスキップして `Tests status` を成功扱いにするため，必須チェックを有効にしてもマージが詰まりません）．`main` へマージされた後はテストを再実行せず，`.github/workflows/badges.yml` がマージ元 PR のテスト結果から `badges` ブランチ上のステータスバッジ JSON を更新します（`workflow_dispatch` で手動実行した場合も更新します）．mockデバイスでdoraのプロセスを起動するE2Eテスト（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
 
 checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 

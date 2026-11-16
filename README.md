@@ -2,7 +2,7 @@
 
 **English** | [日本語](README.ja.md) · Docs: [English](https://tetsugo02.github.io/roboloom/en/) | [日本語](https://tetsugo02.github.io/roboloom/ja/)
 
-[![Tests](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml/badge.svg)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
+[![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/tests.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Docs](https://github.com/tetsugo02/roboloom/actions/workflows/docs.yml/badge.svg)](https://github.com/tetsugo02/roboloom/actions/workflows/docs.yml)
 [![Python 3.12](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.12.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)
 [![Python 3.13](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tetsugo02/roboloom/badges/python-3.13.json)](https://github.com/tetsugo02/roboloom/actions/workflows/test.yml)

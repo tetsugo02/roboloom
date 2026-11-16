@@ -1,27 +1,7 @@
 name: Tests
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "docs/**"
-      - "mkdocs*.yml"
-      - "scripts/docs.py"
-      - "README.md"
-      - "AGENTS.md"
-      - "*.md"
-      - ".claude/**"
-      - ".github/workflows/docs.yml"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "mkdocs*.yml"
-      - "scripts/docs.py"
-      - "README.md"
-      - "AGENTS.md"
-      - "*.md"
-      - ".claude/**"
-      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:
@@ -32,8 +12,83 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Check changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_tests: ${{ steps.filter.outputs.run_tests }}
+    steps:
+      - name: Detect whether tests should run
+        id: filter
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import fnmatch
+          import os
+          import subprocess
+          from pathlib import Path
+
+          out_path = Path(os.environ["GITHUB_OUTPUT"])
+
+          def write_output(run_tests: bool) -> None:
+              val = "true" if run_tests else "false"
+              with out_path.open("a", encoding="utf-8") as f:
+                  f.write(f"run_tests={val}\n")
+              print(f"run_tests={val}")
+
+          if os.environ["EVENT_NAME"] != "pull_request":
+              write_output(True)
+              raise SystemExit(0)
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          pr = os.environ["PR_NUMBER"]
+          res = subprocess.run(
+              [
+                  "gh",
+                  "api",
+                  f"repos/{repo}/pulls/{pr}/files?per_page=100",
+                  "--paginate",
+                  "--jq",
+                  ".[].filename",
+              ],
+              check=True,
+              capture_output=True,
+              text=True,
+          )
+          files = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+          if not files or len(files) >= 3000:
+              write_output(True)
+              raise SystemExit(0)
+
+          def is_ignored(path: str) -> bool:
+              if path.startswith(("docs/", ".claude/")):
+                  return True
+              if path in ("scripts/docs.py", ".github/workflows/docs.yml"):
+                  return True
+              if "/" not in path and (
+                  path.endswith(".md") or fnmatch.fnmatchcase(path, "mkdocs*.yml")
+              ):
+                  return True
+              return False
+
+          need = [p for p in files if not is_ignored(p)]
+          print("Non-ignored files:", need)
+          write_output(bool(need))
+          PY
+
   unit:
     name: ruff, mypy and unit tests (Python ${{ matrix.python }})
+    needs: [changes]
+    if: needs.changes.outputs.run_tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -61,7 +116,7 @@ jobs:
         if: >-
           always() &&
           github.ref == 'refs/heads/main' &&
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          github.event_name == 'workflow_dispatch' &&
           (job.status == 'success' || job.status == 'failure')
         shell: bash
         env:
@@ -91,7 +146,7 @@ jobs:
         if: >-
           always() &&
           github.ref == 'refs/heads/main' &&
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+          github.event_name == 'workflow_dispatch' &&
           (job.status == 'success' || job.status == 'failure')
         uses: actions/upload-artifact@v7
         with:
@@ -99,14 +154,43 @@ jobs:
           path: ${{ runner.temp }}/badge-out/python-${{ matrix.python }}.json
           retention-days: 1
 
+  status:
+    name: Tests status
+    needs: [changes, unit]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify test status
+        shell: bash
+        env:
+          RUN_TESTS: ${{ needs.changes.outputs.run_tests }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          UNIT_RESULT: ${{ needs.unit.result }}
+        run: |
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "Change detection did not succeed ($CHANGES_RESULT)."
+            exit 1
+          fi
+          if [ "$RUN_TESTS" = "false" ]; then
+            echo "Only ignored documentation/markdown files changed; tests skipped."
+            exit 0
+          fi
+          if [ "$UNIT_RESULT" != "success" ]; then
+            echo "Unit tests did not succeed ($UNIT_RESULT)."
+            exit 1
+          fi
+          echo "All Python matrix tests succeeded."
+
   badges:
-    name: Update Python status badges
-    needs: [unit]
+    name: Update CI status badges
+    needs: [changes, unit]
     if: >-
       always() &&
       !cancelled() &&
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      github.event_name == 'workflow_dispatch' &&
+      needs.changes.outputs.run_tests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -118,6 +202,30 @@ jobs:
           pattern: badge-python-*
           path: ${{ runner.temp }}/badges
           merge-multiple: true
+      - name: Write overall Tests badge JSON
+        if: needs.unit.result == 'success' || needs.unit.result == 'failure'
+        shell: bash
+        env:
+          UNIT_RESULT: ${{ needs.unit.result }}
+        run: |
+          mkdir -p "${{ runner.temp }}/badges"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          ok = os.environ["UNIT_RESULT"] == "success"
+          payload = {
+              "schemaVersion": 1,
+              "label": "Tests",
+              "message": "passing" if ok else "failing",
+              "color": "brightgreen" if ok else "red",
+              "namedLogo": "githubactions",
+              "logoColor": "white",
+          }
+          out = Path(os.environ["RUNNER_TEMP"]) / "badges" / "tests.json"
+          out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
       - name: Check out repository
         uses: actions/checkout@v7
         with:
@@ -126,7 +234,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          files=("${{ runner.temp }}/badges"/python-*.json)
+          files=("${{ runner.temp }}/badges"/*.json)
           if [ ${#files[@]} -eq 0 ]; then
             echo "No badge payloads to publish."
             exit 0
@@ -139,10 +247,10 @@ jobs:
             git switch --orphan badges
           fi
           cp "${files[@]}" .
-          git add python-*.json
+          git add *.json
           if git diff --cached --quiet; then
             echo "Badge JSONs are unchanged."
             exit 0
           fi
-          git commit -m "chore(ci): update Python status badges"
+          git commit -m "chore(ci): update CI status badges"
           git push origin HEAD:badges
