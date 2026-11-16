@@ -166,6 +166,7 @@ def test_bad_async_settings_are_refused(tmp_path, settings, message):
         _controller(tmp_path, **settings)
 
 
+@pytest.mark.e2e
 def test_a_slow_policy_leaves_no_gap_in_the_commands(tmp_path, monkeypatch):
     import os
     from pathlib import Path

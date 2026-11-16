@@ -159,6 +159,7 @@ def test_rows_without_followers_close_with_time():
 # -- record, convert, train ------------------------------------------------------------
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_a_handheld_recording_converts_and_trains(tmp_path):
     pytest.importorskip("lerobot.policies.act.modeling_act")

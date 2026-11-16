@@ -145,6 +145,7 @@ def test_the_dataset_keeps_which_files_a_node_was_built_on(tmp_path):
     assert policy["rate_hz"] == 15  # the values it ran with, bases included
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_an_extending_leader_holds_the_camera_joints_where_home_put_them(tmp_path):
     """A leader file that extends the base and only makes torso and head a position

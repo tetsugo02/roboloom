@@ -71,6 +71,7 @@ def test_a_reference_names_any_object_and_installed_modules_come_first(tmp_path)
         load_reference("json:")
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_every_node_process_finds_the_class(tmp_path):
     from roboloom.runtime.session import Session

@@ -282,6 +282,7 @@ def test_estimator_needs_a_robot_that_reports_effort():
         type(robot).effort_signal = saved
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_feedback_path_runs_end_to_end_in_mock(tmp_path):
     from roboloom.runtime.session import Session
@@ -723,6 +724,7 @@ def test_tools_measure_without_feedback():
     assert law.feedback is None
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_feedback_reaches_the_leader_current_while_following_in_mock(tmp_path):
     """The whole chain in mock: the mock follower draws no current, so a constant 30 mA

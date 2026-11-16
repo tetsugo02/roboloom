@@ -112,6 +112,7 @@ def test_a_fresh_project_loads_with_mock_devices_and_not_with_the_hardware(tmp_p
         load_config(path, mock=True)
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_a_fresh_project_records_an_episode_in_mock(tmp_path):
     from roboloom.runtime.session import Session
@@ -195,6 +196,7 @@ def test_a_node_ticks_at_whole_hz_or_whole_milliseconds_only():
         timer(29.97, "camera")  # it used to run at 29 Hz without a word
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_a_rate_in_whole_milliseconds_runs_at_that_rate(tmp_path):
     from conftest import mock_project

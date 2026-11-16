@@ -78,6 +78,7 @@ def _column(root: Path, key: str) -> np.ndarray:
     return np.stack(dataset.hf_dataset[key]).astype(float)
 
 
+@pytest.mark.e2e
 def test_a_recorded_episode_replays_through_the_policy_path(recorded, tmp_path):
     project, root = recorded
     recorded_actions = _column(root, "action")
@@ -102,6 +103,7 @@ def test_a_recorded_episode_replays_through_the_policy_path(recorded, tmp_path):
     assert np.allclose(sent[-1], recorded_actions[-1], atol=1.0)
 
 
+@pytest.mark.e2e
 def test_the_example_model_trains_on_a_recording_and_runs(recorded, tmp_path):
     pytest.importorskip("torch")
     project, root = recorded

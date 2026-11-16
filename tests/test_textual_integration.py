@@ -18,6 +18,7 @@ from roboloom.ui.backend import RecordingPlan, SessionBackend
 from roboloom.ui.command import CommandInput
 
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 async def test_textual_records_and_saves_a_mock_episode(tmp_path: Path):
@@ -89,6 +90,7 @@ def test_plain_flags_are_accepted(command: str, monkeypatch, capsys):
     assert "--plain" in capsys.readouterr().out
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_api_auto_screen_leaves_input_to_the_script(
     tmp_path: Path, monkeypatch, capsys

@@ -175,6 +175,7 @@ def test_the_server_side_needs_no_dataflow_or_learning_packages():
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
+@pytest.mark.e2e
 def test_a_served_policy_drives_the_mock_robot(tmp_path, monkeypatch):
     from policies import Creep
 
@@ -258,6 +259,7 @@ def test_the_backend_is_the_process_unless_the_file_says_server(tmp_path):
         controller.load("policies:creep")
 
 
+@pytest.mark.e2e
 def test_one_file_starts_the_server_and_the_node_that_connects(tmp_path, monkeypatch):
     import os
     from pathlib import Path

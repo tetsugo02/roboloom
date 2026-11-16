@@ -202,6 +202,7 @@ def test_the_command_line_takes_the_robot_before_the_episode():
 # -- through the dataflow ------------------------------------------------------------
 
 
+@pytest.mark.e2e
 @needs_dora
 def test_an_evaluation_run_records_each_verdict(tmp_path, monkeypatch, capsys):
     project = mock_project(tmp_path / ".roboloom")

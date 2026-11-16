@@ -1,6 +1,43 @@
+import shutil
 from pathlib import Path
 
+import pytest
+
 from roboloom.config import read_config
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--shard",
+        default=None,
+        help="Run 1-based shard INDEX/TOTAL of collected tests (e.g. --shard=1/3).",
+    )
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    if shutil.which("dora") is None:
+        skip_dora = pytest.mark.skip(reason="needs dora")
+        for item in items:
+            if item.get_closest_marker("e2e") is not None:
+                item.add_marker(skip_dora)
+    spec = config.getoption("--shard")
+    if not spec:
+        return
+    index_s, sep, total_s = str(spec).partition("/")
+    if not sep or not index_s.isdigit() or not total_s.isdigit():
+        raise pytest.UsageError(f"--shard must be INDEX/TOTAL, got {spec!r}")
+    index, total = int(index_s), int(total_s)
+    if not (1 <= index <= total):
+        raise pytest.UsageError(f"--shard INDEX must be in 1..{total}, got {index}")
+    selected = items[index - 1 :: total]
+    deselected = [item for i, item in enumerate(items) if i % total != index - 1]
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+    items[:] = selected
+
 
 TEMPLATE = Path("src/roboloom/robots/rakuda2/template")
 

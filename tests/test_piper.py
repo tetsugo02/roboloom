@@ -317,6 +317,7 @@ def piper_project(root) -> object:
     return path
 
 
+@pytest.mark.e2e
 def test_a_policy_drives_two_mock_pipers_and_records_rad(tmp_path, monkeypatch):
     import json
     import os

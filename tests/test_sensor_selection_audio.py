@@ -169,6 +169,7 @@ def test_mel_transform_and_dataset_roundtrip(tmp_path):
         EpisodeRecorder(cfg).open_dataset()
 
 
+@pytest.mark.e2e
 def test_session_propagates_audio_and_separate_observe(tmp_path):
     from roboloom.runtime.session import Session
 

@@ -12,9 +12,11 @@ from conftest import mock_project
 from roboloom.config import load_config
 from roboloom.runtime.session import EpisodeInfo, Session, SessionError
 
-pytestmark = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
+needs_dora = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_session_records_episodes_named_by_a_function(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     names: list[EpisodeInfo] = []
@@ -53,6 +55,8 @@ def test_hardware_is_the_default_and_mock_overrides_it(tmp_path):
     assert load_config(path, mock=True).mock
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_cli_records_one_episode_by_name(tmp_path):
     mock_project(tmp_path / ".roboloom")
     result = subprocess.run(
@@ -90,6 +94,8 @@ def test_quality_limits_become_warnings():
     assert "right 50%" in warning and "left" not in warning
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypatch):
     project = mock_project(tmp_path / ".roboloom")
     tests = str(Path(__file__).parent.resolve())
@@ -116,6 +122,8 @@ def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypa
     assert first[-1] > first[0] + 20  # the policy moved joint 0 up
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_a_policy_that_fails_to_load_blocks_start(tmp_path, monkeypatch):
     project = mock_project(tmp_path / ".roboloom")
     tests = str(Path(__file__).parent.resolve())
@@ -144,6 +152,8 @@ def test_node_failures_are_read_from_the_dora_log(tmp_path):
     )
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
     from roboloom.operator import ScriptedOperator
 
@@ -166,12 +176,16 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
     assert "from the script" in out and "nodes" in out  # printed above the screen
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_no_screen_or_question_without_a_terminal(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     with Session.launch(project / "config.yaml") as s:  # pytest: not a tty
         assert s.screen is None and s.operator is None
 
 
+@pytest.mark.e2e
+@needs_dora
 @pytest.mark.parametrize(("answer", "released"), [("", True), ("hold", False)])
 def test_closing_releases_the_follower_unless_the_operator_says_hold(
     tmp_path, answer, released
@@ -190,6 +204,8 @@ def test_closing_releases_the_follower_unless_the_operator_says_hold(
     assert sent == (["release", "quit"] if released else ["quit"])
 
 
+@pytest.mark.e2e
+@needs_dora
 def test_release_while_following_stops_then_turns_the_torque_off(tmp_path):
     import time
 

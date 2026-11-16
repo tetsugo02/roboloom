@@ -160,6 +160,7 @@ def test_the_flow_gives_the_follower_one_command_source(tmp_path):
     assert source.startswith("controller/")
 
 
+@pytest.mark.e2e
 def test_a_parts_controller_teleoperates_in_the_dataflow(tmp_path):
     from roboloom.runtime.session import Session
 

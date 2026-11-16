@@ -18,6 +18,7 @@ def mock_policy_controller():
     return load_config(MOCK, options=["policy"]).controllers["policy"]
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "observe", [[], ["camera"], ["camera", "digit_left", "digit_right"]]
 )
@@ -227,6 +228,7 @@ def test_a_lerobot_policy_infers_one_step_or_a_chunk(act_checkpoint):
     assert chunk.infer(observation).shape == (4, 14)
 
 
+@pytest.mark.e2e
 def test_a_lerobot_policy_drives_the_mock(act_checkpoint, tmp_path):
     import shutil
 
@@ -270,6 +272,7 @@ def test_a_failed_controller_says_why_instead_of_asking_to_wait():
     assert warning == "policy: controller failed: loading the policy: no camera"
 
 
+@pytest.mark.e2e
 def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
     """The path of `lerobot-train` (LeRobot 0.6.1) on a dataset roboloom recorded: the
     metadata and stats it reads, a training step, and the checkpoint back in roboloom."""

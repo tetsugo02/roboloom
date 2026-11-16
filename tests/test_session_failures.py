@@ -49,6 +49,7 @@ def _gone(pid: int, timeout: float) -> bool:
 # -- the operator's process ---------------------------------------------------------
 
 
+@pytest.mark.e2e
 @needs_dora
 def test_the_robot_stops_when_the_operator_process_is_killed(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
@@ -214,6 +215,7 @@ def test_an_episode_that_ends_while_the_policy_waits_leaves_it_ready(tmp_path):
     assert controller.status()["state"] == "failed"
 
 
+@pytest.mark.e2e
 @needs_dora
 def test_a_failed_policy_episode_is_discarded_and_the_next_one_runs(
     tmp_path, monkeypatch
@@ -264,6 +266,7 @@ def test_start_waits_for_the_recorder(state, why):
     assert "recorder" in runtime.start_warning(cfg, latest, S)
 
 
+@pytest.mark.e2e
 @needs_dora
 def test_start_is_refused_while_the_last_episode_is_neither_saved_nor_discarded(
     tmp_path,

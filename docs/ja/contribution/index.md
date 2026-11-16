@@ -12,11 +12,13 @@ uv run ruff format .
 uv run ruff check .
 uv run mypy src
 uv run pyright
-uv run pytest
+uv run pytest                # 全テスト（軽量テスト + e2e）
+uv run pytest -m "not e2e"   # 軽量テストのみ（dora dataflowを起動しない）
+uv run pytest -m e2e         # mockデバイスでdoraを起動するe2eのみ
 uv run --group docs python scripts/docs.py build
 ```
 
-Pull Requestと `main` へのpushでは，GitHub Actions（`.github/workflows/test.yml`）が `ruff check .`・`mypy src`・`pytest` を実行します．dataflowのテストはmockデバイスでdoraのプロセスを起動するもので，実機は使いません．
+Pull Requestと `main` へのpushでは，GitHub Actions（`.github/workflows/test.yml`）が `unit`（`ruff check .`・`mypy src`・軽量テスト `pytest -m "not e2e"`）と `e2e`（mockデバイスでdoraのプロセスを起動するテストを3並列実行，実機は使わない）を実行します．`docs/**` や `mkdocs*.yml` などのドキュメントのみの変更では実行されません．
 
 checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPythonスクリプトを使います．
 
