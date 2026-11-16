@@ -83,7 +83,7 @@ def interfaces(
     root: Path = SYS_NET, bitrate: Callable[[str], int | None] = ip_bitrate
 ) -> list[CanInterface]:
     """Every CAN interface (up or down), sorted by name."""
-    found = []
+    found: list[CanInterface] = []
     if not root.is_dir():
         return found
     for entry in sorted(root.iterdir(), key=lambda p: p.name):

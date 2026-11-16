@@ -635,12 +635,12 @@ def _dispatch(args: argparse.Namespace) -> None:
     if args.command == "setup":
         from .setup.wizard import run_setup
 
-        report = run_setup(resolve_config(args.config), operator, args.step)
+        found = run_setup(resolve_config(args.config), operator, args.step)
         print(
-            f"\nsetup: wrote {len(report.written)} value(s)"
-            + (f", {len(report.notes)} note(s) above" if report.notes else "")
+            f"\nsetup: wrote {len(found.written)} value(s)"
+            + (f", {len(found.notes)} note(s) above" if found.notes else "")
         )
-        if report.valid is False:
+        if found.valid is False:
             raise SystemExit(1)
         return
     if args.command == "commission":
