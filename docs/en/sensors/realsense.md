@@ -1,5 +1,8 @@
 # RealSense
 
+!!! note "Status: hardware-verified"
+    <span class="status status--verified">Hardware-verified</span> Color capture and recording are checked in real collection on Rakuda2.
+
 `RealSenseRGB` uses `pyrealsense2` to capture **only the color stream**. It requires the `hardware` extra.
 
 ```yaml
@@ -16,7 +19,7 @@ RGB8 images are captured and stored in `observation.images.camera` (when the nod
 
 The node also needs a `max_age_ms` entry in `nodes/recorder.yaml`; see "Recorder entry" in [Sensors](index.md).
 
-For connecting it to Rakuda2, see the [robot page](../robots/rakuda2.md).
+For connecting it to Rakuda2, see the [robot page](../robots/rakuda2/index.md).
 
 ### Image storage
 
@@ -26,6 +29,6 @@ PNG generally needs more disk space and PNG compression/write work; actual size 
 
 Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW float32 in [0, 1] for either format by default. Checkpoint inputs remain `VISUAL`. Storage was tested with mock/synthetic frames only, without hardware.
 
-The codec of `video` MP4s (H.264 by default, or AV1) is chosen with the recorder's [`video_codec`](../reference/configuration.md#video-codec).
+The codec of `video` MP4s (H.264 by default, or AV1) is chosen with the recorder's [`video_codec`](../reference/configuration/recorder.md#video-codec).
 
-[Configuration](../reference/configuration.md#image-storage)
+[Configuration](../reference/configuration/sensors.md#image-storage)

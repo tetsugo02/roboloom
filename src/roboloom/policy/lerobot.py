@@ -64,6 +64,9 @@ def _device(torch: Any, device: str) -> str:
 
 
 class LeRobotPolicy:
+    """A LeRobot checkpoint with its pre- and post-processors, as a roboloom policy
+    (made by `load`; see the module's description of `mode` and `rename`)."""
+
     def __init__(
         self,
         path: str,
@@ -137,6 +140,8 @@ class LeRobotPolicy:
         return int(np.prod(feature.shape))
 
     def bind(self, spec: PolicySpec) -> None:
+        """Refuse a configuration whose observation or action does not match the
+        checkpoint's input and output features."""
         problems = []
         for key, (kind, shape) in self.inputs().items():
             source = self.sources[key]
@@ -165,11 +170,14 @@ class LeRobotPolicy:
             )
 
     def reset(self) -> None:
+        """Clear the model's action queue and the processors' state."""
         self.model.reset()
         self.pre.reset()
         self.post.reset()
 
     def infer(self, observation: dict[str, Any]) -> np.ndarray:
+        """Joint targets from the checkpoint: one step `[n]` (`mode: step`) or the
+        predicted chunk `[H, n]` (`mode: chunk`)."""
         batch = {
             key: np.array(observation[source], copy=True)
             for key, source in self.sources.items()

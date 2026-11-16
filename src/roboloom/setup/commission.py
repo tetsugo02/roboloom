@@ -24,12 +24,24 @@ class RegisterChange:
 
 @dataclass
 class CommissionPlan:
+    """The EEPROM values of a node that differ from its configuration
+    (`plan_commission`); `lines()` lists them, `apply_commission` writes them.
+
+    Attributes:
+        node: The node's name.
+        port: Its bus.
+        ids: The motor IDs read.
+        changes: One `RegisterChange` per register to write (joint, register, current
+            and target raw values); empty when the EEPROM already matches.
+    """
+
     node: str
     port: str
     ids: list[int]
     changes: list[RegisterChange] = field(default_factory=list)
 
     def lines(self) -> list[str]:
+        """One line per change: `joint: register current -> target`."""
         return [
             f"{c.joint}: {c.register} {c.current} -> {c.target}" for c in self.changes
         ]

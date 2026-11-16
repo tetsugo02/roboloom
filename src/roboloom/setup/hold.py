@@ -33,6 +33,18 @@ READ_HZ = 20.0
 
 @dataclass
 class HoldResult:
+    """What `check_hold` saw while the follower was left alone: the largest drift
+    per joint and, from it, the follower's `unattended` trait.
+
+    Attributes:
+        follower: The follower tested.
+        unit: Its unit.
+        seconds: How long it was watched (shorter when it moved away).
+        tolerance: The largest change still counted as holding.
+        drift: The largest change per joint while left alone.
+        enabled: The motors' enable state at the end, when the bus reports it.
+    """
+
     follower: str
     unit: str
     seconds: float  # how long it was watched (shorter when it moved away)
@@ -42,18 +54,22 @@ class HoldResult:
 
     @property
     def worst(self) -> tuple[str, float]:
+        """The joint that moved most, and how far."""
         joint = max(self.drift, key=lambda j: abs(self.drift[j]))
         return joint, self.drift[joint]
 
     @property
     def holds(self) -> bool:
+        """No joint moved more than `tolerance` and the motors stayed enabled."""
         return abs(self.worst[1]) <= self.tolerance and all(self.enabled or [True])
 
     @property
     def unattended(self) -> str:
+        """The trait to record: `holds` or `torque_off`."""
         return "holds" if self.holds else "torque_off"
 
     def lines(self) -> list[str]:
+        """The result as the CLI prints it, one line per item."""
         joint, drift = self.worst
         out = [
             (
@@ -133,6 +149,14 @@ def check_hold(
     tolerance: float,
     seconds: float = 10.0,
 ) -> HoldResult:
+    """Bench test (torques the follower): hold the follower's pose, stop commanding
+    it for up to `seconds` and measure how far it moves.
+
+    Only for a follower whose model declares `unattended: unknown`, on hardware, with
+    torque. After the operator confirms, offers to write the measured `unattended`
+    (`holds` when no joint moved more than `tolerance`, in the follower's unit, and the
+    motors stayed enabled; else `torque_off`) to its YAML, then to turn its torque off.
+    """
     cfg = load(config)
     model = cfg.followers.get(follower)
     if model is None:

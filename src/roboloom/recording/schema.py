@@ -98,6 +98,10 @@ def state_names(followers: Mapping[str, Follower]) -> list[str]:
 
 
 def features(cfg: RobotConfig) -> Features:
+    """The LeRobot features a configuration records: name -> {"dtype", "shape",
+    "names"}. `action*` only with followers, `action.intervention` only with a policy
+    that has `teleop:`, then each recorded source's own features and
+    `observation.meta.<source>.*`, then the joined ones (`observation.state`, ...)."""
     names = state_names(cfg.followers)
     out: Features = (
         {

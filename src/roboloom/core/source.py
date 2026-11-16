@@ -17,6 +17,13 @@ Features = dict[str, dict[str, Any]]
 
 @dataclass
 class Sample:
+    """One reading of a source.
+
+    Attributes:
+        value: The reading (joint positions, an HWC RGB image, PCM audio, ...).
+        capture_ns: When it was captured, in `time.monotonic_ns()` time.
+    """
+
     value: np.ndarray
     capture_ns: int
 

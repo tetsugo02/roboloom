@@ -142,7 +142,7 @@ Buffer size 1 is a request, not a newest-frame guarantee. Timestamps are recepti
 not exposure time; no synchronization/reconnection. Indices may change; prefer stable
 Linux paths. Set Recorder `max_age_ms` for the node. Changing size/storage requires
 separate dataset output. Hardware is unverified on all three OSes; full Windows Session
-support is excluded (Unix FIFO/process APIs). Docs: `docs/*/contribution/webcam.md` (in development).
+support is excluded (Unix FIFO/process APIs). Docs: `docs/*/sensors/webcam.md` (in development).
 Never open a camera without user authorization.
 
 mel_mono uses float32[n_mels, n_frames], ascending frequency, with defaults 44100 Hz, 1 second, 64 bins, n_fft=2048, hop_length=690, fmax=15000. Install the audio extra. Select independently through sensors/observe.

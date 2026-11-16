@@ -242,3 +242,66 @@ html[lang="ja"] .md-typeset h3 {
 .md-footer-meta {
   border-top: 1px solid var(--rl-border);
 }
+
+/* Status badges: <span class="status status--verified">…</span> (see reference/status-labels.md).
+   Each color is mixed into the page background, so the pill stays readable in both schemes. */
+.md-typeset .status {
+  --rl-status: var(--rl-fg-muted);
+  display: inline-block;
+  padding: 0.05em 0.6em;
+  border: 1px solid color-mix(in srgb, var(--rl-status) 45%, transparent);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--rl-status) 14%, var(--rl-bg));
+  color: color-mix(in srgb, var(--rl-status) 75%, var(--rl-fg));
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
+.md-typeset .status--verified {
+  --rl-status: #4d8a52;
+}
+
+.md-typeset .status--mock {
+  --rl-status: #4f7fae;
+}
+
+.md-typeset .status--dev {
+  --rl-status: var(--rl-accent);
+}
+
+.md-typeset .status--design {
+  --rl-status: var(--rl-fg-muted);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .status--verified {
+  --rl-status: #7cbf80;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .status--mock {
+  --rl-status: #86b1dc;
+}
+
+/* Tutorial gallery (tutorials/index.md): <div class="grid cards gallery" markdown>.
+   The thumbnail fills the card's width on a surface tint; the tag row is small and muted. */
+.md-typeset .gallery > ul > li > p:first-child,
+.md-typeset .gallery > ol > li > p:first-child {
+  margin: 0 0 0.6em;
+}
+
+.md-typeset .gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.3rem;
+  background-color: var(--rl-surface);
+}
+
+.md-typeset .gallery-tags {
+  color: var(--rl-fg-muted);
+  font-size: 0.8em;
+}

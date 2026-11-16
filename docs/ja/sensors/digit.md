@@ -1,6 +1,9 @@
 # DIGIT
 
-`DigitSensor` は `digit-interface` を使って触覚画像を取得します．`digit` extraが必要です（[インストール](../quick-start/installation.md)）．左右のセンサーには異なるシリアル番号を設定します．
+!!! note "状態：実機検証済み"
+    <span class="status status--verified">実機検証済み</span> Rakuda2の実機で，左右のDIGITを含む収集を確かめています．
+
+`DigitSensor` は `digit-interface` を使って触覚画像を取得します．`digit` extraが必要です（[インストール](../get-started/installation.md)）．左右のセンサーには異なるシリアル番号を設定します．
 
 ```yaml
 type: digit
@@ -23,7 +26,7 @@ fps: 30
 
 DIGITのノードごとに，`nodes/recorder.yaml` の `max_age_ms` の項目も必要です．[Sensors](index.md) の「Recorderの設定」を参照してください．
 
-Rakuda2の対応構成と重力補償との併用方法は [機体ページ](../robots/rakuda2.md) にあります．
+Rakuda2の対応構成と重力補償との併用方法は [機体ページ](../robots/rakuda2/index.md) にあります．
 
 ### Image storage
 
@@ -33,6 +36,6 @@ PNG は一般に容量と PNG 圧縮・書き込み負荷が増えます。実�
 
 ライブ観測は引き続き HWC uint8 RGB です。LeRobot の読み出しは両形式とも既定で CHW float32、範囲 [0, 1] になり、チェックポイントの入力型は `VISUAL` のままです。保存形式は mock・合成フレームのみで試験し、実機では未検証です。
 
-`video` の MP4 の codec（既定 H.264，または AV1）は recorder の [`video_codec`](../reference/configuration.md#video-codec) で選びます．
+`video` の MP4 の codec（既定 H.264，または AV1）は recorder の [`video_codec`](../reference/configuration/recorder.md#video-codec) で選びます．
 
-[Configuration](../reference/configuration.md#image-storage)
+[Configuration](../reference/configuration/sensors.md#image-storage)

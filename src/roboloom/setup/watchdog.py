@@ -15,6 +15,16 @@ from .common import config_node, require_hardware
 
 @dataclass
 class WatchdogResult:
+    """What `watchdog_test` read before and after going silent: whether the Bus
+    Watchdog fired and the motor stopped (`passed`).
+
+    Attributes:
+        joint: The joint pushed.
+        period_ms: The node's `bus_watchdog_ms`.
+        current_mA: The current it was pushed with.
+        readings: The registers read before and after the silence (`watchdog_trial`).
+    """
+
     joint: str
     period_ms: float
     current_mA: float
@@ -22,19 +32,23 @@ class WatchdogResult:
 
     @property
     def fired(self) -> bool:
+        """The Bus Watchdog register shows that it fired."""
         after = self.readings.get("watchdog_after")
         return isinstance(after, int) and after < 0
 
     @property
     def stopped(self) -> bool:
+        """The current after the silence fell below 30% of the pushed current."""
         after = self.readings.get("current_after_mA")
         return isinstance(after, float) and abs(after) < 0.3 * abs(self.current_mA)
 
     @property
     def passed(self) -> bool:
+        """The watchdog fired and the motor stopped."""
         return self.fired and self.stopped
 
     def lines(self) -> list[str]:
+        """The result as the CLI prints it, one line per item."""
         out = [
             f"{k}: {v:.1f}" if isinstance(v, float) else f"{k}: {v}"
             for k, v in self.readings.items()
@@ -99,6 +113,9 @@ def watchdog_test(
     operator: Operator,
     current_mA: float = 30.0,
 ) -> WatchdogResult:
+    """Bench test (torques the motor): push `joint` of the Dynamixel node `node` with
+    `current_mA` in current mode, stop sending and check that the Bus Watchdog
+    (`bus_watchdog_ms`) stops it. Refuses a mock configuration."""
     from ..drivers.dynamixel import DynamixelBus
 
     cfg, owner = config_node(config, node)
