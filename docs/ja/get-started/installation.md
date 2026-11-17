@@ -9,7 +9,7 @@ Python **3.12〜3.14** とuv，Gitを使います．roboloomは，自分のproje
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0
 uv run roboloom --version
 ```
 
@@ -29,11 +29,11 @@ override-dependencies = [
 
 | 構成 | command | 用途 |
 | --- | --- | --- |
-| 基本 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0` | 設定の読み込み，CLI，模擬device |
-| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2` | followerとRakuda-mini leader用のDynamixel SDK |
-| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper --extra pika` | PiPER SDK，IK，Pikaのtracker・手首camera（開発中・実機未検証） |
-| 記録 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` | LeRobotDatasetへの保存，模擬収集 |
-| Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2，記録，RealSense（`hardware`），DIGIT（`digit`） |
+| 基本 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0` | 設定の読み込み，CLI，模擬device |
+| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2` | followerとRakuda-mini leader用のDynamixel SDK |
+| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika` | PiPER SDK，IK，Pikaのtracker・手首camera（開発中・実機未検証） |
+| 記録 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra record` | LeRobotDatasetへの保存，模擬収集 |
+| Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2，記録，RealSense（`hardware`），DIGIT（`digit`） |
 
 Git sourceを登録した後は，package名でextrasを追加することもできます．zshなどのshellでは角括弧を引用符で囲みます．
 
@@ -55,7 +55,7 @@ DIGITの `digit` extraは，上流のdigit-interface 0.2.1（archive済み）で
 
 ## 更新とversionの固定
 
-新しいrelease tagへ切り替える場合（`<tag>` は [GitHub Releases](https://github.com/tetsugo02/roboloom/releases) のtag，例：`v0.1.0`）：
+新しいrelease tagへ切り替える場合（`<tag>` は [GitHub Releases](https://github.com/tetsugo02/roboloom/releases) のtag，例：`v0.2.0`）：
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --tag <tag>

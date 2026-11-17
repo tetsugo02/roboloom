@@ -1,7 +1,8 @@
 """A policy that runs in another process, e.g. another Python environment or a GPU machine.
 
 The policy node loads `roboloom.policy.remote:connect`, which forwards `bind`, `reset`
-and `infer` to a server that holds the real policy:
+and `infer`, negotiates protocol-2 lifecycle events, and refuses server step hooks.
+Steps always run locally. Lifecycle calls share the inference call lock. A server that holds the real policy:
 
     # where the model lives (its own environment; only numpy and roboloom are needed)
     export ROBOLOOM_POLICY_AUTHKEY=...            # any shared secret
@@ -29,11 +30,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import struct
 import threading
 import time
 import traceback
+from collections.abc import Sequence
 from dataclasses import asdict
 from multiprocessing.connection import Client, Connection, Listener
 from typing import Any
@@ -42,6 +45,8 @@ import numpy as np
 
 from ..core.checks import positive, unknown_keys
 from ..errors import ConfigError
+from ..hooks import Event, Hook, HookSpec, Requirements
+from ..hooks.events import EVENTS
 from . import Policy, PolicySpec, load_policy
 
 ADDRESS = "127.0.0.1:18765"
@@ -239,6 +244,8 @@ class RemotePolicy:
         connect_timeout_s: float = 30.0,
     ):
         self.address, self.timeout_s = address, float(timeout_s)
+        self.lock = threading.Lock()
+        self.events: tuple[str, ...] = ()
         self.calls = 0  # the number of the last call; its answer repeats it
         target, key = _address(address), _authkey(None, authkey_env)
         deadline = time.monotonic() + connect_timeout_s
@@ -254,7 +261,27 @@ class RemotePolicy:
                     ) from exc
                 time.sleep(0.2)
 
+        try:
+            capabilities = self._call("capabilities")
+        except RemotePolicyError:
+            capabilities = {}  # old servers have no lifecycle events
+        if capabilities.get("step_hooks"):
+            self.close()
+            raise ConfigError(
+                "remote policy offers step_hooks: move the hook to hooks: with a local factory "
+                "or use backend: process"
+            )
+        self.events = tuple(k for k in capabilities.get("events", []) if k in EVENTS)
+
+    def hooks(self) -> Sequence[Hook]:
+        """Only lifecycle forwarding; per-step hooks always run in the local node."""
+        return [RemoteEvents(self)] if self.events else []
+
     def _call(self, method: str, *arguments: object) -> Any:
+        with self.lock:
+            return self._call_unlocked(method, *arguments)
+
+    def _call_unlocked(self, method: str, *arguments: object) -> Any:
         self.calls += 1
         self.connection.send_bytes(encode([self.calls, method, *arguments]))
         deadline = time.monotonic() + self.timeout_s
@@ -298,6 +325,17 @@ class RemotePolicy:
         self.connection.close()
 
 
+class RemoteEvents(Hook):
+    """A lifecycle-only hook sharing the remote policy's existing call lock."""
+
+    def __init__(self, policy: RemotePolicy):
+        self.policy = policy
+
+    def on_event(self, event: Event) -> None:
+        if event.kind in self.policy.events:
+            self.policy._call("event", {"type": event.kind, **asdict(event)})
+
+
 def connect(
     address: str = ADDRESS,
     authkey_env: str = AUTHKEY_ENV,
@@ -313,7 +351,106 @@ def connect(
 # -- server -----------------------------------------------------------------------
 
 
-def _answer(policy: Policy, method: str, arguments: list) -> object:
+class _ServerHooks:
+    """One client's contributed hooks, built again after policy.bind."""
+
+    def __init__(self, policy: Policy):
+        self.policy = policy
+        self.hooks: Sequence[object] | None = None
+
+    def get(self) -> Sequence[object]:
+        if self.hooks is None:
+            offer = getattr(self.policy, "hooks", None)
+            hooks = offer() if callable(offer) else ()
+            if not isinstance(hooks, Sequence) or isinstance(hooks, (str, bytes)):
+                raise ConfigError("policy hooks() must return a sequence")
+            self.hooks = hooks
+        return self.hooks
+
+    def capabilities(self) -> dict[str, object]:
+        hooks = self.get()
+        return {
+            "protocol": 2,
+            "events": list(EVENTS)
+            if any(callable(getattr(h, "on_event", None)) for h in hooks)
+            else [],
+            "step_hooks": [
+                type(h).__name__ for h in hooks if callable(getattr(h, "step", None))
+            ],
+        }
+
+    def close(self) -> None:
+        for hook in self.hooks or ():
+            close = getattr(hook, "close", None)
+            if callable(close):
+                close()
+        self.hooks = None
+
+    def bind(self, spec: PolicySpec) -> None:
+        previous, self.hooks = self.hooks, None
+        current = self.get()
+        for old in previous or ():
+            if not any(old is hook for hook in current):
+                close = getattr(old, "close", None)
+                if callable(close):
+                    close()
+        for hook in current:
+            if callable(getattr(hook, "step", None)):
+                raise ConfigError(
+                    "step_hooks require a local hooks: factory or backend: process"
+                )
+            requirements = getattr(hook, "requirements", None)
+            req = requirements() if callable(requirements) else Requirements()
+            if not isinstance(req, Requirements) or req.writes or req.api > 1:
+                raise ConfigError(
+                    "remote event hooks must use API 1 and have no writes"
+                )
+            if not set(req.observe) <= set(spec.observation):
+                raise ConfigError(
+                    "remote hook observe keys are not in the policy observation"
+                )
+            bind = getattr(hook, "bind", None)
+            if callable(bind):
+                bind(
+                    HookSpec(
+                        spec.action,
+                        spec.units,
+                        spec.hold,
+                        spec.observation,
+                        spec.rate_hz,
+                        spec.rate_hz,
+                        spec.dataset_fps,
+                        ("policy",),
+                    )
+                )
+
+    def event(self, payload: dict[str, Any]) -> None:
+        fields = dict(payload)
+        kind = fields.pop("type")
+        fields.pop("kind", None)
+        if kind == "observation_stale":
+            fields["sources"] = tuple(fields["sources"])
+        event = EVENTS[kind](**fields)
+        for hook in self.get():
+            on_event = getattr(hook, "on_event", None)
+            if callable(on_event):
+                try:
+                    on_event(event)
+                except Exception:  # event errors are logged, never fatal
+                    logging.getLogger(__name__).exception(
+                        "remote hook event %s raised", kind
+                    )
+
+
+def _answer(
+    policy: Policy, method: str, arguments: list, hooks: _ServerHooks | None = None
+) -> object:
+    hooks = hooks if hooks is not None else _ServerHooks(policy)
+    if method == "capabilities":
+        return hooks.capabilities()
+    if method == "event":
+        hooks.event(arguments[0])
+        return None
     if method == "options":
         options = getattr(policy, "options", None)
         return dict(options()) if callable(options) else {}
@@ -321,6 +458,7 @@ def _answer(policy: Policy, method: str, arguments: list) -> object:
         bind = getattr(policy, "bind", None)
         if callable(bind):
             bind(_spec(arguments[0]))
+        hooks.bind(_spec(arguments[0]))
         return None
     if method == "reset":
         policy.reset()
@@ -339,6 +477,17 @@ BUSY = (
 def _serve_client(policy: Policy | None, connection: Connection) -> None:
     """Answer one client's calls until it disconnects; without a policy (the server is
     busy with another client) every call is answered with that."""
+    hooks = _ServerHooks(policy) if policy is not None else None
+    try:
+        _serve_calls(policy, connection, hooks)
+    finally:
+        if hooks is not None:
+            hooks.close()
+
+
+def _serve_calls(
+    policy: Policy | None, connection: Connection, hooks: _ServerHooks | None
+) -> None:
     while True:
         try:
             call = decode(connection.recv_bytes())
@@ -350,7 +499,7 @@ def _serve_client(policy: Policy | None, connection: Connection) -> None:
         try:
             if policy is None:
                 raise RuntimeError(BUSY)
-            reply: list = ["ok", _answer(policy, method, arguments)]
+            reply: list = ["ok", _answer(policy, method, arguments, hooks)]
         except Exception as exc:  # noqa: BLE001 - reported to the policy node
             reply = ["error", type(exc).__name__, str(exc), traceback.format_exc()]
         try:

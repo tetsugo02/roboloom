@@ -14,14 +14,16 @@ on its own.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import ClassVar, Protocol, runtime_checkable
 
 from ..control.homing import HomeSpec
 from ..core.checks import positive
 from ..core.protocol import Envelope, Publisher
+from ..errors import ConfigError
 from ..estimators.base import Estimator
+from ..hooks import HookChain, StepContext
 from ..inputs.base import InputDevice
 from ..robots.base import Follower
 from ..robots.safety import make_command
@@ -54,6 +56,7 @@ class Controller(ABC):
     # False for controllers that do not follow one operator input (e.g. a policy); they get
     # `source=None` and name what they read in `observes()`.
     uses_input: ClassVar[bool] = True
+    accepts_hooks: ClassVar[bool] = False
     # how many followers one controller of this type drives (None: any number)
     max_followers: ClassVar[int | None] = None
     # True for a controller that must drive every follower, in configuration order (a
@@ -76,6 +79,8 @@ class Controller(ABC):
         source: InputDevice | None,
         followers: Mapping[str, Follower],
     ):
+        if "hooks" in cfg and not self.accepts_hooks:
+            raise ConfigError("only policy controllers take hooks yet")
         self.name, self.cfg, self.source = name, cfg, source
         self.followers = dict(followers)
         if not self.followers:
@@ -95,6 +100,9 @@ class Controller(ABC):
         self.feedback: FeedbackMap | None = None
         # fields every command carries (a policy marks its teleop commands)
         self.command_extra: dict[str, object] = {}
+        # The seam is enabled only for controllers owned by a policy node.
+        self.step_hooks: HookChain | None = None
+        self.step_context: Callable[[StepContext], StepContext | None] | None = None
 
     @property
     def follower(self) -> Follower:

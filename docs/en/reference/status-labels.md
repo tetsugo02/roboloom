@@ -1,6 +1,8 @@
 # Status labels
 
-These four labels show how far a feature, robot or configuration key has been checked. They appear at the top of a page, next to headings and in table rows. An item without a label has the same status as the feature its page describes.
+| Detail | Description |
+| --- | --- |
+| — | These four labels show how far a feature, robot or configuration key has been checked. They appear at the top of a page, next to headings and in table rows. An item without a label has the same status as the feature its page describes. |
 
 ## Labels { #labels }
 
@@ -15,6 +17,7 @@ These four labels show how far a feature, robot or configuration key has been ch
 
 | Item | Status |
 | --- | --- |
+| Local hooks, policy teleop hooks, lifecycle events and `action.filtered` | <span class="status status--mock">Mock only</span> |
 | Rakuda2 teleoperated collection | <span class="status status--verified">Hardware-verified</span> |
 | Gravity compensation | <span class="status status--verified">Hardware-verified</span> |
 | Collection with DIGIT | <span class="status status--verified">Hardware-verified</span> |
@@ -25,14 +28,12 @@ These four labels show how far a feature, robot or configuration key has been ch
 | PiPER, Pika (Gripper, Sense, wrist cameras), web camera, audio | <span class="status status--dev">In development</span> |
 | Force feedback (`feedback`), estimators (`estimators`) | <span class="status status--mock">Mock only</span> (paused) |
 | Bilateral control design, stage 6 onward | <span class="status status--design">Design only</span> (paused) |
-
-Implemented features not listed above count as <span class="status status--mock">Mock only</span>.
+| Detail | Description |
+| --- | --- |
+| — | Implemented features not listed above count as <span class="status status--mock">Mock only</span>. |
 
 ## Writing a label { #usage }
 
-```html
-<span class="status status--verified">Hardware-verified</span>
-<span class="status status--mock">Mock only</span>
-<span class="status status--dev">In development</span>
-<span class="status status--design">Design only</span>
-```
+| Detail | Description |
+| --- | --- |
+| — | `<span class="status status--verified">Hardware-verified</span>`<br>`<span class="status status--mock">Mock only</span>`<br>`<span class="status status--dev">In development</span>`<br>`<span class="status status--design">Design only</span>` |

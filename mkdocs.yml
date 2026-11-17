@@ -61,6 +61,7 @@ nav:
       - 方策で動かす: policy/run.md
       - LeRobotの方策: policy/lerobot.md
       - 自作の方策: policy/custom.md
+      - Hooks (mock only): policy/hooks.md
       - 別のprocessで動かす: policy/remote.md
       - 非同期の推論と補間: policy/async.md
       - teleopと介入: policy/intervention.md
@@ -90,6 +91,7 @@ nav:
       - 操作画面: reference/operator-screen.md
       - 状態label: reference/status-labels.md
   - Explanation:
+      - Hooks in the control loop: explanation/hooks.md
       - 機体を立ち上げる段階: explanation/robot-setup-flow.md
       - 重力補償の調整: explanation/gravity-compensation.md
   - Contribution:

@@ -1,19 +1,22 @@
 # Python API
 
-roboloom の操作は，どれも Python の関数として使えます．CLI（`roboloom ...`）は，その関数を呼んで結果を表示するだけの薄い層です．各ページの API の説明は docstring から生成していて，英語です．
+| Scope | 説明 |
+| --- | --- |
+| Python API | CLI が呼ぶ Python function．説明は docstring から生成 |
+| Installation | [Installation](../../get-started/installation.md) |
+| Paths | configuration と .roboloom の path は project root からの相対 path |
 
-[Installation](../../get-started/installation.md) に従って自分のuv projectへroboloomを追加し，記録には `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` を使います．以下のcodeは自分のPython scriptに保存して `uv run python <script.py>` で実行します．設定や `.roboloom/` のpathは自分のproject rootを基準にします．
-
-## 公開している API { #modules }
+## Public API { #modules }
 
 | module | 中身 | ページ |
 | --- | --- | --- |
 | `roboloom` | `Session`，`EpisodeInfo`・`EpisodeResult`・`EpisodeFailed`・`SessionError`，`InProcessSession`，`load_config`・`resolve_config`，`init_project`，`Sample`，例外 | [Session](session.md) |
 | `roboloom.setup` | 計測と設定の手順（EEPROM，零点，可動域，重力，姿勢，卓上試験），`Operator` | [Setup](setup.md) |
-| `roboloom.policy` | 方策の形（`Policy`，`PolicySpec`），`load_policy`，`hold`，LeRobot・別process・再生の読み込み | [Policy](policy.md) |
+| `roboloom.policy` | 方策の形（`Policy`，`PolicySpec`），`load_policy`，`hold`，LeRobot・別process・再生の読み込み | [policy](policy.md) |
+| `roboloom.hooks` | `HOOKS_API`, `Hook`, `Requirements`, `HookSpec`, `StepContext`, `ChunkPosition`, events, `HookChain` <span class="status status--mock">Mock only</span> | [Hooks](policy.md#hooks) |
 | `roboloom.recording` | datasetの検査（`check_dataset`），episodeごとの記録（`episodes`），特徴量（`features`） | [Recording](recording.md) |
 
-## CLIとの対応 { #cli-and-python }
+## CLI and Python { #cli-and-python }
 
 | やること | CLI | Python |
 | --- | --- | --- |
@@ -28,17 +31,14 @@ roboloom の操作は，どれも Python の関数として使えます．CLI（
 | 操作画面で続けて録る | `roboloom run [robot]` | `Session.launch(...)` の状態画面と `start()`／`stop()`／`save()` |
 | coding agent向けのskillを入れる | `roboloom skills install` | `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`，`agent_skills.check(...)` |
 
-各commandの引数は [CLI](../cli.md) にあります．
+| Reference | Link |
+| --- | --- |
+| Command arguments | [CLI](../cli.md) |
 
-## 例 { #example }
+## Example { #example }
 
-```python
-from roboloom import Session
-
-with Session.launch("rakuda2", options=["gravity"]) as s:
-    s.wait_ready()  # leader が follower に揃うまで待つ
-    result = s.record("pick up the cup", seconds=30)
-    print(result.index, result.frames, result.warnings)
-```
-
-使い方の続きは [Session](session.md) を，方策で動かす・評価する手順は [方策で動かす](../../policy/run.md) と [評価の成否](../../policy/evaluation.md#labels) を参照してください．
+| Workflow | Link |
+| --- | --- |
+| Python session usage | [Session](session.md) |
+| Policy execution | [Running a policy](../../policy/run.md) |
+| Evaluation | [Evaluation verdicts](../../policy/evaluation.md#labels) |

@@ -40,10 +40,12 @@ from ..core.protocol import Envelope
 from . import episodes, journal, manifest
 from .metrics import summarize
 from .schema import (
+    FILTERED,
     INTERVENTION,
     META_FIELDS,
     features,
     observation_frame,
+    records_filtered,
     records_intervention,
 )
 from .video import normalize_video_codec, video_encoder
@@ -426,6 +428,7 @@ class EpisodeRecorder:
             return frame
         parts, all_valid, any_clamped = [], True, False
         intervened = False
+        filtered = False
         for name, follower in self.followers.items():
             actions = [
                 x
@@ -446,6 +449,7 @@ class EpisodeRecorder:
                     else None
                 )
                 parts.append(held or [0.0] * len(follower.joint_names))
+            filtered |= any(bool(x.payload.get("filtered")) for x in actions)
             clamped = bool(action and action.payload.get("clamped"))
             intervened |= bool(action and action.payload.get("intervention"))
             all_valid &= action is not None
@@ -466,6 +470,8 @@ class EpisodeRecorder:
         frame["action.clamped"] = np.asarray([float(any_clamped)], dtype=np.float32)
         if records_intervention(self.cfg):
             frame[INTERVENTION] = np.asarray([float(intervened)], dtype=np.float32)
+        if records_filtered(self.cfg):
+            frame[FILTERED] = np.asarray([float(filtered)], dtype=np.float32)
         return frame
 
     def frames(self) -> list[dict]:

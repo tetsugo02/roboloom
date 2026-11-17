@@ -1,6 +1,8 @@
 # Policy
 
-`roboloom.policy` defines what the policy node runs and the functions that load a policy. How to use them is in the [Policies and inference](../../policy/index.md) chapter (in particular [Custom policies](../../policy/custom.md)); this page holds the descriptions generated from the docstrings.
+| Module | Description |
+| --- | --- |
+| `roboloom.policy` | `roboloom.policy` defines what the policy node runs and the functions that load a policy. How to use them is in the [Policies and inference](../../policy/index.md) chapter (in particular [Custom policies](../../policy/custom.md)); this page holds the descriptions generated from the docstrings. |
 
 ## The policy contract { #contract }
 
@@ -64,3 +66,51 @@
       members:
         - load
         - Replay
+
+## Hooks { #hooks }
+
+<span class="status status--mock">Mock only</span>
+
+::: roboloom.hooks.Requirements
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.HookSpec
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.Hook
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.StepContext
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.ChunkPosition
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.EpisodeStarted
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.EpisodeEnded
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.ControlChanged
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.PolicyRestarted
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.ObservationStale
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.HookChain
+    options:
+      heading_level: 3

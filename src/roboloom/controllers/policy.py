@@ -70,15 +70,22 @@ over again during the episode (`teleop`: an intervention) and hand back (`policy
 Each teleop controller takes over joint by joint from where the followers are held
 (`Takeover`, `control.takeover`); every command carries `intervention` (True from the
 teleop controllers), which the recorder stores as `action.intervention`.
+
+Local `hooks:` extensions run after hold substitution and before interpolation and
+speed limiting, once per action period. The same chain runs after pickup/alignment
+on policy teleop (only during episodes). Hook event workers serialize their own
+methods; see `roboloom.hooks` and docs/explanation/hooks.md (mock only).
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import deque
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, ClassVar
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 
@@ -92,6 +99,21 @@ from ..control.interpolation import (
 from ..core.checks import positive
 from ..core.protocol import Envelope
 from ..errors import ConfigError
+from ..hooks import (
+    ChunkPosition,
+    ControlChanged,
+    EndReason,
+    EpisodeEnded,
+    EpisodeStarted,
+    Event,
+    HookChain,
+    HookError,
+    HookSpec,
+    ObservationStale,
+    PolicyRestarted,
+    StepContext,
+)
+from ..hooks.config import build_hooks, parse_hooks
 from ..robots.base import Follower
 from .base import Controller, FollowerView, Takeover
 
@@ -125,11 +147,14 @@ class _Inference:
         self.done.set()
 
 
+log = logging.getLogger(__name__)
+
 SETTLE_S = 10.0  # how long a reset waits for an inference that is still running
 
 
 class PolicyController(Controller):
     uses_input: ClassVar[bool] = False
+    accepts_hooks: ClassVar[bool] = True
     drives_all_followers: ClassVar[bool] = True
     keys = (
         *Controller.keys,
@@ -149,6 +174,7 @@ class PolicyController(Controller):
         "replan_at",
         "home",
         "teleop",
+        "hooks",
     )
 
     def __init__(
@@ -216,6 +242,20 @@ class PolicyController(Controller):
         self.names = [
             f"{n}.{j}" for n, f in self.followers.items() for j in f.joint_names
         ]
+        self.hook_entries = parse_hooks(
+            cfg.get("hooks", []),
+            self.names,
+            teleop=bool(cfg.get("teleop")),
+            backend=self.backend,
+        )
+        self.hooks = HookChain()
+        self.hook_steps = 0
+        self.episode: dict[str, Any] | None = None
+        self._period_observation: Mapping[str, Any] | None = None
+        self._filtered = np.zeros(len(self.names), dtype=bool)
+        self._chunk_id = 0
+        self._chunk_position = 0
+        self._chunk_length = 0
         self.history = 1
         self.hold: tuple[str, ...] = ()
         self.hold_index: list[int] = []
@@ -260,11 +300,14 @@ class PolicyController(Controller):
         self.sources: dict[str, Recordable] = {}  # set by `bind`
         self.dataset_fps = 30.0  # set by `bind`
         self.max_age_ms: dict[str, float] = {}  # per observed source, set by `bind`
+        self.last_commands: dict[str, list[float]] = {}
         self.executed: np.ndarray | None = None  # the action of the previous period
         self.stale = False  # an observed source went stale: restart with reset()
         self.latest: dict[str, Envelope] = {}
         self.queue: deque[np.ndarray] = deque()
         self.task = ""
+        self.episode_index: int | None = None
+        self.dataset_root: str | None = None
         self.running = False
         self.state = "loading"
         self.error = ""
@@ -305,6 +348,8 @@ class PolicyController(Controller):
         self.interpolator.reset()
         self.frames.clear()
         self.executed = None
+        self._filtered[:] = False
+        self._period_observation = None
         if self.job is not None:  # its result belongs to what was forgotten
             self.orphans.append(self.job)
             self.job = None
@@ -359,6 +404,8 @@ class PolicyController(Controller):
         for c in controllers.values():
             c.publisher = self.publisher  # one command sequence per follower
             c.command_extra = {"intervention": True}
+            c.step_hooks = self.hooks
+            c.step_context = self._teleop_context
         self.command_extra = {"intervention": False}
         self.teleop = dict(controllers)
 
@@ -391,7 +438,13 @@ class PolicyController(Controller):
         for c in self.teleop.values():
             c.begin_takeover(views)  # type: ignore[attr-defined]  # Takeover, checked
         self._clear()
+        previous = self.control
         self.control = "teleop"
+        if self.running and previous != "teleop":
+            if self.episode is not None:
+                self.episode["interventions"] += 1
+                self.episode["teleop_since"] = time.monotonic()
+            self._event(ControlChanged(previous, "teleop", "takeover"))
 
     def resume_policy(self) -> None:
         """Hand back to the policy during an episode; it restarts from the held targets
@@ -405,7 +458,16 @@ class PolicyController(Controller):
         self._clear()
         self.stale = False
         self.last_ns = 0
+        self._handed_back()
+        previous = self.control
         self.control = "policy"
+        self._event(ControlChanged(previous, "policy", "handback"))
+        self._event(PolicyRestarted("handback"))
+
+    def _handed_back(self) -> None:
+        since = self.episode.pop("teleop_since", None) if self.episode else None
+        if self.episode is not None and since is not None:
+            self.episode["intervention_s"] += time.monotonic() - since
 
     def end_teleop(self) -> None:
         """End teleoperation outside an episode; the followers hold."""
@@ -417,13 +479,56 @@ class PolicyController(Controller):
         if self.control != "teleop":
             return {}
         views = self._views()
+        if any(v.mode in ("FAULT", "ESTOP") for v in views.values()):
+            return {}
+        self._period_observation = None
         out: dict[str, Envelope] = {}
         for c in self.teleop.values():
             if c.source is None or c.source.name != input_name:
                 continue
             if all(f in views for f in c.followers):
-                out.update(c.update(intent, {f: views[f] for f in c.followers}))
+                try:
+                    sent = c.update(intent, {f: views[f] for f in c.followers})
+                except HookError as exc:
+                    self.fail(str(exc))
+                    return {}
+                out.update(sent)
+                if sent and self.episode is not None:
+                    self.hook_steps += 1
+        if out and self.episode is not None:
+            self.episode["commands"] += 1
+        self.last_commands.update(
+            {n: list(msg.payload["positions"]) for n, msg in out.items()}
+        )
+        if out and self.running:
+            parts = []
+            for name in self.followers:
+                parts.append(
+                    np.asarray(
+                        self.last_commands.get(
+                            name, views[name].target or views[name].positions
+                        ),
+                        dtype=float,
+                    )
+                )
+            self.executed = np.concatenate(parts)
         return out
+
+    def _teleop_context(self, ctx: StepContext) -> StepContext | None:
+        if not self.running:
+            return None
+        previous = self.last_commands.get(ctx.names[0].split(".", 1)[0])
+        return replace(
+            ctx,
+            _previous=(lambda: np.asarray(previous, dtype=float))
+            if previous is not None
+            else ctx._previous,
+            step=self.hook_steps,
+            task=self.task,
+            episode_index=self.episode_index,
+            _hold=self.hold,
+            _observation=self._hook_observation,
+        )
 
     def _parse_homes(self, raw: object) -> None:
         """`home:` the saved pose(s) `home` moves the followers to before an episode: one
@@ -513,7 +618,66 @@ class PolicyController(Controller):
         if callable(bind):  # the policy checks it gets what it was trained on
             bind(self.spec())
         self.policy = policy
+        try:
+            self._bind_hooks()
+        except BaseException:
+            self.policy = None
+            raise
         self.state = "ready"
+
+    def _bind_hooks(self) -> None:
+        """Called after policy.bind: factories and policy contributions share validation."""
+        offered = getattr(self.policy, "hooks", None)
+        contributed = offered() if callable(offered) else ()
+        if not isinstance(contributed, Sequence) or isinstance(
+            contributed, (str, bytes)
+        ):
+            raise ConfigError("policy hooks() must return a sequence of Hook objects")
+        spec = self.spec()
+        hook_spec = HookSpec(
+            names=tuple(self.names),
+            units=spec.units,
+            hold=self.hold,
+            observation=spec.observation,
+            rate_hz=self.rate_hz,
+            command_hz=self.command_hz,
+            dataset_fps=self.dataset_fps,
+            sources=("policy", "teleop") if self.teleop else ("policy",),
+        )
+        self.hooks.close()
+        self.hooks = HookChain(
+            build_hooks(
+                self.hook_entries,
+                contributed,
+                hook_spec,
+                search=[str(self.cfg.get("__robot_dir__") or "")],
+            )
+        )
+        for controller in self.teleop.values():
+            controller.step_hooks = self.hooks
+            controller.step_context = self._teleop_context
+        # Map observation keys to their producers once, without decoding any samples.
+        from ..recording.schema import joined_parts
+
+        sources = {**self.followers, **self.sources}
+        self._hook_sources: dict[str, tuple[str, ...]] = {
+            key: (name,)
+            for name, source in sources.items()
+            for key in source.features(self.dataset_fps)
+        }
+        self._hook_sources.update(
+            {
+                key: tuple(name for name, _ in parts)
+                for key, parts in joined_parts(sources, self.dataset_fps).items()
+            }
+        )
+
+    def _event(self, event: Event) -> None:
+        try:
+            self.hooks.emit(event, rate_hz=self.rate_hz)
+        except HookError as exc:
+            self.fail(str(exc))
+            raise
 
     def spec(self) -> PolicySpec:
         """The observation's features and the action's names this policy is given."""
@@ -533,39 +697,88 @@ class PolicyController(Controller):
             inference=self.inference,
         )
 
-    def start(self, task: str) -> None:
+    def start(self, task: str, episode_index: int | None = None) -> None:
+        """Start after the previous end event; refuse a blocked start after 60 s."""
         if self.policy is None:
             raise RuntimeError("policy not loaded")
+        if self.running:
+            raise RuntimeError("an episode is already running")
         self._settle()
+        started_at, t0 = time.time(), time.monotonic()
+        # The barrier queues behind the preceding EpisodeEnded on each step hook.
+        self.hooks.emit(
+            EpisodeStarted(task, episode_index, self.dataset_root, started_at),
+            rate_hz=self.rate_hz,
+        )
         self.policy.reset()
-        self.popped = 0
-        self.task, self.running = task, True
+        self.hooks.reset_stats()
+        self.popped = self.hook_steps = 0
+        self.task, self.episode_index, self.running = task, episode_index, True
         self._clear()
-        self.stale = False
+        self.stale, self.error = False, ""
         self.last_ns = 0
-        self.state = "running"
-        self.control = "policy"  # also after teleoperation before the episode
+        self.state, self.control = "running", "policy"
+        self.episode = {
+            "task": task,
+            "episode_index": episode_index,
+            "dataset_root": self.dataset_root,
+            "started_at": started_at,
+            "t0": t0,
+            "commands": 0,
+            "interventions": 0,
+            "intervention_s": 0.0,
+        }
 
-    def stop(self) -> None:
-        """End the episode. A loaded policy is ready for the next one whatever state
-        this one ended in (running, waiting for a stale camera or a late inference,
-        failed): `start` resets it."""
+    def stop(self, reason: EndReason = "stopped", error: str = "") -> None:
+        """End once, without blocking the control thread on event handlers."""
         self.running = False
         self.control = ""
         self._clear()
         if self.policy is not None:
             self.state = "ready"
+        if self.episode is None:
+            return
+        self._handed_back()
+        episode, self.episode = self.episode, None
+        jobs = list(self.orphans)
+
+        def settle() -> None:
+            deadline = time.monotonic() + SETTLE_S
+            for job in jobs:
+                if not job.done.wait(max(0.0, deadline - time.monotonic())):
+                    log.warning("inference still running before hook episode_ended")
+
+        event = EpisodeEnded(
+            task=episode["task"],
+            reason=reason,
+            error=error,
+            episode_index=episode["episode_index"],
+            dataset_root=episode["dataset_root"],
+            steps=self.hook_steps,
+            commands=episode["commands"],
+            interventions=episode["interventions"],
+            intervention_s=round(episode["intervention_s"], 3),
+            filtered_steps=self.hooks.filtered,
+            started_at=episode["started_at"],
+            duration_s=round(time.monotonic() - episode["t0"], 3),
+        )
+        self.hooks.log_stats()
+        self.hooks.emit(event, settle=settle)
 
     def fail(self, error: str) -> None:
-        """The episode cannot go on (the policy raised): the followers hold, and the
-        failure shows until `stop` or `discard` ends the episode."""
-        self.stop()
+        """Fail the episode; commands stop and the followers hold."""
+        self.stop("failed", error)
         self.state, self.error = "failed", error
 
-    def reset(self) -> None:
-        self.stop()
+    def reset(self, why: str = "") -> None:
+        self.stop("interrupted", why)
         for c in self.teleop.values():
             c.reset()
+
+    def shutdown(self) -> None:
+        """End a running episode, drain events (60 s cap), then close hooks."""
+        self.stop("shutdown")
+        self.hooks.close()
 
     def observe(self, name: str, msg: Envelope) -> None:
         self.latest[name] = msg
@@ -584,6 +797,64 @@ class PolicyController(Controller):
         out = observation_frame(sources, self.latest, self.dataset_fps)
         out["task"] = self.task
         return out
+
+    def _hook_observation(self) -> Mapping[str, Any]:
+        if self._period_observation is None:
+            from ..recording.schema import observation_frame
+
+            sources = {**self.followers, **self.sources}
+            producers = {
+                n for key in self.hooks.observe for n in self._hook_sources[key]
+            }
+            self._period_observation = observation_frame(
+                {n: s for n, s in sources.items() if n in producers},
+                self.latest,
+                self.dataset_fps,
+                keys=self.hooks.observe,
+                lazy=True,
+            )
+        return self._period_observation
+
+    def _context(
+        self,
+        source: Literal["policy", "teleop"],
+        now: int,
+        held: np.ndarray,
+        chunk: ChunkPosition | None = None,
+    ) -> StepContext:
+        snapshots = dict(self.last_commands)
+
+        def previous() -> np.ndarray:
+            parts = []
+            start = 0
+            for name, follower in self.followers.items():
+                stop = start + len(follower.joint_names)
+                parts.append(
+                    np.asarray(snapshots.get(name, held[start:stop]), dtype=float)
+                )
+                start = stop
+            return np.concatenate(parts)
+
+        return StepContext(
+            source=source,
+            step=self.hook_steps,
+            t_ns=now,
+            rate_hz=self.rate_hz,
+            task=self.task,
+            episode_index=self.episode_index,
+            names=tuple(self.names),
+            chunk=chunk,
+            _held=lambda: held,
+            _previous=previous,
+            _state=lambda: np.concatenate(
+                [
+                    np.asarray(self.latest[n].payload["positions"], dtype=float)
+                    for n in self.followers
+                ]
+            ),
+            _observation=self._hook_observation,
+            _hold=self.hold,
+        )
 
     def _stale_sources(self, now: int) -> list[str]:
         """Observed inputs and sensors whose latest sample is older than `max_age_ms`."""
@@ -628,6 +899,8 @@ class PolicyController(Controller):
         old = self._stale_sources(now)
         if old:  # e.g. a frozen camera: never act on what is no longer there
             self._clear()
+            if not self.stale:
+                self._event(ObservationStale(tuple(old)))
             self.stale = True
             self.state, self.error = "stale_observation", f"{old[0]} is stale"
             return {}
@@ -636,6 +909,8 @@ class PolicyController(Controller):
                 self._settle()
                 self.policy.reset()
                 self.stale, self.error = False, ""
+                self._event(PolicyRestarted("stale_recovered"))
+            self._period_observation = None
             held = np.concatenate(
                 [
                     np.asarray(
@@ -652,6 +927,7 @@ class PolicyController(Controller):
                 wanted = not self.queue
             if (self.history > 1 and not self.sampled) or wanted:
                 observation = self.observation()
+                self._period_observation = observation
                 if observation is None:
                     self.state = "waiting_observation"
                     return {}
@@ -672,14 +948,35 @@ class PolicyController(Controller):
                 self.state = "late_inference" if self.popped else "waiting_inference"
                 return {}
             chosen = self.queue.popleft().copy()
+            chosen[self.hold_index] = held[self.hold_index]
+            try:
+                filtered = self.hooks.run(
+                    chosen,
+                    self._context(
+                        "policy",
+                        now,
+                        held,
+                        ChunkPosition(
+                            self._chunk_id, self._chunk_position, self._chunk_length
+                        ),
+                    ),
+                )
+            except HookError as exc:
+                self.fail(str(exc))
+                return {}
+            if now_ns is None:
+                now = time.monotonic_ns()
+            self._filtered = filtered != chosen
             self.popped += 1
+            self.hook_steps += 1
+            self._chunk_position += 1
             self.sampled = False
-            chosen[self.hold_index] = held[self.hold_index]  # joints the policy leaves
             # after a reset the line starts from what the followers hold
             following = self.queue[0].copy() if self.queue else None
             if following is not None:
                 following[self.hold_index] = held[self.hold_index]
-            self.interpolator.add(chosen, previous=held, next=following)
+                following[self._filtered] = filtered[self._filtered]
+            self.interpolator.add(filtered, previous=held, next=following)
         action = self.interpolator.get()
         assert action is not None  # an action was just added if the steps ran out
         period = 1 / self.command_hz
@@ -690,6 +987,9 @@ class PolicyController(Controller):
         start = 0
         for name, follower in self.followers.items():
             part = action[start : start + len(follower.joint_names)]
+            part_filtered = bool(
+                self._filtered[start : start + len(follower.joint_names)].any()
+            )
             start += len(follower.joint_names)
             payload = states[name].payload  # type: ignore[union-attr]  # checked above
             # step from what the follower holds, as the joint controller does
@@ -699,12 +999,15 @@ class PolicyController(Controller):
                 max(p - step, min(p + step, float(x)))
                 for p, x in zip(previous, part, strict=True)
             ]
-            out[name] = self.command(name, limited, now)
+            out[name] = self.command(name, limited, now, filtered=part_filtered)
+            self.last_commands[name] = limited
             sent += limited
         # the history's action is the command that went out (what the recorder writes
         # as `action`), not the policy's target before the speed limit
         self.executed = np.asarray(sent, dtype=np.float64)
         self.last_ns = now
+        if self.episode is not None:
+            self.episode["commands"] += 1
         return out
 
     def _collect(self) -> None:
@@ -736,6 +1039,9 @@ class PolicyController(Controller):
             raise ValueError(
                 f"policy returned non-finite targets (shape {actions.shape})"
             )
+        self._chunk_id += 1
+        self._chunk_position = skip
+        self._chunk_length = min(len(actions), self.horizon)
         self.queue.extend(actions[skip : self.horizon])
         self.state = "running"
 
@@ -760,6 +1066,8 @@ class PolicyController(Controller):
         if self.infer_ms:
             out["infer_ms"] = round(self.infer_ms[-1], 1)
             out["infer_max_ms"] = round(max(self.infer_ms), 1)
+        if self.hooks.entries:
+            out.update(self.hooks.status())
         if self.teleop:
             out["control"] = self.control or "hold"
             if self.control == "teleop":

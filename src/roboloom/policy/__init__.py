@@ -24,7 +24,9 @@ stacked `[N, ...]`, oldest first, the current frame last, plus `"action"`: the a
 executed so far) and `hold:` names joints the policy leaves where they are. A policy may
 state these itself with `options()` (a dict with `observation_history`, `hold`,
 `action_horizon`), which wins over the YAML, so swapping the model needs no edited
-configuration. Normalization, resizing and decoding the model's own action form into
+configuration. Optional `hooks() -> Sequence[Hook]` (roboloom.hooks) is called after
+bind. Writing contributions require an explicit `from: policy` slot and write limit.
+Normalization, resizing and decoding the model's own action form into
 joint targets stay in the policy.
 """
 
@@ -68,7 +70,9 @@ class Policy(Protocol):
     `observation.images.<camera>`, ...) to the latest values, plus `task` (and
     `history` with `observation_history`). `infer` returns joint targets in the
     order of `action` and the followers' units: one step `[n]` or a chunk `[H, n]`.
-    Optional methods: `bind(spec: PolicySpec)`, called once after loading to refuse a
+    Optional methods: `hooks() -> Sequence[Hook]` (from roboloom.hooks),
+    called after bind to contribute local steps or lifecycle handlers;
+    `bind(spec: PolicySpec)`, called once after loading to refuse a
     configuration the policy was not trained for, and `options()`, returning
     `observation_history`, `hold` or `action_horizon` to use instead of the YAML's.
     """

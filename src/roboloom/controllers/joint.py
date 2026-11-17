@@ -30,11 +30,14 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
+import numpy as np
+
 from ..control.homing import HomeSpec, parse_home
 from ..control.takeover import JointPickup
 from ..core.checks import positions, positive, unknown_keys
 from ..core.protocol import Envelope
 from ..errors import ConfigError
+from ..hooks import StepContext
 from ..inputs.base import InputDevice, JointInput
 from ..robots.base import Follower
 from .base import Controller, FollowerView
@@ -309,10 +312,40 @@ class JointController(Controller):
         )
         if previous is None:
             raise RuntimeError("controller target missing after alignment")
+        filtered = False
+        if self.step_hooks is not None and self.step_context is not None:
+            held = np.asarray(previous, dtype=float)
+            last = np.asarray(
+                self.last_target if self.last_target is not None else previous,
+                dtype=float,
+            )
+            context = self.step_context(
+                StepContext(
+                    source="teleop",
+                    step=0,
+                    t_ns=now,
+                    rate_hz=1 / dt,
+                    task="",
+                    episode_index=None,
+                    names=tuple(
+                        f"{self.follower.name}.{j}" for j in self.follower.joint_names
+                    ),
+                    _held=lambda: held,
+                    _previous=lambda: last,
+                    _state=lambda: np.asarray(current, dtype=float),
+                )
+            )
+            if context is not None:
+                chosen = np.asarray(target, dtype=float)
+                result = self.step_hooks.run(chosen, context)
+                filtered = bool(np.any(result != chosen))
+                target = result.tolist()
         limited = [
             max(p - step, min(p + step, t))
             for p, t in zip(previous, target, strict=True)
         ]
         self.last_target, self.last_target_ns = limited, now
         self.state = "picking_up" if self.pickup is not None else "following"
-        return self.command(self.follower.name, limited, now, input_seq=intent.seq)
+        return self.command(
+            self.follower.name, limited, now, input_seq=intent.seq, filtered=filtered
+        )

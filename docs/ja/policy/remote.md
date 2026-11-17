@@ -1,8 +1,8 @@
-# 方策server <span class="status status--mock">模擬のみ</span>
+# Policy server <span class="status status--mock">Mock only</span>
 
 方策を，roboloomとは別のprocess・別の環境で動かす方法です．keyの一覧は [方策の設定](../reference/configuration/policy.md#backend)，commandは [CLI](../reference/cli.md#serve-policy) にあります．
 
-## 方策を別のprocessで動かす { #running-the-policy-in-another-process }
+## Running the policy in another process { #running-the-policy-in-another-process }
 
 方策を読み込む場所は2通りあり，方策のYAMLの `backend` で選びます．方策の書き方（`bind`，`reset`，`infer`，`options`）はどちらも同じです．
 
@@ -13,23 +13,23 @@
 
 ```yaml
 # nodes/policy.yaml
-factory: my_lab.policies:load        # どちらの backend でも，方策そのものを書く
+factory: my_lab.policies:load        # the policy itself, with either backend
 kwargs: {checkpoint: "..."}
-backend: server                      # 省略すると process
-server: {address: "127.0.0.1:18765"} # backend: server のときだけ読む
+backend: server                      # left out: process
+server: {address: "127.0.0.1:18765"} # read only with backend: server
 ```
 
 `backend: server` では，方策nodeは `factory` を読み込まず，`server.address` へつなぎます．serverは同じYAMLから `factory`，`kwargs`，`server.address` を読んで起動します．
 
-## serverを起動する { #starting-the-server }
+## Starting the server { #starting-the-server }
 
 ```bash
-# modelのある側：そのmodelの環境．roboloomはextraなしで入れる
+# where the model lives: its own environment, with roboloom installed without extras
 export ROBOLOOM_POLICY_AUTHKEY=some-shared-secret
-uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # 実験fileの方策
-# 方策のYAMLから：roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
-# roboloomのcommandを使わない場合：python -m roboloom.policy.remote --from <同じfile>
-# YAMLを使わない場合：roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
+uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # the experiment's policy
+# from a policy YAML: roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
+# without roboloom's command line: python -m roboloom.policy.remote --from <the same file>
+# without the YAML: roboloom serve-policy my_lab.policies:load --kwargs '{"checkpoint": "..."}'
 ```
 
 | `server` のkey | 意味 |
@@ -43,7 +43,7 @@ uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # 実�
 - `backend: server` では `roboloom infer --policy`・`--policy-kwargs` は使えません（方策を読み込むのはserverです）．
 - `factory: roboloom.policy.remote:connect` と `kwargs: {address: ...}` を直接書く以前の形も動きます．
 
-## serverの動き { #behavior }
+## How the server behaves { #behavior }
 
 - serverはmodelを1回だけ読み込み，方策nodeを1つずつ相手にします．episodeやsessionをまたいで使えます．`roboloom infer` より先に起動してください．nodeは `connect_timeout_s`（30秒）まで待ちます．1つを相手にしている間につないできた2つ目のnodeには，待たせずに，使用中であること（`the policy server is serving another policy node`）を返します．
 - `timeout_s` 以内に答えがない呼び出しは，そのepisodeを失敗させます（`TimeoutError`）．あとから届いたその答えは捨てます．呼び出しには番号が付いていて，同じ番号の答えだけを受け取ります．
@@ -51,3 +51,11 @@ uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # 実�
 - 方策が出した例外は，同じprocessの方策と同じく，controllerの行に出ます（[失敗したとき](custom.md#failures)）．
 - 共有する秘密の文字列で両側を認証します．通信は暗号化しません．addressはloopbackか，信頼できるnetworkにしてください．messageはJSONのheaderと配列の生のbyte列です（pickleは使いません）．
 - network越しでは，`infer` のたびに観測を送ります（480×640の画像1枚で約0.9 MB，`observation_history` の枚数分）．
+
+## Hook capabilities { #hooks }
+
+<span class="status status--mock">Mock only</span>
+
+connect 時の `capabilities` は `{"protocol": 2, "events": [...], "step_hooks": [...]}` を返します．call を拒否する古い server は event を提供しません．空でない `step_hooks` は load を拒否します．`hooks:` の local factory に移すか `backend: process` にします．空でない `writes` を持つ `from: policy` と `backend: server` の組み合わせは configuration load 時に拒否します．
+
+`RemotePolicy.hooks()` は lifecycle-only の `RemoteEvents` hook を提供し，inference と同じ call lock の下で `{"type": event.kind, **asdict(event)}` を送ります．server は policy の hook に dispatch します．step hook とその observation は policy teleop 中も local node に残します．[hooks](hooks.md) と [threading](../explanation/hooks.md#threading) を参照してください．

@@ -24,7 +24,7 @@ One Sense drives one arm and one gripper. Two arms use two Senses and two contro
 ## Requirements
 
 - For PiPER + Pika hardware, choose both robot extras. `piper` includes the PiPER SDK and Pinocchio for IK; `pika` includes `pysurvive` and the wrist-camera dependency.
-    - In your own project: `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper --extra pika` (add `--extra record` to save episodes)
+    - In your own project: `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika` (add `--extra record` to save episodes)
     - In a checkout of the roboloom repository: `uv sync --extra piper --extra pika`
 - The tracker is read through libsurvive (`pysurvive` in Python). The `pika` extra installs a wheel (Linux x86_64) built by a fork of libsurvive; nothing is built at install time. Ask an administrator for the tracker's udev rules (`81-vive.rules`). See [Installation](../get-started/installation.md) for details. Without pysurvive, the Sense's node stops and says why.
 - `pysurvive` is required for real Sense tracker poses only: PiPER joint control, Pika serial/camera access and mocks do not use it. For mock `pose_ik` and `roboloom validate`, the standalone `ik` extra is sufficient (`uv sync --extra ik` in the checkout).

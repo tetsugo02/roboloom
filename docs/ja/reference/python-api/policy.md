@@ -1,8 +1,10 @@
 # Policy
 
-`roboloom.policy` は，方策nodeが動かす方策の形と，方策を読み込む関数です．使い方は [方策と推論](../../policy/index.md) の章（特に [自作方策](../../policy/custom.md)）にあり，このページは docstring から生成した説明（英語）を載せます．
+| Module | 説明 |
+| --- | --- |
+| `roboloom.policy` | `roboloom.policy` は，方策nodeが動かす方策の形と，方策を読み込む関数です．使い方は [方策と推論](../../policy/index.md) の章（特に [自作方策](../../policy/custom.md)）にあり，このページは docstring から生成した説明（英語）を載せます． |
 
-## 方策の形 { #contract }
+## The policy contract { #contract }
 
 ::: roboloom.policy
     options:
@@ -22,7 +24,7 @@
     options:
       heading_level: 3
 
-## 姿勢を保つ方策 { #hold }
+## A policy that holds { #hold }
 
 ::: roboloom.policy.hold
     options:
@@ -41,7 +43,7 @@
         - load
         - LeRobotPolicy
 
-## 別のprocess { #remote }
+## Another process { #remote }
 
 <span class="status status--mock">模擬のみ</span>
 
@@ -54,7 +56,7 @@
         - RemotePolicy
         - RemotePolicyError
 
-## 再生 { #replay }
+## Replay { #replay }
 
 <span class="status status--mock">模擬のみ</span>
 
@@ -64,3 +66,51 @@
       members:
         - load
         - Replay
+
+## Hooks { #hooks }
+
+<span class="status status--mock">Mock only</span>
+
+::: roboloom.hooks.Requirements
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.HookSpec
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.Hook
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.StepContext
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.ChunkPosition
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.EpisodeStarted
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.EpisodeEnded
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.ControlChanged
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.PolicyRestarted
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.ObservationStale
+    options:
+      heading_level: 3
+
+::: roboloom.hooks.HookChain
+    options:
+      heading_level: 3

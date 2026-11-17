@@ -87,3 +87,16 @@ uv run lerobot-train \
 
 `--dataset.repo_id` = the configuration's `repo_id` (with option suffixes);
 `--dataset.root` = its `output` seen from the project root. See [policy.md](policy.md).
+
+## Hook changes (mock only)
+
+`action.filtered`: float32 [1], present only when a policy's YAML hooks list includes
+an entry with nonempty writes (factory or from: policy). Schema selection uses YAML
+alone; the recorder never imports the hook. All valid sent commands/followers in a row
+are ORed, even when the first command was unchanged. The flag reflects hook changes
+before interpolation/speed/safety limits; policy teleop carries it too. No writing
+claims means no column. Preserve dataset schema compatibility; choose another output
+and repo_id for a different feature layout rather than silently appending.
+Controller status adds hook_ms, hook_max_ms, hook_errors, hook_over, filtered; per-hook
+ms/max_ms/errors/over/changed/notes are logged at end. EpisodeEnded.filtered_steps counts
+periods changed by the chain. See [policy](policy.md#local-hooks-mock-only).

@@ -219,3 +219,14 @@ Live observations remain HWC uint8 RGB, and LeRobot dataset reads return CHW flo
 roboloom passes LeRobot's `RGBEncoderConfig(vcodec=...)` to `LeRobotDataset.create/resume`; CRF, GOP and preset stay at LeRobot's defaults and are not settings. An encoder missing from the local FFmpeg/PyAV is refused at launch and `validate` (no silent fallback). An explicit codec that differs from the saved videos is refused before writing with `video_codec: 'av1' (saved videos) -> 'h264' (requested)`: set another `repo_id` and `output`; nothing is converted or moved. `storage: image`, audio and joints are unaffected.
 
 AV1 generally gives smaller files at the same quality; H.264 plays in almost every player and browser (AV1 may not, e.g. in some editor/browser video previews). With LeRobot's defaults both encoded a synthetic 640×480 × 90-frame episode in about 0.9 s. Whether H.264 fixes black videos in the VS Code LeRobot Viewer is unverified; the codec choice is tested with synthetic frames and the mock dataflow only.
+
+## Hooks (mock only)
+
+Only policy controllers accept `hooks:` (list, default []). See
+[policy](policy.md#local-hooks-mock-only) for code and write claims. Entries have exactly
+one of factory/module:callable or from/policy, plus kwargs (factories only), writes
+(unique follower.joint limit), sources (may narrow policy/teleop), on_error
+(fail/hold/pass), budget_ms (positive finite, ms), name. Policy slots occur at most once.
+Factory/policy-declared writes must fit the YAML claim. Writing policy hooks without a
+slot refuse load with the exact two YAML lines to add. sources: [teleop] requires teleop:.
+from: policy with writes + backend: server is refused before connecting.

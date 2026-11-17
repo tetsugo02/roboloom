@@ -77,12 +77,16 @@ hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
 ```
 
 - **`observation_history: N`**: the observation is sampled once per action (every `1/rate_hz`), also for the actions of a chunk that need no inference. `infer` then also gets `observation["history"]`: every array of the observation stacked `[N, ...]`, oldest first, the current frame last. At the start of an episode the first frame fills the history. `history["action"]` (float32 `[N, n]`) is the action executed before each frame (the targets the followers held at the start): the command sent to the followers, as the recorder writes it to `action`, so a policy output cut by `max_speed` appears as the cut value. It is for models that read their past actions. With `N = 1` the observation is unchanged.
-- **`hold`**: entries of the action (`<follower>.<joint>`) the policy does not drive. Whatever the policy returns there, NaN included, is replaced by the target the follower holds, so a model trained on some of the joints still returns `[n]` or `[H, n]`. Every other entry must be finite, or the episode stops. The recorded `action` keeps those entries, holding the held target ([Dataset format](../data/format.md#by-configuration)).
+- **`hold`**: entries of the action (`<follower>.<joint>`) the policy does not drive. Whatever the policy returns there, NaN included, is replaced by the target the follower holds, so a model trained on some of the joints still returns `[n]` or `[H, n]`. Every other entry must be finite, or the episode stops. The recorded `action` keeps those entries; a hook with an explicit write claim may change them after hold substitution ([Dataset format](../data/format.md#by-configuration)).
 - **`options()` (optional)**: a policy states these itself, and its values win over the YAML. Swapping the model then needs no edited configuration.
 
     ```python
     def options(self) -> dict:
-        return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
+        return {
+            "observation_history": 4,
+            "hold": ["follower.torso_yaw"],
+            "action_horizon": 8,
+        }
     ```
 
 - `bind(spec)` also receives `spec.history`, `spec.hold`, `spec.units` (the unit of each action entry) and `spec.inference` (`sync` or `async`).
@@ -113,3 +117,9 @@ PYTHONPATH=$PWD/examples/policies uv run roboloom infer rakuda2 --seconds 20 \
 ```
 
 With `--stride 3` on a 15 fps recording the policy's rate is 5 Hz: set `rate_hz: 5` in `nodes/policy.yaml`. Reading the dataset for training: the table columns (`observation.state`, `action`, `action.valid`, `episode_index`, `index`) are in `LeRobotDataset(...).hf_dataset`; images are decoded per row with `dataset[i]`. Rows whose `action.valid` is 0 are described in [Missing data](../data/format.md#missing-data).
+
+## Hooks { #hooks }
+
+<span class="status status--mock">Mock only</span>
+
+A policy may provide `hooks() -> Sequence[Hook]` after bind. Implement `Hook.step(action, ctx)` for local action-period processing and `on_episode_ended(event)` for finalization. Writing hooks require a `hooks:` YAML entry with `from: policy` and the write limit. Holds are substituted before hooks; explicitly claimed held joints can be changed. See [Hooks](hooks.md) for the release gate and [threading](../explanation/hooks.md#threading) before sharing state with async inference.
