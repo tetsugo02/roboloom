@@ -8,7 +8,7 @@ leader の腕を，手を離してもその場に留まり，ある程度の力�
 制御の周期ごと（leader の `poll_hz`，templateでは120 Hz）に，関節ごとの電流を次の式で決めます．
 
 ```
-送る電流 = 上限で切る( lamp × ( gain × g(q) + 保持 − kd × 速度 ) + 可動域の押し戻し )   [mA]
+送る電流 = 上限で切る( ramp × ( gain × g(q) + 保持 − kd × 速度 ) + 可動域の押し戻し )   [mA]
 ```
 
 | 項 | 意味 | どこで決まるか |
@@ -17,7 +17,7 @@ leader の腕を，手を離してもその場に留まり，ある程度の力�
 | gain | g(q) に掛ける倍率 | `tune-gravity`（`calibration/gravity_tuning_<side>.yaml`） |
 | 保持 | 置いた位置に引き留める電流．最大 ±`hold_mA` | 同上 |
 | kd | 速度に比例するbrake（今は 0） | `nodes/leader_gravity.yaml` |
-| lamp | 起動直後の `ramp_s` 秒で，0 から 1 に上がる | 同上 |
+| ramp | 起動直後の `ramp_s` 秒で，0 から 1 に上がる | 同上 |
 | 押し戻し | 可動域の外に出たときだけ，外に出た量に比例してかかる | `calibration/travel_<side>.yaml` と `barrier_mA_per_count` |
 | 上限 | `max_current_mA`．EEPROM の Current Limit でもmotor側で同じ値に切られる | `nodes/leader_gravity.yaml` |
 
