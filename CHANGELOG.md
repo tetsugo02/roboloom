@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/tetsugo02/roboloom/releases/tag/v0.2.0) - 2026-11-17
+
+### Features
+
+- **hooks**: 方策から独立したフック（周期ごとの step と episode のイベント）を足す ([`bd8e433`](https://github.com/tetsugo02/roboloom/commit/bd8e433d745db97172de2c45cdce6d60db840952))
+- PiPER＋Pikaの機器を特定する roboloom setup と，ロボット別のtutorial ([#54](https://github.com/tetsugo02/roboloom/pull/54)) ([`11114ad`](https://github.com/tetsugo02/roboloom/commit/11114ad7bfa4824cfdf836a8a70a3252d40be7c9))
+
+### Documentation
+
+- 日本語docsの英語由来の専門用語を英語表記に統一し，表記方針を記録する ([#55](https://github.com/tetsugo02/roboloom/pull/55)) ([`897cc8b`](https://github.com/tetsugo02/roboloom/commit/897cc8b785b2970e76d92dc46b5d10b93139bd81))
+
 ## [0.1.0](https://github.com/tetsugo02/roboloom/releases/tag/v0.1.0) - 2026-11-16
 
 ### Features
@@ -77,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### CI & Maintenance
 
+- リリースCI/CD・CHANGELOG自動生成・CLI --version・タグ指定インストール手順を追加する ([#53](https://github.com/tetsugo02/roboloom/pull/53)) ([`1e0f1fa`](https://github.com/tetsugo02/roboloom/commit/1e0f1fab54b89e7b22a3fc4713a5952341bd29c6))
 - MITライセンスとパッケージメタデータを追加する ([#51](https://github.com/tetsugo02/roboloom/pull/51)) ([`e283c93`](https://github.com/tetsugo02/roboloom/commit/e283c93a0d62eae73782aea507cfad8263619228))
 - ソースコード以外の変更でテスト・docs CIを起動しないようトリガーを絞る ([#52](https://github.com/tetsugo02/roboloom/pull/52)) ([`6b7b63d`](https://github.com/tetsugo02/roboloom/commit/6b7b63d51e783388040d875e107f67e0de3c6198))
 - E2E テストを手動ワークフロー（e2e.yml）へ分離する ([#46](https://github.com/tetsugo02/roboloom/pull/46)) ([`8fab1e3`](https://github.com/tetsugo02/roboloom/commit/8fab1e35562edced379a26e357b1d43b191b4c63))
