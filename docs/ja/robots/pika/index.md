@@ -85,11 +85,7 @@ uv run roboloom run piper-mock --with policy
 
 ## 実機で最初にすること
 
-1. グリッパをUSBと電源につなぎ，ポートのパスを確かめます．
-
-    ```bash
-    ls -l /dev/serial/by-path/
-    ```
+1. グリッパをUSBと電源につなぎ，`roboloom setup <robot> --step grippers` でどのポートがどのグリッパかを特定します（USBを1本ずつ抜き差しします．[PiPER＋Pika：機体設定](../../tutorials/piper-pika/setup.md)）．
 
 2. 読むだけで状態を確かめます．有効化も移動もしません（版を尋ねる `GET_INFO` だけを送ります）．
 

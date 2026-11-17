@@ -78,7 +78,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 制約：
 
-- `gravity` は，[Rakuda2：重力補償](../../tutorials/rakuda2-gravity.md) の測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）を済ませてから使います．測定値が `SET_...` のままだと読み込みを拒否します．
+- `gravity` は，[Rakuda2：重力補償](../../tutorials/rakuda2/gravity.md) の測定（`calibrate-joints`，`measure-travel`，`identify-gravity`，`tune-gravity`）を済ませてから使います．測定値が `SET_...` のままだと読み込みを拒否します．
 - `gravity` の有無でleaderのOperating Modeが変わります．端末から実機で起動するとき，CLIはEEPROMの差分を表示し，確認してから書きます．
 - `policy` はDIGITなしで使えます．DIGITを方策に渡すときは，`digit` を有効にし，`nodes/policy.yaml` の `observe` を `[camera, digit_left, digit_right]` に変更します．`digit` の有効化だけでは方策の入力は変わりません．学習時の入力と一致させてください．DIGITが必要なLeRobotチェックポイントをDIGITなしで読み込むと，開始前に拒否します．
 - 関節状態のみの方策は `observe: []` にします．センサーを開かない場合は，`config.yaml` の `sensors` から該当ノードも外します．
@@ -111,4 +111,4 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 
 制御周期はテンプレートで120 Hzです．前提条件と下げ方は [制御周期](../../reference/configuration/followers.md#control-rate) を参照してください．
 
-セットアップから収集までの手順は [Rakuda2：機体設定と読み取り確認](../../tutorials/rakuda2-setup.md)，制御値の意味は [Gravity tuning](../../explanation/gravity-compensation.md) を参照してください．
+セットアップから収集までの手順は [Rakuda2：機体設定と読み取り確認](../../tutorials/rakuda2/setup.md)，制御値の意味は [Gravity tuning](../../explanation/gravity-compensation.md) を参照してください．

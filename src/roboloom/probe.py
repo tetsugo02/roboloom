@@ -1,7 +1,8 @@
 """Read-only bus inspection: identify a port and gather values for the node YAML.
 
-A network interface name (e.g. `can_left`) is a PiPER arm on CAN; a serial port is a
-Dynamixel bus, or a Pika Gripper with `device="pika"`."""
+A name without `/` (e.g. `can0`) is a PiPER arm on that CAN interface; a serial port is
+a Dynamixel bus, a Pika Gripper with `device="pika"` or a Pika Sense with
+`device="pika_sense"`."""
 
 from __future__ import annotations
 
@@ -33,6 +34,18 @@ def is_network_interface(port: str) -> bool:
     return "/" not in port and Path("/sys/class/net", port).exists()
 
 
+def missing_interface(port: str) -> str:
+    """Why `port`, a name and not a path, cannot be probed: no such CAN interface."""
+    from .drivers.can import interfaces
+
+    found = ", ".join(f"{i.name} ({'up' if i.up else 'down'})" for i in interfaces())
+    return (
+        f"no network interface {port!r}; CAN interfaces here: {found or 'none'} "
+        "(`roboloom setup` lists them with their adapters; a serial port is a path "
+        "such as /dev/serial/by-path/...)"
+    )
+
+
 def probe(
     port: str,
     ids: list[int] | None = None,
@@ -49,6 +62,8 @@ def probe(
         from .drivers.piper import probe as probe_piper
 
         return probe_piper(port)
+    if "/" not in port and device == "dynamixel":
+        raise ConnectionError(missing_interface(port))
     if device == "pika":
         from .drivers.pika_gripper import probe as probe_pika
 

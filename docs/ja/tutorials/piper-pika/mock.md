@@ -25,7 +25,7 @@ cd roboloom
 uv sync --extra piper --extra pika --extra record --extra policy --extra train
 ```
 
-構成のファイルは [PiPERのcontroller](../robots/piper/controllers.md) にあります．
+構成のファイルは [PiPERのcontroller](../../robots/piper/controllers.md) にあります．
 
 ## 2. 操作画面で動かす
 
@@ -82,5 +82,5 @@ uv run roboloom check-dataset piper-mock --with policy
 
 ## 次へ
 
-- 実機の前に確かめること：[PiPERフォロワ](../robots/piper/index.md)，[Pika Gripperフォロワ](../robots/pika/index.md)，[Pika SenseとIK](../controllers/pose-ik.md)
-- Senseを手に持って集める：[Pika Senseを手に持った収集](pika-handheld.md)
+- 実機の前に確かめること：[PiPERフォロワ](../../robots/piper/index.md)，[Pika Gripperフォロワ](../../robots/pika/index.md)，[Pika SenseとIK](../../controllers/pose-ik.md)
+- Senseを手に持って集める：[Pika Senseを手に持った収集](../pika-handheld.md)

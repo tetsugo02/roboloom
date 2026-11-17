@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from ...core.checks import identity, positive
+from ...core.checks import positive
+from ...drivers import can as can_link
 from ...drivers.mock import MockBus
 from ...kinematics.spec import KinematicSpec
 from ..base import FOLLOWER_KEYS, Follower, JointBus, SafetyTraits
@@ -12,7 +13,9 @@ from .spec import JOINTS, MODEL, REST, UNIT, check_within_range
 class PiperFollower(Follower):
     """Joint position control through the arm's own controller (MOVE J).
 
-    Keys besides the common follower ones: `can` (the CAN interface, e.g. `can_left`),
+    Keys besides the common follower ones: `can` (the CAN interface, e.g. `can0`, or
+    `{serial: ...}`, the serial number of the USB-CAN adapter: interface names change
+    when adapters reconnect, the serial does not; `roboloom setup` finds it),
     `speed_percent` (1..100, the firmware's joint speed scale), `stale_ms` (optional,
     default 50: older feedback latches FAULT). `health:` is required: the arm reports its
     own faults (teach button, collision, driver errors) only through it.
@@ -38,7 +41,7 @@ class PiperFollower(Follower):
                 "reports teach mode, collisions and driver faults only there"
             )
         check_within_range(self.limits, name)
-        self.can = identity(cfg.get("can"), f"{name}.can")
+        self.can = can_link.parse_spec(cfg.get("can"), f"{name}.can")
         speed = cfg.get("speed_percent")
         if (
             not isinstance(speed, int)
@@ -50,7 +53,7 @@ class PiperFollower(Follower):
         self.stale_ms = positive(cfg.get("stale_ms", 50), f"{name}.stale_ms")
 
     def device_ids(self) -> tuple[str, ...]:
-        return (self.can,)
+        return (can_link.spec_id(self.can),)
 
     def kinematics(self, part: str | None = None) -> KinematicSpec:
         return MODEL
@@ -62,4 +65,6 @@ class PiperFollower(Follower):
             return bus
         from ...drivers.piper import PiperBus
 
-        return PiperBus(self.can, self.speed_percent, stale_ms=self.stale_ms)
+        return PiperBus(
+            can_link.resolve(self.can), self.speed_percent, stale_ms=self.stale_ms
+        )

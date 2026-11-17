@@ -3,7 +3,7 @@
 <span class="status status--verified">Hardware-verified</span>
 
 - **Goal**: measure the zero points, directions and travel of the leader arms, identify the gravity model, and tune the gravity-compensated leader (option `gravity`).
-- **Prerequisites**: [Rakuda2: configuration and read check](rakuda2-setup.md) is done. Someone can support the arms.
+- **Prerequisites**: [Rakuda2: configuration and read check](setup.md) is done. Someone can support the arms.
 - **Time**: 1–2 hours.
 - **Result**: `calibration/` holds `gravity_<side>.yaml`, `travel_<side>.yaml` and `gravity_tuning_<side>.yaml`, and `--with gravity` starts.
 
@@ -64,9 +64,9 @@ Support both arms when tuning starts. The side not being tuned has torque off.
 | `s` | Save the tuned values |
 | `q` | Quit |
 
-If the arm drops, increase gain; if it rises, decrease it. If starting to move feels heavy, decrease hold. If the current stays pinned at the limit, stop tuning and review the configuration. Details and constraints are in [Gravity tuning](../explanation/gravity-compensation.md). Current Limit and the watchdog are separate protections; do not assume that the XC330 watchdog triggering alone brings the current to zero.
+If the arm drops, increase gain; if it rises, decrease it. If starting to move feels heavy, decrease hold. If the current stays pinned at the limit, stop tuning and review the configuration. Details and constraints are in [Gravity tuning](../../explanation/gravity-compensation.md). Current Limit and the watchdog are separate protections; do not assume that the XC330 watchdog triggering alone brings the current to zero.
 
 ## Next
 
-- Collect with the gravity-compensated leader: [Rakuda2: teleoperated collection](rakuda2-collect.md)
-- What the equations and tuning values mean: [Gravity compensation](../explanation/gravity-compensation.md)
+- Collect with the gravity-compensated leader: [Rakuda2: teleoperated collection](collect.md)
+- What the equations and tuning values mean: [Gravity compensation](../../explanation/gravity-compensation.md)

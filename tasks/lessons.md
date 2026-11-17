@@ -66,3 +66,11 @@
 - ルール：
   - 別のリポジトリの変更でも，渡す前にその関数を1回は実際に呼ぶ．
   - 模擬の確認を始める前に，利用者の `roboloom infer` や方策サーバーが動いていないか確かめる．止めるのは自分が起動した PID（プロセスグループ）だけにする．
+
+## 2026-11-17：共有の作業ツリーでブランチを切り替えない
+
+- 状況：計画の承認後，`/home/tetsugo_local/workspace/roboloom` で `git switch -c feat/... main` を実行した．同じ作業ツリーで別のセッションが `main` の上で作業中で，未コミットの変更（README，docs，release 用のファイル）があった．変更ごと新しいブランチへ移ってしまい，別のセッションの次のコミットが違うブランチに入るところだった．
+- 直し方：`git symbolic-ref HEAD refs/heads/main` でファイルに触れずに `main` へ戻し，作った枝を消した．作業は `git worktree add ../roboloom-setup -b feat/... main` の別の作業ツリーで行った．
+- ルール：
+  - ブランチを切る前に `git status` と `git reflog -3` を見る．会話の始めの状態と違えば，別のセッションが動いているとみなす．
+  - 自分の変更は，最初から `git worktree add` の別の作業ツリーで行う．共有の作業ツリーで `switch`／`checkout`／`stash` をしない．

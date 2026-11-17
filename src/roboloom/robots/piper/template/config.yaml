@@ -1,0 +1,26 @@
+# PiPER x2 with a Pika Gripper each, teleoperated by two Pika Senses (IK).
+# First run (docs: Tutorials > PiPER + Pika):
+#   uv run roboloom setup piper-pika        finds the CAN adapters, ports and trackers
+#   uv run roboloom validate piper-pika
+#   uv run roboloom run piper-pika          Move home, then double-click a Sense to engage
+#   uv run roboloom run piper-pika --mock   mock devices, no hardware
+# The IK nodes start without workspace and tool_offset (only the joint limits and the
+# IK bound the target; the tool is the flange). Narrow them once teleoperation works.
+repo_id: local/piper-pika
+output: datasets/piper-pika
+dataset_fps: 30
+trackers:  # one libsurvive for both Senses
+  lighthouse: nodes/lighthouse.yaml
+inputs:
+  left_sense: nodes/left_sense.yaml
+  right_sense: nodes/right_sense.yaml
+controllers:
+  left_ik: nodes/left_ik.yaml
+  right_ik: nodes/right_ik.yaml
+followers:  # the action joins them in this order (6 + 6 + 1 + 1)
+  left: nodes/left.yaml
+  right: nodes/right.yaml
+  left_gripper: nodes/left_gripper.yaml
+  right_gripper: nodes/right_gripper.yaml
+recorder: nodes/recorder.yaml
+session: nodes/session.yaml

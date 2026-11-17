@@ -36,27 +36,29 @@ flowchart LR
 
 ## Rakuda2 { #rakuda2 }
 
+The order is in [Rakuda2 path](rakuda2/index.md).
+
 <div class="grid cards gallery" markdown>
 
--   [![Rakuda2: configuration and read check](../assets/gallery/rakuda2-setup.svg)](rakuda2-setup.md)
+-   [![Rakuda2: configuration and read check](../assets/gallery/rakuda2-setup.svg)](rakuda2/setup.md)
 
-    **[Rakuda2: configuration and read check](rakuda2-setup.md)**
+    **[Rakuda2: configuration and read check](rakuda2/setup.md)**
 
     Create the configuration, read the buses, and go once through with the torque off.
 
     <span class="gallery-tags">Rakuda2 · 1–2 h · <span class="status status--verified">Hardware-verified</span></span>
 
--   [![Rakuda2: gravity compensation](../assets/gallery/rakuda2-gravity.svg)](rakuda2-gravity.md)
+-   [![Rakuda2: gravity compensation](../assets/gallery/rakuda2-gravity.svg)](rakuda2/gravity.md)
 
-    **[Rakuda2: gravity compensation](rakuda2-gravity.md)**
+    **[Rakuda2: gravity compensation](rakuda2/gravity.md)**
 
     Measure zero points, travel and the gravity model, and tune the leader.
 
     <span class="gallery-tags">Rakuda2 · 1–2 h · <span class="status status--verified">Hardware-verified</span></span>
 
--   [![Rakuda2: teleoperated collection](../assets/gallery/rakuda2-collect.svg)](rakuda2-collect.md)
+-   [![Rakuda2: teleoperated collection](../assets/gallery/rakuda2-collect.svg)](rakuda2/collect.md)
 
-    **[Rakuda2: teleoperated collection](rakuda2-collect.md)**
+    **[Rakuda2: teleoperated collection](rakuda2/collect.md)**
 
     Drive with the leader and record with the RealSense and DIGIT.
 
@@ -68,17 +70,17 @@ flowchart LR
 
 <div class="grid cards gallery" markdown>
 
--   [![Rakuda2: from collection to inference](../assets/gallery/rakuda2-train-infer.svg)](rakuda2-train-infer.md)
+-   [![Rakuda2: from collection to inference](../assets/gallery/rakuda2-train-infer.svg)](rakuda2/train-infer.md)
 
-    **[Rakuda2: from collection to inference](rakuda2-train-infer.md)**
+    **[Rakuda2: from collection to inference](rakuda2/train-infer.md)**
 
     Check, train with LeRobot, run the policy and record the verdicts.
 
     <span class="gallery-tags">Rakuda2 · training + 1 h · <span class="status status--verified">Hardware-verified</span></span>
 
--   [![Rakuda2: evaluating with interventions](../assets/gallery/rakuda2-intervention.svg)](rakuda2-intervention.md)
+-   [![Rakuda2: evaluating with interventions](../assets/gallery/rakuda2-intervention.svg)](rakuda2/intervention.md)
 
-    **[Rakuda2: evaluating with interventions](rakuda2-intervention.md)**
+    **[Rakuda2: evaluating with interventions](rakuda2/intervention.md)**
 
     Take over from the policy with the leader; intervened rows are marked.
 
@@ -96,11 +98,21 @@ flowchart LR
 
 ## Robots in development { #in-development }
 
+The order for PiPER + Pika is in [PiPER + Pika path](piper-pika/index.md). Bringing up a robot follows [the same stages](../explanation/robot-setup-flow.md) on every robot.
+
 <div class="grid cards gallery" markdown>
 
--   [![PiPER + Pika on mock devices](../assets/gallery/piper-pika-mock.svg)](piper-pika-mock.md)
+-   [![PiPER + Pika: from robot setup to teleoperation](../assets/gallery/piper-pika-mock.svg)](piper-pika/setup.md)
 
-    **[PiPER + Pika on mock devices](piper-pika-mock.md)**
+    **[PiPER + Pika: from robot setup to teleoperation](piper-pika/setup.md)**
+
+    Identify the devices with `roboloom setup` and teleoperate for the first time with a loose configuration.
+
+    <span class="gallery-tags">PiPER + Pika · 1 h · <span class="status status--dev">In development</span></span>
+
+-   [![PiPER + Pika on mock devices](../assets/gallery/piper-pika-mock.svg)](piper-pika/mock.md)
+
+    **[PiPER + Pika on mock devices](piper-pika/mock.md)**
 
     Record with mock Pika Senses through IK and run a LeRobot policy.
 

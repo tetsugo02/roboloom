@@ -64,8 +64,8 @@ input: left_sense
 followers: [left, left_gripper]
 arm: left                # the arm the IK drives (a follower with a kinematic model)
 gripper: left_gripper    # optional: a one-joint follower driven by the jaw angle
-tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # required: tool frame seen from the flange (link6)
-workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # required: m, in the arm's base frame (base_link)
+tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # optional: tool frame seen from the flange (link6)
+workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # optional: m, in the arm's base frame (base_link)
 max_input_jump: {position_m: 0.05, rotation_rad: 0.5}             # required
 ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}  # optional; these are the defaults
 gripper_map: {scale: 1.0, offset: 0.0}                            # optional; these are the defaults
@@ -97,8 +97,8 @@ input_timeout_ms: 150    # required
 | Key | Meaning |
 | --- | --- |
 | `arm`, `gripper` | `arm` is required: a follower with a kinematic model (the PiPER). `gripper` is optional: a one-joint follower. Together they must name exactly the controller's `followers` |
-| `tool_offset` | Required. The transform from the flange to the tool tip (`xyz` in m, `rpy` in rad). The value above is the one AgileX uses for its own gripper; measure it with the Pika Gripper mounted |
-| `workspace` | Required. `min` and `max` (m, `min` below `max` on every axis). No command is sent while the target position is outside this box |
+| `tool_offset` | Optional. The transform from the flange to the tool tip (`xyz` in m, `rpy` in rad). Without it, the flange is the tool. The value above is the one AgileX uses for its own gripper; measure it with the Pika Gripper mounted ([Tightening the configuration](../tutorials/piper-pika/tighten.md)) |
+| `workspace` | Optional. `min` and `max` (m, `min` below `max` on every axis). No command is sent while the target position is outside this box. Without it, only the joint limits and the IK limit the target; `validate` prints a `note:` and the screen shows `workspace: none` (meant for the first teleoperation) |
 | `max_input_jump` | Required. `position_m` and `rotation_rad`. Teleoperation stops when the Sense's pose jumps by more than this between two samples |
 | `ik` | Optional. Iterations (default 30), damping (default 0.001), and the position (default 0.005 m) and rotation (default 0.05 rad) tolerances counted as reached. Unknown keys are refused. Nothing is sent when the IK does not reach the target |
 | `gripper_map` | Optional. Gripper angle = `scale`·jaw angle + `offset` (defaults 1.0 and 0.0), kept inside the gripper's range |
@@ -132,7 +132,7 @@ The mapping is relative, as in AgileX's teleoperation.
 
 `.roboloom/piper-mock/` drives two mock PiPER arms and two Pika Grippers with two mock Senses. A mock Sense engages 2 s after opening, then repeats 10 s engaged and 2 s disengaged.
 
-`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template). Run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/` and run it the same way. It is a mock configuration (`mode: mock`); do not reuse its ports, CAN interfaces, tracker names, `limits`, `tool_offset` or `workspace` on hardware.
+`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (the template for hardware is `roboloom init piper-pika`; see [PiPER + Pika path](../tutorials/piper-pika/index.md)). Run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/` and run it the same way. It is a mock configuration (`mode: mock`); do not reuse its ports, CAN interfaces, tracker names, `limits`, `tool_offset` or `workspace` on hardware.
 
 ```bash
 uv run roboloom run piper-mock                     # after Launch, Move home
@@ -172,7 +172,7 @@ Running a policy trained on the recorded data is described in [Driving with a po
 
     It shows the version, the jaw angle, `Command` and the feedback rates.
 
-4. Measure `tool_offset`, narrow `workspace` to the table and its surroundings, then try one arm first.
+4. The first time, try without `tool_offset` and `workspace`, at a low speed ([First teleoperation](../tutorials/piper-pika/first-teleop.md)). Once it moves, measure `tool_offset` and add a `workspace` fitted to the table and its surroundings.
 
 ## What to check on hardware
 

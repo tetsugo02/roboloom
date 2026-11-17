@@ -3,7 +3,7 @@
 <span class="status status--verified">実機検証済み</span>
 
 - **目的**：teleopで集めたデータを検査し，LeRobotで学習した方策でRakuda2を動かし，各回の成否を残す．
-- **前提**：[Rakuda2：teleopで収集](rakuda2-collect.md) で収集できる．学習にGPUを使うなら，`labstatus` で空きを確かめる．
+- **前提**：[Rakuda2：teleopで収集](collect.md) で収集できる．学習にGPUを使うなら，`labstatus` で空きを確かめる．
 - **所要**：収集と学習の時間に加えて1時間ほど．
 - **結果**：評価のデータセット `datasets/rakuda2-eval` に，成否の付いたエピソードが並ぶ．
 
@@ -20,7 +20,7 @@ flowchart LR
 
 ## 1. 収集する
 
-[Rakuda2：teleopで収集](rakuda2-collect.md) の手順で，同じtaskのエピソードを集めます．
+[Rakuda2：teleopで収集](collect.md) の手順で，同じtaskのエピソードを集めます．
 
 ```bash
 uv run roboloom record --task "pick up the cup" --seconds 30 --episodes 20 --with gravity
@@ -36,7 +36,7 @@ uv run roboloom check-dataset
 ```
 
 - `problems` が `none` で，`notes` の `action.valid is 0` の割合が小さいことを確かめます．
-- 悪いエピソードを除くときは [悪いエピソードを除く](../data/check-and-train.md#excluding-episodes) の方法を使います．
+- 悪いエピソードを除くときは [悪いエピソードを除く](../../data/check-and-train.md#excluding-episodes) の方法を使います．
 
 ## 3. LeRobotで学習する
 
@@ -54,7 +54,7 @@ uv run lerobot-train \
 
 - `--dataset.repo_id` は設定の `repo_id`，`--dataset.root` はロボットのディレクトリから見た `output` です．
 - チェックポイントは `outputs/train/act_rakuda2/checkpoints/last/pretrained_model` にできます．
-- 経路だけを試すなら `--policy.device=cpu --steps=200 --batch_size=8` で数分です（[LeRobotで学習する](../policy/lerobot.md#training)）．
+- 経路だけを試すなら `--policy.device=cpu --steps=200 --batch_size=8` で数分です（[LeRobotで学習する](../../policy/lerobot.md#training)）．
 
 ## 4. 方策で動かす
 
@@ -75,9 +75,9 @@ uv run roboloom infer --seconds 30 --episodes 10 --task "pick up the cup" \
 - `infer` はオプション `policy` を自動で有効にします．leaderは使わないので `gravity` とは同時に使えません．
 - チェックポイントのパスは絶対パスで渡します．相対パスは，プロジェクトのルートからは解決されません（dataflowは一時ディレクトリから起動します）．
 - `nodes/policy.yaml` の `rate_hz`（15）は，学習したデータセットの `dataset_fps`（15）と同じにします．
-- 既定の `mode: step` では方策が1手ずつ返すので，`action_horizon` は効きません（[LeRobotの方策](../policy/lerobot.md#loading)）．
-- 観測は既定で関節状態と `camera` です．DIGITで学習したなら `--with digit` を足し，`observe` を `[camera, digit_left, digit_right]` にします（[観測を選ぶ](../policy/custom.md#observations)）．
-- 毎回同じ姿勢から始めるときは，`nodes/policy.yaml` に `home:` を書いて `--home` を付けます（[home](../policy/run.md#home)）．
+- 既定の `mode: step` では方策が1手ずつ返すので，`action_horizon` は効きません（[LeRobotの方策](../../policy/lerobot.md#loading)）．
+- 観測は既定で関節状態と `camera` です．DIGITで学習したなら `--with digit` を足し，`observe` を `[camera, digit_left, digit_right]` にします（[観測を選ぶ](../../policy/custom.md#observations)）．
+- 毎回同じ姿勢から始めるときは，`nodes/policy.yaml` に `home:` を書いて `--home` を付けます（[home](../../policy/run.md#home)）．
 
 ## 5. 成否を残す
 
@@ -88,9 +88,9 @@ uv run roboloom label --with policy 3 failure --note "つかみ損ねた"
 uv run roboloom check-dataset --with policy
 ```
 
-`check-dataset` が `labels: 7 success, 3 failure, ...` のように数を表示します．成否はデータセットの `meta/roboloom_episodes.jsonl` に残り，LeRobotの学習には影響しません（[評価と再生](../policy/evaluation.md)）．
+`check-dataset` が `labels: 7 success, 3 failure, ...` のように数を表示します．成否はデータセットの `meta/roboloom_episodes.jsonl` に残り，LeRobotの学習には影響しません（[評価と再生](../../policy/evaluation.md)）．
 
 ## 次へ
 
-- 方策が失敗しそうなときに人が代わる：[Rakuda2：介入しながら評価する](rakuda2-intervention.md)
-- 自分のモデルを書く：[自作の方策を動かす](custom-policy.md)
+- 方策が失敗しそうなときに人が代わる：[Rakuda2：介入しながら評価する](intervention.md)
+- 自分のモデルを書く：[自作の方策を動かす](../custom-policy.md)

@@ -3,7 +3,7 @@
 <span class="status status--verified">実機検証済み</span>
 
 - **目的**：方策でRakuda2を動かし，失敗しそうなときにleaderで代わり，また方策に戻す．介入した行を区別して記録する．
-- **前提**：[Rakuda2：収集から推論まで](rakuda2-train-infer.md) で方策が動く．leaderとfollowerを支えられる．
+- **前提**：[Rakuda2：収集から推論まで](train-infer.md) で方策が動く．leaderとfollowerを支えられる．
 - **所要**：1時間．
 - **結果**：`datasets/rakuda2-eval-teleop` に，`action.intervention` と `observation.leader` を含むエピソードが保存される．
 
@@ -44,7 +44,7 @@ task: pick up the cup
 
 - `kwargs` のパスは絶対パスにします．
 - `nodes/policy_teleop.yaml` は `nodes/policy.yaml` に `teleop: [controller.yaml]` を足したものです．介入のときは `controller.yaml` の `joint` controllerでleaderが動かします．
-- 書き方は [実験ファイル](../reference/configuration/index.md#experiments) にあります．
+- 書き方は [実験ファイル](../../reference/configuration/index.md#experiments) にあります．
 
 ```bash
 uv run roboloom validate --experiment cup-teleop
@@ -69,7 +69,7 @@ uv run roboloom run --experiment cup-teleop
 - Teleopを押すと，フォロワの関節はすべて今の目標で止まります．leaderの関節が近づくか値をまたぐと，その関節から順に追従します．画面の方策の行に，まだつかまえていない関節と差（`pickup`）が出ます．
 - グリッパーは，トリガーをフォロワの開き具合まで握り込むまで動きません．
 - 別の端末からは `uv run roboloom session teleop`，`uv run roboloom session policy` で同じ操作を送れます．
-- 詳しい動きは [テレオペと介入](../policy/intervention.md) にあります．
+- 詳しい動きは [テレオペと介入](../../policy/intervention.md) にあります．
 
 ## 3. 記録を確かめる
 
@@ -88,5 +88,5 @@ uv run roboloom check-dataset --experiment cup-teleop
 
 ## 次へ
 
-- 介入した行を学習でどう扱うか：[データの形式](../data/format.md#valid)
-- 成否の集計：[評価と再生](../policy/evaluation.md)
+- 介入した行を学習でどう扱うか：[データの形式](../../data/format.md#valid)
+- 成否の集計：[評価と再生](../../policy/evaluation.md)

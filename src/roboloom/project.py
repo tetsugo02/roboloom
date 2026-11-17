@@ -28,7 +28,10 @@ from .errors import ConfigError
 from .version import version
 
 # robot name -> package holding `template/`; a new robot adds one line
-TEMPLATES = {"rakuda2": "roboloom.robots.rakuda2"}
+TEMPLATES = {
+    "rakuda2": "roboloom.robots.rakuda2",
+    "piper-pika": "roboloom.robots.piper",
+}
 # In the project: the roboloom that copied the template and each file's hash as it was
 # copied, so `--update` can tell a file nobody touched from one that holds measurements.
 RECORD = ".template.json"

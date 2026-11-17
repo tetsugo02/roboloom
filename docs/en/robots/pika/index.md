@@ -85,11 +85,7 @@ uv run roboloom run piper-mock --with policy
 
 ## First steps on hardware
 
-1. Connect the gripper's USB and power, and find the port's path.
-
-    ```bash
-    ls -l /dev/serial/by-path/
-    ```
+1. Connect the gripper's USB and power, and find which port belongs to which gripper with `roboloom setup <robot> --step grippers` (unplug and replug each USB cable in turn; see [PiPER + Pika: robot setup](../../tutorials/piper-pika/setup.md)).
 
 2. Check its state by reading only. It is neither enabled nor moved (only `GET_INFO`, which asks for the version, is sent).
 

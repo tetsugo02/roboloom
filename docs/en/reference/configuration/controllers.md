@@ -123,8 +123,8 @@ Turns a hand-held device's pose into arm joints through inverse kinematics. Its 
 | `input` | text | required | — | Name of the pose input |
 | `arm` | text | required | — | The arm follower (or part) whose IK is solved; it needs a kinematic model |
 | `gripper` | text | — | — | A one-joint follower (or part) set from the jaw angle |
-| `tool_offset` | `{xyz, rpy}` | required | m, rad | Tool frame seen from the flange |
-| `workspace` | `{min, max}` | required | m | Target box in the arm's base frame; nothing is sent outside it |
+| `tool_offset` | `{xyz, rpy}` | the flange | m, rad | Tool frame seen from the flange |
+| `workspace` | `{min, max}` | none | m | Target box in the arm's base frame; nothing is sent outside it. Without it, only the joint limits and the IK limit the target |
 | `max_input_jump` | `{position_m, rotation_rad}` | required | m, rad | An input that jumps more than this between samples counts as lost and stops teleoperation |
 | `ik` | mapping | table below | — | IK settings |
 | `gripper_map` | `{scale, offset}` | `{scale: 1.0, offset: 0.0}` | — | gripper = `scale` × jaw angle + `offset` |

@@ -30,19 +30,26 @@ The unit is fixed in code (`rad`); do not add `unit:` or `control:` (both follow
 
 ## Getting a configuration
 
-There is **no template**: `roboloom init` only knows `rakuda2` (`TEMPLATES` in
-`roboloom/project.py`). The working mock configuration `.roboloom/piper-mock/` lives in
-the roboloom repository, not in the installed package. To use it in a downstream project,
-copy that directory from <https://github.com/tetsugo02/roboloom> into the user's
-`.roboloom/`. It has `mode: mock` and mock ports/limits: **never reuse its `can`, `port`,
-`tracker`, `limits`, `tool_offset` or `workspace` values for hardware.** For hardware, write
-the YAML by hand with `SET_` placeholders and let the user fill them from measurements
-(`roboloom validate` lists the remaining `SET_` values; `can`/`port`/`tracker.serial` left as
-`SET_` are refused).
+For hardware: `roboloom init piper-pika` (template `roboloom/robots/piper/template/`:
+two PiPER, two Pika Grippers, two Senses, one `lighthouse` tracker node, `ready` poses that
+were not measured on the user's arms). Device identities are `SET_`; fill them with
+`roboloom setup piper-pika` (interactive, the person at the robot answers; do not run it
+for them without a terminal). It identifies by change: an arm by turning its joint1 by
+hand (refused when any arm has motors enabled; it never disables a PiPER, which falls),
+a Sense by opening and closing it, a tracker by moving its Sense (offers
+`--force-calibrate` when no `LHR-` serial is seen), a gripper by unplugging its USB. It
+writes `can: {serial: <USB-CAN adapter serial>}`, `port: /dev/serial/by-path/...` and
+`tracker: {system, serial}`; CAN bring-up commands are only printed (root). Steps:
+`--step check,can,arms,senses,trackers,grippers,validate`. Unverified on hardware: tell
+the user. Docs: tutorials/piper-pika/ (setup, first-teleop, tighten).
+
+The mock configuration `.roboloom/piper-mock/` lives in the roboloom repository only
+(`mode: mock`): **never reuse its `can`, `port`, `tracker`, `limits`, `tool_offset` or
+`workspace` values for hardware.**
 
 ## Node keys (verified against code)
 
-`piper_follower`: `can` (interface name), `control_hz`, `speed_percent` (**required**, int
+`piper_follower`: `can` (interface name such as `can0`, or `{serial: ...}`, the USB-CAN adapter's serial, resolved from sysfs when the bus opens), `control_hz`, `speed_percent` (**required**, int
 1–100), `stale_ms` (default 50), `health` (**required**; `every_ticks` default 10,
 `max_temperature_c`), `limits` (6 entries `name,min,max,max_speed,max_jump`, refused
 outside the PiPER range), `torque` (default true), `record_effort` (default false),
@@ -72,8 +79,8 @@ input: left_sense
 followers: [left, left_gripper]
 arm: left                     # follower with a kinematic model (PiPER)
 gripper: left_gripper         # optional, a one-joint follower
-tool_offset: {xyz: SET_TOOL_XYZ, rpy: SET_TOOL_RPY}  # flange (link6) -> tool; measure
-workspace: {min: SET_MIN_XYZ, max: SET_MAX_XYZ}       # m, arm base_link
+tool_offset: {xyz: [x, y, z], rpy: [r, p, y]}  # optional: flange (link6) -> tool; default the flange
+workspace: {min: [x, y, z], max: [x, y, z]}     # optional: m, arm base_link; default none
 max_input_jump: {position_m: ..., rotation_rad: ...}  # required
 ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}  # defaults
 gripper_map: {scale: 1.0, offset: 0.0}                # defaults; clipped to gripper limits
@@ -100,7 +107,9 @@ controller.
   (no tracker-to-base calibration).
 - Stops (operator must disengage and engage again): pose lost/stale, jump >
   `max_input_jump`, input gap > `input_timeout_ms`, follower `FAULT`/`ESTOP`, move home.
-- Holds without stopping: target outside `workspace` or IK not reached. Controller states
+- Holds without stopping: target outside `workspace` or IK not reached. Without
+  `workspace`, only the joint limits and the IK bound the target (`status()` has
+  `workspace: none`, `validate` prints a note): meant for the first teleoperation only. Controller states
   shown on screen: `waiting_input`, `ready`, `following`, `out_of_workspace`, `unreachable`, `tracking_lost`,
   `input_jump`, `input_stale`, `homing`, `follower_fault`.
 - PiPER's power-on pose (all zeros) is singular: **Move home first** (`home`, `record
@@ -149,7 +158,7 @@ only: `roboloom probe <can>`, `roboloom probe <port> --device pika`, `roboloom p
 
 ## Limitations
 
-No template or Quick start; joint signs/zeros, `tool_offset`, gripper zero, feedback rates,
+Joint signs/zeros, `tool_offset`, gripper zero, feedback rates,
 both Senses on one `libsurvive` tracker node, recovery after a USB unplug (the fork
 carries upstream PRs #383/#378, tested against a fake libusb only) and `unattended` are
 unchecked. URDF matches PiPER

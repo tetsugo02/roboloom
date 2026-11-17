@@ -1,0 +1,12 @@
+# Stand-ins for the SET_ values of this configuration, used only with mock devices
+# (`--mock`), so the project can be tried before `roboloom setup` found the devices.
+# With the hardware they are never read: a SET_ value left in a node file still stops
+# `run` and `validate`, with its location.
+SET_LEFT_CAN_SERIAL: mock-left-can
+SET_RIGHT_CAN_SERIAL: mock-right-can
+SET_LEFT_GRIPPER_PORT: /dev/serial/by-path/mock-left-gripper
+SET_RIGHT_GRIPPER_PORT: /dev/serial/by-path/mock-right-gripper
+SET_LEFT_SENSE_PORT: /dev/serial/by-path/mock-left-sense
+SET_RIGHT_SENSE_PORT: /dev/serial/by-path/mock-right-sense
+SET_LEFT_TRACKER_SERIAL: LHR-MOCK0001
+SET_RIGHT_TRACKER_SERIAL: LHR-MOCK0002

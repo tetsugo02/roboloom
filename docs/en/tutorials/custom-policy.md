@@ -93,5 +93,5 @@ Details are in [Your own policy](../policy/custom.md).
 
 ## Next
 
-- Run it on the real Rakuda2: [Rakuda2: from collection to inference](rakuda2-train-infer.md)
+- Run it on the real Rakuda2: [Rakuda2: from collection to inference](rakuda2/train-infer.md)
 - Run the policy in another environment: [In another process](../policy/remote.md)

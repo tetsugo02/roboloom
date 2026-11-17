@@ -25,7 +25,7 @@ cd roboloom
 uv sync --extra piper --extra pika --extra record --extra policy --extra train
 ```
 
-The configuration files are described in [PiPER controllers](../robots/piper/controllers.md).
+The configuration files are described in [PiPER controllers](../../robots/piper/controllers.md).
 
 ## 2. Run it in the operator screen
 
@@ -82,5 +82,5 @@ uv run roboloom check-dataset piper-mock --with policy
 
 ## Next
 
-- What to check before hardware: [PiPER follower](../robots/piper/index.md), [Pika Gripper follower](../robots/pika/index.md), [Pika Sense and IK](../controllers/pose-ik.md)
-- Collect with a Sense in the hand: [Hand-held collection with Pika Sense](pika-handheld.md)
+- What to check before hardware: [PiPER follower](../../robots/piper/index.md), [Pika Gripper follower](../../robots/pika/index.md), [Pika Sense and IK](../../controllers/pose-ik.md)
+- Collect with a Sense in the hand: [Hand-held collection with Pika Sense](../pika-handheld.md)

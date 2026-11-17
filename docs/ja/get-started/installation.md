@@ -119,6 +119,6 @@ uv run python main.py
 uv run roboloom init rakuda2
 ```
 
-`init` はインストール済みパッケージのテンプレートから，自分のプロジェクト内に `.roboloom/rakuda2/` を生成します．デバイスを開きません．`SET_...` の値を埋めるまでは `validate` が設定不足を報告します．生成した設定を使う実機の手順は [Rakuda2：機体設定と読み取り確認](../tutorials/rakuda2-setup.md) に続きます．模擬例の値を実機の安全値として使わないでください．
+`init` はインストール済みパッケージのテンプレートから，自分のプロジェクト内に `.roboloom/rakuda2/` を生成します．デバイスを開きません．`SET_...` の値を埋めるまでは `validate` が設定不足を報告します．生成した設定を使う実機の手順は [Rakuda2：機体設定と読み取り確認](../tutorials/rakuda2/setup.md) に続きます．模擬例の値を実機の安全値として使わないでください．
 
 roboloomのソース変更・テスト・docsのビルドは [Contribution](../contribution/index.md) を参照してください．リポジトリ直下の `examples/` や `scripts/` は，Git依存としてインストールしたパッケージの利用ファイルには含まれません．

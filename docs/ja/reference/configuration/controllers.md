@@ -123,8 +123,8 @@ input_timeout_ms: 150
 | `input` | 文字列 | 必須 | — | 姿勢の入力のノード名 |
 | `arm` | 文字列 | 必須 | — | IKを解く腕のフォロワ（または部分）．運動学のモデルが必要 |
 | `gripper` | 文字列 | — | — | 顎の開きで動かす1関節のフォロワ（または部分） |
-| `tool_offset` | `{xyz, rpy}` | 必須 | m，rad | フランジから見た工具の座標系 |
-| `workspace` | `{min, max}` | 必須 | m | 腕の土台の座標系での目標の範囲．外れると指令しない |
+| `tool_offset` | `{xyz, rpy}` | フランジ | m，rad | フランジから見た工具の座標系 |
+| `workspace` | `{min, max}` | なし | m | 腕の土台の座標系での目標の範囲．外れると指令しない．省略すると関節の範囲とIKだけで制限する |
 | `max_input_jump` | `{position_m, rotation_rad}` | 必須 | m，rad | 1サンプルでこれより跳んだ入力は，見失ったとみなして操作を止める |
 | `ik` | マッピング | 下の表 | — | IKの設定 |
 | `gripper_map` | `{scale, offset}` | `{scale: 1.0, offset: 0.0}` | — | グリッパ = `scale` × 顎の角度 + `offset` |

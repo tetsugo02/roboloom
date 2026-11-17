@@ -1,0 +1,18 @@
+# The right Sense onto the right PiPER (IK) and its Pika Gripper (jaw angle). The hand's
+# motion moves the tool relative to where the arm was when the operator engaged
+# (double-click the Sense); no tracker-to-robot calibration is needed.
+# First run: no tool_offset (the tool is the flange) and no workspace (only the joint
+# limits and the IK bound the target). Once it works, measure and add (docs: tighten):
+#   tool_offset: {xyz: [x, y, z], rpy: [r, p, y]}   # flange (link6) -> fingertip centre
+#   workspace: {min: [x, y, z], max: [x, y, z]}     # m, in the arm's base_link
+type: pose_ik
+input: right_sense
+followers: [right, right_gripper]
+arm: right
+gripper: right_gripper
+max_input_jump: {position_m: 0.05, rotation_rad: 0.5}  # per tracker sample
+gripper_map: {scale: 1.0, offset: 0.0}  # gripper angle = scale * Sense jaw angle + offset
+max_speed: {right: 0.5, right_gripper: 2.0}
+home: {right: {pose: ../poses/right/ready.yaml, max_speed: 0.3, tolerance: 0.03}}
+command_deadline_ms: 100
+input_timeout_ms: 150
