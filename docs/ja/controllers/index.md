@@ -1,18 +1,18 @@
 # Controllers
 
-controllerは，入力（leader，手に持つ機器，方策）の値をフォロワの目標に変えるノードです．設定は3つに分かれます．
+controllerは，入力（leader，手に持つ機器，方策）の値をfollowerの目標に変えるnodeです．設定は3つに分かれます．
 
 | 設定 | 役割 | 例 |
 | --- | --- | --- |
 | `inputs` | 操作する機器を読む | Rakuda-mini（`rakuda_mini`），Pika Sense（`pika_sense`） |
-| `controllers` | 入力をフォロワの目標に変える．開始の条件（姿勢合わせ），速度の制限，入力の期限を持つ | `joint`，`pose_ik`，`policy`，`parts` |
-| `control` | 機器のモーターに当てる制御則（leaderのばね，重力補償など）．フォロワやleaderのノード自身が動かす | `spring`，`gravity_comp`，`position` |
+| `controllers` | 入力をfollowerの目標に変える．開始の条件（姿勢合わせ），速度の制限，入力の期限を持つ | `joint`，`pose_ik`，`policy`，`parts` |
+| `control` | 機器のmotorに当てる制御則（leaderのばね，重力補償など）．followerやleaderのnode自身が動かす | `spring`，`gravity_comp`，`position` |
 
 ```mermaid
 flowchart LR
   I["入力<br/>inputs"] --> C["controller<br/>controllers"]
   P["方策"] --> C
-  C -- "目標" --> F["フォロワ<br/>followers"]
+  C -- "目標" --> F["follower<br/>followers"]
   F -- "状態" --> C
   L["制御則<br/>control"] -.-> I
   L -.-> F
@@ -33,4 +33,4 @@ flowchart LR
 | [Rakuda2](../robots/rakuda2/controllers.md) | <span class="status status--verified">実機検証済み</span> | <span class="status status--verified">実機検証済み</span> | <span class="status status--verified">実機検証済み</span> | <span class="status status--dev">開発中</span> |
 | [PiPER＋Pika Gripper](../robots/piper/controllers.md) | — | <span class="status status--dev">開発中</span> | — | <span class="status status--dev">開発中</span> |
 
-センサーと方策の種類まで含めた表は [対応表](../get-started/support-matrix.md) にあります．controllerのキーの一覧は [Controllersの設定](../reference/configuration/controllers.md) にあります．
+sensorと方策の種類まで含めた表は [対応表](../get-started/support-matrix.md) にあります．controllerのkeyの一覧は [Controllersの設定](../reference/configuration/controllers.md) にあります．

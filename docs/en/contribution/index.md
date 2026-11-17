@@ -70,6 +70,24 @@ Fonts and colors are set in `docs/overrides/` (`main.html` and `assets/styleshee
 
 `docs/ja/yam-safety-and-smoothness.md` is kept as a past investigation and design note and is excluded from the guide build. Design proposals for unimplemented features, such as the [bilateral control design](bilateral.md), go under Contribution and state at the top that they are not implemented.
 
+### Japanese notation { #japanese-notation }
+
+In the Japanese pages (`docs/ja/`, `README.ja.md`, and the Japanese `nav` titles), write English-derived technical terms in English, not katakana, matching the spelling of the code identifier or API term (`follower` in prose, `Follower` only for the class).
+
+| Area | Examples |
+| --- | --- |
+| Robots, control, hardware | follower, sensor, gripper, tracker, motor, torque, camera, arm, bus, serial, port, driver, firmware, interface, watchdog, encoder, gain, latch |
+| Software, CLI, configuration | node, option, key, file, path, command, directory, process, thread, class, module, package, repository, template, project, session, log, build, test, error, flag, trigger, timeout |
+| Data and learning | dataset, data, metadata, episode, checkpoint, chunk, epoch, model, sample, task, label, schema, vector, norm, skill, agent, coding agent |
+| Audio and video | mel, mel power, mono, mic, sampling, stereo, channel, color, frame |
+| Screen concepts | tab, pane, panel, focus, menu, dialog, shortcut, tooltip, cursor, drag, scroll, layout, font |
+
+- Everyday loanwords stay in katakana: ページ, ボタン, リスト, コピー, チェック, メモ, ガイド, ホーム, カード, サイズ, ゼロ, オン.
+- Kanji terms (方策, 入力, 記録, 校正, 遠隔操作) and product names (PiPER, Pika, Rakuda2, LeRobot, RealSense, DIGIT) are unchanged.
+- Do not introduce new katakana technical terms or long-vowel variants (`センサ`/`センサー`, `グリッパ`/`グリッパー`); the English spelling unifies them.
+- Keep code examples and placeholders identical to the English pages (`<follower>`, `<node>`, `{name: path}`, `logs/<dataset name>-<time>/`).
+- Headings may mix English terms with Japanese; links keep using the explicit anchors (`{ #... }`).
+
 ## Publishing to GitHub Pages
 
 `.github/workflows/docs.yml` builds both languages in strict mode and publishes the entire `site/` directory to GitHub Pages. The published URLs are [Japanese](https://tetsugo02.github.io/roboloom/ja/) and [English](https://tetsugo02.github.io/roboloom/en/). The root URL redirects according to the browser language.

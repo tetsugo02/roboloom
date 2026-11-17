@@ -1,11 +1,11 @@
 # 音声
 
 !!! warning "状態：開発中"
-    <span class="status status--dev">開発中</span> 模擬（固定の配列を返すmock）とテストだけで確かめています．実機のマイクでは確かめていません．
+    <span class="status status--dev">開発中</span> 模擬（固定の配列を返すmock）とtestだけで確かめています．実機のmicでは確かめていません．
 
-音声はロボット共通の任意センサーです．
+音声はrobot共通の任意sensorです．
 `uv pip install 'roboloom[audio]'` で sounddevice と librosa を追加します．
-PortAudio の利用可能な入力デバイス名を指定してください．
+PortAudio の利用可能な入力device名を指定してください．
 
 ```yaml
 # config.yaml
@@ -27,22 +27,22 @@ fmax: 15000
 ```
 
 recorder の `max_age_ms` に `audio: 1500` などの許容遅延を追加します．
-`mel_mono` は直近1秒のモノラル波形を，低周波から高周波順の
-`float32[64,64]` の対数メルパワーにします．center=True，power=2，
+`mel_mono` は直近1秒のmono波形を，低周波から高周波順の
+`float32[64,64]` の対数mel powerにします．center=True，power=2，
 power_to_db(ref=1.0)，librosa の既定の Hann 窓・Slaney mel・top_db=80 を使います．
 着色・上下反転はしません．既存の `pcm_mono` は
 `int16[int(sample_rate/dataset_fps)]` を維持します．
-保存キーはどちらも `observation.audio.<name>` です．
+保存keyはどちらも `observation.audio.<name>` です．
 
-取得は InputStream と固定長バッファで継続します．時刻は窓の終端です．
-初期窓が揃うまで，または新しい音声がない間は新しい有効サンプルを出しません．
-記録の欠測は既存の valid フィールドで判定してください．
+取得は InputStream と固定長bufferで継続します．時刻は窓の終端です．
+初期窓が揃うまで，または新しい音声がない間は新しい有効sampleを出しません．
+記録の欠測は既存の valid fieldで判定してください．
 mock は実機用依存を読み込まず固定配列を返します．
 
-独自 policy は数値配列として利用できます．LeRobot 標準モデルの音声エンコーダ，
-PCM とメルの同時出力，ステレオは対象外です．
+独自 policy は数値配列として利用できます．LeRobot 標準modelの音声encoder，
+PCM とmelの同時出力，stereoは対象外です．
 
-追記時にはキー・dtype・shape・名前と順序・FPS・robot_type を検査します．
-音声処理設定は `meta/roboloom.json` でも比較します．不一致や音声メタデータが
-ない旧データには追記せず，手動で repo_id と output を変更してください．
+追記時にはkey・dtype・shape・名前と順序・FPS・robot_type を検査します．
+音声処理設定は `meta/roboloom.json` でも比較します．不一致や音声metadataが
+ない旧dataには追記せず，手動で repo_id と output を変更してください．
 保存先の自動生成や構成 ID は追加しません．既存の options の dataset 接尾辞は維持します．

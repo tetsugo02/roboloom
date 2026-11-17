@@ -1,8 +1,8 @@
 # Recording
 
-`roboloom.recording` のうち，記録したデータセットを読む・検査する API です．列の一覧は [データセットの列](../dataset-features.md) に，手順は [データの検査と学習](../../data/check-and-train.md) にあります．このページは docstring から生成した説明（英語）を載せます．
+`roboloom.recording` のうち，記録したdatasetを読む・検査する API です．列の一覧は [datasetの列](../dataset-features.md) に，手順は [dataの検査と学習](../../data/check-and-train.md) にあります．このページは docstring から生成した説明（英語）を載せます．
 
-## データセットの検査 { #check-dataset }
+## datasetの検査 { #check-dataset }
 
 ::: roboloom.recording.check.check_dataset
     options:
@@ -12,7 +12,7 @@
     options:
       heading_level: 3
 
-## エピソードごとの記録 { #episodes }
+## episodeごとの記録 { #episodes }
 
 ::: roboloom.recording.episodes
     options:

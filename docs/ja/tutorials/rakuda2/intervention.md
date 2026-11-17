@@ -5,10 +5,10 @@
 - **目的**：方策でRakuda2を動かし，失敗しそうなときにleaderで代わり，また方策に戻す．介入した行を区別して記録する．
 - **前提**：[Rakuda2：収集から推論まで](train-infer.md) で方策が動く．leaderとfollowerを支えられる．
 - **所要**：1時間．
-- **結果**：`datasets/rakuda2-eval-teleop` に，`action.intervention` と `observation.leader` を含むエピソードが保存される．
+- **結果**：`datasets/rakuda2-eval-teleop` に，`action.intervention` と `observation.leader` を含むepisodeが保存される．
 
 !!! note "確かめた範囲"
-    Rakuda2の実機で確かめたのは，方策の推論と介入（`policy_teleop`）です．例に使うLeRobotの方策の読み込み（`roboloom.policy.lerobot:load`）と実験ファイルは <span class="status status--mock">模擬のみ</span> です．
+    Rakuda2の実機で確かめたのは，方策の推論と介入（`policy_teleop`）です．例に使うLeRobotの方策の読み込み（`roboloom.policy.lerobot:load`）と実験fileは <span class="status status--mock">模擬のみ</span> です．
 
 ```mermaid
 stateDiagram-v2
@@ -26,9 +26,9 @@ stateDiagram-v2
   takeover --> hold: Stop
 ```
 
-## 1. 実験ファイルを書く
+## 1. 実験fileを書く
 
-方策とオプションを，プロジェクトの `configs/roboloom/<名前>.yaml` にまとめます．`policy_teleop` は `policy` を必要とするので，両方が有効になります．
+方策とoptionを，projectの `configs/roboloom/<名前>.yaml` にまとめます．`policy_teleop` は `policy` を必要とするので，両方が有効になります．
 
 ```yaml
 # configs/roboloom/cup-teleop.yaml
@@ -42,9 +42,9 @@ nodes:
 task: pick up the cup
 ```
 
-- `kwargs` のパスは絶対パスにします．
+- `kwargs` のpathは絶対pathにします．
 - `nodes/policy_teleop.yaml` は `nodes/policy.yaml` に `teleop: [controller.yaml]` を足したものです．介入のときは `controller.yaml` の `joint` controllerでleaderが動かします．
-- 書き方は [実験ファイル](../../reference/configuration/index.md#experiments) にあります．
+- 書き方は [実験file](../../reference/configuration/index.md#experiments) にあります．
 
 ```bash
 uv run roboloom validate --experiment cup-teleop
@@ -58,18 +58,18 @@ uv run roboloom validate --experiment cup-teleop
 uv run roboloom run --experiment cup-teleop
 ```
 
-| 操作 | キー | 動き |
+| 操作 | key | 動き |
 | --- | --- | --- |
-| Teleop（エピソードの外） | `t` | 記録せずに，leaderでフォロワを開始姿勢へ動かす |
+| Teleop（episodeの外） | `t` | 記録せずに，leaderでfollowerを開始姿勢へ動かす |
 | `start pick up the cup` | — | 方策と記録を始める．Teleopの後ならそこから方策が引き継ぐ |
-| Teleop（エピソード中） | `t` | 方策を止め，leaderに切り替える（介入） |
+| Teleop（episode中） | `t` | 方策を止め，leaderに切り替える（介入） |
 | Policy | `p` | leaderから方策に戻す．方策は `reset()` から始め直す |
 | `stop`，`save success` | — | 止めて，成否を付けて保存する |
 
-- Teleopを押すと，フォロワの関節はすべて今の目標で止まります．leaderの関節が近づくか値をまたぐと，その関節から順に追従します．画面の方策の行に，まだつかまえていない関節と差（`pickup`）が出ます．
-- グリッパーは，トリガーをフォロワの開き具合まで握り込むまで動きません．
+- Teleopを押すと，followerの関節はすべて今の目標で止まります．leaderの関節が近づくか値をまたぐと，その関節から順に追従します．画面の方策の行に，まだつかまえていない関節と差（`pickup`）が出ます．
+- gripperは，triggerをfollowerの開き具合まで握り込むまで動きません．
 - 別の端末からは `uv run roboloom session teleop`，`uv run roboloom session policy` で同じ操作を送れます．
-- 詳しい動きは [テレオペと介入](../../policy/intervention.md) にあります．
+- 詳しい動きは [teleopと介入](../../policy/intervention.md) にあります．
 
 ## 3. 記録を確かめる
 
@@ -82,11 +82,11 @@ uv run roboloom check-dataset --experiment cup-teleop
 | `action.intervention` | 人がleaderで動かした行は1 |
 | `observation.leader` | leaderの関節位置（17） |
 
-- エピソードの外のTeleopは記録しません．
-- エピソードの最初の1〜2行は，`start` の直前の人の指令が残り，`action.intervention` が1になることがあります．
-- leaderも記録するので，`policy` だけのデータセット（`rakuda2-eval`）とは別になります．
+- episodeの外のTeleopは記録しません．
+- episodeの最初の1〜2行は，`start` の直前の人の指令が残り，`action.intervention` が1になることがあります．
+- leaderも記録するので，`policy` だけのdataset（`rakuda2-eval`）とは別になります．
 
 ## 次へ
 
-- 介入した行を学習でどう扱うか：[データの形式](../../data/format.md#valid)
+- 介入した行を学習でどう扱うか：[dataの形式](../../data/format.md#valid)
 - 成否の集計：[評価と再生](../../policy/evaluation.md)

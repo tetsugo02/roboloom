@@ -1,6 +1,6 @@
 # Tutorials
 
-目的ごとの手順です．多くは目的，前提，所要，結果，次へ，の順に書いています．ラベルの意味は [状態ラベル](../reference/status-labels.md) にあります．
+目的ごとの手順です．多くは目的，前提，所要，結果，次へ，の順に書いています．labelの意味は [状態label](../reference/status-labels.md) にあります．
 
 ```mermaid
 flowchart LR
@@ -24,13 +24,13 @@ flowchart LR
 
     <span class="gallery-tags">模擬のRakuda · 15分 · <span class="status status--mock">模擬のみ</span></span>
 
--   [![自分のロボットを足す](../assets/gallery/own-robot.svg)](own-robot.md)
+-   [![自分のrobotを足す](../assets/gallery/own-robot.svg)](own-robot.md)
 
-    **[自分のロボットを足す](own-robot.md)**
+    **[自分のrobotを足す](own-robot.md)**
 
-    自分のフォロワのクラスとテンプレートで，模擬の腕を動かす．
+    自分のfollowerのclassとtemplateで，模擬の腕を動かす．
 
-    <span class="gallery-tags">自分のロボット · 20分 · <span class="status status--mock">模擬のみ</span></span>
+    <span class="gallery-tags">自分のrobot · 20分 · <span class="status status--mock">模擬のみ</span></span>
 
 </div>
 
@@ -44,7 +44,7 @@ flowchart LR
 
     **[Rakuda2：機体設定と読み取り確認](rakuda2/setup.md)**
 
-    設定を作り，ポートを読み，トルクを切って経路を一周する．
+    設定を作り，portを読み，torqueを切って経路を一周する．
 
     <span class="gallery-tags">Rakuda2 · 1〜2時間 · <span class="status status--verified">実機検証済み</span></span>
 
@@ -52,7 +52,7 @@ flowchart LR
 
     **[Rakuda2：重力補償](rakuda2/gravity.md)**
 
-    零点，可動域，重力モデルを測り，leaderの補償を調整する．
+    零点，可動域，重力modelを測り，leaderの補償を調整する．
 
     <span class="gallery-tags">Rakuda2 · 1〜2時間 · <span class="status status--verified">実機検証済み</span></span>
 
@@ -98,7 +98,7 @@ flowchart LR
 
 ## 開発中の機体 { #in-development }
 
-PiPER＋Pikaの順番は [PiPER＋Pikaの道筋](piper-pika/index.md) にあります．機体を立ち上げる段階は，どのロボットも [同じ順](../explanation/robot-setup-flow.md) です．
+PiPER＋Pikaの順番は [PiPER＋Pikaの道筋](piper-pika/index.md) にあります．機体を立ち上げる段階は，どのrobotも [同じ順](../explanation/robot-setup-flow.md) です．
 
 <div class="grid cards gallery" markdown>
 
@@ -122,7 +122,7 @@ PiPER＋Pikaの順番は [PiPER＋Pikaの道筋](piper-pika/index.md) にあり�
 
     **[Pika Senseを手に持った収集](pika-handheld.md)**
 
-    ロボットなしでSenseを手に持って集め，学習用に変換する．
+    robotなしでSenseを手に持って集め，学習用に変換する．
 
     <span class="gallery-tags">Pika Sense · 30分 · <span class="status status--dev">開発中</span></span>
 

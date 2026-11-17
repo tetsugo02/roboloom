@@ -5,23 +5,23 @@ leader の腕を，手を離してもその場に留まり，ある程度の力�
 
 ## 1．送る電流の式
 
-制御の周期ごと（leader の `poll_hz`，テンプレートでは120 Hz）に，関節ごとの電流を次の式で決めます．
+制御の周期ごと（leader の `poll_hz`，templateでは120 Hz）に，関節ごとの電流を次の式で決めます．
 
 ```
-送る電流 = 上限で切る( ランプ × ( gain × g(q) + 保持 − kd × 速度 ) + 可動域の押し戻し )   [mA]
+送る電流 = 上限で切る( ramp × ( gain × g(q) + 保持 − kd × 速度 ) + 可動域の押し戻し )   [mA]
 ```
 
 | 項 | 意味 | どこで決まるか |
 | --- | --- | --- |
-| g(q) | 姿勢 q で関節を保つのに要る電流を，重力モデルが予測した値 | `identify-gravity` で同定（`calibration/gravity_<side>.yaml`） |
+| g(q) | 姿勢 q で関節を保つのに要る電流を，重力modelが予測した値 | `identify-gravity` で同定（`calibration/gravity_<side>.yaml`） |
 | gain | g(q) に掛ける倍率 | `tune-gravity`（`calibration/gravity_tuning_<side>.yaml`） |
 | 保持 | 置いた位置に引き留める電流．最大 ±`hold_mA` | 同上 |
-| kd | 速度に比例するブレーキ（今は 0） | `nodes/leader_gravity.yaml` |
-| ランプ | 起動直後の `ramp_s` 秒で，0 から 1 に上がる | 同上 |
+| kd | 速度に比例するbrake（今は 0） | `nodes/leader_gravity.yaml` |
+| ramp | 起動直後の `ramp_s` 秒で，0 から 1 に上がる | 同上 |
 | 押し戻し | 可動域の外に出たときだけ，外に出た量に比例してかかる | `calibration/travel_<side>.yaml` と `barrier_mA_per_count` |
-| 上限 | `max_current_mA`．EEPROM の Current Limit でもモーター側で同じ値に切られる | `nodes/leader_gravity.yaml` |
+| 上限 | `max_current_mA`．EEPROM の Current Limit でもmotor側で同じ値に切られる | `nodes/leader_gravity.yaml` |
 
-モーターの力（トルク）は，電流にほぼ比例します．XC330 の電流の単位は 1 mA です．
+motorの力（torque）は，電流にほぼ比例します．XC330 の電流の単位は 1 mA です．
 
 ## 2．gain：重さをどれだけ消すか
 
@@ -32,7 +32,7 @@ g(q) はあくまで予測です．効き方を決めるのは「送った電流
 ```
 
 予測が正しければ，gain 1.0 で補償の割合は 100% になります．
-研究室の機体では，位置制御で測った保持電流が，ギアの静止摩擦のために実際より小さく出ました．そのため，g(q) は必要な電流の約半分になりました．
+研究室の機体では，位置制御で測った保持電流が，gearの静止摩擦のために実際より小さく出ました．そのため，g(q) は必要な電流の約半分になりました．
 
 | 例：右肩 sh_roll，腕を横に水平 | 値 |
 | --- | --- |
@@ -43,9 +43,9 @@ g(q) はあくまで予測です．効き方を決めるのは「送った電流
 
 | 補償の割合 | 手を離したときの関節 |
 | --- | --- |
-| 0% | 補償なし．トルクを切ったときと同じように落ちる |
+| 0% | 補償なし．torqueを切ったときと同じように落ちる |
 | 50% 程度 | 重さは半分になるが，落ちる |
-| 約 100% | 重さが消える．ギアの摩擦で，その場に留まる |
+| 約 100% | 重さが消える．gearの摩擦で，その場に留まる |
 | 100% を大きく超える | ゆっくり上がっていく |
 | マイナス（向きが逆） | 落ちるのを速める |
 
@@ -55,17 +55,17 @@ g(q) はあくまで予測です．効き方を決めるのは「送った電流
 
 「押し負けたら動く保持」です．摩擦をソフトで足すものと考えてください．
 
-- 関節を，今いる位置にばね（`hold_kp` mA/カウント，既定 1.0）で引き留めます．引き留める力は `hold_mA` を超えません．
+- 関節を，今いる位置にばね（`hold_kp` mA/count，既定 1.0）で引き留めます．引き留める力は `hold_mA` を超えません．
 - それより強く押すと，引き留める位置が手の動きについていきます．手を離すと，そこで止まります．
-- 重力モデルの誤差が `hold_mA` 以内なら，どの姿勢でも関節は留まります．
+- 重力modelの誤差が `hold_mA` 以内なら，どの姿勢でも関節は留まります．
 - 代わりに，動かし始めるときに，`hold_mA` 分だけ余計に力が要ります．
-- 例：`hold_mA: 30`，`hold_kp: 1.0` なら，30 カウント（約 2.6°）押し込むまでは戻ろうとし，それを超えると滑ります．
+- 例：`hold_mA: 30`，`hold_kp: 1.0` なら，30 count（約 2.6°）押し込むまでは戻ろうとし，それを超えると滑ります．
 
 gain は「重さをどれだけ消すか」，`hold_mA` は「どれくらいの力で押したら動き出すか」を決めます．この 2 つは別々に調整します．
 
 ## 4．感触ごとの調整
 
-| 感触 | 原因 | 調整（`tune-gravity` のキー） |
+| 感触 | 原因 | 調整（`tune-gravity` のkey） |
 | --- | --- | --- |
 | 置いても，ゆっくり下がる | 補償が足りない（誤差が保持を超えている） | gain を上げる（`]`，+0.1） |
 | 置くと，ゆっくり上がる | 補償しすぎ | gain を下げる（`[`，−0.1） |
@@ -82,18 +82,18 @@ gain は「重さをどれだけ消すか」，`hold_mA` は「どれくらい�
 uv run roboloom tune-gravity leader right_arm --with gravity
 ```
 
-1. 腕を支えたまま起動します．電流は `ramp_s` 秒かけて上がります．ほかの電流制御グループは重力gainとbreakaway holdをゼロにしますが，トルクオフではなく，可動域の押し戻しや減衰は残ります．位置制御グループは目標を保持する場合があります．調整終了時は全グループを明示的に脱力してからバスを閉じます．
+1. 腕を支えたまま起動します．電流は `ramp_s` 秒かけて上がります．ほかの電流制御groupは重力gainとbreakaway holdをゼロにしますが，torque offではなく，可動域の押し戻しや減衰は残ります．位置制御groupは目標を保持する場合があります．調整終了時は全groupを明示的に脱力してからbusを閉じます．
 2. Textualの一覧で関節を選び，Detailsで値の意味，調整の説明，選んだ関節の次の値を確認します．
    - ID，gain，hold，g(q)，送った電流，実際の電流，位置，速度
    - 状態：`gravity`（重力補償だけ），`holding`（保持が効いている），`sliding`（押し負けて滑っている），`free`（何もしない），`off`（比較のため重力補償を切っている）
 3. 「guide」の欄に，選んだ関節で重力がかかる姿勢が出ます．その姿勢に置いて手を離し，その関節がどう動くかを見ます．
-4. 4 節の表に従って，キーで gain と hold を変えます．値はすぐに反映されます．
+4. 4 節の表に従って，keyで gain と hold を変えます．値はすぐに反映されます．
 5. `0` を押すと，その関節の重力補償だけを切って，補償なしの感触と比べられます．もう一度押すと戻ります．
 6. Ctrl-Nで関節一覧へ移り，↓で次の関節を選びます（Ctrl-Lの入力欄で `joint <name>` も使えます）．`gain 0` で重力の影響が小さい関節（ねじりの関節など）は，そのままにして次へ進みます．
-7. メニューまたは `save` で保存します（`calibration/gravity_tuning_right.yaml`）．`quit` またはCtrl-Qで終了し，保存・破棄・キャンセル（初期選択）を選びます．保存中の追加変更は未保存として残ります．
+7. menuまたは `save` で保存します（`calibration/gravity_tuning_right.yaml`）．`quit` またはCtrl-Qで終了し，保存・破棄・cancel（初期選択）を選びます．保存中の追加変更は未保存として残ります．
 8. 左腕も `left_arm` で同じように調整します．
 
-調整した値は，オプション `gravity` を有効にした起動（`roboloom run --with gravity`，またはランチャーで `gravity` を選ぶ）でそのまま使われます．
+調整した値は，option `gravity` を有効にした起動（`roboloom run --with gravity`，またはlauncherで `gravity` を選ぶ）でそのまま使われます．
 
 ## 6．安全のための仕組み
 
@@ -121,4 +121,4 @@ uv run roboloom tune-gravity leader right_arm --with gravity
 uv run roboloom gravity-check leader right_arm --poses 1 --scales 1,0,2,-2 --with gravity
 ```
 
-メニューと編集可能な入力欄は `joint <name>`・`gain + / -`・`hold + / -`・`compare`・`resume`・`save`・`estop`・`quit` を共用します．Ctrl-Gは次の制御処理で脱力して再起動までESTOPをラッチします．`resume` は通常のSTOPPEDだけを再開します．制御とファイル保存は描画から独立し，非TTYは機器open前に拒否します．フォーカス・入力・確認のキーは [操作画面](../reference/operator-screen.md) を参照してください．
+menuと編集可能な入力欄は `joint <name>`・`gain + / -`・`hold + / -`・`compare`・`resume`・`save`・`estop`・`quit` を共用します．Ctrl-Gは次の制御処理で脱力して再起動までESTOPをlatchします．`resume` は通常のSTOPPEDだけを再開します．制御とfile保存は描画から独立し，非TTYは機器open前に拒否します．focus・入力・確認のkeyは [操作画面](../reference/operator-screen.md) を参照してください．
