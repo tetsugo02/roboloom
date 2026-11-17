@@ -78,7 +78,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 
 Limitations:
 
-- Use `gravity` only after the measurement steps of the [Rakuda2: gravity compensation](../../tutorials/rakuda2-gravity.md) (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`). Loading is refused while measured values are still `SET_...`.
+- Use `gravity` only after the measurement steps of the [Rakuda2: gravity compensation](../../tutorials/rakuda2/gravity.md) (`calibrate-joints`, `measure-travel`, `identify-gravity`, `tune-gravity`). Loading is refused while measured values are still `SET_...`.
 - Enabling or disabling `gravity` changes the leader's Operating Mode. On a hardware launch from a terminal, the CLI shows the EEPROM differences and writes them after confirmation.
 - `policy` works without DIGIT. To pass DIGIT images to the policy, enable `digit` and change `observe` in `nodes/policy.yaml` to `[camera, digit_left, digit_right]`. Enabling `digit` alone does not change the policy inputs. Match the inputs used for training. Loading a LeRobot checkpoint that needs DIGIT without DIGIT is refused before starting.
 - For a policy using joint state only, set `observe: []`. To avoid opening sensors, also remove their nodes from `sensors` in `config.yaml`.
@@ -111,4 +111,4 @@ Verify ports, motor IDs, models, EEPROM, joint ranges, and speed/current limits 
 
 The control rate is 120 Hz in the templates. For its conditions and how to lower it, see [Control rate](../../reference/configuration/followers.md#control-rate).
 
-For the steps from setup to data collection, see [Rakuda2: configuration and read check](../../tutorials/rakuda2-setup.md); for the meaning of the control values, see [Gravity tuning](../../explanation/gravity-compensation.md).
+For the steps from setup to data collection, see [Rakuda2: configuration and read check](../../tutorials/rakuda2/setup.md); for the meaning of the control values, see [Gravity tuning](../../explanation/gravity-compensation.md).

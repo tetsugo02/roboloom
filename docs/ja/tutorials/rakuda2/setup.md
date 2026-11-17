@@ -3,11 +3,11 @@
 <span class="status status--verified">実機検証済み</span>
 
 - **目的**：`.roboloom/rakuda2/` を作り，leaderとfollowerを読み取り，torqueを切ったfollowerで収集の経路を一周する．
-- **前提**：[Installation](../get-started/installation.md) が済み，Rakuda2とRakuda-mini（leader），RealSenseが接続されている．
+- **前提**：[Installation](../../get-started/installation.md) が済み，Rakuda2とRakuda-mini（leader），RealSenseが接続されている．
 - **所要**：1〜2時間（portと設定値の照合を含む）．
 - **結果**：`validate` が通り，`run` の画面で全nodeが動き，1 episodeを保存・破棄できる．
 
-[Installation](../get-started/installation.md) の手順で，自分のuv projectにroboloomとrobot・実機収集用extras（`rakuda2` / `record` / `hardware` / `digit`）を追加した前提です．commandと設定fileのpathは，自分のproject rootを基準に示します．対応機器と構成は [Rakuda2](../robots/rakuda2/index.md) を参照してください．
+[Installation](../../get-started/installation.md) の手順で，自分のuv projectにroboloomとrobot・実機収集用extras（`rakuda2` / `record` / `hardware` / `digit`）を追加した前提です．commandと設定fileのpathは，自分のproject rootを基準に示します．対応機器と構成は [Rakuda2](../../robots/rakuda2/index.md) を参照してください．
 
 ## 1. 機体設定と読み取り確認
 
@@ -33,7 +33,7 @@ uv run roboloom probe /dev/serial/by-id/<leader-U2D2>
 | `nodes/digit_left.yaml`, `nodes/digit_right.yaml` | 左右DIGITの `serial` |
 | `calibration/leader_right.yaml`, `calibration/leader_left.yaml` | leaderの `port`，関節とURDFの対応，零点，方向 |
 
-`config.yaml` は機体の設定で，重力補償・DIGIT・力の逆送・方策実行などの機能を起動optionとして持ちます（[設定](../reference/configuration/index.md)）．node fileはoptionごとに `nodes/` に分かれています．
+`config.yaml` は機体の設定で，重力補償・DIGIT・力の逆送・方策実行などの機能を起動optionとして持ちます（[設定](../../reference/configuration/index.md)）．node fileはoptionごとに `nodes/` に分かれています．
 
 `probe` の結果から，各関節の `homing_offset` などを設定へ反映します．重力補償では動作modeとCurrent Limitを意図的に変えるので，現在のEEPROMをそのままコピーせず，後述の `commission` で設定との差を確認します．
 
@@ -59,7 +59,7 @@ uv run roboloom commission leader
 uv run roboloom run
 ```
 
-`run` は端末ではまず [launcher](../reference/cli.md) を開きます．操作 `run` を選び，optionのチェックをすべて外したまま Launch（Ctrl-S）を押します．launcherを開かずに起動するときは `uv run roboloom run --plain` を使います（行入力の画面になります）．
+`run` は端末ではまず [launcher](../../reference/cli.md) を開きます．操作 `run` を選び，optionのチェックをすべて外したまま Launch（Ctrl-S）を押します．launcherを開かずに起動するときは `uv run roboloom run --plain` を使います（行入力の画面になります）．
 
 起動時にもID・model・EEPROMを照合し，不一致なら拒否します．画面で全nodeの状態とsensorの取得周期を確認します．leaderをfollowerの姿勢へ揃え，controllerが `following` になったら，次を順に入力します．
 
@@ -75,5 +75,5 @@ quit
 
 ## 次へ
 
-- 重力補償を使う：[Rakuda2：重力補償](rakuda2-gravity.md)
-- すぐに収集する：[Rakuda2：teleopで収集](rakuda2-collect.md)
+- 重力補償を使う：[Rakuda2：重力補償](gravity.md)
+- すぐに収集する：[Rakuda2：teleopで収集](collect.md)

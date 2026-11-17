@@ -62,7 +62,7 @@ PiPERの腕1本（6関節，`joint1`〜`joint6`）です．腕自身の位置制
 
 | key | 型 | 既定値 | 単位 | 説明 |
 | --- | --- | --- | --- | --- |
-| `can` | 文字列 | 必須 | — | CANのinterface（例：`can_left`） |
+| `can` | 文字列か `{serial}` | 必須 | — | CANのinterface（例：`can0`），またはUSB-CAN adapterのserial番号（`{serial: "0029..."}`．開くときに今のinterfaceを探す．`roboloom setup` が書く） |
 | `speed_percent` | 整数 | 必須 | % | firmwareの関節速度（1〜100） |
 | `stale_ms` | 数値 | `50` | ms | これより古い状態を受け取ると `FAULT` |
 

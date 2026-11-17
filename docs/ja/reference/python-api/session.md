@@ -203,7 +203,7 @@ with InProcessSession.from_components(
     session.save_episode()
 ```
 
-実機の収集手順は [Rakuda2：teleopで収集](../../tutorials/rakuda2-collect.md) を参照してください．
+実機の収集手順は [Rakuda2：teleopで収集](../../tutorials/rakuda2/collect.md) を参照してください．
 
 ## API { #api }
 

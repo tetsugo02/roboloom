@@ -3,7 +3,7 @@
 <span class="status status--verified">実機検証済み</span>
 
 - **目的**：leaderの腕の零点・方向・可動域を測り，重力modelを同定して，重力補償付きleader（option `gravity`）を調整する．
-- **前提**：[Rakuda2：機体設定と読み取り確認](rakuda2-setup.md) が済んでいる．腕を支える人がいる．
+- **前提**：[Rakuda2：機体設定と読み取り確認](setup.md) が済んでいる．腕を支える人がいる．
 - **所要**：1〜2時間．
 - **結果**：`calibration/` に `gravity_<side>.yaml`，`travel_<side>.yaml`，`gravity_tuning_<side>.yaml` ができ，`--with gravity` で起動できる．
 
@@ -64,9 +64,9 @@ uv run roboloom tune-gravity leader left_arm --with gravity
 | `s` | 調整値を保存する |
 | `q` | 終了する |
 
-腕が下がるならgainを上げ，上がるなら下げます．動かし始めが重い場合はholdを下げます．電流が上限に張り付く場合は調整を止めて設定を見直します．詳細と制約は [Gravity tuning](../explanation/gravity-compensation.md) にあります．Current Limitとwatchdogは別の保護であり，XC330のwatchdog作動だけで電流がゼロになるとは想定しません．
+腕が下がるならgainを上げ，上がるなら下げます．動かし始めが重い場合はholdを下げます．電流が上限に張り付く場合は調整を止めて設定を見直します．詳細と制約は [Gravity tuning](../../explanation/gravity-compensation.md) にあります．Current Limitとwatchdogは別の保護であり，XC330のwatchdog作動だけで電流がゼロになるとは想定しません．
 
 ## 次へ
 
-- 重力補償付きleaderで収集する：[Rakuda2：teleopで収集](rakuda2-collect.md)
-- 式と調整値の意味：[重力補償の調整](../explanation/gravity-compensation.md)
+- 重力補償付きleaderで収集する：[Rakuda2：teleopで収集](collect.md)
+- 式と調整値の意味：[重力補償の調整](../../explanation/gravity-compensation.md)

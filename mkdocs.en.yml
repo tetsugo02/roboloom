@@ -15,15 +15,23 @@ nav:
       - Support matrix: get-started/support-matrix.md
   - Tutorials:
       - Gallery: tutorials/index.md
-      - First run without devices: tutorials/first-run-mock.md
-      - "Rakuda2: configuration and read check": tutorials/rakuda2-setup.md
-      - "Rakuda2: gravity compensation": tutorials/rakuda2-gravity.md
-      - "Rakuda2: teleoperated collection": tutorials/rakuda2-collect.md
-      - "Rakuda2: from collection to inference": tutorials/rakuda2-train-infer.md
-      - "Rakuda2: evaluating with interventions": tutorials/rakuda2-intervention.md
-      - Running your own policy: tutorials/custom-policy.md
-      - Adding your own robot: tutorials/own-robot.md
-      - PiPER + Pika on mock devices (in development): tutorials/piper-pika-mock.md
+      - First steps:
+          - First run without devices: tutorials/first-run-mock.md
+          - Adding your own robot: tutorials/own-robot.md
+          - Running your own policy: tutorials/custom-policy.md
+      - Rakuda2:
+          - Path: tutorials/rakuda2/index.md
+          - Configuration and read check: tutorials/rakuda2/setup.md
+          - Gravity compensation: tutorials/rakuda2/gravity.md
+          - Teleoperated collection: tutorials/rakuda2/collect.md
+          - From collection to inference: tutorials/rakuda2/train-infer.md
+          - Evaluating with interventions: tutorials/rakuda2/intervention.md
+      - PiPER + Pika (in development):
+          - Path: tutorials/piper-pika/index.md
+          - On mock devices: tutorials/piper-pika/mock.md
+          - Robot setup (roboloom setup): tutorials/piper-pika/setup.md
+          - First teleoperation: tutorials/piper-pika/first-teleop.md
+          - Tightening the configuration: tutorials/piper-pika/tighten.md
       - Hand-held collection with Pika Sense (in development): tutorials/pika-handheld.md
   - Robots:
       - Overview: robots/index.md
@@ -82,6 +90,7 @@ nav:
       - Operator screen: reference/operator-screen.md
       - Status labels: reference/status-labels.md
   - Explanation:
+      - Stages of bringing up a robot: explanation/robot-setup-flow.md
       - Gravity tuning: explanation/gravity-compensation.md
   - Contribution:
       - Development: contribution/index.md

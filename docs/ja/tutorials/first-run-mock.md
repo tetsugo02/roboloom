@@ -64,4 +64,4 @@ uv run roboloom check-dataset examples/mock/config.yaml
 
 - 方策を書いて模擬で動かす：[自作の方策を動かす](custom-policy.md)
 - 自分のrobotを足す：[自分のrobotを足す](own-robot.md)
-- 実機のRakuda2で始める：[Rakuda2：機体設定と読み取り確認](rakuda2-setup.md)
+- 実機のRakuda2で始める：[Rakuda2：機体設定と読み取り確認](rakuda2/setup.md)

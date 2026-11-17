@@ -46,7 +46,7 @@
 Textualの操作menuは使えない操作も理由付きで表示し，初期姿勢がない `home` も含めます．Ctrl-Lで編集可能なcommand欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．key・pane・確認・時間指定mode・拡張契約は [操作画面](operator-screen.md) を参照してください．
 
 `run --plain` は行入力を維持し，`record --plain`・`infer --plain` はkey入力なしで収集します．非TTYも同じ経路です（launcherは開きません）．`tune-gravity` はdeviceを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
-`stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Rakuda2：teleopで収集](../tutorials/rakuda2-collect.md) にあります．
+`stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Rakuda2：teleopで収集](../tutorials/rakuda2/collect.md) にあります．
 
 ## sensor選択 { #sensor-selection }
 
@@ -68,6 +68,7 @@ Textualの操作menuは使えない操作も理由付きで表示し，初期姿
 | [`check-dataset`](#check-dataset) | 記録したdatasetを検査する |
 | [`label`](#label) | 保存済みのepisodeに評価の成否を付ける |
 | [`convert-handheld`](#convert-handheld) | 手に持って記録したdatasetを学習用に変換する |
+| [`setup`](#setup) | どの機器がどのnodeかを特定して設定に書く（PiPER，Pika） |
 | [`probe`](#probe) | busや機器を読むだけで調べる |
 | [`calibrate-joints`](#calibrate-joints) | URDF零姿勢の実測countを保存する |
 | [`measure-travel`](#measure-travel) | 手で動かした可動域を保存する |
@@ -103,7 +104,7 @@ uv run roboloom                                   # launcher
 
 ## roboloom init { #init }
 
-機体設定（`.roboloom/<robot>/`）を，templateから生成します（同梱のtemplateは `rakuda2`）．
+機体設定（`.roboloom/<robot>/`）を，templateから生成します（同梱のtemplateは `rakuda2` と `piper-pika`）．
 
 ```text
 roboloom init <robot> [--root DIR] [--template PACKAGE_OR_DIR] [--update]
@@ -329,9 +330,32 @@ roboloom convert-handheld [robot] [--action delta|relative-chunk] [--horizon N] 
 uv run roboloom convert-handheld --action relative-chunk --horizon 16
 ```
 
+## roboloom setup { #setup }
+
+<span class="status status--dev">開発中</span> どのCAN interface・serial port・trackerが，設定のどのPiPER・Pika Gripper・Pika Senseかを特定し，nodeのfileに書きます．機器は読むだけで，有効化・移動・零点の書き込みはしません．手順は [PiPER＋Pika：機体設定](../tutorials/piper-pika/setup.md) にあります．
+
+```text
+roboloom setup [robot] [--step check,can,arms,senses,trackers,grippers,validate]
+```
+
+| option | 型 | 既定値 | 説明 |
+| --- | --- | --- | --- |
+| `robot` | str | `.roboloom/` に1台だけならそれ | 機体設定 |
+| `--step A,B` | 段階のリスト | すべて（この順） | 実行する段階 |
+
+- 腕は指定された腕のjoint1を手で回し，Senseは開閉し，trackerはSenseを動かし，Gripperは USB を抜き差しして特定します．変化したものがちょうど1つのときだけ決めます．
+- 設定済みの値は先に表示し，Enterでそのまま使い，`r` で特定し直します．
+- CAN interfaceが有効でないときは，実行する `sudo ip link ...` を表示します（実行はしない）．
+- motorが有効なPiPERがあると止まります（無効にすると落ちるので，setupは無効にしない）．
+
+```bash
+uv run roboloom setup piper-pika
+uv run roboloom setup piper-pika --step grippers
+```
+
 ## roboloom probe { #probe }
 
-Dynamixelのbusを読むだけで調べます：ID・model・registerと読み出し時間（目安の周期上限）．`can_left` のようなCAN interfaceを渡すと，PiPER（[開発中](../robots/piper/index.md)）のfirmware・関節角・状態・有効化・温度・異常を読みます（有効化も移動もしない）．`--device pika` では，serial portのPika Gripper（[開発中](../robots/pika/index.md)）の版・角度・状態のbit・温度・feedbackの周期を，`--device pika_sense` では，Pika Sense（[開発中](../controllers/pose-ik.md)）のserialの版・挟みの角度・`Command`・feedbackの周期を読みます．
+Dynamixelのbusを読むだけで調べます：ID・model・registerと読み出し時間（目安の周期上限）．`can0` のようなCAN interface（`/` を含まない名前）を渡すと，PiPER（[開発中](../robots/piper/index.md)）のfirmware・関節角・状態・有効化・温度・異常を読みます（有効化も移動もしない）．`--device pika` では，serial portのPika Gripper（[開発中](../robots/pika/index.md)）の版・角度・状態のbit・温度・feedbackの周期を，`--device pika_sense` では，Pika Sense（[開発中](../controllers/pose-ik.md)）のserialの版・挟みの角度・`Command`・feedbackの周期を読みます．
 
 ```text
 roboloom probe <port> [--device dynamixel|pika|pika_sense] [--ids 1,2,3] [--baudrate N]

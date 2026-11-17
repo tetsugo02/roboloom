@@ -1,0 +1,15 @@
+# A starting pose for teleoperation: the folded rest pose (all joints about 0) is
+# singular and the IK cannot follow a hand from there. Not measured on this robot: before
+# the first Move home, check that the arm clears the table and the other arm on the way.
+# Replace it with your own: pose the arm (teleoperate, then quit with hold) and run
+#   uv run roboloom capture-pose piper-pika left ready --force
+follower: left
+model: piper
+unit: rad
+pose:
+  joint1: 0.0
+  joint2: 1.2
+  joint3: -0.9
+  joint4: 0.0
+  joint5: 0.3
+  joint6: 0.0

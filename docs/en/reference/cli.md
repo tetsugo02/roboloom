@@ -46,7 +46,7 @@ A running `run` takes these operations from the operator screen or from [`robolo
 The Textual operations menu shows unavailable actions with reasons, including `home` without a configured pose. Ctrl-L opens the editable command input; Ctrl-G requests emergency stop. Ctrl-C and Ctrl-Q open the same exit dialog, initially selecting Cancel. See [Operator screen](operator-screen.md) for keys, panes, confirmations, fixed-duration modes, and extension contracts.
 
 `run --plain` retains line input; `record --plain` and `infer --plain` collect without key input. Non-TTY invocation selects these paths automatically (no launcher). `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
-`stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Rakuda2: teleoperated collection](../tutorials/rakuda2-collect.md).
+`stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Rakuda2: teleoperated collection](../tutorials/rakuda2/collect.md).
 
 ## Sensor selection { #sensor-selection }
 
@@ -68,6 +68,7 @@ The Textual operations menu shows unavailable actions with reasons, including `h
 | [`check-dataset`](#check-dataset) | Check a recorded dataset |
 | [`label`](#label) | Give a saved episode its evaluation verdict |
 | [`convert-handheld`](#convert-handheld) | Turn a hand-held recording into a training dataset |
+| [`setup`](#setup) | Find which device is which node and write it to the configuration (PiPER, Pika) |
 | [`probe`](#probe) | Inspect a bus or device read-only |
 | [`calibrate-joints`](#calibrate-joints) | Save the measured counts at the URDF zero pose |
 | [`measure-travel`](#measure-travel) | Save the range of motion moved by hand |
@@ -103,7 +104,7 @@ uv run roboloom                                   # launcher
 
 ## roboloom init { #init }
 
-Generate the robot configuration (`.roboloom/<robot>/`) from a template (the shipped template is `rakuda2`).
+Generate the robot configuration (`.roboloom/<robot>/`) from a template (the shipped templates are `rakuda2` and `piper-pika`).
 
 ```text
 roboloom init <robot> [--root DIR] [--template PACKAGE_OR_DIR] [--update]
@@ -329,9 +330,32 @@ roboloom convert-handheld [robot] [--action delta|relative-chunk] [--horizon N] 
 uv run roboloom convert-handheld --action relative-chunk --horizon 16
 ```
 
+## roboloom setup { #setup }
+
+<span class="status status--dev">In development</span> Find which CAN interface, serial port and tracker is which PiPER, Pika Gripper and Pika Sense in the configuration, and write them to the node files. Devices are only read: nothing is enabled, moved, or zeroed. The steps are in [PiPER + Pika: robot setup](../tutorials/piper-pika/setup.md).
+
+```text
+roboloom setup [robot] [--step check,can,arms,senses,trackers,grippers,validate]
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `robot` | str | the only one in `.roboloom/` | Robot configuration |
+| `--step A,B` | list of steps | all (in this order) | Steps to run |
+
+- Arms are found by turning the named arm's joint1 by hand, Senses by opening and closing them, trackers by moving the Sense, and Grippers by unplugging and replugging their USB. A device is assigned only when exactly one thing changed.
+- Values already set are shown first; Enter keeps them and `r` finds the device again.
+- When a CAN interface is not up, the `sudo ip link ...` commands to run are shown (not run).
+- It stops if any PiPER has its motors enabled (disabling makes the arm drop, so setup does not disable it).
+
+```bash
+uv run roboloom setup piper-pika
+uv run roboloom setup piper-pika --step grippers
+```
+
 ## roboloom probe { #probe }
 
-Inspect a Dynamixel bus read-only: IDs, models, registers, and read times (a rough rate limit). Given a CAN interface such as `can_left`, read the PiPER ([in development](../robots/piper/index.md)) there: firmware, joint angles, state, enabling, temperatures and faults (enables and moves nothing). With `--device pika`, read the Pika Gripper ([in development](../robots/pika/index.md)) on a serial port: version, angle, status bits, temperatures and feedback rates. With `--device pika_sense`, read a Pika Sense's ([in development](../controllers/pose-ik.md)) serial link: version, jaw angle, `Command` and feedback rates.
+Inspect a Dynamixel bus read-only: IDs, models, registers, and read times (a rough rate limit). Given a CAN interface such as `can0` (a name without `/`), read the PiPER ([in development](../robots/piper/index.md)) there: firmware, joint angles, state, enabling, temperatures and faults (enables and moves nothing). With `--device pika`, read the Pika Gripper ([in development](../robots/pika/index.md)) on a serial port: version, angle, status bits, temperatures and feedback rates. With `--device pika_sense`, read a Pika Sense's ([in development](../controllers/pose-ik.md)) serial link: version, jaw angle, `Command` and feedback rates.
 
 ```text
 roboloom probe <port> [--device dynamixel|pika|pika_sense] [--ids 1,2,3] [--baudrate N]

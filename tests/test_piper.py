@@ -240,6 +240,8 @@ def test_follower_checks_its_configuration():
         ({"speed_percent": 0}, "speed_percent"),
         ({"speed_percent": 50.0}, "speed_percent"),
         ({"can": "SET_CAN_LEFT"}, "explicit device identity"),
+        ({"can": {"serial": "SET_LEFT_CAN_SERIAL"}}, "explicit device identity"),
+        ({"can": {"name": "can0"}}, "adapter serial"),
         ({"health": None}, "health: required"),
         ({"control": []}, "own position control"),
     ):
@@ -455,3 +457,60 @@ def test_probe_reads_a_network_interface_as_a_piper():
     assert is_network_interface("lo")
     assert not is_network_interface("/dev/ttyUSB0")
     assert not is_network_interface("can_does_not_exist")
+
+
+def test_a_follower_names_its_can_adapter_by_serial(tmp_path):
+    from roboloom.drivers import can
+
+    follower = PiperFollower("left", follower_cfg(can={"serial": "0029ABC"}))
+    assert follower.device_ids() == ("can-serial:0029ABC",)
+    assert follower.open_device(mock=True).read_positions() == [0.0] * 6
+    sysfs = fake_sysfs(
+        tmp_path, {"can0": ("1-5.3", "001DXYZ"), "can1": ("1-5.4", "0029ABC")}
+    )
+    assert can.resolve({"serial": "0029ABC"}, sysfs, lambda name: None) == "can1"
+    assert can.resolve("can7", sysfs) == "can7"
+    with pytest.raises(ConnectionError, match="no CAN interface has the adapter"):
+        can.resolve({"serial": "FFFF"}, sysfs, lambda name: None)
+
+
+def fake_sysfs(root, interfaces: dict, up: bool = True):
+    """/sys/class/net and /sys/devices with CAN interfaces on USB adapters:
+    name -> (USB port, adapter serial)."""
+    net = root / "class" / "net"
+    net.mkdir(parents=True)
+    (net / "eth0").mkdir()
+    (net / "eth0" / "type").write_text("1\n")
+    for name, (port, serial) in interfaces.items():
+        usb = root / "devices" / "usb1" / port
+        (usb / f"{port}:1.0").mkdir(parents=True)
+        (usb / "serial").write_text(serial + "\n")
+        entry = root / "devices" / "usb1" / port / f"{port}:1.0" / "net" / name
+        entry.mkdir(parents=True)
+        (entry / "type").write_text("280\n")
+        (entry / "flags").write_text("0x41\n" if up else "0x40\n")
+        (entry / "device").symlink_to(usb / f"{port}:1.0")
+        (net / name).symlink_to(entry)
+    return net
+
+
+def test_can_interfaces_are_listed_from_sysfs(tmp_path):
+    from roboloom.drivers import can
+
+    sysfs = fake_sysfs(tmp_path, {"can0": ("1-5.3", "001DXYZ")}, up=False)
+    (found,) = can.interfaces(sysfs, lambda name: 1_000_000)
+    assert found == can.CanInterface("can0", False, 1_000_000, "001DXYZ", "1-5.3")
+    assert not found.ready
+    assert can.bring_up_commands("can0")[1] == (
+        "sudo ip link set can0 type can bitrate 1000000"
+    )
+    assert can.interfaces(tmp_path / "missing") == []
+
+
+def test_probing_a_missing_interface_names_the_can_interfaces(monkeypatch):
+    from roboloom import probe
+    from roboloom.drivers import can
+
+    monkeypatch.setattr(can, "interfaces", lambda *a, **k: [])
+    with pytest.raises(ConnectionError, match="no network interface 'can_left'"):
+        probe.probe("can_left")

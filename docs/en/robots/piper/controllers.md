@@ -3,7 +3,7 @@
 !!! warning "Status: in development"
     <span class="status status--dev">In development</span> None of the PiPER, Pika Gripper and Pika Sense drivers has run on hardware. The configuration here is the repository's mock configuration `.roboloom/piper-mock/`, where it was checked.
 
-The controllers that drive two PiPER arms with two Pika Grippers. There is no `roboloom init` template yet: copy `.roboloom/piper-mock/` ([PiPER + Pika on mock devices](../../tutorials/piper-pika-mock.md)).
+The controllers that drive two PiPER arms with two Pika Grippers. There is no `roboloom init` template yet: copy `.roboloom/piper-mock/` ([PiPER + Pika on mock devices](../../tutorials/piper-pika/mock.md)).
 
 | Controller | Input | Options | Status |
 | --- | --- | --- | --- |

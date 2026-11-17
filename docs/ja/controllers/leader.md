@@ -34,7 +34,7 @@ input_timeout_ms: 150
 
 leaderのtriggerは `law: spring`，重力補償は `law: gravity_comp` で設定します．これらはleader node自身が実行するmotor制御則です．実機では `Session` / CLIのdataflowで動かします．`InProcessSession.from_yaml()` は制御則を実行するleaderを受け付けません．
 
-具体的なsetupは [Rakuda2 Quick start](../tutorials/rakuda2-setup.md) にあります．
+具体的なsetupは [Rakuda2 Quick start](../tutorials/rakuda2/setup.md) にあります．
 
 ## 対応する機体 { #supported-robots }
 

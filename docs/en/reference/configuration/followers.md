@@ -62,7 +62,7 @@ One PiPER arm (6 joints, `joint1` to `joint6`), driven by the arm's own position
 
 | Key | Type | Default | Unit | Description |
 | --- | --- | --- | --- | --- |
-| `can` | text | required | — | CAN interface (e.g. `can_left`) |
+| `can` | text or `{serial}` | required | — | CAN interface (e.g. `can0`), or the serial number of the USB-CAN adapter (`{serial: "0029..."}`; the current interface is looked up on open; written by `roboloom setup`) |
 | `speed_percent` | integer | required | % | The firmware's joint speed scale (1 to 100) |
 | `stale_ms` | number | `50` | ms | Older feedback latches `FAULT` |
 

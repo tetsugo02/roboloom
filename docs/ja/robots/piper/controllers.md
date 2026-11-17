@@ -3,7 +3,7 @@
 !!! warning "状態：開発中"
     <span class="status status--dev">開発中</span> PiPER，Pika Gripper，Pika Senseのdriverは，どれも実機で動かしていません．ここの構成は，repositoryの模擬の構成 `.roboloom/piper-mock/` で確かめたものです．
 
-PiPER 2台とPika Gripper 2台を動かすcontrollerの一覧です．`roboloom init` のtemplateはまだないので，`.roboloom/piper-mock/` を写して使います（[PiPER＋Pikaを模擬で](../../tutorials/piper-pika-mock.md)）．
+PiPER 2台とPika Gripper 2台を動かすcontrollerの一覧です．`roboloom init` のtemplateはまだないので，`.roboloom/piper-mock/` を写して使います（[PiPER＋Pikaを模擬で](../../tutorials/piper-pika/mock.md)）．
 
 | Controller | 入力 | option | 状態 |
 | --- | --- | --- | --- |

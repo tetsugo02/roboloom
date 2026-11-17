@@ -1,0 +1,6 @@
+# The right Pika Sense. `roboloom setup` writes port (its /dev/serial/by-path/...
+# path) and tracker.serial (the LHR-... serial of the Vive tracker inside it).
+type: pika_sense
+port: SET_RIGHT_SENSE_PORT
+tracker: {system: lighthouse, serial: SET_RIGHT_TRACKER_SERIAL}
+stale_ms: 100

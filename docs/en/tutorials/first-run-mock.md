@@ -64,4 +64,4 @@ What is checked is listed in [Checking and training](../data/check-and-train.md#
 
 - Write a policy and run it on mock devices: [Running your own policy](custom-policy.md)
 - Add your own robot: [Adding your own robot](own-robot.md)
-- Start on the real Rakuda2: [Rakuda2: configuration and read check](rakuda2-setup.md)
+- Start on the real Rakuda2: [Rakuda2: configuration and read check](rakuda2/setup.md)

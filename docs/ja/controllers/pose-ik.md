@@ -64,8 +64,8 @@ input: left_sense
 followers: [left, left_gripper]
 arm: left                # IKで動かす腕（運動学のmodelを持つfollower）
 gripper: left_gripper    # 任意．挟みの角度で動かす1関節のfollower
-tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # 必須．flange（link6）から見た道具の座標
-workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # 必須．m．腕の基準座標（base_link）
+tool_offset: {xyz: [0.0, 0.0, 0.19], rpy: [0.0, -1.5708, 0.0]}  # 任意．flange（link6）から見た道具の座標
+workspace: {min: [0.05, -0.45, 0.05], max: [0.6, 0.45, 0.6]}    # 任意．m．腕の基準座標（base_link）
 max_input_jump: {position_m: 0.05, rotation_rad: 0.5}             # 必須
 ik: {iterations: 30, damping: 0.001, position_tolerance_m: 0.005, rotation_tolerance_rad: 0.05}  # 任意．この値が既定
 gripper_map: {scale: 1.0, offset: 0.0}                            # 任意．この値が既定
@@ -97,8 +97,8 @@ input_timeout_ms: 150    # 必須
 | key | 意味 |
 | --- | --- |
 | `arm`，`gripper` | `arm` は必須で，運動学のmodelを持つfollower（PiPER）．`gripper` は任意で，1関節のfollower．2つで，controllerの `followers` をちょうど指します |
-| `tool_offset` | 必須．flangeから道具の先端への変換（`xyz` はm，`rpy` はrad）．上の値はAgileXが自社のgripperに使う値です．Pika Gripperを付けたときの値は，計測して書きます |
-| `workspace` | 必須．`min` と `max`（m．どの軸も `min` が `max` より小さい）．目標の位置がこの箱の外なら指令を送りません |
+| `tool_offset` | 任意．flangeから道具の先端への変換（`xyz` はm，`rpy` はrad）．省略するとflangeが道具になります．上の値はAgileXが自社のgripperに使う値です．Pika Gripperを付けたときの値は，計測して書きます（[設定を絞る](../tutorials/piper-pika/tighten.md)） |
+| `workspace` | 任意．`min` と `max`（m．どの軸も `min` が `max` より小さい）．目標の位置がこの箱の外なら指令を送りません．省略すると，関節の範囲とIKだけが目標を制限し，`validate` が `note:` を，画面が `workspace: none` を出します（初回の遠隔操作向け） |
 | `max_input_jump` | 必須．`position_m` と `rotation_rad`．Senseの姿勢が1回でこれより大きく跳んだら，遠隔操作を止めます |
 | `ik` | 任意．反復の回数（既定30），減衰（既定0.001），届いたと見なす位置（既定0.005 m）と回転（既定0.05 rad）の許容．知らないkeyは拒否します．届かなければ指令を送りません |
 | `gripper_map` | 任意．gripperの角度 = `scale`·挟みの角度 + `offset`（既定は1.0と0.0）．gripperの範囲に収めます |
@@ -132,7 +132,7 @@ AgileXの遠隔操作と同じ，相対の写し方です．
 
 `.roboloom/piper-mock/` は，模擬のSense 2台で，模擬のPiPER 2台とPika Gripper 2台を動かす構成です．模擬のSenseは，開いてから2 s後に開始し，その後は10 s開始・2 s停止を繰り返します．
 
-`.roboloom/piper-mock/` はroboloomのrepositoryにあり，installしたpackageには入っていません（`roboloom init` のtemplateは `rakuda2` だけです）．下のcommandは，cloneしたrepositoryのrootで実行します．自分のprojectでは，[repository](https://github.com/tetsugo02/roboloom) からこのdirectoryを自分の `.roboloom/` にコピーすれば，同じように動かせます．模擬の構成（`mode: mock`）なので，port，CAN interface，trackerの名前，`limits`，`tool_offset`，`workspace` の値を実機に使い回さないでください．
+`.roboloom/piper-mock/` はroboloomのrepositoryにあり，installしたpackageには入っていません（実機用のtemplateは `roboloom init piper-pika`．[PiPER＋Pikaの道筋](../tutorials/piper-pika/index.md)）．下のcommandは，cloneしたrepositoryのrootで実行します．自分のprojectでは，[repository](https://github.com/tetsugo02/roboloom) からこのdirectoryを自分の `.roboloom/` にコピーすれば，同じように動かせます．模擬の構成（`mode: mock`）なので，port，CAN interface，trackerの名前，`limits`，`tool_offset`，`workspace` の値を実機に使い回さないでください．
 
 ```bash
 uv run roboloom run piper-mock                     # Launchのあと，Move home
@@ -172,7 +172,7 @@ uv run roboloom run piper-mock --with policy       # Senseの代わりに確認�
 
     版，挟みの角度，`Command`，feedbackの周期を表示します．
 
-4. `tool_offset` を計測し，`workspace` を机と周りに合わせて狭くしてから，腕1台で試します．
+4. 初回は `tool_offset` と `workspace` なしで，遅い速度で試します（[初めての遠隔操作](../tutorials/piper-pika/first-teleop.md)）．動いたら `tool_offset` を計測し，`workspace` を机と周りに合わせて書き足します．
 
 ## 実機で確かめること
 

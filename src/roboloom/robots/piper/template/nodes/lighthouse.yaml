@@ -1,0 +1,4 @@
+# Lighthouse tracking through libsurvive: one context serves both Senses. The base
+# stations need a calibration once (`roboloom setup` offers it when no tracker is seen).
+type: libsurvive
+args: []  # extra libsurvive arguments, e.g. [--lighthouse-gen, "2"]

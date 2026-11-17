@@ -1,20 +1,20 @@
 # PiPER follower
 
 !!! warning "状態：開発中"
-    <span class="status status--dev">開発中</span> AgileX PiPERをfollowerとして動かすdriverの開発中の記録です．模擬のbusと，piper_sdkを模した試験だけで確かめています．実機では動かしていません．機体のtemplate（`roboloom init`）とQuick startはまだありません．
+    <span class="status status--dev">開発中</span> AgileX PiPERをfollowerとして動かすdriverの開発中の記録です．模擬のbusと，piper_sdkを模した試験だけで確かめています．実機では動かしていません．PiPER 2台とPika 2組のtemplateは `roboloom init piper-pika` で作れます（[PiPER＋Pikaの道筋](../../tutorials/piper-pika/index.md)）．
 
-使えるcontroller（Pika SenseとIK，方策）は [PiPERのcontroller](controllers.md)，模擬で一周する手順は [PiPER＋Pikaを模擬で](../../tutorials/piper-pika-mock.md) にあります．
+使えるcontroller（Pika SenseとIK，方策）は [PiPERのcontroller](controllers.md)，模擬で一周する手順は [PiPER＋Pikaを模擬で](../../tutorials/piper-pika/mock.md) にあります．
 
 ## 必要なもの
 
 - piper_sdk（`uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper`）．安定版の0.6系のV2 interfaceを使います．使うのは関節の位置制御（MOVE J）・状態・有効化だけで，これらはV3のfirmwareでも同じ形です．
-- 腕ごとに1つのCAN interface（1 Mbps）．名前は `can_left`，`can_right` のように腕で決めます．interfaceの作成と，USB portによる名前付けにはsudoが要るので，管理者に頼みます．
+- 腕ごとに1つのCAN interface（1 Mbps）．有効にするにはsudoが要るので，管理者に頼みます．名前は `can0`，`can1` のままでかまいません．設定にはUSB-CAN adapterのserial番号を書き（`can: {serial: ...}`），開くときに今のinterfaceの名前を探します．
 
 ## 設定
 
 ```yaml
 type: piper_follower
-can: can_left            # この腕のCAN interface
+can: {serial: "0029002F5746570A20383839"}  # USB-CAN adapterのserial（roboloom setup が書く）．can0 のような名前も可
 control_hz: 100
 speed_percent: 30        # firmwareの関節速度の割合（1〜100）
 stale_ms: 50             # 任意．これより古いfeedbackはFAULT
@@ -90,11 +90,13 @@ uv run roboloom run piper-mock --with policy
 
 ## 実機で最初にすること
 
-1. 管理者にCAN interface（1 Mbps，腕ごとの名前）を作ってもらいます．
+手順は [PiPER＋Pika：機体設定](../../tutorials/piper-pika/setup.md) と [初めての遠隔操作](../../tutorials/piper-pika/first-teleop.md) にあります．ここでは腕に関わる部分だけを説明します．
+
+1. 管理者にCAN interfaceを1 Mbpsで有効にしてもらいます．`roboloom setup` の `can` の段階が，状態と，実行するcommandを表示します．どのCANがどの腕かは，`arms` の段階で腕のjoint1を手で回して特定します．
 2. 腕を電源につないだまま，読むだけで状態を確かめます．有効化も移動もしません．
 
     ```bash
-    uv run roboloom probe can_left
+    uv run roboloom probe can0
     ```
 
     firmware，関節角（rad と度），制御mode，有効化，温度，異常，feedbackの周期を表示します．
@@ -102,7 +104,7 @@ uv run roboloom run piper-mock --with policy
 3. 放置したときに保持するかを測ります．腕を支えられる状態で，周りを空けてから実行します．今の姿勢で2 s保持してから，有効化したまま指令を書くのをやめ，最大 `--seconds` のあいだ関節角を読むだけにします（保持して終了したとき，ESTOP，FAULTと同じ状態です）．同じprocessでCANを閉じて開き直すことはpiper_sdkでは確実でないため，busは開いたままにします．PiPERのdriverは閉じるときにmotorを無効にしないので，閉じた後も同じ状態です．短い `--seconds` では，ゆっくり下がる腕を見逃します．変化が `--tolerance`（rad）を超えるか，motorが無効になれば `torque_off`，そうでなければ `holds` です．`record` と入力すると，followerのYAMLに `unattended:` を書きます．最後に，`release` で脱力するか，そのままにするかを選びます．
 
     ```bash
-    uv run roboloom check-hold left --tolerance 0.02
+    uv run roboloom check-hold piper-pika left --tolerance 0.02
     ```
 
 ## 実機で確かめること

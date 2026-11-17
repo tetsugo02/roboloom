@@ -15,15 +15,23 @@ nav:
       - 対応表: get-started/support-matrix.md
   - Tutorials:
       - 一覧: tutorials/index.md
-      - 装置なしで一周する: tutorials/first-run-mock.md
-      - Rakuda2：機体設定と読み取り確認: tutorials/rakuda2-setup.md
-      - Rakuda2：重力補償: tutorials/rakuda2-gravity.md
-      - Rakuda2：teleopで収集: tutorials/rakuda2-collect.md
-      - Rakuda2：収集から推論まで: tutorials/rakuda2-train-infer.md
-      - Rakuda2：介入しながら評価する: tutorials/rakuda2-intervention.md
-      - 自作の方策を動かす: tutorials/custom-policy.md
-      - 自分のrobotを足す: tutorials/own-robot.md
-      - PiPER＋Pikaを模擬で（開発中）: tutorials/piper-pika-mock.md
+      - はじめの一歩:
+          - 装置なしで一周する: tutorials/first-run-mock.md
+          - 自分のrobotを足す: tutorials/own-robot.md
+          - 自作の方策を動かす: tutorials/custom-policy.md
+      - Rakuda2:
+          - 道筋: tutorials/rakuda2/index.md
+          - 機体設定と読み取り確認: tutorials/rakuda2/setup.md
+          - 重力補償: tutorials/rakuda2/gravity.md
+          - teleopで収集: tutorials/rakuda2/collect.md
+          - 収集から推論まで: tutorials/rakuda2/train-infer.md
+          - 介入しながら評価する: tutorials/rakuda2/intervention.md
+      - PiPER＋Pika（開発中）:
+          - 道筋: tutorials/piper-pika/index.md
+          - 模擬で一周する: tutorials/piper-pika/mock.md
+          - 機体設定（roboloom setup）: tutorials/piper-pika/setup.md
+          - 初めての遠隔操作: tutorials/piper-pika/first-teleop.md
+          - 設定を絞る: tutorials/piper-pika/tighten.md
       - Pika Senseを手に持った収集（開発中）: tutorials/pika-handheld.md
   - Robots:
       - 概要: robots/index.md
@@ -82,6 +90,7 @@ nav:
       - 操作画面: reference/operator-screen.md
       - 状態label: reference/status-labels.md
   - Explanation:
+      - 機体を立ち上げる段階: explanation/robot-setup-flow.md
       - 重力補償の調整: explanation/gravity-compensation.md
   - Contribution:
       - 開発: contribution/index.md

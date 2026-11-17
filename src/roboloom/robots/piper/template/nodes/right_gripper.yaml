@@ -1,0 +1,10 @@
+# The Pika Gripper on the right arm. `roboloom setup` writes port: its
+# /dev/serial/by-path/... path (the USB socket it is plugged into: keep it there).
+type: pika_gripper_follower
+port: SET_RIGHT_GRIPPER_PORT
+control_hz: 100
+current_limit_A: 0.5  # A, low for a first run; raise for a firm grasp (at most 2)
+health:
+  every_ticks: 10
+limits:  # rad (motor angle), 0 = closed
+  - {name: gripper, min: 0.0, max: 1.6, max_speed: 2.0, max_jump: 0.5}
