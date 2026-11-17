@@ -53,3 +53,23 @@ class Flaky(Creep):
 
 def flaky() -> Flaky:
     return Flaky()
+
+
+class Gate:
+    """Mock hook factory used by Session.launch dataset tests."""
+
+    def __init__(self, joint: str):
+        self.joint = joint
+
+    def requirements(self):
+        from roboloom.hooks import Requirements
+
+        return Requirements(writes=(self.joint,))
+
+    def step(self, action, ctx):
+        action[ctx.index(self.joint)] += 1
+        return action
+
+
+def gate(joint: str) -> Gate:
+    return Gate(joint)

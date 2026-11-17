@@ -40,7 +40,7 @@ A dataset roboloom recorded (LeRobotDataset v3.0) trains with `lerobot-train` as
 
 ```bash
 # training needs lerobot[training] (accelerate, trackio)
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra policy --extra train   # in your own project
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra policy --extra train   # in your own project
 uv sync --extra policy --extra train                                                # in a checkout of the roboloom repository
 uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \

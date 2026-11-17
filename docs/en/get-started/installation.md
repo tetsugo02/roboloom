@@ -9,7 +9,7 @@ To create a new project:
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0
 uv run roboloom --version
 ```
 
@@ -29,11 +29,11 @@ The base install contains the shared runtime (dora, YAML, NumPy, OpenCV, serial 
 
 | Setup | Command | Purpose |
 | --- | --- | --- |
-| Base | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0` | Configuration loading, CLI, mock devices |
-| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2` | Dynamixel SDK for the follower and Rakuda-mini leader |
-| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra piper --extra pika` | PiPER SDK, IK, Pika tracking and wrist cameras (in development, hardware unverified) |
-| Recording | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` | Saving to LeRobotDataset, mock collection |
-| Rakuda2 hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2, recording, RealSense (`hardware`), DIGIT (`digit`) |
+| Base | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0` | Configuration loading, CLI, mock devices |
+| Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2` | Dynamixel SDK for the follower and Rakuda-mini leader |
+| PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika` | PiPER SDK, IK, Pika tracking and wrist cameras (in development, hardware unverified) |
+| Recording | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra record` | Saving to LeRobotDataset, mock collection |
+| Rakuda2 hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2, recording, RealSense (`hardware`), DIGIT (`digit`) |
 
 Once the Git source is registered, extras can also be added by package name. Quote the brackets in shells such as zsh:
 
@@ -55,7 +55,7 @@ The `digit` extra uses a wheel built by a [fork of digit-interface](https://gith
 
 ## Updating and pinning a release
 
-To switch to another release tag (`<tag>` from [GitHub Releases](https://github.com/tetsugo02/roboloom/releases), e.g. `v0.1.0`):
+To switch to another release tag (`<tag>` from [GitHub Releases](https://github.com/tetsugo02/roboloom/releases), e.g. `v0.2.0`):
 
 ```bash
 uv add git+https://github.com/tetsugo02/roboloom.git --tag <tag>

@@ -51,3 +51,11 @@ uv run roboloom serve-policy --experiment configs/roboloom/drawer.yaml   # the e
 - An exception raised by the policy is shown on the controller's line, as for a policy in the same process ([When the policy fails](custom.md#failures)).
 - The shared secret authenticates both ends; the data is not encrypted. Keep the address on the loopback interface or a trusted network. Messages carry a JSON header and raw array bytes (no pickle).
 - Over a network, every `infer` sends the observation (about 0.9 MB per 480×640 image, times `observation_history`).
+
+## Hook capabilities { #hooks }
+
+<span class="status status--mock">Mock only</span>
+
+At connect, `capabilities` replies with `{"protocol": 2, "events": [...], "step_hooks": [...]}`. Older servers that reject the call contribute no events. Nonempty `step_hooks` refuse loading: move the hook to `hooks:` using a local factory or select `backend: process`. A `from: policy` claim with nonempty `writes` and `backend: server` is refused at configuration load.
+
+`RemotePolicy.hooks()` contributes a lifecycle-only `RemoteEvents` hook, sending `{"type": event.kind, **asdict(event)}` under the same call lock as inference. The server dispatches to its policy’s hooks. Step hooks and their observations remain in the local node, including during policy teleop. See [Hooks](hooks.md) and [threading](../explanation/hooks.md#threading).

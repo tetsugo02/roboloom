@@ -39,6 +39,7 @@ flowchart LR
 | Component | Status | Notes |
 | --- | --- | --- |
 | **Rakuda2** (leader teleop, gravity compensation, RealSense, DIGIT, custom policy & interventions) | Hardware-verified | Real hardware default |
+| **[Local hooks](https://tetsugo02.github.io/roboloom/en/policy/hooks/)** (policy actions, policy teleop, lifecycle events, `action.filtered`) | Mock only | Explicit YAML write claims; existing speed and safety limits still apply |
 | **LeRobot policies** (`policy.lerobot`, `lerobot-train`), replay, `serve-policy`, async inference | Mock only | Verified on mock dataflows; `policy`/`train` require Python 3.12–3.13 |
 | **PiPER**, **Pika** (Gripper, Sense, wrist cameras), webcam, audio | In development | Not verified on hardware; `pika` tracking requires Python 3.12 on Linux x86_64 |
 
@@ -51,7 +52,7 @@ Requires **Python 3.12–3.14**, [uv](https://docs.astral.sh/uv/), and Git. Add 
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra hardware --extra digit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra hardware --extra digit
 ```
 
 | Extra | Purpose |

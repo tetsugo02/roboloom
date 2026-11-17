@@ -383,6 +383,9 @@ class FollowerSafety:
                 "clamped": clamped,
                 "command_seq": seq,
                 "t_sent_ns": sent_ns,
+                "filtered": bool(
+                    sent and command is not None and command.payload.get("filtered")
+                ),
                 # a person drove this command (a policy's teleop), for action.intervention
                 "intervention": bool(
                     sent and command is not None and command.payload.get("intervention")

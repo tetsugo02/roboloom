@@ -1,30 +1,30 @@
-# 自作の方策
+# Your own policy
 
 roboloomはmodelの形を決めません．方策は `reset()` と `infer(observation)` を持つobjectで，記録と同じ観測を受け取り，関節の絶対目標を返します．LeRobotのcheckpointを使うときは [LeRobotの方策](lerobot.md) を参照してください．
 
-## 方策の形 { #interface }
+## The policy's shape { #interface }
 
 `reset()` と `infer(observation)` を持つobjectを返す関数を書きます（`roboloom.Policy`）．
 
 ```python
-# .roboloom/<robot>/my_policy.py か，installしたpackage
+# .roboloom/<robot>/my_policy.py, or an installed package
 import numpy as np
 
 
 class MyPolicy:
     def __init__(self, checkpoint: str): ...
 
-    def bind(self, spec):  # 任意．読み込みの直後に1回呼ばれる
+    def bind(self, spec):  # optional; called once, right after loading
         if "observation.images.left_wrist" not in spec.observation:
-            raise ValueError("left_wrist を observe に加えてください")
+            raise ValueError("add left_wrist to observe")
 
-    def reset(self): ...  # episodeの始めに呼ばれる
+    def reset(self): ...  # called when an episode starts
 
     def infer(self, observation) -> np.ndarray:
         state = observation["observation.state"]  # float32 [n]
-        image = observation["observation.images.left_wrist"]  # uint8 [h, w, 3]，RGB
+        image = observation["observation.images.left_wrist"]  # uint8 [h, w, 3], RGB
         task = observation["task"]
-        return self.model(state, image, task)  # [n] か [H, n]
+        return self.model(state, image, task)  # [n] or [H, n]
 
 
 def load(checkpoint: str) -> MyPolicy:
@@ -43,7 +43,7 @@ def load(checkpoint: str) -> MyPolicy:
 
 Pythonの型と関数は [Python API：方策](../reference/python-api/policy.md) にあります．
 
-## 観測を選ぶ { #observations }
+## Selecting observations { #observations }
 
 Rakuda2のtemplateは，DIGITなしで関節状態とRealSenseを方策に渡します．`nodes/policy.yaml` の `observe` を，学習時に使った入力に合わせます．followerの関節状態は常に渡されます．
 
@@ -59,7 +59,7 @@ DIGITを入力とする学習済み方策を，DIGITなしでそのまま使え�
 
 既存projectの設定は，package更新では上書きされません．`roboloom init rakuda2 --update` が，足りないfile（`nodes/policy.yaml` など）を足し，`config.yaml` に足りないoptionを一覧にします．以前のtemplateから移行するときは，`config.yaml` の `options.policy` から `requires: [digit]` を削除し，`nodes/policy.yaml` を `observe: [camera]` に変更します．評価の保存先はDIGITなしなら `datasets/rakuda2-eval`，`digit` も有効なら `datasets/rakuda2-digit-eval` です．
 
-## episodeの途中で方策が失敗したとき { #failures }
+## When the policy fails during an episode { #failures }
 
 - `infer` や `reset` が例外を出すと，controllerは指令を止めて `failed` になり，followerは保持します．理由は画面のcontrollerの行に出ます．
 - `roboloom infer`，`Session.record`，操作画面の時間指定の実行は，そのepisodeを破棄します（保存しません）．`Session.record` は `EpisodeFailed` を上げます．
@@ -67,28 +67,32 @@ DIGITを入力とする学習済み方策を，DIGITなしでそのまま使え�
 - 読み込めなかった方策（`bind` の例外を含む）は `failed` のままです．直してから起動し直してください．
 - followerがFAULTかESTOPになったepisodeも，同じく破棄します．
 
-## 履歴，動かさない関節，新しい観測 { #hold }
+## History, joints left alone, and fresh samples { #hold }
 
 最新のframe以外にmodelが要るものは，controllerに頼みます．modelを作り替えるたびに書き直す必要はありません．正規化，画像の縮小，model独自の行動（差分，一部の関節だけ）を関節の目標へ直す処理は，方策の側に書きます．
 
 ```yaml
-observation_history: 4                       # 既定は1：最新のframeだけ
-hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # 既定は []
+observation_history: 4                       # default 1: only the latest frame
+hold: [follower.torso_yaw, follower.head_yaw, follower.head_pitch]  # default []
 ```
 
 - **`observation_history: N`**：観測を行動1手ごと（`1/rate_hz` ごと）に1回採ります．まとめた行動のうち推論しない手でも採ります．`infer` には `observation["history"]` も渡ります．観測の各配列を `[N, ...]` に重ねたもので，古い順に並び，最後が今のframeです．episodeの始めは，最初のframeで履歴を埋めます．`history["action"]`（float32 `[N, n]`）は，各frameの前に実行した行動です（始めはfollowerが保持していた目標）．値はfollowerへ送った指令で，recorderが `action` に書くものと同じです．方策の出力が `max_speed` を超えて削られたときは，削られたあとの値が入ります．過去の行動を読むmodelに使います．`N = 1` なら観測は今までと同じです．
-- **`hold`**：行動のうち方策が動かさない要素（`<follower>.<joint>`）です．方策がそこに何を返しても（NaNでも），followerが保持している目標に置き換えます．一部の関節だけで学習したmodelも，`[n]` か `[H, n]` を返せば済みます．ほかの要素は有限でなければならず，そうでなければepisodeを止めます．記録した `action` のその要素には，保持している目標が入ります（[dataの形式](../data/format.md#by-configuration)）．
+- **`hold`**：行動のうち方策が動かさない要素（`<follower>.<joint>`）です．方策がそこに何を返しても（NaNでも），followerが保持している目標に置き換えます．一部の関節だけで学習したmodelも，`[n]` か `[H, n]` を返せば済みます．ほかの要素は有限でなければならず，そうでなければepisodeを止めます．記録した `action` にもその entry が入ります．hold の置換の後に明示的な write claim を持つ hook が変更できます（[dataの形式](../data/format.md#by-configuration)）．
 - **`options()`（任意）**：方策が自分でこれらを指定できます．YAMLより優先します．modelを差し替えても設定を書き換えずに済みます．
 
     ```python
     def options(self) -> dict:
-        return {"observation_history": 4, "hold": ["follower.torso_yaw"], "action_horizon": 8}
+        return {
+            "observation_history": 4,
+            "hold": ["follower.torso_yaw"],
+            "action_horizon": 8,
+        }
     ```
 
 - `bind(spec)` には `spec.history`，`spec.hold`，`spec.units`（行動の各要素の単位），`spec.inference`（`sync` か `async`）も渡ります．
 - **新しい観測だけを使う**：観測する入力やsensorの最新の値が，recorderの `max_age_ms.<node>` より古いと，方策を止めます（controllerの行に `stale_observation`）．指令を送らず，followerは保持します．補間の途中でも止めます．値が新しくなると，方策を `reset()` して始め直します．`max_age_ms` は [recorderの設定](../reference/configuration/recorder.md#recorder) にあります．
 
-## 記録から自分のmodelまで { #from-recording-to-model }
+## From a recording to your own model { #from-recording-to-model }
 
 roboloomはmodelの形を決めません．方策には，記録と同じ観測，その履歴，実行した行動を渡し，関節の絶対目標を受け取ります．modelごとに変わる処理は方策の側に書きます．
 
@@ -113,3 +117,9 @@ PYTHONPATH=$PWD/examples/policies uv run roboloom infer rakuda2 --seconds 20 \
 ```
 
 15 fpsの記録で `--stride 3` なら，方策の周期は5 Hzです．`nodes/policy.yaml` を `rate_hz: 5` にします．学習でdatasetを読むとき，表の列（`observation.state`，`action`，`action.valid`，`episode_index`，`index`）は `LeRobotDataset(...).hf_dataset` にあります．画像は `dataset[i]` で1行ずつ復号します．`action.valid` が0の行の扱いは [欠損の扱い](../data/format.md#missing-data) にあります．
+
+## Hooks { #hooks }
+
+<span class="status status--mock">Mock only</span>
+
+policy は bind の後に `hooks() -> Sequence[Hook]` を提供できます．local action period の処理は `Hook.step(action, ctx)`，終了処理は `on_episode_ended(event)` に実装します．writing hook には `hooks:` YAML の `from: policy` と write limit が必須です．hold は hook の前に置換し，claim した held joint は hook が変更できます．[hooks](hooks.md) の release gate と，async inference と state を共有する前に [threading](../explanation/hooks.md#threading) を参照してください．

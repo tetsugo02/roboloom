@@ -1,11 +1,12 @@
 # Dataset features
 
-The columns (features) roboloom writes to a LeRobotDataset 0.7.0. Which columns exist depends on the configuration's followers, inputs, sensors and recorded estimators, and on the enabled options. `roboloom.recording.features(cfg)` lists them for a configuration (see [Recording](python-api/recording.md#features)). How rows are assigned and how missing data is handled is in [Data format](../data/format.md).
-
-- `<follower>`, `<input>`, `<sensor>`, `<estimator>` and `<source>` are node names in the configuration (`follower`, `leader`, `camera`, `digit_left` and so on in the Rakuda2 template).
-- `<source>` is every recorded node (inputs, followers, sensors, estimators with `record: true`).
-- A column shared by several nodes (`observation.state` and others) joins their values in configuration order. Its `names` tell which entry belongs to which node (`follower.r_arm_sh_pitch1`).
-- Shapes are per row.
+| Detail | Description |
+| --- | --- |
+| — | The columns (features) roboloom writes to a LeRobotDataset 0.7.0. Which columns exist depends on the configuration's followers, inputs, sensors and recorded estimators, and on the enabled options. `roboloom.recording.features(cfg)` lists them for a configuration (see [Recording](python-api/recording.md#features)). How rows are assigned and how missing data is handled is in [Data format](../data/format.md). |
+| — | `<follower>`, `<input>`, `<sensor>`, `<estimator>` and `<source>` are node names in the configuration (`follower`, `leader`, `camera`, `digit_left` and so on in the Rakuda2 template). |
+| — | `<source>` is every recorded node (inputs, followers, sensors, estimators with `record: true`). |
+| — | A column shared by several nodes (`observation.state` and others) joins their values in configuration order. Its `names` tell which entry belongs to which node (`follower.r_arm_sh_pitch1`). |
+| — | Shapes are per row. |
 
 ## Observation { #observation }
 
@@ -22,24 +23,30 @@ The columns (features) roboloom writes to a LeRobotDataset 0.7.0. Which columns 
 | `observation.effort_ext.valid` <span class="status status--mock">Mock only</span> | float32 | (number of estimators,) | an estimator with `record: true` | 1 when that estimator's estimate is valid |
 | `observation.contact` <span class="status status--mock">Mock only</span> | float32 | (number of estimators,) | an estimator with `record: true` | 1 when it detects contact |
 | `task` | string (LeRobot turns it into `task_index`) | — | always | The episode's task |
-
-- A row without a usable sample repeats that node's last valid value (zeros before its first sample), and `observation.meta.<source>.valid` is 0 ([Missing data](../data/format.md#missing-data)).
-- A policy receives its observation with the same names and shapes (without `observation.meta`; [Observations](../policy/custom.md#observations)).
+| Detail | Description |
+| --- | --- |
+| — | A row without a usable sample repeats that node's last valid value (zeros before its first sample), and `observation.meta.<source>.valid` is 0 ([Missing data](../data/format.md#missing-data)). |
+| — | A policy receives its observation with the same names and shapes (without `observation.meta`; [Observations](../policy/custom.md#observations)). |
 
 ## Action { #action }
 
-A configuration without followers (a hand-held device) has no columns starting with `action`.
+| Detail | Description |
+| --- | --- |
+| — | A configuration without followers (a hand-held device) has no columns starting with `action`. |
 
 | Column | dtype | shape | Present when | Meaning |
 | --- | --- | --- | --- | --- |
-| `action` | float32 | (joints of every follower,) | there are followers | The first command each follower sent in the row's interval [t_k, t_{k+1}), in the order and units of `observation.state`. A follower that sent none fills its part with the target it held (else its position). Joints listed in a policy's `hold` are there too, with the held target |
+| `action` | float32 | (joints of every follower,) | there are followers | The first command each follower sent in the row's interval [t_k, t_{k+1}), in the order and units of `observation.state`. A follower that sent none fills its part with the target it held (else its position). Joints listed in a policy's `hold` are there too; explicitly claimed hooks can change their held target |
 | `action.valid` | float32 | (1,) | there are followers | 1 when every follower sent a command in the row |
 | `action.clamped` | float32 | (1,) | there are followers | 1 when a limit cut down any follower's command |
 | `action.intervention` | float32 | (1,) | the policy has `teleop:` (option `policy_teleop`) | 1 when a person drove the row with the leader ([teleoperation and interventions](../policy/intervention.md#teleop)) |
+| `action.filtered` <span class="status status--mock">Mock only</span> | float32 | (1,) | a policy YAML `hooks:` entry has nonempty `writes` (factory or `from: policy`) | 1 if any valid command in any follower’s row interval was changed by a hook, before speed/safety limits; OR over all commands, including policy teleop. No column without writing claims |
 
 ## Metadata { #meta }
 
-Each node's times and validity. Times are in `time.monotonic_ns()` time.
+| Detail | Description |
+| --- | --- |
+| — | Each node's times and validity. Times are in `time.monotonic_ns()` time. |
 
 | Column | dtype | shape | Present when | Meaning |
 | --- | --- | --- | --- | --- |
@@ -54,8 +61,9 @@ Each node's times and validity. Times are in `time.monotonic_ns()` time.
 | `action.meta.<follower>.clamped` | float32 | (1,) | per follower | 1 when a limit cut that command down |
 | `action.meta.<follower>.seq` | int64 | (1,) | per follower | The command's sequence number; −1 without one |
 | `action.meta.<follower>.sent_ns` | int64 | (1,) | per follower | When the command was sent; 0 without one |
-
-LeRobot adds its own columns too.
+| Detail | Description |
+| --- | --- |
+| — | LeRobot adds its own columns too. |
 
 | Column | dtype | shape | Meaning |
 | --- | --- | --- | --- |
@@ -67,12 +75,16 @@ LeRobot adds its own columns too.
 
 ## In training { #training }
 
-- LeRobot gives `*.valid` columns no special meaning: rows whose `valid` is 0 are trained on like any other. To leave them out, see [Checking the data and training](../data/check-and-train.md#training) and [valid](../data/format.md#valid).
-- LeRobot puts every column starting with `observation.` into the policy configuration as an observation feature and every column starting with `action` as an action feature. The models of policies such as ACT, however, read `observation.state`, `observation.environment_state` and the images: `observation.meta.*`, `observation.<input>` and `observation.effort` are not model inputs, even when the dataset has them.
+| Detail | Description |
+| --- | --- |
+| — | LeRobot gives `*.valid` columns no special meaning: rows whose `valid` is 0 are trained on like any other. To leave them out, see [Checking the data and training](../data/check-and-train.md#training) and [valid](../data/format.md#valid). |
+| — | LeRobot puts every column starting with `observation.` into the policy configuration as an observation feature and every column starting with `action` as an action feature. The models of policies such as ACT, however, read `observation.state`, `observation.environment_state` and the images: `observation.meta.*`, `observation.<input>` and `observation.effort` are not model inputs, even when the dataset has them. |
 
 ## Rakuda2 example { #rakuda2-example }
 
-The columns that change with each option in the Rakuda2 template (`roboloom init rakuda2`).
+| Detail | Description |
+| --- | --- |
+| — | The columns that change with each option in the Rakuda2 template (`roboloom init rakuda2`). |
 
 | Option | Columns added | Columns removed |
 | --- | --- | --- |

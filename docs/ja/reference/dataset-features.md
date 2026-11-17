@@ -1,13 +1,14 @@
-# datasetの列
+# Dataset features
 
-roboloom が LeRobotDataset 0.7.0 に書く列（特徴量）の一覧です．どの列があるかは，設定の followers・inputs・sensors・記録する estimators と，有効なoptionで決まります．`roboloom validate` で検証した設定の列は `roboloom.recording.features(cfg)` で確かめられます（[Recording](python-api/recording.md#features)）．行の割り当てと欠損の扱いは [dataの形式](../data/format.md) にあります．
+| Detail | 説明 |
+| --- | --- |
+| — | roboloom が LeRobotDataset 0.7.0 に書く列（特徴量）の一覧です．どの列があるかは，設定の followers・inputs・sensors・記録する estimators と，有効なoptionで決まります．`roboloom validate` で検証した設定の列は `roboloom.recording.features(cfg)` で確かめられます（[Recording](python-api/recording.md#features)）．行の割り当てと欠損の扱いは [dataの形式](../data/format.md) にあります． |
+| — | `<follower>`，`<input>`，`<sensor>`，`<estimator>`，`<source>` は，設定でのnodeの名前です（Rakuda2 のtemplateでは `follower`，`leader`，`camera`，`digit_left` など）． |
+| — | `<source>` は記録するnodeすべて（inputs，followers，sensors，`record: true` の estimators）を指します． |
+| — | 複数のnodeにまたがる列（`observation.state` など）は，設定の順にnodeの値をつなぎます．`names` が，どの要素がどのnodeのものかを示します（`follower.r_arm_sh_pitch1`）． |
+| — | 形は1行あたりです． |
 
-- `<follower>`，`<input>`，`<sensor>`，`<estimator>`，`<source>` は，設定でのnodeの名前です（Rakuda2 のtemplateでは `follower`，`leader`，`camera`，`digit_left` など）．
-- `<source>` は記録するnodeすべて（inputs，followers，sensors，`record: true` の estimators）を指します．
-- 複数のnodeにまたがる列（`observation.state` など）は，設定の順にnodeの値をつなぎます．`names` が，どの要素がどのnodeのものかを示します（`follower.r_arm_sh_pitch1`）．
-- 形は1行あたりです．
-
-## 観測 { #observation }
+## Observation { #observation }
 
 | 列 | dtype | shape | ある条件 | 意味 |
 | --- | --- | --- | --- | --- |
@@ -22,24 +23,30 @@ roboloom が LeRobotDataset 0.7.0 に書く列（特徴量）の一覧です．�
 | `observation.effort_ext.valid` <span class="status status--mock">模擬のみ</span> | float32 | (estimator の数,) | estimator の `record: true` | その estimator の推定が有効なら1 |
 | `observation.contact` <span class="status status--mock">模擬のみ</span> | float32 | (estimator の数,) | estimator の `record: true` | 接触を判定したら1 |
 | `task` | 文字列（LeRobot が `task_index` に変える） | — | 常に | episodeの task |
+| Detail | 説明 |
+| --- | --- |
+| — | 使える標本がない行は，そのnodeの最後の有効な値をくり返します（最初の標本より前は0）．このとき `observation.meta.<source>.valid` が0です（[欠損の扱い](../data/format.md#missing-data)）． |
+| — | 方策が受け取る観測は，同じ名前と形です（`observation.meta` を除く．[観測](../policy/custom.md#observations)）． |
 
-- 使える標本がない行は，そのnodeの最後の有効な値をくり返します（最初の標本より前は0）．このとき `observation.meta.<source>.valid` が0です（[欠損の扱い](../data/format.md#missing-data)）．
-- 方策が受け取る観測は，同じ名前と形です（`observation.meta` を除く．[観測](../policy/custom.md#observations)）．
+## Action { #action }
 
-## 行動 { #action }
-
-followerのない構成（手に持って記録する機器）には，`action` で始まる列はありません．
+| Detail | 説明 |
+| --- | --- |
+| — | followerのない構成（手に持って記録する機器）には，`action` で始まる列はありません． |
 
 | 列 | dtype | shape | ある条件 | 意味 |
 | --- | --- | --- | --- | --- |
-| `action` | float32 | (全followerの関節数,) | followerがある | 各followerが行の時間 [t_k, t_{k+1}) に最初に送った指令．`observation.state` と同じ並びと単位．指令を送らなかったfollowerは，保持していた目標（なければ位置）で埋める．方策の `hold` に挙げた関節も，保持した目標の値で入る |
+| `action` | float32 | (全followerの関節数,) | followerがある | 各followerが行の時間 [t_k, t_{k+1}) に最初に送った指令．`observation.state` と同じ並びと単位．指令を送らなかったfollowerは，保持していた目標（なければ位置）で埋める．policy の `hold` に挙げた joint も入る．明示的な write claim を持つ hook は held target を変更できる |
 | `action.valid` | float32 | (1,) | followerがある | すべてのfollowerがその行で指令を送ったら1 |
 | `action.clamped` | float32 | (1,) | followerがある | どれかのfollowerの指令が制限で切り詰められたら1 |
 | `action.intervention` | float32 | (1,) | 方策に `teleop:` がある（option `policy_teleop`） | その行を人が leader で動かしたら1（[teleopと介入](../policy/intervention.md#teleop)） |
+| `action.filtered` <span class="status status--mock">Mock only</span> | float32 | (1,) | policy YAML の `hooks:` entry に空でない `writes` がある（factory または `from: policy`） | 行内の全 follower の valid command のいずれかが hook で変更された場合 1．speed/safety limit の前の変化で，policy teleop を含む全 command の OR．write claim がなければ column は作らない |
 
-## metadata { #meta }
+## Metadata { #meta }
 
-各nodeの時刻と有効さです．時刻は `time.monotonic_ns()` の時間です．
+| Detail | 説明 |
+| --- | --- |
+| — | 各nodeの時刻と有効さです．時刻は `time.monotonic_ns()` の時間です． |
 
 | 列 | dtype | shape | ある条件 | 意味 |
 | --- | --- | --- | --- | --- |
@@ -54,8 +61,9 @@ followerのない構成（手に持って記録する機器）には，`action` 
 | `action.meta.<follower>.clamped` | float32 | (1,) | followerごと | その指令が制限で切り詰められたら1 |
 | `action.meta.<follower>.seq` | int64 | (1,) | followerごと | 指令の通し番号．なければ −1 |
 | `action.meta.<follower>.sent_ns` | int64 | (1,) | followerごと | 指令を送った時刻．なければ0 |
-
-LeRobot が足す列もあります．
+| Detail | 説明 |
+| --- | --- |
+| — | LeRobot が足す列もあります． |
 
 | 列 | dtype | shape | 意味 |
 | --- | --- | --- | --- |
@@ -65,14 +73,18 @@ LeRobot が足す列もあります．
 | `index` | int64 | (1,) | dataset全体での行番号 |
 | `task_index` | int64 | (1,) | task の番号 |
 
-## 学習での扱い { #training }
+## In training { #training }
 
-- LeRobot は `*.valid` の列を特別に扱いません．`valid` が0の行も，ほかの行と同じく学習に使われます．除き方は [dataの検査と学習](../data/check-and-train.md#training) と [valid](../data/format.md#valid) を参照してください．
-- LeRobot は `observation.` で始まる列を観測の特徴量として，`action` で始まる列を行動の特徴量として方策の設定に載せます．ただし ACT などの方策のmodelが読む観測は，`observation.state`，`observation.environment_state` と画像です．`observation.meta.*`，`observation.<input>`，`observation.effort` は，datasetにあってもmodelの入力になりません．
+| Detail | 説明 |
+| --- | --- |
+| — | LeRobot は `*.valid` の列を特別に扱いません．`valid` が0の行も，ほかの行と同じく学習に使われます．除き方は [dataの検査と学習](../data/check-and-train.md#training) と [valid](../data/format.md#valid) を参照してください． |
+| — | LeRobot は `observation.` で始まる列を観測の特徴量として，`action` で始まる列を行動の特徴量として方策の設定に載せます．ただし ACT などの方策のmodelが読む観測は，`observation.state`，`observation.environment_state` と画像です．`observation.meta.*`，`observation.<input>`，`observation.effort` は，datasetにあってもmodelの入力になりません． |
 
-## Rakuda2 の例 { #rakuda2-example }
+## Rakuda2 example { #rakuda2-example }
 
-Rakuda2 のtemplate（`roboloom init rakuda2`）で，optionごとに変わる列です．
+| Detail | 説明 |
+| --- | --- |
+| — | Rakuda2 のtemplate（`roboloom init rakuda2`）で，optionごとに変わる列です． |
 
 | option | 増える列 | なくなる列 |
 | --- | --- | --- |

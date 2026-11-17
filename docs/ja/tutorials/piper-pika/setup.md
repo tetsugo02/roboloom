@@ -19,8 +19,7 @@ rootが要る作業です．roboloomはsudoを呼びません．
 ## 1. 設定を作る
 
 ```bash
-# roboloom setup は v0.1.0 の後に入った機能：次の版が出るまでは main を使う
-uv add git+https://github.com/tetsugo02/roboloom.git --branch main --extra piper --extra pika --extra record
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika --extra record
 uv run roboloom init piper-pika
 uv run roboloom validate piper-pika --mock   # 装置なしで設定が読めることを確かめる
 ```

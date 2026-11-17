@@ -61,6 +61,7 @@ nav:
       - Running a policy: policy/run.md
       - LeRobot policies: policy/lerobot.md
       - Your own policy: policy/custom.md
+      - Hooks (mock only): policy/hooks.md
       - In another process: policy/remote.md
       - Asynchronous inference and interpolation: policy/async.md
       - Teleoperation and interventions: policy/intervention.md
@@ -90,6 +91,7 @@ nav:
       - Operator screen: reference/operator-screen.md
       - Status labels: reference/status-labels.md
   - Explanation:
+      - Hooks in the control loop: explanation/hooks.md
       - Stages of bringing up a robot: explanation/robot-setup-flow.md
       - Gravity tuning: explanation/gravity-compensation.md
   - Contribution:

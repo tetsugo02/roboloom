@@ -501,7 +501,7 @@ def test_a_policy_stops_its_episode_when_a_follower_goes_silent(tmp_path, monkey
     policy.cfg["follower_timeout_ms"] = 1
     stops = []
     monkeypatch.setattr(policy, "load", lambda *a: setattr(policy, "state", "ready"))
-    monkeypatch.setattr(policy, "stop", lambda: stops.append(True))
+    monkeypatch.setattr(policy, "stop", lambda *a: stops.append(True))
     monkeypatch.setattr(policy, "tick", dict)
     policy.running = True
     real = runtime.time.monotonic_ns
@@ -648,7 +648,7 @@ def test_a_slow_sync_inference_drains_events_and_waits_before_declaring_silent(
 
     monkeypatch.setattr(policy, "load", lambda *a: setattr(policy, "state", "ready"))
     monkeypatch.setattr(policy, "tick", slow_tick)
-    monkeypatch.setattr(policy, "reset", lambda: resets.append(True))
+    monkeypatch.setattr(policy, "reset", lambda *a: resets.append(True))
     policy.running = True
 
     class Node:

@@ -40,7 +40,7 @@ roboloomが記録したdataset（LeRobotDataset v3.0）は，そのまま `lerob
 
 ```bash
 # 学習に lerobot[training]（accelerate，trackio）が要ります
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra policy --extra train   # 自分のprojectで
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra policy --extra train   # 自分のprojectで
 uv sync --extra policy --extra train                                                # roboloomのrepositoryをcloneした中で
 uv run lerobot-train \
   --dataset.repo_id=local/piper-mock \

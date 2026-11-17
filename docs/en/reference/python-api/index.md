@@ -1,8 +1,10 @@
 # Python API
 
-Every roboloom operation is available as a Python function. The CLI (`roboloom ...`) is only a thin layer that calls those functions and prints the result. The API descriptions on these pages are generated from the docstrings.
-
-Add roboloom to your own uv project following [Installation](../../get-started/installation.md), and use `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra record` for recording. Save the code below in your own Python script and run it with `uv run python <script.py>`. Configuration and `.roboloom/` paths are relative to your project root.
+| Scope | Description |
+| --- | --- |
+| Python API | Functions used by the CLI; descriptions generated from docstrings |
+| Installation | [Installation](../../get-started/installation.md) |
+| Paths | Configuration and .roboloom paths are relative to the project root |
 
 ## Public API { #modules }
 
@@ -11,6 +13,7 @@ Add roboloom to your own uv project following [Installation](../../get-started/i
 | `roboloom` | `Session`, `EpisodeInfo`, `EpisodeResult`, `EpisodeFailed`, `SessionError`, `InProcessSession`, `load_config`, `resolve_config`, `init_project`, `Sample`, the exceptions | [Session](session.md) |
 | `roboloom.setup` | Measurement and setup steps (EEPROM, zeros, travel, gravity, poses, bench tests), `Operator` | [Setup](setup.md) |
 | `roboloom.policy` | The policy contract (`Policy`, `PolicySpec`), `load_policy`, `hold`, the LeRobot, remote and replay loaders | [Policy](policy.md) |
+| `roboloom.hooks` | `HOOKS_API`, `Hook`, `Requirements`, `HookSpec`, `StepContext`, `ChunkPosition`, events, `HookChain` <span class="status status--mock">Mock only</span> | [Hooks](policy.md#hooks) |
 | `roboloom.recording` | Checking a dataset (`check_dataset`), episode records (`episodes`), the features (`features`) | [Recording](recording.md) |
 
 ## CLI and Python { #cli-and-python }
@@ -28,17 +31,14 @@ Add roboloom to your own uv project following [Installation](../../get-started/i
 | Record continuously from the operation screen | `roboloom run [robot]` | The `Session.launch(...)` status screen and `start()` / `stop()` / `save()` |
 | Install the skill for coding agents | `roboloom skills install` | `roboloom.agent_skills.install(root=".", targets=("agents", "claude"), force=False)`, `agent_skills.check(...)` |
 
-The arguments of each command are in [CLI](../cli.md).
+| Reference | Link |
+| --- | --- |
+| Command arguments | [CLI](../cli.md) |
 
 ## Example { #example }
 
-```python
-from roboloom import Session
-
-with Session.launch("rakuda2", options=["gravity"]) as s:
-    s.wait_ready()  # wait until the leader is aligned with the follower
-    result = s.record("pick up the cup", seconds=30)
-    print(result.index, result.frames, result.warnings)
-```
-
-For more, see [Session](session.md); for running and evaluating a policy, see [Running a policy](../../policy/run.md) and [Evaluation verdicts](../../policy/evaluation.md#labels).
+| Workflow | Link |
+| --- | --- |
+| Python session usage | [Session](session.md) |
+| Policy execution | [Running a policy](../../policy/run.md) |
+| Evaluation | [Evaluation verdicts](../../policy/evaluation.md#labels) |

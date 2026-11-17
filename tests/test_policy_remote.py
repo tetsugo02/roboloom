@@ -282,3 +282,108 @@ def test_one_file_starts_the_server_and_the_node_that_connects(tmp_path, monkeyp
         server.terminate()
         server.wait(10)
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
+
+
+class EventPolicy(Echo):
+    def __init__(self, step=False):
+        super().__init__()
+        from roboloom.hooks import Hook
+
+        class Events(Hook):
+            def on_episode_started(inner, event):
+                self.events.append(event)
+
+        self.events = []
+        self.handler = Events()
+        if step:
+            self.handler.step = lambda a, ctx: a
+
+    def hooks(self):
+        return [self.handler]
+
+
+def test_hook_capabilities_events_and_step_refusal(monkeypatch):
+    from roboloom.hooks import EpisodeStarted
+
+    for step in (False, True):
+        policy, up = EventPolicy(step), threading.Event()
+        address = _free_address()
+        monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
+        thread = threading.Thread(
+            target=R.serve,
+            args=(policy, address),
+            kwargs={"authkey": KEY, "clients": 1, "ready": up.set},
+            daemon=True,
+        )
+        thread.start()
+        assert up.wait(3)
+        if step:
+            with pytest.raises(ConfigError, match="local factory.*backend: process"):
+                R.connect(address)
+        else:
+            client = R.connect(address)
+            caps = client._call("capabilities")
+            assert caps["protocol"] == 2 and caps["step_hooks"] == []
+            assert "episode_started" in caps["events"]
+            assert not hasattr(client.hooks()[0], "step")
+            event = EpisodeStarted("task", 9, "out", 123.0)
+            client.hooks()[0].on_event(event)
+            assert policy.events == [event]
+            assert client._call("infer", {"observation.state": np.ones(2)}) is not None
+            client.close()
+        thread.join(3)
+        assert not thread.is_alive()
+
+
+def test_old_policy_server_has_no_event_hooks(monkeypatch):
+    class Old(Echo):
+        pass
+
+    original = R._answer
+
+    def answer(policy, method, arguments, hooks=None):
+        if method == "capabilities":
+            raise ValueError("unknown call 'capabilities'")
+        return original(policy, method, arguments, hooks)
+
+    monkeypatch.setattr(R, "_answer", answer)
+    monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
+    up, address = threading.Event(), _free_address()
+    thread = threading.Thread(
+        target=R.serve,
+        args=(Old(), address),
+        kwargs={"authkey": KEY, "clients": 1, "ready": up.set},
+        daemon=True,
+    )
+    thread.start()
+    assert up.wait(3)
+    client = R.connect(address)
+    assert client.hooks() == []
+    assert client.infer({"observation.state": np.ones(2)}).tolist() == [2.0, 2.0]
+    client.close()
+    thread.join(3)
+
+
+def test_remote_event_forwarding_uses_call_lock(served):
+    from roboloom.hooks import EpisodeStarted
+
+    address, _ = served
+    client = R.connect(address)
+    client.events = ("episode_started",)
+    hook = R.RemoteEvents(client)
+    entered, sent = threading.Event(), threading.Event()
+
+    def send():
+        entered.set()
+        try:
+            hook.on_event(EpisodeStarted("task", None, None, 1.0))
+        finally:
+            sent.set()
+
+    with client.lock:
+        thread = threading.Thread(target=send, daemon=True)
+        thread.start()
+        assert entered.wait(1) and not sent.wait(0.01)
+    assert sent.wait(2)
+    thread.join()
+    client.close()

@@ -22,6 +22,7 @@ from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.estimators.base import Estimate, Estimator
+from roboloom.hooks import EndReason
 from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed
 from roboloom.recording.episodes import check_label
 from roboloom.robots.base import Follower
@@ -328,6 +329,10 @@ def _session(node, cfg: RobotConfig):
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
+                # the index the episode gets if saved, for episode lifecycle events
+                saved = latest.get("recorder", {}).get("fields", {}).get("episodes")
+                if cmd == "start" and isinstance(saved, int):
+                    request["episode_index"] = saved
                 if cmd in ("teleop", "policy", "stop_teleop"):
                     warning = teleop_warning(cfg, cmd, latest, time.monotonic_ns())
                     if warning is not None:
@@ -360,6 +365,11 @@ def _session(node, cfg: RobotConfig):
                 state = recorder_state_after(msg.payload)
                 if state is not None and "recorder" in latest:
                     latest["recorder"]["fields"]["state"] = state
+                    fields = latest["recorder"]["fields"]
+                    # a save tells the next episode's index before the status does
+                    fields["episodes"] = msg.payload.get(
+                        "episodes", fields.get("episodes")
+                    )
                     latest["recorder"]["t_ns"] = msg.t_ready_ns
             elif (
                 event_id is not None
@@ -951,8 +961,9 @@ def _policy(node, controller: PolicyController):
                         "FAULT",
                         "ESTOP",
                     ):
-                        controller.reset()  # teleop re-aligns after a latched follower
                         stopped = f"{follower} {msg.payload.get('mode')}"
+                        # teleop re-aligns after a latched follower
+                        controller.reset(stopped)
             elif (
                 event_id is not None
                 and event_id.startswith("observe_")
@@ -981,7 +992,15 @@ def _policy(node, controller: PolicyController):
                     controller.error = ""
                 try:
                     if command in ("stop", "discard", "estop", "release"):
-                        controller.stop()  # also ends a failed episode: ready again
+                        # also ends a failed episode: ready again
+                        reasons: dict[str, EndReason] = {
+                            "stop": "stopped",
+                            "discard": "discarded",
+                            "estop": "estop",
+                            "release": "released",
+                        }
+                        reason = reasons[command]
+                        controller.stop(reason)
                     elif (
                         command == "teleop"
                     ):  # works also when the policy failed to load
@@ -992,7 +1011,10 @@ def _policy(node, controller: PolicyController):
                     elif controller.policy is None:
                         pass  # it did not load: nothing to start
                     elif command == "start":
-                        controller.start(msg.payload.get("task", ""))
+                        controller.start(
+                            msg.payload.get("task", ""),
+                            msg.payload.get("episode_index"),
+                        )
                         stopped = ""
                     elif command == "policy":
                         controller.resume_policy()
@@ -1014,8 +1036,8 @@ def _policy(node, controller: PolicyController):
                         sent = {}
                     else:
                         # a frozen state would make the policy act on a robot that is not there
-                        controller.reset()
                         stopped = f"{silent[0]} silent"
+                        controller.reset(stopped)
                         sent = {}
                 else:
                     began_tick = now
@@ -1248,7 +1270,11 @@ def main() -> None:
     elif name in cfg.controllers:
         controller = cfg.controllers[name]
         if isinstance(controller, PolicyController):
-            _policy(node, controller)
+            controller.dataset_root = cfg.output  # for episode lifecycle events
+            try:
+                _policy(node, controller)
+            finally:  # an episode still running ends with the dataflow
+                controller.shutdown()
         else:
             _controller(node, controller)
     elif name in cfg.trackers:

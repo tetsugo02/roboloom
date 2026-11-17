@@ -124,3 +124,32 @@ written.
 
 Other modules: setup steps in [setup.md](setup.md); one-process sessions in
 [in-process.md](in-process.md).
+
+## Hooks (mock only)
+
+```python
+from roboloom.hooks import (
+    HOOKS_API,
+    Hook,
+    Requirements,
+    HookSpec,
+    StepContext,
+    ChunkPosition,
+    EpisodeStarted,
+    EpisodeEnded,
+    ControlChanged,
+    PolicyRestarted,
+    ObservationStale,
+)
+```
+
+`Requirements(observe=(), writes=(), sources=("policy",), on_error=None,
+budget_ms=None, api=HOOKS_API)` and `HookSpec(names, units, hold, observation,
+rate_hz, command_hz, dataset_fps, sources, api=HOOKS_API)` are frozen.
+All Hook methods are optional: requirements(), bind(spec), step(action, ctx) -> array
+or None, on_event(event) (routes to on_<kind>), close(). Optional Policy.hooks() returns
+a sequence after bind. See [policy](policy.md#local-hooks-mock-only).
+
+StepContext has source, step, t_ns, rate_hz, task, episode_index, names, index(name),
+held, previous (last command sent), state, hold_mask, writable_mask, chunk (None during
+teleop), observation, note(**small_scalar_fields). Context arrays are read-only.

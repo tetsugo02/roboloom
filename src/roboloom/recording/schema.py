@@ -14,8 +14,8 @@ when any of them was limited; `action.meta.<follower>.*` keep each follower's ow
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import Collection, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 
@@ -83,6 +83,18 @@ def _joined_features(sources: Mapping[str, Recordable], fps: float) -> Features:
     }
 
 
+FILTERED = "action.filtered"  # 1 when a hook changed any command in the row
+
+
+def records_filtered(cfg: RobotConfig) -> bool:
+    """Decide from YAML alone, without importing a hook or policy factory."""
+    return any(
+        c.cfg.get("type") == "policy"
+        and any(entry.get("writes") for entry in c.cfg.get("hooks", []))
+        for c in cfg.controllers.values()
+    )
+
+
 INTERVENTION = "action.intervention"  # 1 where a person drove the row (policy teleop)
 
 
@@ -100,7 +112,8 @@ def state_names(followers: Mapping[str, Follower]) -> list[str]:
 def features(cfg: RobotConfig) -> Features:
     """The LeRobot features a configuration records: name -> {"dtype", "shape",
     "names"}. `action*` only with followers, `action.intervention` only with a policy
-    that has `teleop:`, then each recorded source's own features and
+    that has `teleop:`, `action.filtered` only for YAML hook write claims,
+    then each recorded source's own features and
     `observation.meta.<source>.*`, then the joined ones (`observation.state`, ...)."""
     names = state_names(cfg.followers)
     out: Features = (
@@ -117,6 +130,8 @@ def features(cfg: RobotConfig) -> Features:
             out[f"action.meta.{follower}.{key}"] = _one(dtype)
     if records_intervention(cfg):
         out[INTERVENTION] = _one("float32")
+    if records_filtered(cfg):
+        out[FILTERED] = _one("float32")
 
     def add(own: Features, owner: str) -> None:
         clash = out.keys() & own.keys()
@@ -149,13 +164,103 @@ def observation_features(
     return out
 
 
+class _ObservationFrame(Mapping[str, Any]):
+    """A period's values, decoded by source only when a declared key is read."""
+
+    def __init__(
+        self,
+        sources: Mapping[str, Recordable],
+        msgs: Mapping[str, Envelope | None],
+        fps: float,
+        keys: Collection[str],
+    ):
+        self.sources, self.msgs, self.fps = sources, msgs, fps
+        self.keys_requested = tuple(keys)
+        self.owners = {
+            key: name
+            for name, source in sources.items()
+            for key in source.features(fps)
+        }
+        self.parts = joined_parts(sources, fps)
+        self.own: dict[str, dict[str, Any]] = {}
+        self.joined: dict[str, dict[str, Any]] = {}
+        self.cache: dict[str, Any] = {}
+
+    def __getitem__(self, key: str) -> Any:
+        if key not in self.keys_requested:
+            raise KeyError(key)
+        if key not in self.cache:
+            if key in self.parts:
+                parts = self.parts[key]
+                values = []
+                for name, part in parts:
+                    if name not in self.joined:
+                        self.joined[name] = self.sources[name].joined_frame(  # type: ignore[attr-defined]
+                            self.msgs.get(name), self.fps
+                        )
+                    value = self.joined[name][key]
+                    if len(value) != len(part.names):
+                        raise ValueError(
+                            f"{name}: {key} has {len(value)} values, not {len(part.names)}"
+                        )
+                    values.append(np.asarray(value, dtype=part.dtype))
+                self.cache[key] = np.concatenate(values).astype(parts[0][1].dtype)
+            else:
+                name = self.owners[key]
+                if name not in self.own:
+                    self.own[name] = self.sources[name].frame(
+                        self.msgs.get(name), self.fps
+                    )
+                self.cache[key] = self.own[name][key]
+        return self.cache[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.keys_requested)
+
+    def __len__(self) -> int:
+        return len(self.keys_requested)
+
+
+@overload
 def observation_frame(
     sources: Mapping[str, Recordable],
     msgs: Mapping[str, Envelope | None],
     dataset_fps: float,
-) -> dict[str, Any]:
+    *,
+    keys: Collection[str] | None = None,
+    lazy: Literal[False] = False,
+) -> dict[str, Any]: ...
+
+
+@overload
+def observation_frame(
+    sources: Mapping[str, Recordable],
+    msgs: Mapping[str, Envelope | None],
+    dataset_fps: float,
+    *,
+    keys: Collection[str],
+    lazy: Literal[True],
+) -> Mapping[str, Any]: ...
+
+
+def observation_frame(
+    sources: Mapping[str, Recordable],
+    msgs: Mapping[str, Envelope | None],
+    dataset_fps: float,
+    *,
+    keys: Collection[str] | None = None,
+    lazy: bool = False,
+) -> Mapping[str, Any]:
     """The observation values of one row (or one policy step) from each source's latest
-    message: each source's own features plus the joined ones. Without `observation.meta`."""
+    message: each source's own features plus the joined ones. Without `observation.meta`.
+
+    ``keys`` restricts the features to materialize. With ``lazy=True`` it returns a
+    read-only mapping whose values are decoded and cached on first access, so a hook
+    reading state does not decode an unread image. The default returns the full dict.
+    """
+    if keys is not None:
+        frame = _ObservationFrame(sources, msgs, dataset_fps, keys)
+        return frame if lazy else dict(frame)
     out: dict[str, Any] = {}
     for name, source in sources.items():
         out.update(source.frame(msgs.get(name), dataset_fps))

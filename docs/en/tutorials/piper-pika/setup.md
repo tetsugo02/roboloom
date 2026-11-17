@@ -19,8 +19,7 @@ This work needs root. roboloom does not call sudo.
 ## 1. Create the configuration
 
 ```bash
-# roboloom setup came after v0.1.0: use main until the next release
-uv add git+https://github.com/tetsugo02/roboloom.git --branch main --extra piper --extra pika --extra record
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika --extra record
 uv run roboloom init piper-pika
 uv run roboloom validate piper-pika --mock   # check that the configuration loads without hardware
 ```

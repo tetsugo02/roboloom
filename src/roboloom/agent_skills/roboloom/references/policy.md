@@ -225,3 +225,74 @@ uv run lerobot-train --dataset.repo_id=<repo_id> --dataset.root=<output from pro
 - Path check on CPU in minutes: `--policy.device=cpu --steps=200 --batch_size=8`; offline:
   `--policy.pretrained_backbone_weights=null`.
 - Check that a GPU is free (`labstatus` on the lab machines) before GPU work.
+
+## Local hooks (mock only)
+
+Use `roboloom.hooks` for per-action-period extensions. A policy may optionally return
+`Sequence[Hook]` from `hooks()`, called after `bind`. A standalone hook factory works
+with LeRobot/replay too. Writing policy contributions require this explicit claim:
+
+```yaml
+hooks:
+  - from: policy
+    writes: [follower.r_arm_grip, follower.l_arm_grip]
+```
+
+```python
+from roboloom.hooks import Hook, HookSpec, Requirements, StepContext, EpisodeEnded
+
+
+class SessionHook(Hook):
+    def requirements(self) -> Requirements:
+        return Requirements(
+            observe=(
+                "observation.state",
+                "observation.images.digit_left",
+                "observation.images.digit_right",
+            ),
+            writes=("follower.r_arm_grip", "follower.l_arm_grip"),
+            on_error="hold",
+        )
+
+    def step(self, action, ctx: StepContext):
+        # Read declared keys through ctx.observation; return an array or None.
+        # ctx.chunk has id/position/length on policy steps and is None on teleop.
+        return action
+
+    def on_episode_ended(self, event: EpisodeEnded):
+        # Finish video/log output here, on this hook's ordered event worker.
+        pass
+```
+
+- `Requirements.sources` defaults to `(policy,)`; include teleop to support takeover.
+  YAML `sources` may only narrow it; teleop requires the policy's `teleop:` controllers.
+- Factory entry keys: `factory`, `kwargs`, `writes`, `sources`, `on_error`, `budget_ms`,
+  `name`. Exactly one of `factory` and `from`; at most one `from: policy` slot.
+  All declared writes must fit inside the YAML limit; overlapping claims run in order.
+- Hold substitution precedes hooks. Claimed held joints may be written; remove old
+  gripper-not-in-hold guards and NaN embedding from adapters. Keep shape/finite and
+  outside-writes entries unchanged. Interpolation, max_speed and FollowerSafety follow.
+- Steps run locally and synchronously during episodes, once per queued action (policy)
+  or after pickup/alignment (policy teleop), never on the pchip lookahead. Plain joint
+  controllers have no enabled hooks. `ctx.names` is the follower slice during teleop.
+- Observations are lazy, declared keys only, read-only arrays. Undeclared keys raise
+  KeyError mentioning observe. No full image frame is built just because a hook exists.
+- Error policies: fail (writing default), hold (only written entries), pass (observe-only
+  default). Budget defaults to `0.5 / rate_hz` ms, using the input period for teleop;
+  overruns count/warn only. V1 has no fallback or on_overrun. API = 1; newer refused.
+- Each hook has one ordered event worker; its methods never overlap. Start barrier
+  waits 60 s, ControlChanged/PolicyRestarted barriers budget_ms * 10, for step hooks
+  only. EpisodeEnded is async, after orphaned inference waits (10 s cap). Next start
+  queues behind it; a 60 s timeout refuses start. Event errors are logged, not fatal.
+  Shutdown drains 60 s then workers close when finished. Protect state shared with async
+  infer using the policy's own lock (the hook lock does not serialize infer).
+- Events: EpisodeStarted, EpisodeEnded (stopped/discarded/failed/estop/released/
+  interrupted/shutdown), ControlChanged (takeover/handback), PolicyRestarted
+  (handback/stale_recovered), ObservationStale. Base on_event routes to on_<kind>.
+- Remote capabilities protocol 2 forwards lifecycle events only through RemoteEvents
+  under the inference call lock. Server step_hooks refuse connect: local factory or
+  backend: process. Older servers have no events. from: policy + writes + server is
+  refused at config load.
+- Record `action.filtered` only for YAML writing claims; see [recording](recording.md).
+  Report hooks as mock only, never hardware-verified. Effort feedback paths remain
+  available for future extensions; do not resume paused bilateral work.
