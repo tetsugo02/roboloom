@@ -1,6 +1,6 @@
 # Japanese documentation. English: mkdocs.en.yml. Build both: uv run --group docs python scripts/docs.py build
 INHERIT: docs/base.yml
-site_description: Rakuda2 の teleoperation とデータ収集
+site_description: Rakuda2 の teleoperation とdata収集
 docs_dir: docs/ja
 site_dir: site/ja
 # Canonical public URL; the serve commands also support local previews.
@@ -10,7 +10,7 @@ theme:
 nav:
   - ホーム: index.md
   - Get started:
-      - インストール: get-started/installation.md
+      - Installation: get-started/installation.md
       - しくみ: get-started/concepts.md
       - 対応表: get-started/support-matrix.md
   - Tutorials:
@@ -22,7 +22,7 @@ nav:
       - Rakuda2：収集から推論まで: tutorials/rakuda2-train-infer.md
       - Rakuda2：介入しながら評価する: tutorials/rakuda2-intervention.md
       - 自作の方策を動かす: tutorials/custom-policy.md
-      - 自分のロボットを足す: tutorials/own-robot.md
+      - 自分のrobotを足す: tutorials/own-robot.md
       - PiPER＋Pikaを模擬で（開発中）: tutorials/piper-pika-mock.md
       - Pika Senseを手に持った収集（開発中）: tutorials/pika-handheld.md
   - Robots:
@@ -46,19 +46,19 @@ nav:
       - RealSense: sensors/realsense.md
       - DIGIT: sensors/digit.md
       - Audio: sensors/audio.md
-      - Pikaの手首カメラ（開発中）: sensors/pika-cameras.md
-      - Webカメラ（開発中）: sensors/webcam.md
+      - Pikaの手首camera（開発中）: sensors/pika-cameras.md
+      - Web camera（開発中）: sensors/webcam.md
   - Policy:
       - 概要: policy/index.md
       - 方策で動かす: policy/run.md
       - LeRobotの方策: policy/lerobot.md
       - 自作の方策: policy/custom.md
-      - 別のプロセスで動かす: policy/remote.md
+      - 別のprocessで動かす: policy/remote.md
       - 非同期の推論と補間: policy/async.md
-      - テレオペと介入: policy/intervention.md
+      - teleopと介入: policy/intervention.md
       - 評価と再生: policy/evaluation.md
   - Data:
-      - データの形式: data/format.md
+      - dataの形式: data/format.md
       - 記録と保存: data/recording.md
       - 検査と学習: data/check-and-train.md
   - Reference:
@@ -78,13 +78,13 @@ nav:
           - Setup: reference/python-api/setup.md
           - Policy: reference/python-api/policy.md
           - Recording: reference/python-api/recording.md
-      - データセットの列: reference/dataset-features.md
+      - datasetの列: reference/dataset-features.md
       - 操作画面: reference/operator-screen.md
-      - 状態ラベル: reference/status-labels.md
+      - 状態label: reference/status-labels.md
   - Explanation:
       - 重力補償の調整: explanation/gravity-compensation.md
   - Contribution:
       - 開発: contribution/index.md
-      - バイラテラル制御の設計: contribution/bilateral.md
+      - bilateral制御の設計: contribution/bilateral.md
 exclude_docs: |
   yam-safety-and-smoothness.md

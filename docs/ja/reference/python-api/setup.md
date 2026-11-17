@@ -7,16 +7,16 @@
 - 計測の本体は，結果を dataclass で返し，失敗を例外で知らせます．
   - `ConfigError`：設定の誤り．
   - `SetupError`：計測の前提を満たさない，精度が足りない．
-  - `HardwareError`：トルクが入っているなど，機器の状態が合わない．
+  - `HardwareError`：torqueが入っているなど，機器の状態が合わない．
   - `Cancelled`：確認が拒否された．何も書いていない．
 - 人の操作が要る場面は，`Operator` に問い合わせます．
   - 腕を支える，姿勢を置く，Enter を押す，など．
   - CLI は `TerminalOperator` を渡します．
-  - スクリプトや試験では `ScriptedOperator` に答えを並べて渡せます．
-- 設定を取る関数は，パス，機体名，読み込み済みの `RobotConfig` のどれでも受け取ります．オプションやモードを選ぶときは，`load_config(..., options=..., mock=...)` で読み込んでから渡します．
+  - scriptや試験では `ScriptedOperator` に答えを並べて渡せます．
+- 設定を取る関数は，path，機体名，読み込み済みの `RobotConfig` のどれでも受け取ります．optionやmodeを選ぶときは，`load_config(..., options=..., mock=...)` で読み込んでから渡します．
 - `plan_commission`，`watchdog_test`，`gravity_check` は，mockの設定を拒否します．
 
-各手順に対応するコマンドは [CLI](../cli.md#commands) にあります．
+各手順に対応するcommandは [CLI](../cli.md#commands) にあります．
 
 ```python
 from roboloom import setup

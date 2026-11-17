@@ -1,6 +1,6 @@
 # Policy
 
-`roboloom.policy` は，方策ノードが動かす方策の形と，方策を読み込む関数です．使い方は [方策と推論](../../policy/index.md) の章（特に [自作方策](../../policy/custom.md)）にあり，このページは docstring から生成した説明（英語）を載せます．
+`roboloom.policy` は，方策nodeが動かす方策の形と，方策を読み込む関数です．使い方は [方策と推論](../../policy/index.md) の章（特に [自作方策](../../policy/custom.md)）にあり，このページは docstring から生成した説明（英語）を載せます．
 
 ## 方策の形 { #contract }
 
@@ -41,7 +41,7 @@
         - load
         - LeRobotPolicy
 
-## 別のプロセス { #remote }
+## 別のprocess { #remote }
 
 <span class="status status--mock">模擬のみ</span>
 

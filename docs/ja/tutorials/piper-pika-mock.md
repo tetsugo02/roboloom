@@ -1,10 +1,10 @@
 # PiPER＋Pikaを模擬で
 
 !!! warning "状態：開発中"
-    <span class="status status--dev">開発中</span> PiPER，Pika Gripper，Pika Senseのドライバは，どれも実機で動かしていません．ここの手順は模擬のデバイスだけで確かめたものです．値（`tool_offset` など）を実機に使い回さないでください．
+    <span class="status status--dev">開発中</span> PiPER，Pika Gripper，Pika Senseのdriverは，どれも実機で動かしていません．ここの手順は模擬のdeviceだけで確かめたものです．値（`tool_offset` など）を実機に使い回さないでください．
 
 - **目的**：PiPER 2台とPika Gripper 2台の構成を，模擬のPika Senseで動かして記録し，LeRobotで学習した方策で動かす．
-- **前提**：roboloomのリポジトリをcloneしている（`.roboloom/piper-mock/` はcloneした中だけにある）．実機は使わない．
+- **前提**：roboloomのrepositoryをcloneしている（`.roboloom/piper-mock/` はcloneした中だけにある）．実機は使わない．
 - **所要**：30分（学習の時間を除く）．
 - **結果**：`.roboloom/piper-mock/datasets/piper-mock` に記録ができ，学習した方策の回が `piper-mock-policy` に保存される．
 
@@ -25,7 +25,7 @@ cd roboloom
 uv sync --extra piper --extra pika --extra record --extra policy --extra train
 ```
 
-構成のファイルは [PiPERのcontroller](../robots/piper/controllers.md) にあります．
+構成のfileは [PiPERのcontroller](../robots/piper/controllers.md) にあります．
 
 ## 2. 操作画面で動かす
 
@@ -62,13 +62,13 @@ uv run lerobot-train \
 
 ## 5. 方策で動かす
 
-まず，同じディレクトリの確認用の方策（`demo_policy.py`）で動かします．
+まず，同じdirectoryの確認用の方策（`demo_policy.py`）で動かします．
 
 ```bash
 uv run roboloom infer piper-mock --seconds 10 --plain
 ```
 
-次に，学習したチェックポイントで動かし，`--task` で評価の回として保存します．
+次に，学習したcheckpointで動かし，`--task` で評価の回として保存します．
 
 ```bash
 uv run roboloom infer piper-mock --seconds 20 --task "pick" \
@@ -82,5 +82,5 @@ uv run roboloom check-dataset piper-mock --with policy
 
 ## 次へ
 
-- 実機の前に確かめること：[PiPERフォロワ](../robots/piper/index.md)，[Pika Gripperフォロワ](../robots/pika/index.md)，[Pika SenseとIK](../controllers/pose-ik.md)
+- 実機の前に確かめること：[PiPER follower](../robots/piper/index.md)，[Pika Gripper follower](../robots/pika/index.md)，[Pika SenseとIK](../controllers/pose-ik.md)
 - Senseを手に持って集める：[Pika Senseを手に持った収集](pika-handheld.md)

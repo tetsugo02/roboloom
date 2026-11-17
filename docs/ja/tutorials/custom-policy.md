@@ -2,31 +2,31 @@
 
 <span class="status status--mock">模擬のみ</span>
 
-- **目的**：見本の方策 `chunk_mlp.py` を模擬の記録で学習し，`roboloom infer` で動かす．自分のモデルに置き換える場所を知る．
-- **前提**：Python 3.12〜3.14とuv，roboloomのリポジトリのclone（隣の `../roboloom`）．[インストール](../get-started/installation.md) を読んでいる．実機は使わない．
+- **目的**：見本の方策 `chunk_mlp.py` を模擬の記録で学習し，`roboloom infer` で動かす．自分のmodelに置き換える場所を知る．
+- **前提**：Python 3.12〜3.14とuv，roboloomのrepositoryのclone（隣の `../roboloom`）．[Installation](../get-started/installation.md) を読んでいる．実機は使わない．
 - **所要**：30分．
-- **結果**：模擬のRakuda2で方策が動き，評価のデータセット `datasets/rakuda2-eval` に1エピソードが保存される．
+- **結果**：模擬のRakuda2で方策が動き，評価のdataset `datasets/rakuda2-eval` に1 episodeが保存される．
 
-!!! warning "試しのプロジェクトを分ける"
-    `--mock` でも，保存先は実機と同じ `.roboloom/rakuda2/datasets/` です．実機のデータがあるプロジェクトでは試さず，新しいプロジェクトを作ってください．
+!!! warning "試しのprojectを分ける"
+    `--mock` でも，保存先は実機と同じ `.roboloom/rakuda2/datasets/` です．実機のdataがあるprojectでは試さず，新しいprojectを作ってください．
 
 ```mermaid
 flowchart LR
   A["模擬で記録<br/>record --mock"] --> B["学習<br/>chunk_mlp.py train"]
-  B --> C["チェックポイント"]
+  B --> C["checkpoint"]
   C --> D["推論<br/>infer --mock"]
 ```
 
-## 1. 試しのプロジェクトを作る
+## 1. 試しのprojectを作る
 
 ```bash
 uv init --python '>=3.12,<3.15' my_policy_trial && cd my_policy_trial
 uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.1.0 --extra rakuda2 --extra record --extra policy
 uv run roboloom init rakuda2
-cp ../roboloom/examples/policies/chunk_mlp.py .roboloom/rakuda2/   # cloneしたリポジトリから
+cp ../roboloom/examples/policies/chunk_mlp.py .roboloom/rakuda2/   # cloneしたrepositoryから
 ```
 
-- `chunk_mlp.py` はリポジトリの `examples/policies/` にあり，インストールしたパッケージには入っていません．入れたroboloomと同じ版のcloneから写します．方策のモジュールは，ロボットのディレクトリ（`.roboloom/rakuda2/`）に置けば `PYTHONPATH` なしで読み込めます．
+- `chunk_mlp.py` はrepositoryの `examples/policies/` にあり，installしたpackageには入っていません．入れたroboloomと同じ版のcloneから写します．方策のmoduleは，robotのdirectory（`.roboloom/rakuda2/`）に置けば `PYTHONPATH` なしで読み込めます．
 - `policy` extraでtorchとLeRobotが入ります．
 
 ## 2. 模擬で記録する
@@ -48,7 +48,7 @@ uv run python .roboloom/rakuda2/chunk_mlp.py train \
 
 | 引数 | 意味 |
 | --- | --- |
-| `--history 4` | 過去4フレーム（方策の周期ごと）を入力にする |
+| `--history 4` | 過去4 frame（方策の周期ごと）を入力にする |
 | `--horizon 8` | 8手をまとめて出す |
 | `--stride 3` | 3行おきに学習する．15 fpsの記録で方策は5 Hz |
 | `--exclude ...` | 動かさない関節．`hold` としてroboloomが保持する |
@@ -65,12 +65,12 @@ uv run roboloom infer --mock --seconds 10 --plain --task "chunk eval" \
 ```
 
 - `saved episode 0: 'chunk eval', ... frames` と出れば，記録から推論まで通っています．
-- チェックポイントは絶対パスで渡します．相対パスは，プロジェクトのルートからは解決されません（dataflowは一時ディレクトリから起動します）．
+- checkpointは絶対pathで渡します．相対pathは，projectのrootからは解決されません（dataflowは一時directoryから起動します）．
 - 模擬の記録はほとんど動かないので，方策の出来は確かめられません．経路の確認だけです．
 
-## 5. 自分のモデルに置き換える
+## 5. 自分のmodelに置き換える
 
-`chunk_mlp.py` の `load` が返すオブジェクトを，自分のモデルにします．必要なのは `reset()` と `infer(observation)` だけです．
+`chunk_mlp.py` の `load` が返すobjectを，自分のmodelにします．必要なのは `reset()` と `infer(observation)` だけです．
 
 ```python
 class MyPolicy:
@@ -94,4 +94,4 @@ def load(checkpoint: str) -> MyPolicy:
 ## 次へ
 
 - 実機のRakuda2で動かす：[Rakuda2：収集から推論まで](rakuda2-train-infer.md)
-- 別の環境で方策を動かす：[別のプロセスで動かす](../policy/remote.md)
+- 別の環境で方策を動かす：[別のprocessで動かす](../policy/remote.md)
