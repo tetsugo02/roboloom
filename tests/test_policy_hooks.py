@@ -392,7 +392,7 @@ def test_session_launch_records_filtered_rows(tmp_path, monkeypatch):
         session.start("hooks")
         time.sleep(1)
         session.stop()
-        assert session.save().saved
+        assert session.save(wait=True).saved
         output = session.cfg.output
     files = [p for p in (tmp_path / output).rglob("*.parquet") if "data" in p.parts]
     flags = np.concatenate(

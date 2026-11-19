@@ -173,6 +173,15 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
     return None
 
 
+def next_episode_index(fields: dict) -> int | None:
+    """The index the next episode gets if it is saved, from the recorder's status
+    fields: the saved episodes plus those still queued for a background save."""
+    saved = fields.get("episodes")
+    if not isinstance(saved, int):
+        return None
+    return saved + int(fields.get("pending_saves") or 0)
+
+
 def recorder_state_after(report: dict) -> str | None:
     """The recorder's state once it sent `report`, or None when the report does not
     tell. Its status follows up to a quarter of a second later; without this a `start`
@@ -380,14 +389,10 @@ def _session(node, cfg: RobotConfig):
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
-                # the index the episode gets if saved, for episode lifecycle events:
-                # the saved episodes plus those still queued for a background save
-                fields = latest.get("recorder", {}).get("fields", {})
-                saved = fields.get("episodes")
-                if cmd == "start" and isinstance(saved, int):
-                    request["episode_index"] = saved + int(
-                        fields.get("pending_saves") or 0
-                    )
+                # the index the episode gets if saved, for episode lifecycle events
+                index = next_episode_index(latest.get("recorder", {}).get("fields", {}))
+                if cmd == "start" and index is not None:
+                    request["episode_index"] = index
                 if cmd in ("teleop", "policy", "stop_teleop"):
                     warning = teleop_warning(cfg, cmd, latest, time.monotonic_ns())
                     if warning is not None:

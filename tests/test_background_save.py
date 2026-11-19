@@ -578,3 +578,12 @@ def test_synchronous_save_ignores_wait_false(fake_session, monkeypatch):
     result = session.save(wait=False)
     assert result.saved and not result.pending and result.index == 3
     assert session.wait_saves() == []
+
+
+def test_the_next_episode_index_counts_the_queued_saves():
+    # lifecycle events (hooks) get the index the started episode will have if saved
+    from roboloom.runtime.node import next_episode_index
+
+    assert next_episode_index({"episodes": 3}) == 3
+    assert next_episode_index({"episodes": 3, "pending_saves": 2}) == 5
+    assert next_episode_index({"pending_saves": 1}) is None
