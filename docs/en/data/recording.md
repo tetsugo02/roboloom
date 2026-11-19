@@ -45,6 +45,49 @@ Before uploading or training, finish the session and check `roboloom check-datas
 
 To save synchronously, set `background_save: false` in [nodes/recorder.yaml](../reference/configuration/recorder.md#recorder). This setting is also required with `streaming_encoding: true`.
 
+### Checking on hardware { #checking-on-hardware }
+
+<span class="status status--mock">Mock only</span> Run these checks from a [roboloom checkout](../contribution/index.md). Use a configured Rakuda2 with RealSense and keep `background_save: true`. To include DIGIT, pass `--with gravity,digit` if you normally use `gravity`. List all the options you want because `--with` replaces the defaults. Use a dedicated test dataset. The default is `datasets/rakuda2-bgsave-check`, and `--root` selects a different directory.
+
+```bash
+uv run python scripts/check_background_save.py compare rakuda2 --seconds 30 --episodes 5
+uv run python scripts/check_background_save.py limit rakuda2 --seconds 1
+uv run python scripts/check_background_save.py crash rakuda2 --seconds 20
+```
+
+Align the leader with the follower before each episode. Keep them aligned between episodes because the script attempts the next Start as soon as allowed by the check. For `compare`, use similar movements in both groups.
+
+| Check | Procedure and approximate recording time |
+| --- | --- |
+| `compare` | Record five episodes after draining the save queue before each Start, then five with an immediate Start after Save. Allow five minutes for recording plus startup and save time. |
+| `limit` | Record one-second episodes back to back and try Start at the queue limit. After a refusal, drain the queue and record and save one more episode. Allow up to `max_pending_saves + 3` seconds for recording, plus command and save time. |
+| `crash` | Record for 20 seconds, then send `SIGKILL` only to the recorder while a save is pending. The script closes the dataflow and reopens the same dataset to verify recovery. Allow time for confirmation, restart and saving. |
+
+For `crash`, support the leader and follower arms before confirming and keep them supported through shutdown and restart. Recording stops before the kill. Dora and the other nodes may keep running until the script closes the dataflow. On orderly shutdown, the follower stops and can keep holding in position mode. Current-mode joints can lose holding force when their device closes or its watchdog fires.
+
+| Result or metric | What to check |
+| --- | --- |
+| Missing rates | Compare `missing_rate` per source and `action_missing_rate` per follower. `compare` warns if an overlap mean increases by more than 0.01 or crosses the configured quality limit. |
+| Timing | Compare recording `queue_ms` and `latency_ms` p99 and max, and `control_interval_ms` max per follower. Review queue and latency values for slowdowns. The control interval is also checked against the configured quality limit. |
+| `PASS` | The check observed the expected behavior, and the dataset passed validation. |
+| `WARN` | `compare` could not confirm overlap around Start, or metrics crossed a comparison or quality limit. |
+| `SKIP` | The queue did not reach the limit, the save completed before the crash could be induced, or the operator declined the kill. To reproduce more save load, try a longer duration or add sensors. |
+| `FAIL` | A command, save, dataset check, or recovery check failed. |
+
+The script prints the path to `background-save-result.json` in the session's log directory next to the robot's other logs (`.roboloom/<robot>/logs/bgsave-check-<time>/`; `recovery/` under it holds the restarted run of `crash`). Keep the JSON with the hardware results. It contains the arguments, roboloom version, timeline, per-episode metrics and verdict.
+
+**Operator screen checklist.** Use a [test experiment](../reference/configuration/index.md#experiments) with its own `dataset.root`, then run:
+
+```bash
+uv run roboloom run rakuda2 --experiment ./bgsave-screen.yaml
+```
+
+- Align the leader. Record an episode, select Stop and then Save, and check that the recorder row shows `saving 1 queued`. With space in the queue, Start works immediately.
+- With `max_pending_saves` queued, try Start and check for `N episodes are waiting to be saved (max_pending_saves M); wait, then retry start`.
+- Check that `saved episode N '...'` appears in the log after a queued save completes.
+- Quit with a queued save and confirm that saving finishes before the screen closes. Check the test dataset after exit.
+- If a save fails, check that the screen reports `episode '...' was not saved: ...` as an error.
+
 ## Resuming { #resuming }
 
 You can append further episodes to the same dataset. On resume, FPS and feature compatibility are checked. Give an option that changes the recorded features a `dataset`, so it gets a dataset of its own ([Launch options](../reference/configuration/index.md#launch-options)).

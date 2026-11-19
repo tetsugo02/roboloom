@@ -45,6 +45,49 @@ uploadや学習の前にsessionを終了し，`roboloom check-dataset` に `epis
 
 同期保存にするには，[nodes/recorder.yaml](../reference/configuration/recorder.md#recorder) に `background_save: false` を指定します．`streaming_encoding: true` を使う場合もこの指定が必要です．
 
+### 実機での確かめ方 { #checking-on-hardware }
+
+<span class="status status--mock">模擬のみ</span> [roboloomのcheckout](../contribution/index.md) から実行します．RealSenseを設定したRakuda2を使い，`background_save: true` にします．普段 `gravity` を使い，DIGITも含める場合は `--with gravity,digit` を渡します．`--with` は既定のoptionを置き換えるので，使うoptionをすべて指定します．検査専用のdatasetを使います．既定は `datasets/rakuda2-bgsave-check` で，`--root` で別のdirectoryを選べます．
+
+```bash
+uv run python scripts/check_background_save.py compare rakuda2 --seconds 30 --episodes 5
+uv run python scripts/check_background_save.py limit rakuda2 --seconds 1
+uv run python scripts/check_background_save.py crash rakuda2 --seconds 20
+```
+
+各episodeの前にleaderをfollowerに合わせます．次のStartは各checkの条件を満たすとすぐ実行するので，episodeの間も両者を合わせておきます．`compare` では両方のgroupで同じように動かします．
+
+| Check | 手順と記録時間の目安 |
+| --- | --- |
+| `compare` | Start前に保存待ちをすべて処理するepisodeを5回，Save直後にStartするepisodeを5回記録します．記録に5分かかり，起動と保存の時間が加わります． |
+| `limit` | 1秒のepisodeを続けて記録し，保存待ちが上限に達したときのStartを確認します．拒否されたら保存完了を待ち，もう1 episodeを記録して保存します．記録は最大 `max_pending_saves + 3` 秒で，commandと保存の時間が加わります． |
+| `crash` | 20秒間記録したあと，保存待ちがある間にrecorderだけを `SIGKILL` で強制終了します．scriptはdataflowを閉じ，同じdatasetを開き直して復旧を確かめます．確認，再起動，保存の時間が加わります． |
+
+`crash` では確認を入力する前にleaderとfollowerの腕を支え，終了から再起動まで支え続けます．記録は強制終了の前に停止します．scriptがdataflowを閉じるまで，Doraと他のnodeが動き続ける場合があります．通常の終了処理ではfollowerは停止し，位置制御の関節は保持を続けることがあります．電流制御の関節はdeviceを閉じたときやwatchdogが作動したときに保持力を失うことがあります．
+
+| 結果・指標 | 確認すること |
+| --- | --- |
+| 欠損率 | sourceごとの `missing_rate` とfollowerごとの `action_missing_rate` を比べます．重複ありのgroupの平均が0.01より大きく増えるか，設定の品質上限を超えると，`compare` は警告を出します． |
+| 処理時間 | 記録の `queue_ms` と `latency_ms` のp99・最大値，followerごとの `control_interval_ms` の最大値を比べます．queueとlatencyの増加を確認します．制御周期は設定の品質上限とも照合します． |
+| `PASS` | 期待した動作を観測し，datasetの検査を通過しました． |
+| `WARN` | `compare` はStart時の保存との重なりを確認できなかったか，指標が比較または品質の上限を超えました． |
+| `SKIP` | 保存待ちが上限に達しなかったか，強制終了の前に保存が完了したか，操作者が強制終了を取りやめました．保存の負荷を上げるには，記録時間を延ばすかsensorを増やします． |
+| `FAIL` | command，保存，datasetの検査，または復旧の確認に失敗しました． |
+
+scriptは，robotのほかのlogと同じ場所にあるsessionのlog directory（`.roboloom/<robot>/logs/bgsave-check-<時刻>/`．`crash` の再起動分はその下の `recovery/`）に `background-save-result.json` を書き，そのpathを表示します．JSONは実機での結果と一緒に残してください．引数，roboloomのversion，時系列，episodeごとの指標，判定を含みます．
+
+**操作画面のチェック項目**．専用の `dataset.root` を持つ [検査用experiment](../reference/configuration/index.md#experiments) を用意して実行します．
+
+```bash
+uv run roboloom run rakuda2 --experiment ./bgsave-screen.yaml
+```
+
+- leaderを合わせます．episodeを記録してStop，Saveを選び，recorder行に `saving 1 queued` が出ることを確かめます．保存待ちに空きがあれば，すぐStartできます．
+- 保存待ちが `max_pending_saves` 件の状態でStartし，`N episodes are waiting to be saved (max_pending_saves M); wait, then retry start` が出ることを確かめます．
+- 保存待ちの処理が終わるとlogに `saved episode N '...'` が出ることを確かめます．
+- 保存待ちがある間に終了し，保存が終わってから操作画面が閉じることを確かめます．終了後に検査用datasetを調べます．
+- 保存に失敗した場合は，操作画面に `episode '...' was not saved: ...` がerrorとして出ることを確かめます．
+
 ## 再開 { #resuming }
 
 同じdatasetに次のepisodeを追記できます．再開時はFPSとfeatureの互換性を検査します．記録するfeatureを変えるoptionには `dataset` を付け，datasetを分けます（[起動option](../reference/configuration/index.md#launch-options)）．
