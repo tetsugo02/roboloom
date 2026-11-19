@@ -43,8 +43,10 @@ print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 from roboloom import Session
 
 with Session.launch("rakuda2", options=["gravity"]) as s:
-    s.wait_ready()  # wait until the leader is aligned with the follower
+    s.wait_ready()
     result = s.record("pick up the cup", seconds=30)
+    if result.pending:
+        (result,) = s.wait_saves()
     print(result.index, result.frames, result.warnings)
 ```
 
@@ -56,7 +58,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 - Leaving the `with` block does the following:
   - Discards any in-progress episode.
   - If an `operator` is configured, asks you to support the arms. Enter releases the follower too; typing `hold` keeps the follower holding.
-  - Stops the dataflow.
+  - Waits for queued saves, then stops the dataflow.
   - The leader goes limp. The follower's torque goes off only when you chose to release it; otherwise it keeps its torque and last target. A follower that does not hold when left alone (`unattended` other than `holds`) does not keep holding; see [Behaviour without torque and when left alone](../configuration/followers.md#torque-off-and-unattended).
   - To decide from a script, call `s.close(release=True)` (release) or `s.close(release=False)` (hold).
 - Logs are kept in `logs/<dataset name>-<time>/` next to the configuration file (for example `logs/rakuda2-digit-20261102-101500/`).
@@ -84,8 +86,8 @@ For `task`, you can pass either a string or a function that takes an `EpisodeInf
 
 | `EpisodeInfo` field | Contents |
 | --- | --- |
-| `index` | Episode number in the dataset (number of saved episodes) |
-| `number` | Number recorded in this Session |
+| `index` | Next dataset index if all pending saves succeed (`next_info()` adds saved and pending counts) |
+| `number` | Number saved by this Session plus its accepted saves still awaiting a result |
 | `dataset` | The dataset's name (the part of `repo_id` after `/`, with the enabled options' names; e.g. `rakuda2-digit`) |
 | `previous` | List of tasks saved in this Session |
 
@@ -112,13 +114,20 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 ## Fine-grained control { #step-by-step }
 
 - You can call `start(task)`, `stop()`, `save()`, `discard()`, `estop()`, and `release(confirm=True)` one at a time.
-- An episode `save()` returned for stays readable even if the process stops afterwards. When the write fails, `save()` raises `SessionError` and drops that episode (the earlier ones stay and the next can be recorded; [Saved episodes](../../data/recording.md#saved-episodes)).
-  - Example: when start and end are decided by an external signal.
+- <span class="status status--mock">Mock only</span> [Background saving](../../data/recording.md#background-saving) adds the following save results and controls.
+
+| Call or field | Behavior |
+| --- | --- |
+| `save(timeout=300, *, label=None, note=None, wait=None)` | `wait=None` follows `background_save`. Use `wait=True` for this episode's final result. With `background_save: false`, `save` always waits for the write. |
+| `EpisodeResult.pending` | In background mode, `save()` by default and `record()` for kept episodes return `pending=True`, `saved=False`, and `index=None`. Use a final result for the saved index. |
+| `wait_saves(timeout=None) -> list[EpisodeResult]` | Collects this Session's queued results in submission order, including completed results that have yet to be collected. After those saves finish, raises `SessionError` if any failed, with successes in `report["results"]` and failures in `report["failures"]`. A timeout raises `SessionError` and the results can be collected later. |
+| `pending_saves` | Latest recorder count of queued and in-progress saves. |
+
 - Inspecting state:
   - `status()`: latest status of each node.
   - `reports()`: unread reports, such as robot mode changes.
 - When a command is rejected (e.g. the leader is not aligned), a `SessionError` is raised.
-  - `start` is also rejected while the previous episode is being saved, is stopped but neither saved nor discarded, or is still recording. When the recorder could not take a `start`, the followers and the policy are stopped too (no episode runs that nobody records).
+  - `start` is rejected while recording, while an episode awaits `save` or `discard`, during a synchronous save, or when the background queue is full. If the followers and policy received a `start` the recorder could not take, they are stopped too.
 - `record` discards the episode and raises `EpisodeFailed` (a `SessionError`) when a controller fails during it (for example the policy raised) or a follower latches FAULT or ESTOP. The policy can be used for the next episode as it is.
 - `estop()` goes out even after a node has failed (other commands raise `SessionError` once they see a failed node).
 - When the process that called `Session.launch` ends, however it ends (killed, an exception, its terminal closed), the dataflow discards the episode in progress, lets the followers hold and ends. A robot never keeps following a policy after its script is gone, with or without `close()`. Child processes made with `multiprocessing` and the like count as the process still being there.
@@ -127,11 +136,11 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 
 ```python
 s.start("wipe the table")
-while not task_done():  # user's own check
+while not task_done():
     print(s.status()["follower"]["fields"]["mode"])
     time.sleep(0.5)
-stopped = s.stop()  # not saved yet; metrics and warnings can be inspected
-s.save() if stopped.ok else s.discard()
+stopped = s.stop()
+s.save(wait=True) if stopped.ok else s.discard()
 ```
 
 ## Policies, evaluation and choosing episodes { #guides }
@@ -171,6 +180,7 @@ The CLI selection is in [Sensor selection in the CLI](../cli.md#sensor-selection
   - Simulation
   - Simple robots with few sensors
 - It drives one follower. Run configurations with several followers with `Session`.
+- `save_episode()` always saves synchronously, including when the recorder YAML enables background saving for the dataflow.
 - A policy can be passed directly to `step(policy=...)`.
   - However, if the policy or sensors are slow, the control period is delayed too.
 - Run the real Rakuda-2 with `Session`.

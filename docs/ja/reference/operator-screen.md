@@ -49,6 +49,7 @@
 | --- | --- |
 | header | 機体名，mode（操作・mockか実機か・有効なoption），記録の進捗，警告 |
 | Status tab | node一覧と詳細．幅100文字以上では左右に並べ，それ未満ではDetailsで選択nodeの詳細を確認する |
+| recorderの行 | recorderの状態を表示し，保存待ちがあれば保存中の1件を含めて `saving N queued` を表示する．Detailsには `pending_saves` と `max_pending_saves` が出る．[background保存](../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> |
 | Details tab | 選択nodeの状態，項目，単位，更新からの時間．node選択は表示だけを変更し，操作はdataflow全体を対象にする |
 | Logs tab | tabを選ぶまで隠す．独立してscrollでき，非表示中の新着も保持する．過去の行を読んでいる間は新着で位置を戻さない．画面は最大10,000行を保持し，doraの全logは設定の隣の `logs/` に残る |
 | Operations | すべてのtabの下に残り，表示領域の約半分を使う．対応する最小サイズ80×24でも，既定では10行以上を確保する（最小6行）．使えない操作も理由付きでmenuに残る．初期focusは操作menu |
@@ -139,6 +140,12 @@
 | `estop` | 非常停止．送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別する．busやdataflowが切断されている場合の到達は保証できない |
 | `quit` | 終了確認を開く |
 
+| 保存のlog | 意味 |
+| --- | --- |
+| `queued for save (N pending)` | recorderが `save` を受け付けた <span class="status status--mock">模擬のみ</span> |
+| `saved episode N 'task' (F frames)` | backgroundでの書き込みが完了した．同じ行に品質の指標が続くことがある <span class="status status--mock">模擬のみ</span> |
+| `episode 'task' was not saved: ...` | backgroundでの書き込みが失敗し，そのepisodeを破棄した <span class="status status--mock">模擬のみ</span> |
+
 ### Exit confirmation { #exit-confirmation }
 
 | Detail | 説明 |
@@ -155,6 +162,7 @@
 | --- | --- |
 | — | followerを保持しても，通電している入力機器は終了時に脱力します． |
 | — | UI異常終了時も，脱力の選択が確認済みでなければfollowerを保持します． |
+| — | <span class="status status--mock">模擬のみ</span> 終了を確定すると，[保存待ち](../data/recording.md#background-saving) の処理が終わるまで待ちます． |
 | — | roboloomのprocessごと止まった場合（強制終了，端末を閉じた）も，dataflowは記録中のepisodeを破棄し，followerを保持させて終わります． |
 
 ## record and infer { #record-and-infer }

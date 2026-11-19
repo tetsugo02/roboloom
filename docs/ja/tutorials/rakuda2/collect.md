@@ -28,7 +28,7 @@ uv run roboloom run --with gravity
 2. leaderをfollowerに揃え，controllerの `following` を確認します．`aligning` の警告中は，姿勢を合わせてから開始を再試行します．
 3. `start pick up the cup` で追従・記録を始め，leaderで操作します．
 4. `stop` で止めます．`stop` はfollowerを保持し，脱力はしません．
-5. `save` で保存，または `discard` で破棄します．保存結果の欠損率・指令の有効率・制御周期の警告を確認します．
+5. `save` でepisodeを保存に回すか，`discard` で破棄します．Logsで保存完了後の欠損率・指令の有効率・制御周期の警告を確認します．
 6. 次の `start <task>` で別episodeを収集できます．
 7. 終了時は `stop` → 保存または破棄 → leaderとfollowerの腕を支えて `quit` の順に操作し，確認で保持または支持後の脱力を明示選択します．初期選択はcancelです．
 
@@ -44,12 +44,16 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --episodes 3 --with
 
 Pythonからは同じdataflowを使えます．
 
+<span class="status status--mock">模擬のみ</span> [background保存](../../data/recording.md#background-saving) では，既定でepisodeが保存待ちになります．保存後の番号を読むには，確定した結果を待ちます．
+
 ```python
 from roboloom import Session
 
 with Session.launch("rakuda2", options=["gravity"]) as session:
     session.wait_ready()
     result = session.record("pick up the cup", seconds=30)
+    if result.pending:
+        (result,) = session.wait_saves()
     print(result.index, result.frames, result.warnings)
 ```
 

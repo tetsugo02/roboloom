@@ -15,9 +15,11 @@ uv run roboloom check-dataset --with policy
 | Summary | Episodes, rows, fps, robot, the roboloom version that recorded it, file counts; with episode records, the verdict counts (`labels: 7 success, 3 failure, ...`) |
 | `problems` | What is broken: unreadable files, counts that disagree between `info.json` and the episode metadata, episode indices with gaps, missing videos and videos that do not match their rows, a half-written episode |
 | `notes` | What to know before training: the share of rows that are 0, per `*.valid` column; the share of rows whose `action` is all zeros (recorded before rows without a command kept the held target) |
+| `episode spool:` (in `notes`) | Counts ready and unfinished episodes still in the [spool](recording.md#background-saving) <span class="status status--mock">Mock only</span> |
 
 - With `problems`, the command exits with code 1.
-- When a save was interrupted and a half-written episode is left, `--recover` removes it before checking. Recording into the dataset again removes it too ([What happens to a saved episode](recording.md#saved-episodes)).
+- If a dataset write was interrupted, `--recover` rolls it back before checking. Reopening the dataset for recording also rolls it back and processes any remaining spool episodes ([What happens to a saved episode](recording.md#saved-episodes)).
+- <span class="status status--mock">Mock only</span> Before upload or training, finish the recording session and check for an `episode spool:` note even when `problems: none` appears. If there are spool episodes, reopen the dataset for recording, let the recorder finish, then check again.
 - What `valid` means is in [Validity flags](format.md#valid); the values of rows that are 0 are in [Missing data](format.md#missing-data).
 
 ## Leaving out bad episodes { #excluding-episodes }

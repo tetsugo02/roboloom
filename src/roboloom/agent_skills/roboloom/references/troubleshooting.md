@@ -50,7 +50,8 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | `torque is on for some of these motors; support the arm, release it, then retry` | `commission` refuses torqued motors | User supports the arm and releases it |
 | `PiPER on <can>: ...` / `Pika Gripper on <port>: no ... feedback` / `Pika Sense on <port>:` | CAN interface down, power, USB path | Hints in the message; creating CAN interfaces needs an administrator. In development, mock only |
 | `another run of this robot is using <fifo>` | A dataflow of this robot is running (or one started within the last 30 s) | End it: `roboloom session quit`. A FIFO left by a run that died is removed automatically |
-| `start not started: the stopped episode is neither saved nor discarded` / `still being saved` / `already being recorded` | The recorder is not idle | `save` or `discard` the stopped episode, or wait for the save; then retry `start` |
+| `start not started: the stopped episode is neither saved nor discarded` / `still being saved` / `already being recorded` | The current episode is stopped, saving synchronously, or recording | `save` or `discard` a stopped episode, wait for a synchronous save, or `stop` the current recording; then retry `start` |
+| `N episodes are waiting to be saved (max_pending_saves M); wait, then retry start` | [Background save queue](recording.md#background-saving) is at its limit, including the active save | Wait until `pending_saves` is below `max_pending_saves`, then retry `start` |
 | `EpisodeFailed: <controller> failed during the episode: ...` | The policy raised in `infer`/`reset` (or a follower latched FAULT/ESTOP); the episode was discarded | Read the error. The policy is ready again after the episode ended: no restart. A policy that did not *load* needs a restart |
 | `the operator's process is gone: ...` (in `logs/<run>/reports.jsonl`) | The launching process died while the dataflow ran; the followers were left holding | Nothing to clean up; start a new run |
 
@@ -73,8 +74,9 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | Message fragment | Cause | Fix |
 | --- | --- | --- |
 | `existing dataset schema or FPS differs from the configuration:` (recorder log) | Features or `dataset_fps` changed against an existing `output` | New `output`, or a `dataset:` name on the option. The message also offers moving the old dataset away; that is the user's decision, so ask first. **Never delete or overwrite the dataset** |
-| `save failed: the episode was not saved and is dropped (...)` | The write failed (disk full, a video that does not match the rows) | That episode is gone; the earlier ones are intact and recording goes on. Fix the cause (free disk space) before the next episode |
-| `the dataset was put back to its last saved episode: a save had been interrupted` | The recorder was killed while saving; the half-written episode was removed on opening | Nothing to do. `roboloom check-dataset` confirms the dataset is whole |
+| `save failed: the episode was not saved and is dropped (...)` / `episode 'task' was not saved: ...` | The write failed (disk full, a video that does not match the rows). Background failures can arrive during the next recording | Earlier saves stay intact and later queued saves continue. Fix the cause before submitting more episodes. In Python, `wait_saves()` reports failed queued writes |
+| `the dataset was put back to its last saved episode: a save had been interrupted` | A partial dataset write was rolled back | Check with `roboloom check-dataset`. Accepted background episodes are retried when the dataset opens for recording |
+| `episode spool:` in `check-dataset` notes | Ready episodes await import or unfinished episodes remain from an interrupted run | Reopen the same dataset for recording, quit to drain the queue, then check again before uploading or training |
 | `No module named 'lerobot'` (recorder) / `converting needs lerobot` | `record` extra missing | `uv add 'roboloom[record]'` |
 | `No module named 'cv2'` | Core dependencies missing | Run `uv sync` or reinstall roboloom |
 | `No module named 'pyrealsense2'` / `'sounddevice'` | `hardware` extra missing | `uv add 'roboloom[hardware]'` |

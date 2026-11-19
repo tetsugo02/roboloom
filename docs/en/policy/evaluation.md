@@ -23,7 +23,7 @@ uv run roboloom check-dataset --with policy                                # lab
 - `record(..., label="success")` and `save(label="failure", note="...")` save the episode with a verdict (`success` or `failure`) and a note.
   - `record` also takes a function as `label`: it receives the stopped episode (`result`) and returns the verdict. Returning `None` saves without one.
   - Any other string raises `ValueError` before anything is saved.
-- Every save appends one line to the dataset's `meta/roboloom_episodes.jsonl`, with or without a verdict.
+- The recorder writes the [episode record](../data/recording.md#episode-records) with or without a verdict after the dataset write. With [background saving](../data/recording.md#background-saving) <span class="status status--mock">Mock only</span>, call `wait_saves()` before reading the records, or use `save(wait=True)` for one episode.
 - To set or change a verdict afterwards, `roboloom.recording.episodes.label(...)` works too ([Python API: recording](../reference/python-api/recording.md)).
 
 ```python
@@ -33,9 +33,10 @@ for k in range(10):
     s.record(
         "pick up the cup",
         seconds=30,
-        label=lambda ep: "success" if cup_lifted() else "failure",  # your own check
+        label=lambda ep: "success" if cup_lifted() else "failure",
     )
-records = episodes.read(s.cfg.output)  # {episode index: record}
+s.wait_saves()
+records = episodes.read(s.cfg.output)
 print(episodes.summary(s.cfg.output, s.episodes))
 # labels: 7 success, 3 failure, 0 not labelled (70% of the labelled)
 ```

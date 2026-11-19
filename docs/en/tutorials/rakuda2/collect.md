@@ -28,7 +28,7 @@ With `--with`, the launcher is not opened. To start from the launcher, run `uv r
 2. Align the leader to the follower and confirm the controller is `following`. While an `aligning` warning is shown, match the pose and retry starting.
 3. Start following and recording with `start pick up the cup`, and operate with the leader.
 4. Stop with `stop`. `stop` holds the follower and does not turn off torque.
-5. Save with `save`, or discard with `discard`. Check the saved result's warnings for missing-data rate, valid-command rate, and control period.
+5. Accept the episode with `save`, or drop it with `discard`. Check the completed result's warnings for missing-data rate, valid-command rate, and control period in Logs.
 6. Collect another episode with the next `start <task>`.
 7. To finish, do `stop` → save or discard → support the leader and follower arms and `quit`, then explicitly select supported Release or follower Hold in the confirmation. Cancel is selected initially; Enter alone cancels.
 
@@ -44,12 +44,16 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --episodes 3 --with
 
 The same dataflow can be used from Python.
 
+<span class="status status--mock">Mock only</span> With [background saving](../../data/recording.md#background-saving), the episode is queued by default. To read its saved index, wait for the final result.
+
 ```python
 from roboloom import Session
 
 with Session.launch("rakuda2", options=["gravity"]) as session:
     session.wait_ready()
     result = session.record("pick up the cup", seconds=30)
+    if result.pending:
+        (result,) = session.wait_saves()
     print(result.index, result.frames, result.warnings)
 ```
 

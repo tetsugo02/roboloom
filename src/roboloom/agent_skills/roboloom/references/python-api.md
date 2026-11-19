@@ -44,13 +44,17 @@ def launch(  # Session.launch
 with Session.launch("rakuda2", options=["gravity"]) as s:
     s.wait_ready()  # leader aligned / policy loaded (timeout=30.0)
     r = s.record("pick up the cup", seconds=30)
+    if r.pending:
+        (r,) = s.wait_saves()
     print(r.index, r.frames, r.warnings, r.ok)
 ```
 
 `record(task, seconds, *, keep=None, on_tick=None, tick_s=0.2, ready_timeout=60.0, home=False, label=None, note=None) -> EpisodeResult`
 
-- Waits until start is allowed (alignment), starts, records, stops, saves unless
-  `keep(result)` returns `False`. Exception or Ctrl-C discards the episode.
+- Waits until start is allowed, starts, records, stops, and saves unless
+  `keep(result)` returns `False`. A kept episode returns a pending result by default
+  with [background saving](recording.md#background-saving) (mock only).
+  Exception or Ctrl-C during recording discards the episode.
 - Raises `EpisodeFailed` (a `SessionError`) and discards the episode when a controller
   fails during it (the policy raised) or a follower latches FAULT/ESTOP. The policy is
   ready for the next `record` without a restart.
@@ -58,14 +62,16 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   running episode, the followers hold and it ends; `close()` is not what keeps a robot
   from running on.
 - `task`: a string or `Callable[[EpisodeInfo], str]`.
-  `EpisodeInfo(index, number, dataset, previous)`: dataset episode index, number in this
-  session, dataset name (e.g. `rakuda2-digit`), tasks saved in this session.
+  `EpisodeInfo(index, number, dataset, previous)`: next dataset index assuming queued
+  saves succeed (`next_info()` adds saved and pending counts), number in this session,
+  dataset name (e.g. `rakuda2-digit`), tasks saved in this session.
 - `home=True` moves leader and follower to the controller's `home` pose first.
 - `label`: an evaluation verdict, `"success"` / `"failure"`, or a function of the
   stopped `EpisodeResult` returning one (None: none); `note`: free text. Both go to
   the dataset's `meta/roboloom_episodes.jsonl` ([recording.md](recording.md)).
-- `EpisodeResult(task, saved, frames, index, metrics, warnings, label)`, `.ok` = no
-  warnings.
+- `EpisodeResult(task, saved, frames, index, metrics, warnings, label, pending)`.
+  `.ok` means there are no quality warnings. A queued result has `pending=True`,
+  `saved=False` and `index=None`.
 
 ```python
 import itertools
@@ -78,15 +84,19 @@ s.record(lambda info: f"pick up the {next(objects)}", seconds=20, keep=lambda ep
 
 | Call | Effect |
 | --- | --- |
-| `start(task)` | start following + recording; `SessionError` if not aligned |
+| `start(task)` | start following and recording. Raises `SessionError` if start is refused, including when the save queue is full |
 | `stop() -> EpisodeResult` | stop; not saved yet (inspect metrics/warnings) |
-| `save(timeout=300.0, *, label=None, note=None) -> EpisodeResult` / `discard()` | write the episode (readable from then on, whatever happens to the process) or drop it; a failed write raises `SessionError` and drops the episode; `label` / `note` as in `record` (another string: `ValueError`, nothing saved) |
+| `save(timeout=300, *, label=None, note=None, wait=None) -> EpisodeResult` | `wait=None` follows `background_save`. `wait=True` waits for this episode's final result and raises `SessionError` on a failed write. Synchronous mode always waits. `label` and `note` work as in `record` |
+| `wait_saves(timeout=None) -> list[EpisodeResult]` | Collect this Session's uncollected queued results in submission order. After all finish, raise `SessionError` on failures. `report["results"]` holds successes and `report["failures"]` holds the failure reports |
+| `discard()` | drop the episode in progress |
 | `home(timeout=None)` | slow move to the home pose; refused while recording |
 | `estop()` | emergency stop (latched); goes out even after a node failed |
 | `release(confirm=False)` | torque off; with `confirm=False` raises `HardwareError` carrying `release_note()` |
 | `status() -> dict` | latest status per node `{name: {"role", "level", "fields", "t_ns"}}`, e.g. `s.status()["follower"]["fields"]["mode"]` |
 | `reports() -> list[dict]` | unread reports (mode changes, ...) |
 | `episodes` (property) | episodes in the dataset |
+| `pending_saves` (property) | recorder's latest count of queued and in-progress saves |
+| `close()` | discard unfinished recording, wait for queued saves, and close the dataflow |
 | `log_dir` | log directory of this run |
 | `note(text, level="info")` | message on the status screen |
 
@@ -95,7 +105,7 @@ s.start("wipe the table")
 while not task_done():
     time.sleep(0.5)
 stopped = s.stop()
-s.save() if stopped.ok else s.discard()
+s.save(wait=True) if stopped.ok else s.discard()
 ```
 
 Each node process gets `ROBOLOOM_OPTIONS` and `ROBOLOOM_MODE` in its environment.

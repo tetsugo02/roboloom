@@ -8,9 +8,11 @@
 | --- | --- | --- | --- | --- |
 | `max_age_ms` | `{node: value}` | 必須 | ms | nodeごとに，行に使うsampleの古さの上限．入力，follower，sensor，`record: true` の推定器のすべてに必要．古いsampleしかない行は欠測（`valid` が0）になる（[欠測の扱い](../../data/format.md#missing-data)） |
 | `grace_ms` | 数値 | `500` | ms | 指令のないfollowerを待たずに行を確定するまでの時間 |
-| `image_writer_threads` | 整数 | `4` | — | LeRobotの画像書き込みのthread数 |
-| `streaming_encoding` | 真偽値 | `false` | — | LeRobotのstreaming encodeを使う |
-| `queue_s` | 数値 | `0.5` | s | recorderの入力queueに溜める時間（streamごと）．保存中に古いものから捨てる |
+| `image_writer_threads` | 整数 | `4` | thread | LeRobotの画像書き込みと，background保存時のspool画像書き込みのthread数 |
+| `streaming_encoding` | 真偽値 | `false` | — | LeRobotのstreaming encoderは一度に1 episodeを扱う．`true` と `background_save: true` の併用は `ConfigError` |
+| `background_save` | 真偽値 | `true` | — | dora recorderでepisodeを保存待ちに入れる．`false` では書き込みが終わるまで `save` は戻らない．PiPERとRakuda2のtemplateに設定済み．[background保存](../../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> |
+| `max_pending_saves` | 1以上の整数 | `2` | episode | 保存中の1件を含め，この件数に達すると `start` を拒否する．PiPERとRakuda2のtemplateに設定済み <span class="status status--mock">模擬のみ</span> |
+| `queue_s` | 数値 | `0.5` | s | recorderの入力queueに溜める時間（streamごと）．超えると古いsampleから捨てる |
 | `video_codec` | 文字列 | — | — | `storage: video` の画像のcodec（[下記](#video-codec)） |
 | `quality` | mapping | `{}` | — | 品質の警告の閾値（[下記](#quality)） |
 
@@ -25,6 +27,8 @@ max_age_ms:
 grace_ms: 500
 image_writer_threads: 4
 streaming_encoding: false
+background_save: true
+max_pending_saves: 2
 queue_s: 0.5
 quality:
   max_missing_rate: 0.05

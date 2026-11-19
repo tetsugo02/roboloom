@@ -32,7 +32,7 @@ override-dependencies = [
 | `rakuda2` | dynamixel-sdk | Rakuda2 follower and Rakuda-mini leader hardware |
 | `piper` | piper_sdk 0.6, pinocchio (`pin`) | PiPER follower and `pose_ik` (in development) |
 | `pika` | pysurvive | Pika Sense tracking (in development); cameras and serial use core dependencies |
-| `record` | `lerobot[dataset]==0.7.0` | saving episodes (also mock collection that saves) |
+| `record` | `lerobot[dataset]==0.7.0` | saving episodes, including [background saving](recording.md#background-saving) (mock only) |
 | `hardware` | pyrealsense2, sounddevice | RealSense, microphone |
 | `digit` | digit-interface 0.2.1 (fork wheel, opencv-python-headless) | DIGIT |
 | `ik` | pinocchio (`pin`) | standalone IK without the PiPER SDK; also included in `piper` |

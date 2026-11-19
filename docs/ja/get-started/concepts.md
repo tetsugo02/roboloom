@@ -82,13 +82,15 @@ stateDiagram-v2
   [*] --> idle
   idle --> recording: start
   recording --> stopped: stop
-  stopped --> saving: save
-  saving --> idle: 保存した
+  stopped --> idle: save (background_save true)
+  stopped --> saving: save (background_save false)
+  saving --> idle: saved or dropped
   stopped --> idle: discard
   recording --> idle: discard
 ```
 
-- `stopped` の間は，`save` か `discard` を選ぶまで次の `start` を拒否します．`saving` の間も拒否します．
+- `stopped` の間は，`save` か `discard` を選ぶまで次の `start` を拒否します．`background_save: false` では `saving` の間も拒否します．
+- <span class="status status--mock">模擬のみ</span> [background保存](../data/recording.md#background-saving) では，`save` がepisodeを保存待ちに入れるとrecorderは `idle` に戻ります．保存中の1件を含む `pending_saves` を報告し，`max_pending_saves` 以上で `start` を拒否します．
 - `stop` はfollowerを保持します．脱力はしません．
 
 leaderで動かす `joint` controllerは，episodeとは別に次の状態を持ちます．`aligning` の間は `start` を拒否します．

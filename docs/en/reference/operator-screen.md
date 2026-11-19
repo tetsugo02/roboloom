@@ -49,6 +49,7 @@
 | --- | --- |
 | Header | The robot, mode (operation, mock or hardware, enabled options), recording progress, and warnings |
 | Status tab | The node list and details, side by side at widths of 100 columns or more; below that, use Details to inspect the selected node |
+| Recorder row | Shows the recorder state and `saving N queued` when saves are pending, including the active one. Details include `pending_saves` and `max_pending_saves`. [Background saving](../data/recording.md#background-saving) <span class="status status--mock">Mock only</span> |
 | Details tab | The selected node's state, fields, units, and update age. Node selection changes the display; operations still target the whole dataflow |
 | Logs tab | Hidden until its tab is selected. Scrolls independently; messages arriving while it is hidden are retained, and new entries preserve your position while reading older logs. Retains up to 10,000 lines; the full dora log stays in `logs/` beside the configuration |
 | Operations | Stays visible below every tab and uses roughly half of the content area, with at least 10 rows by default at the supported 80×24 size (six at minimum). Unavailable operations remain in the menu with a reason. The operations menu has initial focus |
@@ -139,6 +140,12 @@
 | `estop` | Emergency stop. Reports send failure, sent but unconfirmed, and fresh follower ESTOP confirmation separately; it cannot guarantee delivery through a disconnected bus or dataflow |
 | `quit` | Open the exit confirmation |
 
+| Save log line | Meaning |
+| --- | --- |
+| `queued for save (N pending)` | The recorder accepted `save` <span class="status status--mock">Mock only</span> |
+| `saved episode N 'task' (F frames)` | The background write completed. Quality metrics can follow on the same line <span class="status status--mock">Mock only</span> |
+| `episode 'task' was not saved: ...` | A background write failed and that episode was dropped <span class="status status--mock">Mock only</span> |
+
 ### Exit confirmation { #exit-confirmation }
 
 | Detail | Description |
@@ -155,6 +162,7 @@
 | --- | --- |
 | — | Actuated inputs release on exit even when followers hold. |
 | — | UI failure keeps followers holding unless a release choice was already confirmed. |
+| — | <span class="status status--mock">Mock only</span> Confirmed exit waits for [queued saves](../data/recording.md#background-saving) to finish. |
 | — | When the whole roboloom process stops (killed, its terminal closed), the dataflow discards the episode in progress, lets the followers hold and ends. |
 
 ## record and infer { #record-and-infer }

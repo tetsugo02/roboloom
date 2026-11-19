@@ -85,6 +85,7 @@ outdated, run `uv run roboloom skills install --force`.
 | Leader joint locking (`law: position`), `couplings`, `home` moves | Mock only | [robots/rakuda2.md](references/robots/rakuda2.md) |
 | Own policies (`type: policy`): inference and intervention (`policy`, `policy_teleop`) on Rakuda2 | Hardware-verified | [policy.md](references/policy.md) |
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | Mock only (PiPER + Pika) | [policy.md](references/policy.md) |
+| Background episode saving in the dora dataflow (`background_save`, `max_pending_saves`) | Mock only | [recording.md](references/recording.md#background-saving) |
 | PiPER follower, Pika Gripper, Pika Sense + `pose_ik` | In development, mock only | [robots/piper-pika.md](references/robots/piper-pika.md) |
 | Hand-held Pika Sense collection, `convert-handheld` | In development, mock only | [robots/handheld.md](references/robots/handheld.md) |
 | `opencv_rgb` web camera (Linux/macOS/Windows driver only) | Mock only; hardware unverified; Windows Session excluded | [sensors.md](references/sensors.md) |
@@ -154,8 +155,14 @@ with Session.launch("rakuda2", options=["gravity"], mock=True) as s:
     s.wait_ready()  # leader aligned with the follower
     for _ in range(3):
         result = s.record(lambda info: f"pick up the cup #{info.index}", seconds=20)
-        print(result.index, result.frames, result.warnings)
+        print(result.pending, result.frames, result.warnings)
+    for saved in s.wait_saves():
+        print(saved.index, saved.task)
 ```
+
+`Session.record()` returns a pending result for a kept episode by default. Call
+`wait_saves()` before using the committed dataset and to surface write failures.
+`InProcessSession.save_episode()` saves synchronously.
 
 Run a policy (`"module:callable"`, looked up in installed packages, then in
 `.roboloom/<robot>/`):

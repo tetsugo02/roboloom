@@ -36,7 +36,7 @@ A running `run` takes these operations from the operator screen or from [`robolo
 | --- | --- |
 | `start <task>` | Check readiness and start following and recording |
 | `stop` | Stop following and recording (saving is a separate operation) |
-| `save` | Save the episode |
+| `save` | Save the stopped episode. By default, acknowledge when queued. [Background saving](../data/recording.md#background-saving) <span class="status status--mock">Mock only</span> |
 | `discard` | Discard the episode |
 | `release` | Stop following and release actuated inputs and followers after confirming support |
 | `home` | Move the leader and follower slowly to the initial pose chosen in the controller; after arriving the leader returns to its normal laws |
@@ -180,6 +180,8 @@ uv run roboloom run --mock                        # mock devices
 
 Collect episodes of a fixed length, then exit. Select Start for each episode once ready ([Operator screen](operator-screen.md#operations)).
 
+<span class="status status--mock">Mock only</span> With [background saving](../data/recording.md#background-saving), `--plain` waits for queued saves after the last episode and prints the saved results. The operator screen logs results as they arrive and waits for the queue on confirmed exit.
+
 ```text
 roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--plain] [COMMON_OPTIONS]
 ```
@@ -272,6 +274,8 @@ uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
 
 Check a recorded dataset by reading it only: episode counts against the files, video length against the rows, the share of rows whose `valid` is 0, the count of verdicts. Exit code 1 when something is wrong ([Checking the data](../data/check-and-train.md)).
 
+<span class="status status--mock">Mock only</span> The `episode spool:` note reports ready and unfinished [spool episodes](../data/recording.md#background-saving).
+
 ```text
 roboloom check-dataset [robot | DATASET_DIR] [--recover] [COMMON_OPTIONS]
 ```
@@ -279,7 +283,7 @@ roboloom check-dataset [robot | DATASET_DIR] [--recover] [COMMON_OPTIONS]
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `robot` | robot name or path, or a dataset directory | the only robot's dataset | The dataset to check; select a dataset whose name an option changes with `--with` |
-| `--recover` | flag | off | First remove an episode whose save was interrupted ([Saved episodes](../data/recording.md#saved-episodes)) |
+| `--recover` | flag | off | Roll back an interrupted dataset write before checking ([Saved episodes](../data/recording.md#saved-episodes)) |
 | Common options | — | — | [Common options](#common-options) (`--with`, `--without` and `--experiment` decide the dataset name) |
 
 ```bash

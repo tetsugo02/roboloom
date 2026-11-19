@@ -82,13 +82,15 @@ stateDiagram-v2
   [*] --> idle
   idle --> recording: start
   recording --> stopped: stop
-  stopped --> saving: save
-  saving --> idle: saved
+  stopped --> idle: save (background_save true)
+  stopped --> saving: save (background_save false)
+  saving --> idle: saved or dropped
   stopped --> idle: discard
   recording --> idle: discard
 ```
 
-- While `stopped`, the next `start` is refused until you choose `save` or `discard`. It is refused while `saving` too.
+- While `stopped`, the next `start` is refused until you choose `save` or `discard`. With `background_save: false`, it is also refused during `saving`.
+- <span class="status status--mock">Mock only</span> With [background saving](../data/recording.md#background-saving), `save` returns the recorder to `idle` once queued. The recorder reports `pending_saves`, including the active save, and refuses `start` at `max_pending_saves` or above.
 - `stop` holds the follower. It does not turn the torque off.
 
 A `joint` controller driven by a leader has its own states, apart from the episode. `start` is refused while it is `aligning`.

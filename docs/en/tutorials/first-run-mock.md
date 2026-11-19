@@ -44,7 +44,7 @@ The operations are explained in [run operations](../reference/cli.md#run-operati
 uv run roboloom record examples/mock/config.yaml --task "mock demo" --seconds 5 --episodes 2 --plain
 ```
 
-`--plain` records without key input. `saved episode 0: 'mock demo', ... frames` appears twice. The output is `datasets/rakuda-mock` (`output` is relative to the configuration).
+`--plain` records without key input. With [background saving](../data/recording.md#background-saving) <span class="status status--mock">Mock only</span>, it reports each queued episode, then waits and prints both saved results with their dataset indices. The output is `datasets/rakuda-mock` (`output` is relative to the configuration).
 
 ## 5. Check the recording
 

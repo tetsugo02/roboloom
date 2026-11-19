@@ -4,6 +4,10 @@
 simulation and simple robots with one follower. A slow policy or sensor delays the control
 period, so production collection uses `Session` (dataflow).
 
+`save_episode()` always waits for the dataset write and returns the saved index,
+including when the YAML enables [background saving](recording.md#background-saving)
+for the dataflow.
+
 ## From components (no YAML)
 
 ```python
