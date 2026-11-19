@@ -37,7 +37,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ..core.protocol import Envelope
-from . import episodes, journal, manifest
+from ..errors import ConfigError
+from . import episodes, journal, manifest, spool
 from .metrics import summarize
 from .schema import (
     FILTERED,
@@ -75,8 +76,17 @@ class EpisodeRecorder:
         streaming_encoding: bool = False,
         queue_s: float = 0.5,
         video_codec: str | None = None,
+        background_save: bool = True,
+        max_pending_saves: int = 2,
     ):  # queue_s: dora input queues, see runtime.flow; video_codec: recording.video
+        if background_save and streaming_encoding:
+            raise ConfigError("set background_save or streaming_encoding to false")
         self.cfg = cfg
+        self.background_save = background_save
+        self.max_pending_saves = max_pending_saves
+        self.spool: spool.EpisodeSpool | None = None
+        self._spool_seq = 0
+        self._spool_threads = image_writer_threads
         self.sources = cfg.sources
         self.followers = cfg.followers
         self.streams = {action_stream(name): name for name in self.followers}
@@ -187,6 +197,8 @@ class EpisodeRecorder:
                 rgb_encoder=video_encoder(cfg, self.video_codec),
                 **self.writer_options,
             )
+        if self.root is None:
+            self._spool_seq = spool.next_sequence(root)
         self.root = root
         self.episodes = int(self.dataset.num_episodes)
         manifest.create(root, cfg, self._audio_signature(), new)
@@ -204,7 +216,19 @@ class EpisodeRecorder:
             raise RuntimeError("finish or discard the previous episode first")
         if not task.strip():
             raise ValueError("task is required")
-        if write:
+        if write and self.background_save:
+            if self.root is None:
+                raise RuntimeError("open the dataset before recording to a spool")
+            image_keys = tuple(
+                key
+                for key, feature in features(self.cfg).items()
+                if feature["dtype"] in ("video", "image")
+            )
+            self.spool = spool.EpisodeSpool(
+                self.root, image_keys, self._spool_threads, start_at=self._spool_seq
+            )
+            self._spool_seq = self.spool.seq + 1
+        elif write:
             self.open_dataset()
         self.write = write
         self.samples = self._empty()
@@ -260,12 +284,108 @@ class EpisodeRecorder:
             for k in range(self.next_row, self._row_count()):
                 self._emit(k)
         self.active, self.stopped = False, True
+        if self.spool is not None:
+            try:
+                self.spool.close()
+            except (OSError, RuntimeError, ValueError):
+                self.discard()
+                raise
 
     def discard(self) -> None:
-        if self.dataset is not None and self.dataset.has_pending_frames():
+        if self.spool is not None:
+            self.spool.discard()
+            self.spool = None
+        if (
+            not self.background_save
+            and self.dataset is not None
+            and self.dataset.has_pending_frames()
+        ):
             self.dataset.clear_episode_buffer()
         self.active = self.stopped = False
         self.samples = self._empty()
+
+    def enqueue(
+        self,
+        label: str | None = None,
+        note: str | None = None,
+        controllers: dict | None = None,
+    ) -> Path:
+        """Accept a stopped episode for saving and release the recording state."""
+        if not self.stopped:
+            raise RuntimeError("stop the episode first")
+        if not self.written:
+            raise ValueError("empty episode")
+        label = episodes.check_label(label)
+        if self.spool is None:
+            raise RuntimeError("background saving requires a spool")
+        path = self.spool.mark_ready(
+            {
+                "task": self.task,
+                "metrics": self.metrics(),
+                "label": label,
+                "note": note,
+                "controllers": controllers,
+            }
+        )
+        self.spool = None
+        self.discard()
+        self._reset_stats()
+        return path
+
+    def save_spooled(self, path: Path) -> dict:
+        """Import one accepted episode on the saver thread."""
+        root = self.root
+        assert root is not None
+        receipt = path / spool.COMMITTED
+        try:
+            entry = spool.metadata(path)
+            if entry.get("ready") is not True:
+                raise ValueError("the spooled episode is not ready")
+            task, frames, metrics = entry["task"], entry["frames"], entry["metrics"]
+            label = episodes.check_label(entry.get("label"))
+            self.open_dataset()
+            for row in spool.rows(path, entry):
+                self.dataset.add_frame(row)
+            self._save_closed(root, receipt=receipt)
+            index = self.episodes - 1
+            with contextlib.suppress(Exception):  # a note; the episode is saved
+                episodes.saved(
+                    root,
+                    index,
+                    task,
+                    frames,
+                    metrics,
+                    label,
+                    entry.get("note"),
+                    entry.get("controllers"),
+                )
+            return {
+                "saved_frames": frames,
+                "episodes": self.episodes,
+                "index": index,
+                "metrics": metrics,
+                "label": label,
+                "task": task,
+            }
+        except SaveFailed:
+            raise
+        except Exception as exc:
+            if self.dataset is not None:
+                # An import can fail partway through a row, before has_pending_frames().
+                # Abandon joins LeRobot's image writer before reopening cleans staging.
+                with contextlib.suppress(Exception):
+                    self.dataset.clear_episode_buffer(delete_images=False)
+                self._drop(root, reset_recording=False)
+            raise SaveFailed(
+                f"the episode was not saved and is dropped ({type(exc).__name__}: "
+                f"{exc}); the episodes saved before it are intact"
+            ) from exc
+        finally:
+            if receipt.exists():
+                with contextlib.suppress(OSError):  # a later startup can prune it
+                    spool.remove(path)
+            else:
+                spool.remove(path)
 
     def save(
         self,
@@ -284,6 +404,8 @@ class EpisodeRecorder:
         if not self.written:
             raise ValueError("empty episode")
         label = episodes.check_label(label)  # before anything is written
+        if self.background_save:
+            raise RuntimeError("use enqueue to save an episode in background mode")
         if self.root is None:  # a dataset the caller passed in saves as it likes
             self.dataset.save_episode()
             self.episodes = int(
@@ -306,7 +428,7 @@ class EpisodeRecorder:
         self.discard()
         return count
 
-    def _save_closed(self, root: Path) -> None:
+    def _save_closed(self, root: Path, *, receipt: Path | None = None) -> None:
         """Save the episode and close its files (`recording.journal`), or undo it."""
         journal.begin(root)
         try:
@@ -318,14 +440,17 @@ class EpisodeRecorder:
             if not closed:  # another LeRobot: its own way to close the files
                 self.dataset.finalize()
         except BaseException as exc:
-            self._drop(root)
+            self._drop(root, reset_recording=receipt is None)
             if not isinstance(exc, Exception):  # Ctrl-C, exit: as they are
                 raise
             raise SaveFailed(
                 f"the episode was not saved and is dropped ({type(exc).__name__}: "
                 f"{exc}); the episodes saved before it are intact"
             ) from exc
-        journal.commit(root)
+        if receipt is None:
+            journal.commit(root)
+        else:
+            journal.commit(root, receipt)
         self.episodes = int(self.dataset.num_episodes)
         if not self.noted:  # only runs that saved something are listed
             with contextlib.suppress(Exception):  # a note; the episode is saved
@@ -333,13 +458,15 @@ class EpisodeRecorder:
             self.noted = True
         if not closed:
             self.dataset = None
-            self.open_dataset()
+            if receipt is None:
+                self.open_dataset()
 
-    def _drop(self, root: Path) -> None:
+    def _drop(self, root: Path, *, reset_recording: bool = True) -> None:
         """After a failed save: the dataset as it was before it, opened again."""
         failed, self.dataset = self.dataset, None
-        self.active = self.stopped = False
-        self.samples = self._empty()
+        if reset_recording:
+            self.active = self.stopped = False
+            self.samples = self._empty()
         journal.abandon(failed)
         # still failing (e.g. the disk is full): the next `start` opens and recovers it
         with contextlib.suppress(Exception):
@@ -370,7 +497,10 @@ class EpisodeRecorder:
         for name in self.followers:
             self.action_missing[name] += int(row[f"action.meta.{name}.valid"][0] == 0)
         if self.write:
-            self.dataset.add_frame(row)
+            if self.spool is not None:
+                self.spool.add(row)
+            else:
+                self.dataset.add_frame(row)
         self.written += 1
         self.next_row = k + 1
         self._prune(t_ns + self.period_ns)

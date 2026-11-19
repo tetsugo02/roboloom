@@ -149,7 +149,7 @@ def test_rows_wait_for_the_slowest_follower_then_for_grace(tmp_path):
             self.frames.append(row)
 
     dataset = Rows()
-    recorder = EpisodeRecorder(cfg, dataset, grace_ms=500)
+    recorder = EpisodeRecorder(cfg, dataset, grace_ms=500, background_save=False)
     t = time.monotonic_ns()
     recorder.start("two arms", t)
     late = t + 250 * MS  # the follower's stream has passed two rows (10 fps)
@@ -198,7 +198,8 @@ def test_two_followers_record_one_episode_in_mock(tmp_path):
     path = dual_mock(tmp_path)
     with Session.launch(path, log_dir=tmp_path / "logs") as s:
         s.wait_ready(30)
-        result = s.record("two arms", 1.0)
+        s.record("two arms", 1.0)
+        (result,) = s.wait_saves()
     assert result.saved and result.frames > 5, result
     assert set(result.metrics["action_missing_rate"]) == {"follower", "left"}
     info = json.loads((Path(path.parent) / "datasets/dual/meta/info.json").read_text())
@@ -454,7 +455,8 @@ def test_one_policy_drives_two_followers_in_mock(tmp_path, monkeypatch):
         path, policy_kwargs={"step": 5.0}, log_dir=tmp_path / "logs"
     ) as s:
         s.wait_ready(30)
-        result = s.record("creep", 1.5)
+        s.record("creep", 1.5)
+        (result,) = s.wait_saves()
     assert result.saved, result
     assert result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert max(result.metrics["action_missing_rate"].values()) < 0.5, result.metrics

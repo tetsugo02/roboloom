@@ -188,7 +188,8 @@ def test_the_policy_moves_home_then_infers_from_there(tmp_path):
         robot = s.status()["follower"]["fields"]
         assert robot["home"] == "ready" and robot["home_state"] == "reached"
         assert robot["home_diff"] <= 30
-        result = s.record("from home", 1.0, home=True)
+        s.record("from home", 1.0, home=True)
+        (result,) = s.wait_saves()
     assert result.saved and result.frames > 5
 
 

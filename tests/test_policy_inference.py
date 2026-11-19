@@ -53,7 +53,8 @@ def test_rakuda_policy_runs_with_the_selected_sensors(tmp_path, observe):
         screen=False,
     ) as session:
         session.wait_ready()
-        result = session.record("hold", seconds=1)
+        session.record("hold", seconds=1)
+        (result,) = session.wait_saves()
         status = session.status()["policy"]["fields"]
     assert result.saved
     assert result.metrics["action_valid_rate"] > 0.5, result.metrics
@@ -128,7 +129,9 @@ def test_a_policy_without_bind_loads_as_before():
 def act_checkpoint(tmp_path_factory):
     """An untrained, tiny ACT for the mock (state 14, the left wrist camera), on CPU."""
     if sys.version_info >= (3, 14):
-        pytest.skip("LeRobot 0.7.0 (draccus) cannot parse policy configs on Python 3.14")
+        pytest.skip(
+            "LeRobot 0.7.0 (draccus) cannot parse policy configs on Python 3.14"
+        )
     pytest.importorskip("lerobot.policies.act.modeling_act")
     from lerobot.configs.types import FeatureType, PolicyFeature
     from lerobot.policies.act.configuration_act import ACTConfig
@@ -250,7 +253,8 @@ def test_a_lerobot_policy_drives_the_mock(act_checkpoint, tmp_path):
         log_dir=tmp_path / "logs",
     ) as s:
         s.wait_ready(60)
-        result = s.record("pick", 2.0)
+        s.record("pick", 2.0)
+        (result,) = s.wait_saves()
         status = s.status()["policy"]["fields"]
     assert result.saved, result
     assert result.metrics["action_valid_rate"] > 0.5, (status, result.metrics)
@@ -279,7 +283,9 @@ def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
     """The path of `lerobot-train` (LeRobot 0.7.0) on a dataset roboloom recorded: the
     metadata and stats it reads, a training step, and the checkpoint back in roboloom."""
     if sys.version_info >= (3, 14):
-        pytest.skip("LeRobot 0.7.0 (draccus) cannot parse policy configs on Python 3.14")
+        pytest.skip(
+            "LeRobot 0.7.0 (draccus) cannot parse policy configs on Python 3.14"
+        )
     pytest.importorskip("lerobot.policies.act.modeling_act")
     import shutil
 
@@ -300,7 +306,9 @@ def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
     )
     with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs") as s:
         s.wait_ready(60)
-        assert s.record("pick", 4.0, home=True).saved  # the mock Senses teleoperate
+        s.record("pick", 4.0, home=True)  # the mock Senses teleoperate
+        (result,) = s.wait_saves()
+        assert result.saved
     root = project / "datasets" / "piper-mock"
 
     cfg = ACTConfig(

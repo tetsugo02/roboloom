@@ -272,9 +272,10 @@ def test_an_episode_ends_when_the_policy_has_taken_its_steps(tmp_path, monkeypat
         s.wait_ready(30)
         seen: list[int] = []
         began = time.monotonic()
-        result = s.record(
+        s.record(
             "creep", 30.0, steps=10, on_tick=lambda st: seen.append(steps_done(st))
         )
+        (result,) = s.wait_saves()
         took = time.monotonic() - began
     assert result.saved
     assert max(seen) >= 10 and took < 10  # 10 actions at 5 Hz: about 2 s, not 30

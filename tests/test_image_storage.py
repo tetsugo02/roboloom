@@ -111,7 +111,7 @@ def test_recording_roundtrip(tmp_path, storages, camera_cls):
         max_age_ms={name: 1000 for name in sensors},
         mode="mock",
     )
-    recorder = EpisodeRecorder(cfg)
+    recorder = EpisodeRecorder(cfg, background_save=False)
     rng = np.random.default_rng(42)
     frames = {
         name: rng.integers(0, 256, sensor.shape, dtype=np.uint8)

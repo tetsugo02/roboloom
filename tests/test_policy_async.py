@@ -193,13 +193,14 @@ def test_a_slow_policy_leaves_no_gap_in_the_commands(tmp_path, monkeypatch):
         log_dir=tmp_path / "logs",
     ) as s:
         s.wait_ready(30)
-        result = s.record(
+        s.record(
             "slow",
             3.0,
             on_tick=lambda status: rates.append(
                 status.get("policy", {}).get("fields", {}).get("command_hz", 0)
             ),
         )
+        (result,) = s.wait_saves()
         fields = s.status()["policy"]["fields"]
     assert result.saved and fields.get("inference") == "async", fields
     # 0.2 s per inference (3 actions at 15 Hz) would stop the commands when synchronous

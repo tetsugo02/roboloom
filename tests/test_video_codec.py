@@ -56,7 +56,7 @@ def _cfg(root: Path, codec: str | None = None) -> RobotConfig:
         followers={},
         sensors=sensors,
         max_age_ms={name: 1000 for name in sensors},
-        recorder={"video_codec": codec},
+        recorder={"video_codec": codec, "background_save": False},
         mode="mock",
     )
 
@@ -154,7 +154,9 @@ def test_resume_keeps_the_saved_codec_and_refuses_another(tmp_path):
     root = Path(cfg.output)
     unspecified = replace(cfg, recorder={"video_codec": None})
     assert check_video_encoding(unspecified) == "h264"
-    resumed = EpisodeRecorder(unspecified, **unspecified.recorder)  # inherits H.264
+    resumed = EpisodeRecorder(
+        unspecified, background_save=False, **unspecified.recorder
+    )  # inherits H.264
     _record(resumed, 5_000_000_000)
     resumed.close()
     streams = _streams(root)  # resuming starts a new MP4 file
@@ -184,12 +186,14 @@ def test_resume_keeps_the_saved_codec_and_refuses_another(tmp_path):
 
 def test_existing_av1_dataset_resumes_as_av1(tmp_path):
     cfg = _cfg(tmp_path)  # unspecified: the saved videos' codec
-    first = EpisodeRecorder(cfg, video_codec="av1")  # e.g. recorded before H.264
+    first = EpisodeRecorder(
+        cfg, video_codec="av1", background_save=False
+    )  # e.g. recorded before H.264
     _record(first, 1_000_000_000)
     first.close()
     with pytest.raises(ConfigError, match="'av1' \\(saved videos\\) -> 'h264'"):
         check_video_encoding(replace(cfg, recorder={"video_codec": "h264"}))
-    resumed = EpisodeRecorder(cfg, video_codec="av1")
+    resumed = EpisodeRecorder(cfg, video_codec="av1", background_save=False)
     _record(resumed, 5_000_000_000)
     resumed.close()
     streams = _streams(Path(cfg.output))  # resuming starts a new MP4 file
@@ -339,7 +343,9 @@ def test_session_records_with_the_chosen_codec(tmp_path):
         log_dir=tmp_path / "logs",
     ) as session:
         session.wait_ready()
-        assert session.record("hold", seconds=1).saved
+        session.record("hold", seconds=1)
+        (result,) = session.wait_saves()
+        assert result.saved
     cfg = load_config(path)
     root = Path(cfg.output)
     videos = list((root / "videos").rglob("*.mp4"))

@@ -66,7 +66,9 @@ def recorded(tmp_path, monkeypatch):
     )
     with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs") as s:
         s.wait_ready(60)
-        assert s.record("pick", 3.0).saved
+        s.record("pick", 3.0)
+        (result,) = s.wait_saves()
+        assert result.saved
         root = Path(s.cfg.output)
     return project, root
 
@@ -90,7 +92,8 @@ def test_a_recorded_episode_replays_through_the_policy_path(recorded, tmp_path):
         log_dir=tmp_path / "logs2",
     ) as s:
         s.wait_ready(60)
-        result = s.record("replay", 2.0)
+        s.record("replay", 2.0)
+        (result,) = s.wait_saves()
         replayed = Path(s.cfg.output)
         fields = s.status()["policy"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, (
@@ -147,7 +150,8 @@ def test_the_example_model_trains_on_a_recording_and_runs(recorded, tmp_path):
         log_dir=tmp_path / "logs3",
     ) as s:
         s.wait_ready(60)
-        result = s.record("pick", 2.0)
+        s.record("pick", 2.0)
+        (result,) = s.wait_saves()
         fields = s.status()["policy"]["fields"]
     assert fields["state"] in ("ready", "running") and "infer_ms" in fields, fields
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics

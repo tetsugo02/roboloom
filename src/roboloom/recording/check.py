@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import episodes, journal, manifest
+from . import episodes, journal, manifest, spool
 
 
 @dataclass
@@ -80,6 +80,13 @@ def check_dataset(root: str | Path, recover: bool = False) -> DatasetReport:
                 "`roboloom check-dataset --recover` (or recording into the dataset "
                 "again) puts the dataset back to its last saved episode"
             )
+    ready, unfinished = spool.counts(root)
+    if ready or unfinished:
+        report.notes.append(
+            f"episode spool: {ready} ready episodes waiting to be imported and "
+            f"{unfinished} unfinished episodes to be removed the next time the "
+            "dataset is opened for recording"
+        )
     info = json.loads(info_path.read_text())
     fps = float(info.get("fps") or 0)
     report.episodes = int(info.get("total_episodes", 0))

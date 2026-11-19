@@ -27,9 +27,11 @@ def test_session_records_episodes_named_by_a_function(tmp_path):
 
     with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)
-        first = s.record(task, 1.0)
+        s.record(task, 1.0)
+        (first,) = s.wait_saves()
         dropped = s.record("drop me", 0.5, keep=lambda ep: False)
-        second = s.record(task, 1.0)
+        s.record(task, 1.0)
+        (second,) = s.wait_saves()
         assert s.episodes == 2
     assert (first.task, first.index, first.saved) == ("pick #0", 0, True)
     assert (second.task, second.index) == ("pick #1", 1)
@@ -110,7 +112,8 @@ def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypa
     ) as s:
         s.wait_ready(30)  # the policy is loaded
         assert s.status()["policy"]["fields"]["state"] == "ready"
-        result = s.record("creep", 1.5)
+        s.record("creep", 1.5)
+        (result,) = s.wait_saves()
         policy = s.status()["policy"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert policy["state"] in ("ready", "running") and "infer_ms" in policy, policy
@@ -163,6 +166,7 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
         assert s.actuated == ["leader"]  # the trigger spring runs a control law
         s.wait_ready(30)
         s.record("wave", 0.5)
+        s.wait_saves()
         print("from the script")
         messages = [m.plain for m in s.screen.messages]
     assert any("recording 'wave'" in m for m in messages), messages

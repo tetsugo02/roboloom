@@ -138,7 +138,8 @@ def test_the_option_runs_in_the_mock_dataflow(tmp_path):
         _project(tmp_path), options=["pika"], log_dir=tmp_path / "logs"
     ) as s:
         s.wait_ready(60)
-        result = s.record("pick", 3.0)
+        s.record("pick", 3.0)
+        (result,) = s.wait_saves()
         status = s.status()
     assert result.saved, result
     fields = status["controller"]["fields"]

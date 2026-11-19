@@ -35,6 +35,8 @@ PLAIN_PROGRESS_S = 5.0  # without a screen: one progress line this often
 
 
 def describe(result: EpisodeResult) -> str:
+    if result.pending:
+        return f"queued '{result.task}' for save ({result.frames} frames)"
     if not result.saved:
         return f"discarded '{result.task}' ({result.frames} rows)"
     verdict = f", labelled {result.label}" if result.label else ""
@@ -129,6 +131,22 @@ class _Progress:
             )
 
 
+def _collect_saves(
+    session: Session, results: list[EpisodeResult], show: Callable[[str], None]
+) -> list[EpisodeResult]:
+    try:
+        saved = session.wait_saves()
+    except SessionError as exc:
+        for result in exc.report.get("results", []):
+            show(describe(result))
+        raise
+    for result in saved:
+        show(describe(result))
+    pending = sum(result.pending for result in results)
+    completed = iter(saved[len(saved) - pending :])
+    return [next(completed) if result.pending else result for result in results]
+
+
 def _plain(
     session: Session,
     task: Task,
@@ -159,7 +177,7 @@ def _plain(
         print(describe(results[-1]), flush=True)
         for warning in results[-1].warnings:
             print(f"  quality: {warning}", flush=True)
-    return results
+    return _collect_saves(session, results, lambda text: print(text, flush=True))
 
 
 def _keys(
@@ -251,6 +269,12 @@ def _keys(
             results.append(
                 session.record(task, seconds, keep=keep, on_tick=tick, steps=steps)
             )
-            session.note(describe(results[-1]), "info" if results[-1].saved else "warn")
+            result = results[-1]
+            session.note(
+                describe(result), "info" if result.saved or result.pending else "warn"
+            )
+        if session.pending_saves:
+            prompt("saving queued episodes ...")
+        results = _collect_saves(session, results, session.note)
         prompt("done")
     return results

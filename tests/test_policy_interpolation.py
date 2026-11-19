@@ -243,7 +243,8 @@ def test_the_node_commands_at_the_interpolated_rate(tmp_path):
         path, options=["policy"], log_dir=tmp_path / "logs", screen=False
     ) as session:
         session.wait_ready()
-        result = session.record("hold", seconds=2.5, on_tick=during)
+        session.record("hold", seconds=2.5, on_tick=during)
+        (result,) = session.wait_saves()
     assert result.saved
     # read while recording: after stop the policy sends nothing, so a count read after
     # save falls with the time save takes (measured 47 after a 0.35 s save)

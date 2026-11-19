@@ -54,6 +54,8 @@ RECORDER_KEYS = (
     "grace_ms",
     "image_writer_threads",
     "streaming_encoding",
+    "background_save",
+    "max_pending_saves",
     "queue_s",
     "video_codec",
     "quality",
@@ -1084,7 +1086,19 @@ def parse_config(tree: dict) -> RobotConfig:
 
     unknown_keys(tree["recorder"], RECORDER_KEYS, "recorder")
     unknown_keys(tree["session"], SESSION_KEYS, "session")
-    ages = tree["recorder"].get("max_age_ms", {})
+    recorder = tree["recorder"]
+    where = recorder.get("__file__", tree["path"])
+    background_save = recorder.get("background_save", True)
+    pending = recorder.get("max_pending_saves", 2)
+    if not isinstance(background_save, bool):
+        raise ConfigError(f"{where}: background_save must be a bool")
+    if type(pending) is not int or pending < 1:
+        raise ConfigError(f"{where}: max_pending_saves must be an integer >= 1")
+    if background_save and recorder.get("streaming_encoding", False):
+        raise ConfigError(
+            f"{where}: set background_save or streaming_encoding to false"
+        )
+    ages = recorder.get("max_age_ms", {})
     cfg = RobotConfig(
         robot=robot,
         repo_id=repo_id,
@@ -1112,9 +1126,11 @@ def parse_config(tree: dict) -> RobotConfig:
             in ("grace_ms", "image_writer_threads", "streaming_encoding", "queue_s")
         }
         | {
+            "background_save": background_save,
+            "max_pending_saves": pending,
             "video_codec": normalize_video_codec(
                 tree["recorder"].get("video_codec"), "recorder.video_codec"
-            )
+            ),
         },
         quality=_quality(tree["recorder"].get("quality") or {}),
         mode=e["mode"],
