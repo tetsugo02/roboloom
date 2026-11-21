@@ -320,5 +320,6 @@ def test_session_moves_home_then_records_from_there(tmp_path):
         s.home()
         robot = s.status()["follower"]["fields"]
         assert robot["home"] == "ready" and robot["home_state"] == "reached"
-        result = s.record("from home", 1.0, home=True)
+        s.record("from home", 1.0, home=True)
+        (result,) = s.wait_saves()
     assert result.saved and result.frames > 5

@@ -366,7 +366,8 @@ def test_a_policy_drives_two_pipers_and_two_grippers(tmp_path, monkeypatch):
         assert s.held == []
         assert set(s.limp_at_end) == {"left", "right", "left_gripper", "right_gripper"}
         s.wait_ready(30)
-        result = s.record("creep", 1.5)
+        s.record("creep", 1.5)
+        (result,) = s.wait_saves()
         gripper = s.status()["left_gripper"]["fields"]
     assert gripper["torque_off"] == "lets_go" and gripper["unattended"] == "unknown"
     assert result.saved, result

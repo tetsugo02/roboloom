@@ -229,6 +229,7 @@ def recorder(f: dict) -> tuple[str, Text]:
     detail = joined(
         [
             f"episodes {f.get('episodes')}",
+            f"saving {f['pending_saves']} queued" if f.get("pending_saves") else None,
             Text(f"task '{f['task']}'", style="bold cyan") if f.get("task") else None,
             f"{f.get('rows')} rows  {f.get('elapsed_s')} s"
             if f.get("state") == "recording"
@@ -369,6 +370,8 @@ def describe_report(report: dict) -> Text:
             f"{report.get('command', '')} not started: {report['warning']}",
             style="bold yellow",
         )
+    if report.get("command") == "recorder_closed":
+        return Text("the recorder stopped", style="bold red")
     if "error" in report:
         return Text(
             f"{report.get('command', '')} failed: {report['error']}", style="bold red"
@@ -381,7 +384,12 @@ def describe_report(report: dict) -> Text:
         ticks = list((m.get("control_interval_ms") or {}).values())  # per follower
         p99 = max((t.get("p99", 0) for t in ticks), default=0)
         worst = max((t.get("max", 0) for t in ticks), default=0)
-        text = f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})  tick p99 {p99:.1f} ms max {worst:.1f} ms"
+        saved = (
+            f"saved episode {report['index']} '{report['task']}' ({report['saved_frames']} frames)"
+            if report.get("command") == "saved"
+            else f"saved {report['saved_frames']} frames (episodes {report.get('episodes')})"
+        )
+        text = f"{saved}  tick p99 {p99:.1f} ms max {worst:.1f} ms"
         if missing:
             text += f"  missing % {missing}"
         if report.get("label"):
@@ -389,6 +397,8 @@ def describe_report(report: dict) -> Text:
         return Text(text, style="green")
     if report.get("ok"):
         command = report.get("command", "")
+        if command == "save" and report.get("queued"):
+            return Text(f"queued for save ({report['pending']} pending)", style="cyan")
         if command == "start":
             return Text(f"recording '{report.get('task', '')}'", style="cyan")
         if command == "stop":

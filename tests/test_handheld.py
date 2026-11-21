@@ -131,7 +131,7 @@ def test_rows_without_followers_close_with_time():
             self.frames.append(row)
 
     rows = Rows()
-    recorder = EpisodeRecorder(cfg, rows)
+    recorder = EpisodeRecorder(cfg, rows, background_save=False)
     t = time.monotonic_ns()
     recorder.start("pick", t)
     payload = {
@@ -175,7 +175,8 @@ def test_a_handheld_recording_converts_and_trains(tmp_path):
     project = copy_mock(tmp_path)
     with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs") as s:
         s.wait_ready(60)
-        result = s.record("pick", 3.0)
+        s.record("pick", 3.0)
+        (result,) = s.wait_saves()
     assert result.saved and "action_valid_rate" not in result.metrics, result
     source = project / "datasets" / "pika-handheld-mock"
 

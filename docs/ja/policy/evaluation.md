@@ -23,7 +23,7 @@ uv run roboloom check-dataset --with policy                            # labels:
 - `record(..., label="success")` と `save(label="failure", note="...")` で，保存するepisodeに成否（`success` か `failure`）とメモを付けられます．
   - `record` の `label` には，停止したepisode（`result`）を受け取って成否を返す関数も渡せます．`None` を返すと成否を付けません．
   - `success`・`failure` 以外の文字列は，保存の前に `ValueError` になります．
-- 保存のたびに，datasetの `meta/roboloom_episodes.jsonl` に1行を書きます．成否を付けなくても書きます．
+- recorderはdatasetへの書き込みが終わってから，成否の有無にかかわらず [episodeごとの記録](../data/recording.md#episode-records) を追記します．[background保存](../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> では，記録を読む前に `wait_saves()` を呼ぶか，1 episodeなら `save(wait=True)` で保存完了を待ちます．
 - あとから付ける・付け直すときは，`roboloom.recording.episodes.label(...)` も使えます（[Python API：記録](../reference/python-api/recording.md)）．
 
 ```python
@@ -33,9 +33,10 @@ for k in range(10):
     s.record(
         "pick up the cup",
         seconds=30,
-        label=lambda ep: "success" if cup_lifted() else "failure",  # 利用者の判定
+        label=lambda ep: "success" if cup_lifted() else "failure",
     )
-records = episodes.read(s.cfg.output)  # {episode番号: 記録}
+s.wait_saves()
+records = episodes.read(s.cfg.output)
 print(episodes.summary(s.cfg.output, s.episodes))
 # labels: 7 success, 3 failure, 0 not labelled (70% of the labelled)
 ```

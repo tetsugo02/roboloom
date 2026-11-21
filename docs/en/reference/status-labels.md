@@ -25,6 +25,7 @@
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | <span class="status status--mock">Mock only</span> (PiPER + Pika) |
 | RealSense | <span class="status status--verified">Hardware-verified</span> |
 | Asynchronous inference, replaying a recording, a policy in another process (`serve-policy`) | <span class="status status--mock">Mock only</span> |
+| [Background episode saving](../data/recording.md#background-saving) | <span class="status status--mock">Mock only</span> (mock dataflows and synthetic frames) |
 | PiPER, Pika (Gripper, Sense, wrist cameras), web camera, audio | <span class="status status--dev">In development</span> |
 | Force feedback (`feedback`), estimators (`estimators`) | <span class="status status--mock">Mock only</span> (paused) |
 | Bilateral control design, stage 6 onward | <span class="status status--design">Design only</span> (paused) |

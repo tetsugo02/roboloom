@@ -69,7 +69,9 @@ class FakeDataset:
 def test_streaming_rows_watermark_preroll_and_pruning():
     cfg = load_config("examples/mock/config.yaml")  # 10 fps -> 100 ms rows
     dataset = FakeDataset()
-    recorder = EpisodeRecorder(cfg, dataset=dataset, grace_ms=500)
+    recorder = EpisodeRecorder(
+        cfg, background_save=False, dataset=dataset, grace_ms=500
+    )
     t = time.monotonic_ns()
     recorder.ingest(
         "follower",
@@ -119,7 +121,7 @@ def test_streaming_rows_watermark_preroll_and_pruning():
 def test_discard_mid_episode_clears_written_rows():
     cfg = load_config("examples/mock/config.yaml")
     dataset = FakeDataset()
-    recorder = EpisodeRecorder(cfg, dataset=dataset)
+    recorder = EpisodeRecorder(cfg, background_save=False, dataset=dataset)
     t = time.monotonic_ns()
     recorder.start("task", t)
     recorder.ingest("action_follower", action(0, t + 250 * MS))

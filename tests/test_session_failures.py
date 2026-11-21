@@ -145,7 +145,15 @@ def _session_node(tmp_path, monkeypatch, reads):
 
     monkeypatch.setattr(runtime.os, "read", read)
     monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: now)
-    monkeypatch.setattr(runtime, "_event", lambda node: (None, None))
+
+    def event(node):
+        if seen and seen[-1]["command"] == "quit":
+            return "report", Envelope(
+                "report", "recorder", "boot", 1, now, now, {"command": "quit"}
+            )
+        return None, None
+
+    monkeypatch.setattr(runtime, "_event", event)
     monkeypatch.setattr("builtins.open", keep)
 
     class Node:
@@ -237,7 +245,8 @@ def test_a_failed_policy_episode_is_discarded_and_the_next_one_runs(
         s.wait_ready(10)  # no restart: the policy is ready again
         fields = s.status()["policy"]["fields"]
         assert "out of memory" in fields["error"]  # shown until the next start
-        result = s.record("creep", 1.5)
+        s.record("creep", 1.5)
+        (result,) = s.wait_saves()
         assert result.saved and s.episodes == 1
         assert "error" not in s.status()["policy"]["fields"]
 
@@ -283,8 +292,9 @@ def test_start_is_refused_while_the_last_episode_is_neither_saved_nor_discarded(
         time.sleep(0.5)
         follower = s.status()["follower"]["fields"]
         assert not follower["armed"] and follower["mode"] == "HOLD"  # nothing moved
-        assert s.save().saved  # the stopped episode is still there
-        result = s.record("second", 1.0)
+        assert s.save(wait=True).saved  # the stopped episode is still there
+        s.record("second", 1.0)
+        (result,) = s.wait_saves()
         assert result.saved and s.episodes == 2
 
 

@@ -181,7 +181,8 @@ def test_two_senses_teleoperate_the_mock_and_the_dataset_records_them(tmp_path):
         while s.status()["left_ik"]["fields"].get("state") != "following":
             assert time.monotonic() < deadline, s.status()["left_ik"]
             time.sleep(0.1)
-        result = s.record("follow", 2.0)
+        s.record("follow", 2.0)
+        (result,) = s.wait_saves()
         status = s.status()
     assert result.saved, result
     assert result.metrics["action_valid_rate"] > 0.5, result.metrics

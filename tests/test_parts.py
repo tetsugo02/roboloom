@@ -166,7 +166,8 @@ def test_a_parts_controller_teleoperates_in_the_dataflow(tmp_path):
 
     with Session.launch(_arms(tmp_path), log_dir=tmp_path / "logs") as s:
         s.wait_ready(60)
-        result = s.record("pick", 2.0)
+        s.record("pick", 2.0)
+        (result,) = s.wait_saves()
         fields = s.status()["controller"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert fields["state"] == "following" and fields["command_hz"] > 50, fields

@@ -397,6 +397,8 @@ class SessionBackend:
                     self._phase = "saving" if plan.save else "discarding"
                     if plan.save:
                         result = session.save()
+                        if result.pending:
+                            self._phase = "queued for save"
                     else:
                         session.discard()
                     self._log(describe(result))
@@ -425,9 +427,10 @@ class SessionBackend:
             self._recording = False
             self._phase = "stopped: save or discard"
         elif name == "save":  # `save success` / `save failure`: with the verdict
-            self._log(describe(session.save(label=task.strip() or None)))
+            result = session.save(label=task.strip() or None)
+            self._log(describe(result))
             self._episode = False
-            self._phase = "saved"
+            self._phase = "queued for save" if result.pending else "saved"
         elif name == "discard":
             session.discard()
             self._episode = self._recording = False

@@ -124,7 +124,8 @@ def test_a_fresh_project_records_an_episode_in_mock(tmp_path):
     ) as s:
         # the mock follower starts where the mock leader's trigger spring rests
         s.wait_ready(60)
-        result = s.record("try it", 1.5)
+        s.record("try it", 1.5)
+        (result,) = s.wait_saves()
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
 
 

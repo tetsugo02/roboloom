@@ -36,7 +36,7 @@
 | --- | --- |
 | `start <task>` | 準備状態を確認し追従・記録を始める |
 | `stop` | 追従・記録を止める（保存は別操作） |
-| `save` | episodeを保存する |
+| `save` | 停止したepisodeを保存する．既定では保存待ちに入れた時点で応答する．[background保存](../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> |
 | `discard` | episodeを破棄する |
 | `release` | 支持確認後に追従を止め，通電している入力機器とfollowerを脱力する |
 | `home` | leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かす．到着後，leaderは通常の制御に戻る |
@@ -180,6 +180,8 @@ uv run roboloom run --mock                        # mock device
 
 一定時間のepisodeを収集して終わります．準備ができたら毎回Startを選びます（[操作画面](operator-screen.md#operations)）．
 
+<span class="status status--mock">模擬のみ</span> [background保存](../data/recording.md#background-saving) では，`--plain` は最後のepisodeの後に保存待ちの処理が終わるまで待ち，保存結果を表示します．操作画面は結果が届くたびにlogに出し，終了を確定してから保存待ちの処理を待ちます．
+
 ```text
 roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--plain] [COMMON_OPTIONS]
 ```
@@ -272,6 +274,8 @@ uv run roboloom serve-policy --from .roboloom/rakuda2/nodes/policy.yaml
 
 記録したdatasetを読むだけで検査します：episode数とfileの整合，動画の長さと行数，`valid` が0の行の割合，成否の数．問題があれば終了code 1です（[dataの検査](../data/check-and-train.md)）．
 
+<span class="status status--mock">模擬のみ</span> `episode spool:` の通知に，保存待ちと未確定の [spool内のepisode](../data/recording.md#background-saving) の数が出ます．
+
 ```text
 roboloom check-dataset [robot | DATASET_DIR] [--recover] [COMMON_OPTIONS]
 ```
@@ -279,7 +283,7 @@ roboloom check-dataset [robot | DATASET_DIR] [--recover] [COMMON_OPTIONS]
 | option | 型 | 既定値 | 説明 |
 | --- | --- | --- | --- |
 | `robot` | 機体名かpath，またはdatasetのdirectory | 唯一の機体のdataset | 検査するdataset．optionで名前が変わるdatasetは `--with` で選ぶ |
-| `--recover` | flag | 切 | 先に，保存の途中で止まったepisodeを取り除く（[保存したepisode](../data/recording.md#saved-episodes)） |
+| `--recover` | flag | 切 | 途中で止まったdatasetへの書き込みを戻してから検査する（[保存したepisode](../data/recording.md#saved-episodes)） |
 | 共通のoption | — | — | [共通のoption](#common-options)（dataset名を決める `--with`・`--without`・`--experiment`） |
 
 ```bash

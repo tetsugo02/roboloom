@@ -145,7 +145,7 @@ def test_mel_transform_and_dataset_roundtrip(tmp_path):
         max_age_ms={"mic": 1500},
         mode="mock",
     )
-    recorder = EpisodeRecorder(cfg)
+    recorder = EpisodeRecorder(cfg, background_save=False)
     t = sample.capture_ns
     recorder.start("audio", t)
     recorder.ingest(
@@ -187,7 +187,8 @@ def test_session_propagates_audio_and_separate_observe(tmp_path):
         log_dir=tmp_path / "logs",
     ) as session:
         session.wait_ready()
-        result = session.record("hold", seconds=1)
+        session.record("hold", seconds=1)
+        (result,) = session.wait_saves()
         fields = session.status()["policy"]["fields"]
     assert result.saved
     assert "infer_ms" in fields and "error" not in fields

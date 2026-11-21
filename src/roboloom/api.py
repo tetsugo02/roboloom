@@ -56,7 +56,9 @@ class InProcessSession:
         self.safety.start()
         self.controller = controller
         self.sensors = sensors or {}
-        self.recorder = EpisodeRecorder(cfg, dataset, **cfg.recorder)
+        self.recorder = EpisodeRecorder(
+            cfg, dataset, **{**cfg.recorder, "background_save": False}
+        )
         self.publisher = Publisher("python-controller")
         self.specs: dict[str, InputDevice | Source] = {**cfg.inputs, **cfg.sensors}
         self.publishers = {name: Publisher(name) for name in cfg.sources}

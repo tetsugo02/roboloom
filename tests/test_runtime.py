@@ -74,11 +74,14 @@ def test_session_warns_without_starting_then_accepts_aligned_retry(
             ("follower_status", {"mode": "HOLD", "armed": False}),
             ("controller_status", {"state": "following"}),
             (None, None),
+            ("report", {"command": "quit"}),
         ]
     )
 
     def event(node: object) -> tuple[str | None, Envelope | None]:
         name, fields = next(events)
+        if name == "report":
+            return name, Publisher("recorder").make("report", fields, now)
         msg = publisher.make("status", {"fields": fields}, now) if fields else None
         return name, msg
 

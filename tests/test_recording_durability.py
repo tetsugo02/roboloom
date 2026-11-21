@@ -252,7 +252,8 @@ def test_an_episode_saved_through_the_dataflow_survives_killing_it(tmp_path):
     session = Session.launch(project / "config.yaml", log_dir=tmp_path / "logs")
     try:
         session.wait_ready(60)
-        saved = session.record("pick", 2.0)
+        session.record("pick", 2.0)
+        (saved,) = session.wait_saves()
         assert saved.saved
         root = Path(session.cfg.output)
         session.start("cut short")  # an episode is running when every node dies
@@ -276,7 +277,8 @@ def test_an_episode_saved_through_the_dataflow_survives_killing_it(tmp_path):
     # the next session appends to it; the frames the dead recorder staged are not used
     with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs2") as s:
         s.wait_ready(60)
-        again = s.record("pick", 2.0)
+        s.record("pick", 2.0)
+        (again,) = s.wait_saves()
     ds = LeRobotDataset(f"local/{root.name}", root=root, video_backend="pyav")
     assert ds.meta.total_episodes == 2 and len(ds) == saved.frames + again.frames
     assert ds[len(ds) - 1]["observation.images.camera"].shape[0] == 3

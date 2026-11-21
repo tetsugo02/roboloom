@@ -8,9 +8,11 @@ Keys of the node YAML files that `recorder:` and `session:` of `config.yaml` poi
 | --- | --- | --- | --- | --- |
 | `max_age_ms` | `{node: value}` | required | ms | Per node, the oldest sample a row may use. Every input, follower, sensor and `record: true` estimator needs an entry. A row with only older samples is missing (`valid` 0) ([Missing data](../../data/format.md#missing-data)) |
 | `grace_ms` | number | `500` | ms | How long a row waits for a silent follower before it is final |
-| `image_writer_threads` | integer | `4` | — | Threads of LeRobot's image writer |
-| `streaming_encoding` | boolean | `false` | — | Use LeRobot's streaming encoding |
-| `queue_s` | number | `0.5` | s | How much each recorder input queue holds; while saving, the oldest is dropped |
+| `image_writer_threads` | integer | `4` | threads | Threads of LeRobot's image writer and, with background saving, the spool image writer |
+| `streaming_encoding` | boolean | `false` | — | LeRobot's streaming encoder holds one episode at a time. `true` with `background_save: true` raises `ConfigError` |
+| `background_save` | boolean | `true` | — | Queue saves in the dora recorder. `false` waits for the write before returning from `save`. Included in the PiPER and Rakuda2 templates. [Background saving](../../data/recording.md#background-saving) <span class="status status--mock">Mock only</span> |
+| `max_pending_saves` | integer ≥ 1 | `2` | episodes | Refuse `start` at this many pending saves, including the save in progress. Included in the PiPER and Rakuda2 templates <span class="status status--mock">Mock only</span> |
+| `queue_s` | number | `0.5` | s | How much each recorder input queue holds before dropping its oldest samples |
 | `video_codec` | text | — | — | Codec of `storage: video` images ([below](#video-codec)) |
 | `quality` | mapping | `{}` | — | Thresholds of the quality warnings ([below](#quality)) |
 
@@ -25,6 +27,8 @@ max_age_ms:
 grace_ms: 500
 image_writer_threads: 4
 streaming_encoding: false
+background_save: true
+max_pending_saves: 2
 queue_s: 0.5
 quality:
   max_missing_rate: 0.05

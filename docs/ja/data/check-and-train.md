@@ -15,9 +15,11 @@ uv run roboloom check-dataset --with policy
 | 要約 | episode数，行数，fps，robot，記録したroboloomの版，fileの数．episodeごとの記録があれば成否の数（`labels: 7 success, 3 failure, ...`） |
 | `problems` | 壊れているところ：読めないfile，`info.json` とepisodeのmetadataの数の食い違い，episode番号の飛び，動画の欠落と動画と行数の不一致，書きかけのepisode |
 | `notes` | 学習の前に知っておくべきこと：`*.valid` の列ごとの，0の行の割合．`action` がすべて0の行の割合（指令のない行を保持した目標で埋める前に記録したもの） |
+| `episode spool:`（`notes` 内） | [spool](recording.md#background-saving) に残った保存待ちと未確定のepisode数 <span class="status status--mock">模擬のみ</span> |
 
 - `problems` があると，終了code 1で終わります．
-- 保存の途中でprocessが止まり，書きかけのepisodeが残っているときは，`--recover` で取り除いてから検査します．同じdatasetに記録し直しても取り除かれます（[保存したepisodeの扱い](recording.md#saved-episodes)）．
+- datasetへの書き込みが中断された場合，`--recover` は途中の書き込みを戻してから検査します．同じdatasetを記録用に開き直すと，途中の書き込みを戻し，残ったspoolのepisodeも処理します（[保存したepisodeの扱い](recording.md#saved-episodes)）．
+- <span class="status status--mock">模擬のみ</span> uploadや学習の前に記録sessionを終了し，`problems: none` と出ても `episode spool:` の通知を確認します．spoolにepisodeが残っていたら，同じdatasetを記録用に開き直し，処理を終えてから再検査します．
 - `valid` の意味は [有効flag](format.md#valid)，0の行の値は [欠損の扱い](format.md#missing-data) にあります．
 
 ## 悪いepisodeを除く { #excluding-episodes }

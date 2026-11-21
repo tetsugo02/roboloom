@@ -5,9 +5,88 @@ episodeを保存・破棄する流れと，保存したdatasetに残るもので
 ## 保存と破棄 { #save-and-discard }
 
 - episodeは `start` で始まり，`stop` で止まります．止めたepisodeは，`save` で保存するか `discard` で捨てます．`roboloom record` と `Session.record` は，止めたあと保存します（[残すepisodeを選ぶ](#choosing-episodes)）．
-- `save()` が返ったepisodeは，そのあとprocessが止まっても読めます（[保存したepisodeの扱い](#saved-episodes)）．
+- dora dataflowでは，既定で `save` は停止したepisodeを保存待ちにします．`background_save: false` ではdatasetへの書き込み完了を待ちます．`InProcessSession` は常に同期保存します．
 - episodeの途中でcontrollerが失敗したとき（方策の例外など）と，followerがFAULT・ESTOPになったときは，そのepisodeを破棄します．
 - Pythonの操作は [Session](../reference/python-api/session.md) にあります．
+
+## background保存 { #background-saving }
+
+<span class="status status--mock">模擬のみ</span> mock dataflowと合成frameで確かめています．`roboloom run`，`roboloom record`，Pythonの `Session` で既定で使います．
+
+```mermaid
+sequenceDiagram
+  participant O as Operator / Session
+  participant R as Recorder
+  participant S as Saver thread
+  participant D as LeRobot dataset
+  O->>R: start → record → stop
+  O->>R: save
+  R->>S: enqueue ready spool
+  R-->>O: queued, recorder idle
+  par Next episode
+    O->>R: start (if below limit)
+  and Background save
+    S->>D: import and commit
+    S-->>O: saved or error
+  end
+```
+
+| 手順 | 動作 |
+| --- | --- |
+| `start` → `stop` | recorderは `<dataset root>/roboloom_spool/<seq>/` にepisodeを一時保存します．記録中に，2次元または3・4 channelの `uint8` 画像をPNGで，それ以外の画像配列を `.npy` で書きます．`stop` は画像の書き込み完了を待ち，保持していた画像以外のfeatureを `rows.npz` に書きます． |
+| `save` | `ready: true` を含む `episode.json` を書き，保存待ちに入れた時点で戻ります．1本の保存threadが順にepisodeを取り込み，保存journalを使って書き込みます．処理後に各episodeのspool directoryを取り除きます． |
+| 次の `start` | recorderとcontrollerの準備ができており，`pending_saves < max_pending_saves` ならすぐ開始できます．保存中の1件も数えます．上限に達すると `N episodes are waiting to be saved (max_pending_saves M); wait, then retry start` が出ます． |
+| 保存の失敗 | datasetを保存前の状態に戻し，そのepisodeだけを破棄します．errorは後からlogや `Session` のerror通知に出ます．その時点で次のepisodeを記録中の場合もあります．後続の保存は続きます． |
+| `quit` / `Session.close()` | 未確定のepisodeを破棄し，保存待ちの処理が終わるまで待ちます．`Session.close()` は保存待ちがあれば `saving N queued episodes ...` と通知します． |
+
+recorderのprocessが異常終了したら，同じdatasetを記録用に開き直します．recorderは途中の書き込みを戻し，未確定のspool内のepisode（停止したまま保存を指示しなかったものを含む）を取り除き，受け付け済みのepisodeを再び保存待ちに入れます．警告 `N episodes left from an interrupted run are being saved` に復旧対象の数が出ます．書き込みの確定後にspoolの削除が中断しても，保存済みのepisodeは1件だけ残ります．`background_save: false` でもこの復旧処理は動きます．
+
+uploadや学習の前にsessionを終了し，`roboloom check-dataset` に `episode spool:` の通知がないか確認します．保存待ち・未確定のepisodeが残っていたら，同じdatasetを記録用に開き直して `quit` で復旧を完了し，再検査します．`--recover` が修復するのは途中のdataset書き込みです．[datasetの検査](check-and-train.md#check-dataset) を参照してください．
+
+同期保存にするには，[nodes/recorder.yaml](../reference/configuration/recorder.md#recorder) に `background_save: false` を指定します．`streaming_encoding: true` を使う場合もこの指定が必要です．
+
+### 実機での確かめ方 { #checking-on-hardware }
+
+<span class="status status--mock">模擬のみ</span> [roboloomのcheckout](../contribution/index.md) から実行します．RealSenseを設定したRakuda2を使い，`background_save: true` にします．普段 `gravity` を使い，DIGITも含める場合は `--with gravity,digit` を渡します．`--with` は既定のoptionを置き換えるので，使うoptionをすべて指定します．検査専用のdatasetを使います．既定は `datasets/rakuda2-bgsave-check` で，`--root` で別のdirectoryを選べます．
+
+```bash
+uv run python scripts/check_background_save.py compare rakuda2 --seconds 30 --episodes 5
+uv run python scripts/check_background_save.py limit rakuda2 --seconds 1
+uv run python scripts/check_background_save.py crash rakuda2 --seconds 20
+```
+
+各episodeの前にleaderをfollowerに合わせます．次のStartは各checkの条件を満たすとすぐ実行するので，episodeの間も両者を合わせておきます．`compare` では両方のgroupで同じように動かします．
+
+| Check | 手順と記録時間の目安 |
+| --- | --- |
+| `compare` | Start前に保存待ちをすべて処理するepisodeを5回，Save直後にStartするepisodeを5回記録します．記録に5分かかり，起動と保存の時間が加わります． |
+| `limit` | 1秒のepisodeを続けて記録し，保存待ちが上限に達したときのStartを確認します．拒否されたら保存完了を待ち，もう1 episodeを記録して保存します．記録は最大 `max_pending_saves + 3` 秒で，commandと保存の時間が加わります． |
+| `crash` | 20秒間記録したあと，保存待ちがある間にrecorderだけを `SIGKILL` で強制終了します．scriptはdataflowを閉じ，同じdatasetを開き直して復旧を確かめます．確認，再起動，保存の時間が加わります． |
+
+`crash` では確認を入力する前にleaderとfollowerの腕を支え，終了から再起動まで支え続けます．記録は強制終了の前に停止します．scriptがdataflowを閉じるまで，Doraと他のnodeが動き続ける場合があります．通常の終了処理ではfollowerは停止し，位置制御の関節は保持を続けることがあります．電流制御の関節はdeviceを閉じたときやwatchdogが作動したときに保持力を失うことがあります．
+
+| 結果・指標 | 確認すること |
+| --- | --- |
+| 欠損率 | sourceごとの `missing_rate` とfollowerごとの `action_missing_rate` を比べます．重複ありのgroupの平均が0.01より大きく増えるか，設定の品質上限を超えると，`compare` は警告を出します． |
+| 処理時間 | 記録の `queue_ms` と `latency_ms` のp99・最大値，followerごとの `control_interval_ms` の最大値を比べます．queueとlatencyの増加を確認します．制御周期は設定の品質上限とも照合します． |
+| `PASS` | 期待した動作を観測し，datasetの検査を通過しました． |
+| `WARN` | `compare` はStart時の保存との重なりを確認できなかったか，指標が比較または品質の上限を超えました． |
+| `SKIP` | 保存待ちが上限に達しなかったか，強制終了の前に保存が完了したか，操作者が強制終了を取りやめました．保存の負荷を上げるには，記録時間を延ばすかsensorを増やします． |
+| `FAIL` | command，保存，datasetの検査，または復旧の確認に失敗しました． |
+
+scriptは，robotのほかのlogと同じ場所にあるsessionのlog directory（`.roboloom/<robot>/logs/bgsave-check-<時刻>/`．`crash` の再起動分はその下の `recovery/`）に `background-save-result.json` を書き，そのpathを表示します．JSONは実機での結果と一緒に残してください．引数，roboloomのversion，時系列，episodeごとの指標，判定を含みます．
+
+**操作画面のチェック項目**．専用の `dataset.root` を持つ [検査用experiment](../reference/configuration/index.md#experiments) を用意して実行します．
+
+```bash
+uv run roboloom run rakuda2 --experiment ./bgsave-screen.yaml
+```
+
+- leaderを合わせます．episodeを記録してStop，Saveを選び，recorder行に `saving 1 queued` が出ることを確かめます．保存待ちに空きがあれば，すぐStartできます．
+- 保存待ちが `max_pending_saves` 件の状態でStartし，`N episodes are waiting to be saved (max_pending_saves M); wait, then retry start` が出ることを確かめます．
+- 保存待ちの処理が終わるとlogに `saved episode N '...'` が出ることを確かめます．
+- 保存待ちがある間に終了し，保存が終わってから操作画面が閉じることを確かめます．終了後に検査用datasetを調べます．
+- 保存に失敗した場合は，操作画面に `episode '...' was not saved: ...` がerrorとして出ることを確かめます．
 
 ## 再開 { #resuming }
 
@@ -15,10 +94,10 @@ episodeを保存・破棄する流れと，保存したdatasetに残るもので
 
 ## 保存したepisodeの扱い { #saved-episodes }
 
-- 保存のたびに，そのepisodeのfileを閉じます．`save` が成功を返したepisodeは，そのあとprocessが強制終了されても読めます．
+- 保存が完了すると，そのepisodeのfileを閉じます．保存済みと報告されたepisodeは，そのあとprocessが強制終了されても読めます．
 - そのため，data・episodeのmetadata・動画は1 episodeにつき1 fileです（LeRobotで `resume` を繰り返したときと同じ配置）．Hubに上げる前にfileをまとめたい場合は，LeRobotの集約toolを使います．
 - 保存が失敗した場合（diskの空きがないなど）は，そのepisodeを破棄し，datasetを保存前の状態に戻します．それまでのepisodeは残り，次のepisodeを記録できます．
-- 保存の途中でprocessが止まった場合は，次にそのdatasetを開いたとき（`run`・`record`，または `check-dataset --recover`）に，書きかけのepisodeを取り除きます．
+- datasetへの書き込みの途中でprocessが止まった場合は，記録再開時または `check-dataset --recover` で保存journalを使って途中の書き込みを戻します．[background保存](#background-saving) で受け付け済みのepisodeは，記録再開時にspoolから取り込み直します．
 - 動画の長さがepisodeの行数と合わない場合（画像を書けなかったなど）は，保存の失敗として扱います．
 - 対象はprocessの異常終了です．電源断までは保証しません（LeRobotがfileをdiskへ同期しないため）．
 
@@ -28,7 +107,7 @@ episodeを保存・破棄する流れと，保存したdatasetに残るもので
 
 ## episodeごとの記録 { #episode-records }
 
-保存のたびに，datasetの `meta/roboloom_episodes.jsonl` に1行（JSON）を追記します．
+datasetへの書き込みが成功すると，recorderは `meta/roboloom_episodes.jsonl` への1行（JSON）の追記を試みます．このfileへの追記が中断・失敗した場合も，datasetへの書き込みは確定したままです．
 
 | key | 内容 |
 | --- | --- |
@@ -36,7 +115,7 @@ episodeを保存・破棄する流れと，保存したdatasetに残るもので
 | `saved` | 保存した時刻 |
 | `task`，`frames` | task と行数 |
 | `metrics` | recorderの指標（欠損率，有効な行動の割合，制御周期の分布） |
-| `controllers` | 保存したときの各controllerの状態．方策では `infer_ms`・`infer_max_ms`（推論時間），`dropped`（非同期の推論で遅れて捨てた手数），`error` など |
+| `controllers` | `save` を指示したときの各controllerの状態．方策では `infer_ms`・`infer_max_ms`（推論時間），`dropped`（非同期の推論で遅れて捨てた手数），`error` など |
 | `label`，`note` | 評価の成否（`success`・`failure`．付けなければ `null`）とメモ |
 
 - 成否は保存のときに付けます：Pythonの `save(label=...)`・`record(..., label=...)`（[評価の成否を残す](../policy/evaluation.md#labels)），操作画面のcommand欄や `--plain` の行入力で `save success`・`save failure`，別端末から `roboloom session save success`．

@@ -35,12 +35,12 @@ Flags of commands that open devices:
 | `roboloom check-hold [robot] <follower> --tolerance <v> [--seconds 10]` | measure `unattended` for `unknown` models | energizes |
 | `roboloom capture-pose [robot] [follower] <name> [--force]` | save current follower pose to `poses/` | reads |
 | `roboloom run [robot] [--plain]` | operator screen, many episodes | yes |
-| `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--plain]` | fixed-length episodes | yes |
+| `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--plain]` | fixed-length episodes. `--plain` waits for queued writes at the end and prints final results. The operator screen logs each result and drains the queue on exit ([background saving](recording.md#background-saving)) | yes |
 | `roboloom record\|infer --experiment <name\|file>` | run as the project's `configs/roboloom/<name>.yaml` says (robot, options, node settings such as the policy, dataset, task, length; see configuration.md); words on the command line win. `validate`, `check-dataset`, `label` take `--experiment` too | yes |
 | `roboloom infer [robot] --seconds <n> \| --steps <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only with `--task` | yes |
 | `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit\|teleop\|policy\|stop_teleop> [task]` | send one operation to a running `run`; `save success` / `save failure` saves with the verdict | no |
 | `roboloom serve-policy --experiment <experiment file>` or `--from <policy YAML>` or `<module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node with `backend: server` (the file's `factory`, `kwargs`, `server.address`) | no |
-| `roboloom check-dataset [robot\|dataset dir] [--with a,b] [--recover]` | is a recorded dataset whole (exit 1 if not), which rows are not valid; `--recover` removes an episode whose save was interrupted | no |
+| `roboloom check-dataset [robot\|dataset dir] [--with a,b] [--recover]` | checks dataset integrity (exit 1 if broken) and row validity, and reports spool episodes in notes. `--recover` rolls back an interrupted dataset write | no |
 | `roboloom label [robot\|dataset dir] <episode> success\|failure [--note TEXT] [--with a,b]` | set or change a saved episode's evaluation verdict (appends to `meta/roboloom_episodes.jsonl`), print the counts | no |
 | `roboloom convert-handheld [robot] --action delta\|relative-chunk [--horizon 16] [--hands a,b] [--max-gap 3] [--output P] [--repo-id R]` | hand-held recording → training dataset (in development) | no |
 | `roboloom skills install\|check\|path [--agent all\|agents\|claude] [--root .] [--force]` | install / check this agent skill | no |

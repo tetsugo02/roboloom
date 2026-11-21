@@ -5,3 +5,5 @@ max_age_ms:
   right_gripper: 300
   left_sense: 300
   right_sense: 300
+background_save: true
+max_pending_saves: 2

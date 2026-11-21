@@ -91,13 +91,13 @@ class EpisodeInfo:
     """What a task-naming function knows about the episode it names.
 
     Attributes:
-        index: The episode's index in the dataset (the episodes already saved).
+        index: The next index if all queued saves succeed (saved plus pending).
         number: The episodes this session has recorded so far.
         dataset: The dataset's name, e.g. `rakuda2-digit` (it tells the options).
         previous: The tasks this session has saved, oldest first.
     """
 
-    index: int  # episode index in the dataset (episodes already saved)
+    index: int
     number: int  # episodes recorded by this session so far
     dataset: str  # the dataset's name, e.g. rakuda2-digit (tells the options)
     previous: list[str] = field(default_factory=list)  # tasks saved by this session
@@ -115,7 +115,8 @@ class EpisodeResult:
         metrics: The recorder's quality metrics (missing rates, the share of valid
             actions, the control interval distribution).
         warnings: The quality limits (`quality:` of the recorder YAML) it exceeded.
-        label: The verdict it was saved with, `"success"` or `"failure"`, else None.
+        label: The verdict supplied with the episode, `"success"` or `"failure"`, else None.
+        pending: The episode is queued. While pending, saved is False and index is None.
     """
 
     task: str
@@ -125,11 +126,20 @@ class EpisodeResult:
     metrics: dict = field(default_factory=dict)  # EpisodeRecorder.metrics()
     warnings: list[str] = field(default_factory=list)  # quality limits exceeded
     label: str | None = None  # the verdict it was saved with: "success" / "failure"
+    pending: bool = False
 
     @property
     def ok(self) -> bool:
         """True when no quality limit was exceeded (`warnings` is empty)."""
         return not self.warnings
+
+
+@dataclass
+class _QueuedSave:
+    task: str
+    accepted: bool = False
+    report: dict | None = None
+    result: EpisodeResult | None = None
 
 
 Task = str | Callable[[EpisodeInfo], str]
@@ -277,6 +287,9 @@ class Session:
         self._recorded: list[str] = []
         self._episode: str | None = None  # task of the episode in progress
         self._saved = 0  # dataset episodes after this session's last save
+        self._queued_saves: dict[int, _QueuedSave] = {}
+        self._save_progress: dict = {}
+        self._recorder_closed = False
         self._lock = threading.RLock()  # the screen thread reads reports too
         self._listeners: list[Callable[[dict], None]] = []
         self.screen: SessionScreen | None = None
@@ -502,7 +515,7 @@ class Session:
         )
 
     def close(self, timeout: float = 15.0, *, release: bool | None = None) -> None:
-        """Discard an unfinished episode, stop every node and wait for the dataflow to exit.
+        """Discard unfinished recording, drain accepted saves, then close the dataflow.
 
         An actuated leader goes limp. The follower torque goes off when `release` is
         true; when it is None, the operator is asked (Enter releases, `hold` keeps the
@@ -526,16 +539,34 @@ class Session:
                         self.client.send("release")
                     self.client.send("quit")
                 except OSError:
-                    pass
-                try:
-                    self.process.wait(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    os.killpg(self.process.pid, signal.SIGTERM)
-                    try:
-                        self.process.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(self.process.pid, signal.SIGKILL)
-                        self.process.wait()
+                    quit_sent = False
+                else:
+                    quit_sent = True
+                with self._cancellable(None):
+                    while True:
+                        if quit_sent:
+                            with contextlib.suppress(SessionError):
+                                self._wait_on_close()
+                        try:
+                            self.process.wait(timeout=timeout)
+                            break
+                        except subprocess.TimeoutExpired:
+                            # A raw FIFO command may have queued work just before quit.
+                            self.poll()
+                            if (
+                                quit_sent
+                                and not self._recorder_closed
+                                and self._remaining_saves()
+                            ):
+                                continue
+                            os.killpg(self.process.pid, signal.SIGTERM)
+                            try:
+                                self.process.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                os.killpg(self.process.pid, signal.SIGKILL)
+                                self.process.wait()
+                            break
+                    self.poll()
         finally:
             if self.screen is not None:
                 self.screen.stop()
@@ -556,7 +587,23 @@ class Session:
 
     def status(self) -> dict:
         """Latest status of every node: {name: {"role", "level", "fields", "t_ns"}}."""
-        return (self.client.status() or {}).get("nodes", {})
+        status = (self.client.status() or {}).get("nodes", {})
+        recorder = status.get("recorder")
+        with self._lock:
+            progress = self._save_progress
+            if recorder and progress and progress["recorder_t_ns"] >= recorder["t_ns"]:
+                recorder["fields"].update(
+                    pending_saves=progress["pending"],
+                    episodes=progress["total_episodes"],
+                )
+        return status
+
+    @property
+    def pending_saves(self) -> int:
+        """Queued and in-progress saves, as last reported by the recorder."""
+        return int(
+            self.status().get("recorder", {}).get("fields", {}).get("pending_saves", 0)
+        )
 
     @property
     def episodes(self) -> int:
@@ -573,7 +620,7 @@ class Session:
         return out
 
     def listen(self, listener: Callable[[dict], None]) -> None:
-        """Call `listener` with every report and session note (the screen uses this)."""
+        """Call `listener` with reports and session notes, including save failures."""
         self._listeners.append(listener)
 
     def poll(self) -> None:
@@ -581,8 +628,72 @@ class Session:
         with self._lock:
             new = self.client.new_reports()
             self._reports += new
-        for report in new:
-            self._tell(report)
+            notifications = [(report, self._track_save(report)) for report in new]
+        for report, result in notifications:
+            if report.get("command") == "saved" and "error" in report:
+                self.note(
+                    f"episode {report.get('task')!r} was not saved: {report['error']}",
+                    "error",
+                )
+            else:
+                self._tell(report)
+            if result is not None:
+                self._quality_notes(result)
+
+    def _track_save(self, report: dict) -> EpisodeResult | None:
+        if "recorder_t_ns" in report:
+            self._save_progress = report
+        command = report.get("command")
+        if command == "recorder_closed":
+            self._recorder_closed = True
+        elif command == "save":
+            ident = report.get("id")
+            ticket = self._queued_saves.get(ident) if isinstance(ident, int) else None
+            if ticket is not None and isinstance(ident, int):
+                if report.get("queued"):
+                    ticket.accepted = True
+                    self._episode = None
+                else:
+                    del self._queued_saves[ident]
+        elif command == "saved":
+            ident = report.get("save_id")
+            ticket = self._queued_saves.get(ident) if ident is not None else None
+            if ticket is not None:
+                ticket.report = report
+            if "error" in report:
+                return None
+            self._saved = max(self._saved, int(report["episodes"]))
+            task = report.get("task") or (ticket.task if ticket else "")
+            result = self._saved_result(task, report)
+            if ticket is not None:
+                self._recorded.append(task)
+                ticket.result = result
+            return result
+        return None
+
+    def _check_save_stream(self) -> None:
+        # Other nodes can fail while the writer still has accepted episodes to save.
+        if self._recorder_closed or not self.alive:
+            raise SessionError(
+                f"the recorder stopped with saves still pending; log {self.log_path}"
+            )
+
+    def _remaining_saves(self) -> int:
+        with self._lock:
+            return max(
+                self.pending_saves,
+                sum(ticket.report is None for ticket in self._queued_saves.values()),
+            )
+
+    def _wait_on_close(self) -> None:
+        self.poll()
+        queued = self._remaining_saves()
+        if queued:
+            self.note(f"saving {queued} queued episodes ...")
+        while self._remaining_saves():
+            self._check_save_stream()
+            time.sleep(0.05)
+            self.poll()
 
     def note(self, text: str, level: str = "info") -> None:
         """A message from this side (e.g. quality warnings) for the listeners."""
@@ -737,9 +848,9 @@ class Session:
 
         Raises SessionError when a controller refuses (e.g. the leader is not aligned
         with the follower, `alignment_tolerance`) or while the previous episode is
-        recording, stopped but not saved, or being saved. When the recorder could not take the
-        start, the followers and the policy are stopped too, so no episode runs that
-        nobody records.
+        recording, stopped, or saving synchronously. A full save queue also refuses
+        start. If recording cannot start after the command reached the followers and
+        policy, they are stopped too.
         """
         if not task.strip():
             raise ValueError("task is required")
@@ -775,10 +886,11 @@ class Session:
         *,
         label: str | None = None,
         note: str | None = None,
+        wait: bool | None = None,
     ) -> EpisodeResult:
-        """Write the stopped episode (video encoding can take a while). When the
-        write fails the episode is dropped (SessionError); the dataset keeps the
-        episodes saved before it and the next one can be recorded.
+        """Accept a stopped episode for saving. With background saving, return once queued
+        by default. Use `wait=True` for this episode's final result, or `wait_saves()`
+        for outstanding results. With synchronous saving, always wait for the write.
 
         `label` ("success" or "failure") and `note` are the verdict of an evaluation
         episode. They go into the dataset's `meta/roboloom_episodes.jsonl` with the
@@ -791,28 +903,97 @@ class Session:
             extra["label"] = verdict
         if note:
             extra["note"] = note
+        background = self.cfg.recorder.get("background_save", True)
+        deadline = time.monotonic() + timeout
+        with self._lock:
+            ident = self.send("save", **extra)
+            self._queued_saves[ident] = _QueuedSave(task)
         try:
-            report = self.wait_report(self.send("save", **extra), timeout)
+            report = self.wait_report(ident, timeout)
         except SessionError as exc:
             if exc.report.get("dropped"):  # nothing left to save or discard
                 self._episode = None
             raise
         self._episode = None
+        if report.get("queued"):
+            should_wait = not background if wait is None else wait
+            if should_wait:
+                return self._wait_saves([ident], deadline)[0]
+            metrics = report.get("metrics", {})
+            return EpisodeResult(
+                task,
+                False,
+                int(metrics.get("rows", 0)),
+                metrics=metrics,
+                warnings=assess(metrics, self.cfg.quality),
+                label=report.get("label"),
+                pending=True,
+            )
         self._recorded.append(task)
         self._saved = int(report.get("episodes", 0))
+        result = self._saved_result(task, report)
+        self._quality_notes(result)
+        return result
+
+    def _saved_result(self, task: str, report: dict) -> EpisodeResult:
         metrics = report.get("metrics", {})
-        result = EpisodeResult(
+        return EpisodeResult(
             task,
             True,
             int(report.get("saved_frames", 0)),
-            int(report.get("episodes", 0)) - 1,
+            report.get("index", int(report.get("episodes", 0)) - 1),
             metrics,
             assess(metrics, self.cfg.quality),
             report.get("label"),
         )
+
+    def _quality_notes(self, result: EpisodeResult) -> None:
         for warning in result.warnings:
             self.note(f"episode {result.index} quality: {warning}", "warn")
-        return result
+
+    def wait_saves(self, timeout: float | None = None) -> list[EpisodeResult]:
+        """Collect queued saves in submission order. Report drops after all finish."""
+        self.poll()
+        with self._lock:
+            ids = list(self._queued_saves)
+        deadline = None if timeout is None else time.monotonic() + timeout
+        return self._wait_saves(ids, deadline)
+
+    def _wait_saves(
+        self, ids: list[int], deadline: float | None
+    ) -> list[EpisodeResult]:
+        while True:
+            self._check_cancelled()
+            self.poll()
+            with self._lock:
+                tickets = [
+                    self._queued_saves[i] for i in ids if i in self._queued_saves
+                ]
+                if all(ticket.report is not None for ticket in tickets):
+                    for ident in ids:
+                        self._queued_saves.pop(ident, None)
+                    break
+            self._check_save_stream()
+            if deadline is not None and time.monotonic() >= deadline:
+                raise SessionError("timed out waiting for queued saves")
+            time.sleep(0.05)
+        results = [ticket.result for ticket in tickets if ticket.result is not None]
+        failures = [
+            ticket.report
+            for ticket in tickets
+            if ticket.report is not None and "error" in ticket.report
+        ]
+        if failures:
+            messages = [
+                f"{ticket.task!r}: {ticket.report['error']}"
+                for ticket in tickets
+                if ticket.report is not None and "error" in ticket.report
+            ]
+            raise SessionError(
+                "queued saves failed: " + ", ".join(messages),
+                {**failures[0], "results": results, "failures": failures},
+            )
+        return results
 
     def discard(self) -> None:
         """Stop the robot and drop the episode in progress."""
@@ -953,12 +1134,20 @@ class Session:
 
     def next_info(self) -> EpisodeInfo:
         """What a task-naming function is given for the next episode."""
-        return EpisodeInfo(
-            self.episodes,
-            len(self._recorded),
-            self.cfg.repo_id.rpartition("/")[2],
-            list(self._recorded),
-        )
+        self.poll()
+        with self._lock:
+            fields = self.status().get("recorder", {}).get("fields", {})
+            episodes = max(int(fields.get("episodes") or 0), self._saved)
+            return EpisodeInfo(
+                episodes + int(fields.get("pending_saves", 0)),
+                len(self._recorded)
+                + sum(
+                    ticket.accepted and ticket.report is None
+                    for ticket in self._queued_saves.values()
+                ),
+                self.cfg.repo_id.rpartition("/")[2],
+                list(self._recorded),
+            )
 
     def record(
         self,

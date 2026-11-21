@@ -216,12 +216,12 @@ def test_an_evaluation_run_records_each_verdict(tmp_path, monkeypatch, capsys):
         log_dir=tmp_path / "logs",
     ) as s:
         s.wait_ready(30)
-        first = s.record("creep", 1.5, label="success", note="reached the mark")
+        s.record("creep", 1.5, label="success", note="reached the mark")
+        (first,) = s.wait_saves()
         assert first.saved and first.label == "success"
         # decided from the stopped episode, e.g. by a check of the scene
-        second = s.record(
-            "creep", 1.5, label=lambda ep: "failure" if ep.frames else None
-        )
+        s.record("creep", 1.5, label=lambda ep: "failure" if ep.frames else None)
+        (second,) = s.wait_saves()
         assert second.label == "failure"
         with pytest.raises(ValueError, match="label must be success or failure"):
             s.record("creep", 1.5, label="ok")  # refused before the robot moves
@@ -229,7 +229,7 @@ def test_an_evaluation_run_records_each_verdict(tmp_path, monkeypatch, capsys):
         s.stop()
         with pytest.raises(ValueError, match="label must be success or failure"):
             s.save(label="good")  # refused before anything is sent
-        third = s.save()
+        third = s.save(wait=True)
         assert third.saved and third.label is None
         root = Path(s.cfg.output)
     records = episodes.read(root)

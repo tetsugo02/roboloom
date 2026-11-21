@@ -44,7 +44,7 @@ uv run roboloom run examples/mock/config.yaml
 uv run roboloom record examples/mock/config.yaml --task "mock demo" --seconds 5 --episodes 2 --plain
 ```
 
-`--plain` はkey入力なしで記録します．`saved episode 0: 'mock demo', ... frames` が2回出ます．保存先は `datasets/rakuda-mock` です（`output` は設定からの相対path）．
+`--plain` はkey入力なしで記録します．[background保存](../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> では，episodeごとに保存待ちを報告し，最後に処理を待って2件の保存結果をdataset内の番号付きで表示します．保存先は `datasets/rakuda-mock` です（`output` は設定からの相対path）．
 
 ## 5. 記録を検査する
 

@@ -43,8 +43,10 @@ print(cfg.options, cfg.repo_id)  # ('digit', 'gravity') local/rakuda2-digit
 from roboloom import Session
 
 with Session.launch("rakuda2", options=["gravity"]) as s:
-    s.wait_ready()  # leader が follower に揃うまで待つ
+    s.wait_ready()
     result = s.record("pick up the cup", seconds=30)
+    if result.pending:
+        (result,) = s.wait_saves()
     print(result.index, result.frames, result.warnings)
 ```
 
@@ -56,7 +58,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 - `with` を抜けると，次のことをします．
   - 途中のepisodeがあれば破棄する．
   - `operator` が設定されていれば，腕を支えるように求める．Enter で follower も脱力し，`hold` と入力すると follower は保持を続ける．
-  - dataflow を止める．
+  - 保存待ちの処理を待ってからdataflowを止める．
   - leader は脱力する．follower は，脱力を選んだときだけtorqueを切り，それ以外はtorqueと最後の目標を保持する．ただし，放置したときに保持しない（`unattended` が `holds` でない）follower は保持しない．性質は [脱力したときと放置したときの性質](../configuration/followers.md#torque-off-and-unattended) にある．
   - scriptから決めるときは `s.close(release=True)`（脱力）または `s.close(release=False)`（保持）を呼ぶ．
 - logは，設定fileの隣の `logs/<dataset name>-<time>/` に残ります（例：`logs/rakuda2-digit-20261102-101500/`）．
@@ -84,8 +86,8 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
 
 | `EpisodeInfo` の項目 | 中身 |
 | --- | --- |
-| `index` | datasetでのepisode番号（保存済みのepisode数） |
-| `number` | この Session で録った数 |
+| `index` | 保存待ちがすべて成功した場合の次のdataset内の番号（`next_info()` は保存済みと保存待ちの数を足す） |
+| `number` | このSessionで保存した数と，受け付け済みで結果を待つ保存の数の合計 |
 | `dataset` | datasetの名前（`repo_id` の `/` より後ろ．有効なoptionの名前が付く．例：`rakuda2-digit`） |
 | `previous` | この Session で保存した task の一覧 |
 
@@ -112,13 +114,20 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 ## 細かく操作する { #step-by-step }
 
 - `start(task)`，`stop()`，`save()`，`discard()`，`estop()`，`release(confirm=True)` を，1 つずつ呼べます．
-- `save()` が返ったepisodeは，そのあとprocessが止まっても読めます．書き込みに失敗すると `SessionError` を上げ，そのepisodeを破棄します（それまでのepisodeは残り，次を録れます．[保存したepisode](../../data/recording.md#saved-episodes)）．
-  - 例：外部の合図で開始と終了を決めるとき．
+- <span class="status status--mock">模擬のみ</span> [background保存](../../data/recording.md#background-saving) の結果と操作を以下に示します．
+
+| 呼び出し・項目 | 動作 |
+| --- | --- |
+| `save(timeout=300, *, label=None, note=None, wait=None)` | `wait=None` は `background_save` に従う．`wait=True` はこのepisodeの確定した保存結果を待つ．`background_save: false` では常に書き込み完了を待つ． |
+| `EpisodeResult.pending` | background保存では既定の `save()` と，保持するepisodeに対する `record()` が `pending=True`，`saved=False`，`index=None` の結果を返す．保存済みepisodeの番号は確定した結果から取得する． |
+| `wait_saves(timeout=None) -> list[EpisodeResult]` | このSessionで保存待ちに入れたepisodeの結果を，未回収の完了分も含めて受け付け順に集める．対象の保存がすべて終わってから，失敗があれば `SessionError` を上げる．`report["results"]` に成功分，`report["failures"]` に失敗分が入る．timeoutは `SessionError` になり，結果は後から取得できる． |
+| `pending_saves` | 保存中と保存待ちを合わせたrecorderの最新報告値． |
+
 - 状態を見る：
   - `status()`：各nodeの最新の状態．
   - `reports()`：未読の報告．robot のmodeの変化など．
 - commandが拒否されたとき（leader が揃っていないなど）は，`SessionError` になります．
-  - `start` は，前のepisodeが保存中・停止したまま未保存・記録中のときも拒否されます．recorderが `start` を受けられなかったときは，followerと方策も止めます（記録されないepisodeが走り続けません）．
+  - `start` は，記録中，`save`・`discard` を待つ停止中，同期保存中，またはbackground保存が上限に達したときに拒否されます．recorderが受けられなかった `start` がfollowerと方策に届いた場合は，それらも止めます．
 - `record` は，episodeの途中でcontrollerが失敗したとき（方策の例外など）と，followerがFAULT・ESTOPになったとき，そのepisodeを破棄して `EpisodeFailed`（`SessionError` の一種）を上げます．方策は次のepisodeでそのまま使えます．
 - `estop()` は，nodeが落ちたあとでも送れます（ほかのcommandは，nodeの障害を見つけると `SessionError` になります）．
 - `Session.launch` を呼んだprocessが終わると，どう終わった場合でも（強制終了，例外，端末を閉じた），dataflowは記録中のepisodeを破棄し，followerを保持させて終わります．`close()` を呼ばずに放置しても，robotが方策で動き続けることはありません．`multiprocessing` などで作った子processが残っている間は，終わったと見なされません．
@@ -127,11 +136,11 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 
 ```python
 s.start("wipe the table")
-while not task_done():  # 利用者の判定
+while not task_done():
     print(s.status()["follower"]["fields"]["mode"])
     time.sleep(0.5)
-stopped = s.stop()  # まだ保存していない．metrics と warnings を見られる
-s.save() if stopped.ok else s.discard()
+stopped = s.stop()
+s.save(wait=True) if stopped.ok else s.discard()
 ```
 
 ## 方策・評価・episodeの選別 { #guides }
@@ -171,6 +180,7 @@ CLIでの指定は [CLI のsensor選択](../cli.md#sensor-selection) に，規�
   - 模擬
   - sensorの少ない簡単な機体
 - 動かせるfollowerは1台です．followerが複数ある設定は `Session` で動かします．
+- `save_episode()` は常に同期保存します．dataflow用のrecorder YAMLでbackground保存が有効な場合も同じです．
 - 方策を `step(policy=...)` に直接渡せます．
   - ただし，方策やsensorが遅いと，制御の周期も遅れます．
 - 実機の Rakuda-2 は，`Session` で動かします．

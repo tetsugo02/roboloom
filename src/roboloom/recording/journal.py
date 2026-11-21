@@ -46,7 +46,8 @@ def _files(root: Path) -> list[str]:
     )
 
 
-def _replace(path: Path, data: bytes) -> None:
+def atomic_replace(path: Path, data: bytes) -> None:
+    """Publish a fully written file with an atomic rename."""
     tmp = path.with_name(path.name + ".tmp")
     with open(tmp, "wb") as out:
         out.write(data)
@@ -64,12 +65,15 @@ def begin(root: Path) -> None:
             base64.b64encode(path.read_bytes()).decode() if path.exists() else None
         )
     note = {"files": _files(root), "rewritten": kept}
-    _replace(root / JOURNAL, json.dumps(note).encode())
+    atomic_replace(root / JOURNAL, json.dumps(note).encode())
 
 
-def commit(root: Path) -> None:
-    """The episode is closed (`checkpoint`): forget the note."""
-    (root / JOURNAL).unlink(missing_ok=True)
+def commit(root: Path, receipt: Path | None = None) -> None:
+    """Commit the closed episode, optionally marking its spool consumed atomically."""
+    if receipt is None:
+        (root / JOURNAL).unlink(missing_ok=True)
+    else:
+        os.replace(root / JOURNAL, receipt)
 
 
 def clean(root: Path) -> None:
@@ -102,7 +106,7 @@ def recover(root: Path) -> bool:
         if content is None:
             path.unlink(missing_ok=True)
         else:
-            _replace(path, base64.b64decode(content))
+            atomic_replace(path, base64.b64decode(content))
     clean(root)
     note_path.unlink()
     return True

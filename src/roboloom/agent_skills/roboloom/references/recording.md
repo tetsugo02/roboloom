@@ -50,22 +50,57 @@ or give the option that changed the features a `dataset` name. The same holds fo
 video codec: without `video_codec` the saved videos' codec is reused, and a different
 explicit one is refused ([configuration](configuration.md#video-codec)).
 
-## What a save guarantees
+## Background saving
 
-- Every save closes the episode's files (one data file, one metadata file and one video
-  per camera for each episode). An episode whose `save` succeeded stays readable even if
-  the process is killed afterwards.
-- A save that fails (disk full, a video that does not match the rows) drops that episode
-  and puts the dataset back as it was: `save()` raises `SessionError`, the earlier
-  episodes stay, the next episode can be recorded.
-- A save interrupted by a kill is undone the next time the dataset is opened (`run`,
-  `record`, or `roboloom check-dataset --recover`).
+**Mock only.** In the dora dataflow (`roboloom run`, `roboloom record`, `Session`),
+these keys go in `nodes/recorder.yaml` and ship in the Rakuda2 and PiPER templates.
+
+```yaml
+background_save: true
+max_pending_saves: 2
+streaming_encoding: false
+```
+
+- `background_save` defaults to `true`. Set it to `false` for synchronous saves
+  (`save` waits, `start` is refused during `saving`). `streaming_encoding: true`
+  requires `background_save: false` because its encoder holds one episode.
+  `InProcessSession` always saves synchronously.
+- During recording the recorder stages images under `<dataset root>/roboloom_spool/<seq>/`
+  as PNG (2D or 3-/4-channel `uint8`) or `.npy` (other arrays). `stop` writes the other
+  features to `rows.npz`. `save` publishes `episode.json` with `ready: true` and returns
+  once queued. One saver thread imports episodes in order using the save journal and
+  removes their spool directories.
+- `max_pending_saves` is an integer ≥ 1 (default `2`) and counts the active save too.
+  Below the limit, `start` can follow a queued `save` as soon as ready. At the limit
+  `start` reports `N episodes are waiting to be saved (max_pending_saves M); wait, then retry start`.
+  The recorder status includes `pending_saves` and `max_pending_saves`. The screen
+  shows `saving N queued` and logs acceptance and completion separately.
+- On a write failure the dataset returns to the preceding saved state and the failed
+  episode is dropped. The error arrives later and subsequent saves continue.
+  `quit` and `Session.close()` wait for the queue. `roboloom record --plain` prints
+  the final results after waiting. In the operator screen, read the results in Logs.
+- If the recorder process dies, reopen the same dataset for recording. The recorder
+  rolls back an interrupted write, removes unfinished spool episodes, and imports
+  accepted episodes that had yet to commit. A warning gives the count for import.
+  Startup recovery also runs with `background_save: false`.
+- Before upload or training, finish the session and check `roboloom check-dataset`
+  for the `episode spool:` note. If ready or unfinished episodes remain, reopen for
+  recording, allow the recorder to finish, and recheck. `--recover` rolls back an
+  interrupted dataset write; reopening for recording processes the spool.
+
+## What a completed save guarantees
+
+- A completed save closes the episode's files. Once reported as saved, the episode
+  stays readable across process exit.
+- In Python, use `save(wait=True)` to wait for one write, or `wait_saves()` to
+  collect all outstanding results. See [python-api.md](python-api.md#fine-grained-control).
 - `meta/roboloom.json` holds the roboloom version, the unit of each `action` /
   `observation.state` entry, and each recording run's options and configuration
   (`meta/roboloom_config/`).
-- `meta/roboloom_episodes.jsonl` gets one JSON line per saved episode: `episode`,
-  `saved`, `task`, `frames`, `metrics`, `controllers` (each controller's status when it
-  was saved: a policy's `infer_max_ms`, `dropped`, `error`), `label` (`success` /
+- After a dataset commit the recorder attempts to append one JSON line to
+  `meta/roboloom_episodes.jsonl`: `episode`,
+  `saved`, `task`, `frames`, `metrics`, `controllers` (each controller's status when
+  `save` was requested: a policy's `infer_max_ms`, `dropped`, `error`), `label` (`success` /
   `failure` / null) and `note`. Set the verdict when saving (`save(label=...)`,
   `record(..., label=...)`, typed `save success`) or afterwards with
   `roboloom label [robot] <episode> success|failure` (appends a line; later lines win).

@@ -265,7 +265,7 @@ def test_teleop_before_and_during_an_episode_is_recorded(tmp_path):
         s.policy()  # and back
         time.sleep(1.0)
         s.stop()
-        result = s.save()
+        result = s.save(wait=True)
         output = s.cfg.output
     assert result.saved
     frames = pd.concat(

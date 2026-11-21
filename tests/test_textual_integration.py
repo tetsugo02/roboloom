@@ -42,7 +42,7 @@ async def test_textual_records_and_saves_a_mock_episode(tmp_path: Path):
             assert time.monotonic() < deadline, app.snapshot
             await asyncio.sleep(0.1)
         assert len(app.screen_stack) == 2
-        assert backend.session is not None and backend.session.episodes == 1
+        assert backend.session is not None
         assert backend.session.screen is None and backend.session.operator is None
         assert app.query_one(CommandInput).history == []
         await pilot.press("down", "enter")
@@ -50,6 +50,7 @@ async def test_textual_records_and_saves_a_mock_episode(tmp_path: Path):
         while backend.session.alive:
             assert time.monotonic() < deadline
             await asyncio.sleep(0.1)
+    assert backend.session.episodes == 1  # quit drains the accepted save
     assert not (project / "config.fifo").exists()
 
 

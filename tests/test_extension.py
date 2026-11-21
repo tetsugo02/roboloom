@@ -81,7 +81,8 @@ def test_every_node_process_finds_the_class(tmp_path):
         project / "config.yaml", mock=True, log_dir=tmp_path / "logs"
     ) as s:
         s.wait_ready(60)
-        result = s.record("hold", 1.5)
+        s.record("hold", 1.5)
+        (result,) = s.wait_saves()
         root = Path(s.cfg.output)
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert manifest.read(root)["units"]["action"] == ["rad", "rad"]

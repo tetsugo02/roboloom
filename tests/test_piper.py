@@ -338,7 +338,8 @@ def test_a_policy_drives_two_mock_pipers_and_records_rad(tmp_path, monkeypatch):
         # nothing is known about the PiPER left alone: quit offers no "hold"
         assert s.held == [] and set(s.limp_at_end) == {"left", "right"}
         s.wait_ready(30)
-        result = s.record("creep", 1.5)
+        s.record("creep", 1.5)
+        (result,) = s.wait_saves()
         left = s.status()["left"]["fields"]
     assert left["unattended"] == "unknown" and left["torque_off"] == "falls"
     assert result.saved, result

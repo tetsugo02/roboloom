@@ -198,7 +198,8 @@ def test_a_served_policy_drives_the_mock_robot(tmp_path, monkeypatch):
         policy_kwargs={"address": address},
     ) as s:
         s.wait_ready(30)
-        result = s.record("creep", 1.5)
+        s.record("creep", 1.5)
+        (result,) = s.wait_saves()
         policy = s.status()["policy"]["fields"]
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     assert policy["state"] in ("ready", "running") and "infer_ms" in policy, policy
@@ -277,7 +278,8 @@ def test_one_file_starts_the_server_and_the_node_that_connects(tmp_path, monkeyp
     try:
         with Session.launch(project / "config.yaml", options=["policy"]) as s:
             s.wait_ready(30)
-            result = s.record("creep", 1.5)
+            s.record("creep", 1.5)
+            (result,) = s.wait_saves()
     finally:
         server.terminate()
         server.wait(10)

@@ -23,8 +23,9 @@ from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
 from roboloom.estimators.base import Estimate, Estimator
 from roboloom.hooks import EndReason
-from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed
+from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed, spool
 from roboloom.recording.episodes import check_label
+from roboloom.recording.saver import BackgroundSaver
 from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
@@ -57,7 +58,11 @@ def _send(node, output: str, msg: Envelope) -> None:
 
 
 def _decode_event(event) -> tuple[str | None, Envelope | None]:
-    if event is None or event.get("type") != "INPUT":
+    if event is None:
+        return None, None
+    if event.get("type") == "INPUT_CLOSED" and event.get("id") == "report":
+        return "report_closed", None
+    if event.get("type") != "INPUT":
         return None, None
     return event["id"], None if event["id"] == "tick" else Envelope.decode(
         event["value"]
@@ -117,6 +122,13 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
             )
         if state == "recording":
             return "an episode is already being recorded: stop it first"
+        n = recorder["fields"].get("pending_saves", 0)
+        m = recorder["fields"].get("max_pending_saves", 2)
+        if n >= m:
+            return (
+                f"{n} episodes are waiting to be saved (max_pending_saves {m}); "
+                "wait, then retry start"
+            )
     for name in cfg.controllers:
         status = latest.get(name)
         # Reports arrive at 4 Hz; never start from missing or outdated readiness.
@@ -161,12 +173,23 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
     return None
 
 
+def next_episode_index(fields: dict) -> int | None:
+    """The index the next episode gets if it is saved, from the recorder's status
+    fields: the saved episodes plus those still queued for a background save."""
+    saved = fields.get("episodes")
+    if not isinstance(saved, int):
+        return None
+    return saved + int(fields.get("pending_saves") or 0)
+
+
 def recorder_state_after(report: dict) -> str | None:
     """The recorder's state once it sent `report`, or None when the report does not
     tell. Its status follows up to a quarter of a second later; without this a `start`
     right after `save` or `discard` would be refused on the old one."""
     command = report.get("command")
-    if command == "save" and ("saved_frames" in report or report.get("dropped")):
+    if command == "save" and (
+        "saved_frames" in report or report.get("dropped") or report.get("queued")
+    ):
         return "idle"
     if command == "discard" and report.get("ok"):
         return "idle"
@@ -273,14 +296,50 @@ def _session(node, cfg: RobotConfig):
     attached = False  # the launching process holds the FIFO open (it sent `attach`)
     unheld_ns = 0  # since when nobody does
     gone_ns = 0  # when the operator was found gone (0: it is there)
+    quitting = False
+    recorder_closed = False
 
     def report(payload: dict) -> None:
         print(payload, flush=True)
         with open(os.environ["ROBOLOOM_REPORT_PATH"], "a") as out:
             out.write(json.dumps(payload) + "\n")
 
+    def recorder_report(msg: Envelope) -> None:
+        payload = msg.payload
+        state = recorder_state_after(payload)
+        progress = "pending" in payload
+        recorder = latest.get("recorder")
+        if recorder is not None and msg.t_ready_ns >= recorder["t_ns"]:
+            if state is not None:
+                recorder["fields"]["state"] = state
+            if progress:
+                recorder["fields"].update(
+                    pending_saves=payload["pending"], episodes=payload["total_episodes"]
+                )
+            elif state == "idle" and payload.get("command") == "save":
+                recorder["fields"]["pending_saves"] = 0
+                if "episodes" in payload:
+                    # a synchronous save tells the next episode's index before the
+                    # status does
+                    recorder["fields"]["episodes"] = payload["episodes"]
+            if state is not None or progress:
+                recorder["t_ns"] = msg.t_ready_ns
+        report({**payload, "recorder_t_ns": msg.t_ready_ns} if progress else payload)
+
     try:
         while True:
+            if quitting:
+                if recorder_closed:
+                    return
+                event_id, msg = _event(node)
+                if event_id == "report_closed":
+                    report({"command": "recorder_closed"})
+                    return
+                if event_id == "report" and msg is not None:
+                    if msg.payload.get("command") == "quit":
+                        return
+                    recorder_report(msg)
+                continue
             try:
                 data = os.read(fd, 4096)
             except BlockingIOError:  # a writer holds the FIFO, nothing to read
@@ -312,7 +371,8 @@ def _session(node, cfg: RobotConfig):
                 _send(
                     node, "control", p.make("session", {"command": "quit", "task": ""})
                 )
-                return
+                quitting = True
+                continue
             while b"\n" in pending:
                 raw, pending = pending.split(b"\n", 1)
                 request = parse_command(raw.decode())
@@ -330,9 +390,9 @@ def _session(node, cfg: RobotConfig):
                         report({**request, "warning": warning})
                         continue
                 # the index the episode gets if saved, for episode lifecycle events
-                saved = latest.get("recorder", {}).get("fields", {}).get("episodes")
-                if cmd == "start" and isinstance(saved, int):
-                    request["episode_index"] = saved
+                index = next_episode_index(latest.get("recorder", {}).get("fields", {}))
+                if cmd == "start" and index is not None:
+                    request["episode_index"] = index
                 if cmd in ("teleop", "policy", "stop_teleop"):
                     warning = teleop_warning(cfg, cmd, latest, time.monotonic_ns())
                     if warning is not None:
@@ -358,19 +418,16 @@ def _session(node, cfg: RobotConfig):
                 if cmd in ("home", "teleop", "policy", "stop_teleop"):
                     report({**request, "ok": True})
                 if cmd == "quit":
-                    return
+                    quitting = True
+                    break
+            if quitting:
+                continue
             event_id, msg = _event(node)
-            if event_id == "report" and msg is not None:
-                report(msg.payload)
-                state = recorder_state_after(msg.payload)
-                if state is not None and "recorder" in latest:
-                    latest["recorder"]["fields"]["state"] = state
-                    fields = latest["recorder"]["fields"]
-                    # a save tells the next episode's index before the status does
-                    fields["episodes"] = msg.payload.get(
-                        "episodes", fields.get("episodes")
-                    )
-                    latest["recorder"]["t_ns"] = msg.t_ready_ns
+            if event_id == "report_closed":
+                recorder_closed = True
+                report({"command": "recorder_closed"})
+            elif event_id == "report" and msg is not None:
+                recorder_report(msg)
             elif (
                 event_id is not None
                 and event_id.endswith(STATUS_SUFFIX)
@@ -1082,7 +1139,11 @@ def _recorder(node, cfg: RobotConfig):
     # creating/resuming takes ~1 s (more with the first import of LeRobot); never
     # inside an episode
     if not _prepare(node, writer.open_dataset):
+        _send(node, "report", p.make("report", {"command": "quit"}))
         return
+    assert writer.root is not None
+    spool.prune(writer.root)
+    leftovers = spool.ready(writer.root)
     follower_modes: dict[str, str | None] = {}
     saving: threading.Thread | None = None
     done: queue.Queue[dict] = queue.Queue()
@@ -1095,6 +1156,30 @@ def _recorder(node, cfg: RobotConfig):
                 "level": "warn",
             }
         )
+
+    saver = (
+        BackgroundSaver(writer, done.put, close_writer=writer.background_save)
+        if writer.background_save or leftovers
+        else None
+    )
+    if leftovers:
+        assert saver is not None
+        done.put(
+            {
+                "note": f"{len(leftovers)} episodes left from an interrupted run are being saved",
+                "level": "warn",
+            }
+        )
+        for path in leftovers:
+            saver.submit(path, None)
+
+    def flush_reports() -> None:
+        while not done.empty():
+            report = done.get()
+            if report.get("command") == "saved":
+                assert saver is not None
+                report["pending"], report["total_episodes"] = saver.progress
+            _send(node, "report", p.make("report", report))
 
     def save(metrics: dict, request: dict) -> None:
         ident = request.get("id")
@@ -1119,19 +1204,32 @@ def _recorder(node, cfg: RobotConfig):
                 failed["dropped"] = True
             done.put(failed)
 
+    quitting = False
     try:
         while True:
             event_id, msg = _event(node)
-            while not done.empty():
-                _send(node, "report", p.make("report", done.get()))
+            flush_reports()
             if saving is not None and not saving.is_alive():
                 saving = None
+            if quitting:
+                if saving is None and (saver is None or saver.drain(timeout=0)):
+                    flush_reports()
+                    _send(node, "report", p.make("report", {"command": "quit"}))
+                    return
+                continue
             writer.poll()
             now = time.monotonic_ns()
             if status.due(now):
+                pending, total = (
+                    saver.progress if saver is not None else (0, writer.episodes)
+                )
+                if saving is not None:
+                    pending = 1
+                if not writer.background_save and pending == 0:
+                    total = writer.episodes
                 state = (
                     "saving"
-                    if saving is not None
+                    if not writer.background_save and pending
                     else "recording"
                     if writer.active
                     else "stopped"
@@ -1148,7 +1246,9 @@ def _recorder(node, cfg: RobotConfig):
                     "missing": {k: v for k, v in writer.missing.items() if v},
                     # rows in which a follower sent no command
                     "no_action": {k: v for k, v in writer.action_missing.items() if v},
-                    "episodes": writer.episodes,
+                    "episodes": total,
+                    "pending_saves": pending,
+                    "max_pending_saves": writer.max_pending_saves,
                 }
                 level = (
                     "warn" if any(writer.missing.values()) and writer.active else "ok"
@@ -1177,7 +1277,13 @@ def _recorder(node, cfg: RobotConfig):
                 ident = msg.payload.get("id")
                 ack: dict | None = None  # answers a Session waiting on this command
                 try:
-                    if saving is not None and command in ("start", "save", "discard"):
+                    if (
+                        not writer.background_save
+                        and (
+                            saving is not None or (saver is not None and saver.pending)
+                        )
+                        and command in ("start", "save", "discard")
+                    ):
                         raise RuntimeError(
                             "the previous episode is still being saved; retry shortly"
                         )
@@ -1190,22 +1296,42 @@ def _recorder(node, cfg: RobotConfig):
                     elif command == "save":
                         if not writer.stopped:
                             raise RuntimeError("stop the episode first")
-                        check_label(msg.payload.get("label"))
-                        saving = threading.Thread(
-                            target=save,
-                            args=(writer.metrics(), dict(msg.payload)),
-                            name="save-episode",
-                        )
-                        saving.start()
+                        label = check_label(msg.payload.get("label"))
+                        if writer.background_save:
+                            assert saver is not None
+                            if saver.pending >= writer.max_pending_saves:
+                                raise RuntimeError(
+                                    "max_pending_saves reached; wait, then retry save"
+                                )
+                            metrics = writer.metrics()
+                            path = writer.enqueue(
+                                label,
+                                msg.payload.get("note"),
+                                msg.payload.get("controllers"),
+                            )
+                            saver.submit(path, ident)
+                            pending, total = saver.progress
+                            ack = {
+                                "queued": True,
+                                "pending": pending,
+                                "total_episodes": total,
+                                "metrics": metrics,
+                                "label": label,
+                            }
+                        else:
+                            saving = threading.Thread(
+                                target=save,
+                                args=(writer.metrics(), dict(msg.payload)),
+                                name="save-episode",
+                            )
+                            saving.start()
                     elif command == "discard":
                         writer.discard()
                         ack = {}
                     elif command == "quit":
-                        if saving is not None:
-                            saving.join()
-                        while not done.empty():
-                            _send(node, "report", p.make("report", done.get()))
-                        return
+                        quitting = True
+                        if writer.background_save:
+                            writer.discard()
                 except Exception as exc:  # noqa: BLE001 - report session failure to operator
                     _send(
                         node,
@@ -1228,7 +1354,12 @@ def _recorder(node, cfg: RobotConfig):
     finally:
         if saving is not None:
             saving.join()
-        writer.close()
+        if saver is not None:
+            saver.stop()
+        if not writer.background_save:
+            writer.close()
+        elif writer.spool is not None:
+            writer.discard()
 
 
 def config_from_env(path: str, env: Mapping[str, str]) -> RobotConfig:

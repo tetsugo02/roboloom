@@ -42,3 +42,4 @@
 | Python session usage | [Session](session.md) |
 | Policy execution | [Running a policy](../../policy/run.md) |
 | Evaluation | [Evaluation verdicts](../../policy/evaluation.md#labels) |
+| Background saving (`wait_saves`, pending results) | [記録と再開](../../data/recording.md#background-saving) |
