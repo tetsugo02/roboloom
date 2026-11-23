@@ -20,8 +20,8 @@ from test_video_codec import CAMERA, COLOURS, STILL, _cfg, _frame, _record, _str
 
 from roboloom.config import load_config
 from roboloom.core.protocol import Publisher
-from roboloom.errors import ConfigError
-from roboloom.recording import EpisodeRecorder, episodes, journal, spool
+from roboloom.errors import Cancelled, ConfigError
+from roboloom.recording import EpisodeRecorder, SaveFailed, episodes, journal, spool
 from roboloom.recording.check import check_dataset
 from roboloom.recording.saver import BackgroundSaver
 from roboloom.runtime import node as runtime
@@ -332,6 +332,49 @@ def test_commit_receipt_prevents_reimport_if_cleanup_is_interrupted(
     assert not path.exists() and check_dataset(Path(writer.cfg.output)).episodes == 1
 
 
+def test_stop_spool_close_failure_drops_the_episode(tmp_path, monkeypatch):
+    def fail_close(_):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(spool.EpisodeSpool, "close", fail_close)
+
+    def run(command, receive):
+        command("start", task="broken", id=1)
+        assert receive("report", command="start", id=1)["ok"]
+        command("stop", id=2)
+        report = receive("report", command="stop", id=2)
+        assert "disk full" in report["error"] and report["dropped"]
+        assert runtime.recorder_state_after(report) == "idle"
+        assert runtime.recorder_state_after({"command": "stop", "error": "no"}) is None
+        command("start", task="next", id=3)  # idle again: a new episode may start
+        assert receive("report", command="start", id=3)["ok"]
+        command("discard", id=4)
+        assert receive("report", command="discard", id=4)["ok"]
+
+    cfg = _cfg(tmp_path)
+    cfg.recorder["background_save"] = True
+    _node(monkeypatch, cfg, run)
+
+
+def test_failed_save_is_not_masked_by_a_spool_remove_failure(tmp_path, monkeypatch):
+    writer = _writer(tmp_path)
+    try:
+        _stopped(writer, S, "broken")
+        path = writer.enqueue()
+        (path / CAMERA / "frame-000001.png").unlink()  # the import fails mid-row
+
+        def fail_remove(_):
+            raise OSError("read-only file system")
+
+        monkeypatch.setattr(spool, "remove", fail_remove)
+        with pytest.raises(SaveFailed, match="not saved and is dropped"):
+            writer.save_spooled(path)
+        assert not (path / spool.METADATA).exists()
+        assert spool.ready(Path(writer.cfg.output)) == []
+    finally:
+        writer.close()
+
+
 def test_start_limit_and_queued_state(tmp_path):
     cfg = _cfg(tmp_path)
     state = {
@@ -578,6 +621,75 @@ def test_synchronous_save_ignores_wait_false(fake_session, monkeypatch):
     result = session.save(wait=False)
     assert result.saved and not result.pending and result.index == 3
     assert session.wait_saves() == []
+
+
+@pytest.mark.parametrize("dropped", [True, False])
+def test_stop_failure_clears_the_episode_only_when_dropped(
+    fake_session, monkeypatch, dropped
+):
+    session, client = fake_session
+    session._episode = "broken"
+
+    def send(line):
+        ident = json.loads(line)["id"]
+        report = {"command": "stop", "id": ident, "error": "could not close the spool"}
+        if dropped:
+            report["dropped"] = True
+        client.reports.append(report)
+
+    monkeypatch.setattr(client, "send", send)
+    with pytest.raises(SessionError, match="stop: could not close the spool"):
+        session.stop()
+    if dropped:
+        assert session._episode is None
+    else:
+        assert session._episode == "broken"
+
+
+def test_save_timeout_forgets_the_unaccepted_ticket(fake_session, monkeypatch):
+    session, client = fake_session
+    session._episode = "slow"
+    monkeypatch.setattr(client, "send", lambda line: None)  # no answer ever comes
+    with pytest.raises(SessionError, match="no answer"):
+        session.save(timeout=0.05)
+    assert session._queued_saves == {}
+    assert session._episode == "slow"  # not dropped: the operator may retry
+
+
+def test_save_cancelled_forgets_the_unaccepted_ticket(fake_session, monkeypatch):
+    session, client = fake_session
+    session._episode = "slow"
+    cancelled = threading.Event()
+
+    def send(line):
+        cancelled.set()  # the operator cancels while the answer is awaited
+
+    monkeypatch.setattr(client, "send", send)
+    with session._cancellable(cancelled), pytest.raises(Cancelled):
+        session.save()
+    assert session._queued_saves == {}
+
+
+def test_save_dropped_clears_the_episode_and_ticket(fake_session, monkeypatch):
+    session, client = fake_session
+    session._episode = "gone"
+
+    def send(line):
+        ident = json.loads(line)["id"]
+        client.reports.append(
+            {
+                "command": "save",
+                "id": ident,
+                "error": "the episode was not saved and is dropped",
+                "dropped": True,
+            }
+        )
+
+    monkeypatch.setattr(client, "send", send)
+    with pytest.raises(SessionError, match="save:"):
+        session.save()
+    assert session._episode is None
+    assert session._queued_saves == {}
 
 
 def test_the_next_episode_index_counts_the_queued_saves():

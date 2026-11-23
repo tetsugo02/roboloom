@@ -14,7 +14,7 @@ from ..config import CONFIG_FILE
 from ..core.traits import ending_note
 from ..errors import Cancelled
 from ..runtime.node import start_warning
-from ..runtime.session import Session, _ui_launch, steps_done
+from ..runtime.session import Session, SessionError, _ui_launch, steps_done
 from .models import (
     Capabilities,
     Closed,
@@ -423,7 +423,12 @@ class SessionBackend:
             session.wait_ready(120)
             self._phase = "ready"
         elif name == "stop":
-            self._log(describe(session.stop()))
+            try:
+                self._log(describe(session.stop()))
+            except SessionError as exc:
+                if exc.report.get("dropped"):  # nothing left to save or discard
+                    self._episode = self._recording = False
+                raise
             self._recording = False
             self._phase = "stopped: save or discard"
         elif name == "save":  # `save success` / `save failure`: with the verdict

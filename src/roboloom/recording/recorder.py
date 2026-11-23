@@ -385,7 +385,13 @@ class EpisodeRecorder:
                 with contextlib.suppress(OSError):  # a later startup can prune it
                     spool.remove(path)
             else:
-                spool.remove(path)
+                try:
+                    spool.remove(path)
+                except OSError:
+                    # must not mask the save failure; without its metadata the
+                    # episode is not re-imported as ready at the next startup
+                    with contextlib.suppress(OSError):
+                        (path / spool.METADATA).unlink(missing_ok=True)
 
     def save(
         self,

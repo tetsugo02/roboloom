@@ -234,6 +234,51 @@ def test_a_typed_verdict_is_saved_with_the_episode(tmp_path):
         backend.shutdown()
 
 
+def test_stop_dropped_clears_the_episode_and_recording_state(tmp_path):
+    session = FakeSession(tmp_path)
+
+    def stop() -> EpisodeResult:
+        raise SessionError(
+            "stop: could not write spool images",
+            {
+                "command": "stop",
+                "error": "could not write spool images",
+                "dropped": True,
+            },
+        )
+
+    session.stop = stop  # type: ignore[method-assign]
+    backend = SessionBackend(lambda: session)
+    notices = Notices()
+    backend.start(notices)
+    try:
+        notices.wait(ready)
+        backend.submit("start task")
+        notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == "recording")
+        backend.submit("stop")
+        notices.wait(
+            lambda n: (
+                isinstance(n, LogEvent) and "could not write spool images" in n.text
+            )
+        )
+        # the episode is gone: Start is available again, Save/Discard/Stop are not
+        snapshot = notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot)
+                and n.phase == "operation refused; retry when ready"
+                and any(o.command == "start" and o.enabled for o in n.operations)
+            )
+        )
+        assert isinstance(snapshot, Snapshot)
+        assert not any(
+            o.enabled
+            for o in snapshot.operations
+            if o.command in ("stop", "save", "discard")
+        )
+    finally:
+        backend.shutdown()
+
+
 @pytest.mark.parametrize("operation", ["save", "home"])
 def test_monitor_and_emergency_bypass_blocked_operations(tmp_path, operation: str):
     session = FakeSession(tmp_path, home=True)
