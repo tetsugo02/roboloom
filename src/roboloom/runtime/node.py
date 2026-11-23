@@ -195,6 +195,8 @@ def recorder_state_after(report: dict) -> str | None:
         return "idle"
     if command == "stop" and report.get("ok"):
         return "stopped"
+    if command == "stop" and report.get("dropped"):
+        return "idle"
     if command == "start" and report.get("ok"):
         return "recording"
     return None
@@ -1333,14 +1335,10 @@ def _recorder(node, cfg: RobotConfig):
                         if writer.background_save:
                             writer.discard()
                 except Exception as exc:  # noqa: BLE001 - report session failure to operator
-                    _send(
-                        node,
-                        "report",
-                        p.make(
-                            "report",
-                            {"command": command, "id": ident, "error": str(exc)},
-                        ),
-                    )
+                    failed = {"command": command, "id": ident, "error": str(exc)}
+                    if command == "stop" and not writer.active and not writer.stopped:
+                        failed["dropped"] = True  # stop discarded the episode
+                    _send(node, "report", p.make("report", failed))
                 else:
                     if ack is not None:
                         _send(

@@ -116,11 +116,14 @@ def prepare(args: argparse.Namespace) -> tuple[Path, dict]:
         read_config(robot, options, experiment=replace(source, dataset={})),
     ):
         output = tree["settings"].get("output")
-        if output and root == Path(output).resolve():
+        if output and root == Path(output).expanduser().resolve():
             raise ValueError(
                 f"refusing --root {root}: it is the robot's configured output dataset"
             )
-    if "root" in source.dataset and root == Path(source.dataset["root"]).resolve():
+    if (
+        "root" in source.dataset
+        and root == Path(source.dataset["root"]).expanduser().resolve()
+    ):
         raise ValueError(
             f"refusing --root {root}: it is the experiment's configured dataset"
         )

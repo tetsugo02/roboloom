@@ -870,7 +870,12 @@ class Session:
     def stop(self) -> EpisodeResult:
         """End the episode's recording; the result (not yet saved) has its metrics and
         quality warnings, to decide between `save` and `discard`."""
-        report = self.wait_report(self.send("stop"))
+        try:
+            report = self.wait_report(self.send("stop"))
+        except SessionError as exc:
+            if exc.report.get("dropped"):  # nothing left to save or discard
+                self._episode = None
+            raise
         metrics = report.get("metrics", {})
         return EpisodeResult(
             self._episode or "",
@@ -910,9 +915,14 @@ class Session:
             self._queued_saves[ident] = _QueuedSave(task)
         try:
             report = self.wait_report(ident, timeout)
-        except SessionError as exc:
-            if exc.report.get("dropped"):  # nothing left to save or discard
-                self._episode = None
+        except BaseException as exc:
+            with self._lock:
+                ticket = self._queued_saves.get(ident)
+                if ticket is not None and not ticket.accepted and ticket.report is None:
+                    # timed out or cancelled before acceptance: nothing to wait for
+                    self._queued_saves.pop(ident, None)
+            if isinstance(exc, SessionError) and exc.report.get("dropped"):
+                self._episode = None  # nothing left to save or discard
             raise
         self._episode = None
         if report.get("queued"):

@@ -8,6 +8,7 @@ import runpy
 import shutil
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -93,4 +94,33 @@ def test_refuses_robot_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     with pytest.raises(
         ValueError, match="refusing --root .* configured output dataset"
     ):
+        script["prepare"](args)
+
+
+@pytest.mark.parametrize("where", ["robot", "experiment"])
+def test_refuses_tilde_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str
+) -> None:
+    # A ~-prefixed output/dataset root naming the same directory as --root must be
+    # refused too; the config sources here hand it over unexpanded.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    script = runpy.run_path(str(SCRIPT))
+    # run_path returns a copy of the namespace: patch the functions' own globals
+    namespace = script["prepare"].__globals__
+    config = MOCK / "config.yaml"
+    if where == "robot":
+        monkeypatch.setitem(
+            namespace,
+            "read_config",
+            lambda *_, **__: {"settings": {"output": "~/dataset"}},
+        )
+        message = "configured output dataset"
+    else:
+        source = script["load_experiment"]({})
+        tilde = replace(source, dataset={"root": "~/dataset"})
+        monkeypatch.setitem(namespace, "load_experiment", lambda *_, **__: tilde)
+        message = "experiment's configured dataset"
+    args = script["parse_args"](["limit", str(config), "--mock", "--root", "~/dataset"])
+    with pytest.raises(ValueError, match=f"refusing --root .* {message}"):
         script["prepare"](args)
