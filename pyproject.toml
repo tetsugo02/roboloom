@@ -56,6 +56,7 @@ digit = [
     "digit-interface @ https://github.com/tetsugo02/digit-interface/releases/download/roboloom-1/digit_interface-0.2.1-py3-none-any.whl",
 ]
 ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
+viz = ["lerobot[viz]==0.7.0"]  # live view of the observations in Rerun (viewer node)
 policy = ["lerobot==0.7.0"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
 train = ["lerobot[training]==0.7.0"]  # lerobot-train on roboloom datasets (accelerate, trackio)
 test = [

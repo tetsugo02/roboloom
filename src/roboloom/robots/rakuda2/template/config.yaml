@@ -63,3 +63,7 @@ options:
       inputs.leader: nodes/leader.yaml
       controllers.policy: nodes/policy_teleop.yaml
     dataset: teleop
+  viewer:
+    help: show the observations live in Rerun (needs the viz extra)
+    set:
+      viewer: nodes/viewer.yaml

@@ -24,3 +24,8 @@ followers:  # the action joins them in this order (6 + 6 + 1 + 1)
   right_gripper: nodes/right_gripper.yaml
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
+options:
+  viewer:
+    help: show the observations live in Rerun (needs the viz extra)
+    set:
+      viewer: nodes/viewer.yaml
