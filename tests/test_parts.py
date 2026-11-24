@@ -21,9 +21,7 @@ JOINT = {
 }
 
 
-def _project(tmp_path, parts: dict[str, dict], **extra):
-    """The Rakuda2 mock with its controller replaced by a parts controller."""
-    project = mock_project(tmp_path / ".roboloom")
+def _write_parts(project, parts: dict[str, dict], **extra):
     nodes = project / "nodes"
     for name, node in parts.items():
         (nodes / f"{name}.yaml").write_text(yaml.safe_dump(node))
@@ -39,6 +37,11 @@ def _project(tmp_path, parts: dict[str, dict], **extra):
         )
     )
     return project / "config.yaml"
+
+
+def _project(tmp_path, parts: dict[str, dict], **extra):
+    """The Rakuda2 mock with its controller replaced by a parts controller."""
+    return _write_parts(mock_project(tmp_path / ".roboloom"), parts, **extra)
 
 
 def _arms(tmp_path):
@@ -120,33 +123,32 @@ def test_each_part_follows_its_input_and_the_rest_holds(tmp_path):
 
 
 def test_parts_are_checked_at_load(tmp_path):
-    with pytest.raises(ValueError, match="driven by both"):
-        load_config(
-            _project(
-                tmp_path / "a",
-                {
-                    "one": {**JOINT, "followers": ["follower.right_arm"]},
-                    "two": {**JOINT, "followers": ["follower.right_arm"]},
-                },
-            )
-        )
-    with pytest.raises(Exception, match="parts of follower"):
-        load_config(
-            _project(tmp_path / "b", {"one": {**JOINT, "followers": ["follower"]}})
-        )
-    with pytest.raises(ValueError, match="no part 'tail'"):
-        load_config(
-            _project(tmp_path / "c", {"one": {**JOINT, "followers": ["follower.tail"]}})
-        )
-    with pytest.raises(Exception, match="configured input"):
-        load_config(
-            _project(
-                tmp_path / "d",
-                {"one": {**JOINT, "input": "nobody", "followers": ["follower.body"]}},
-            )
-        )
-    with pytest.raises(Exception, match="list of controller YAML paths"):
-        load_config(_project(tmp_path / "e", {}))
+    project = mock_project(tmp_path / ".roboloom")
+    cases = [
+        (
+            {
+                "one": {**JOINT, "followers": ["follower.right_arm"]},
+                "two": {**JOINT, "followers": ["follower.right_arm"]},
+            },
+            ValueError,
+            "driven by both",
+        ),
+        ({"one": {**JOINT, "followers": ["follower"]}}, Exception, "parts of follower"),
+        (
+            {"one": {**JOINT, "followers": ["follower.tail"]}},
+            ValueError,
+            "no part 'tail'",
+        ),
+        (
+            {"one": {**JOINT, "input": "nobody", "followers": ["follower.body"]}},
+            Exception,
+            "configured input",
+        ),
+        ({}, Exception, "list of controller YAML paths"),
+    ]
+    for parts, exc_type, match in cases:
+        with pytest.raises(exc_type, match=match):
+            load_config(_write_parts(project, parts))
 
 
 def test_the_flow_gives_the_follower_one_command_source(tmp_path):

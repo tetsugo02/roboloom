@@ -48,18 +48,24 @@ class Echo:
         return np.asarray(observation["observation.state"], dtype=np.float64) + 1
 
 
-@pytest.fixture
-def served(monkeypatch):
+def _serve(monkeypatch, policy, clients: int = 1) -> tuple[str, threading.Thread]:
     monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
-    address, policy, up = _free_address(), Echo(), threading.Event()
+    address, up = _free_address(), threading.Event()
     thread = threading.Thread(
         target=R.serve,
         args=(policy, address),
-        kwargs={"authkey": KEY, "clients": 2, "ready": up.set},
+        kwargs={"authkey": KEY, "clients": clients, "ready": up.set},
         daemon=True,
     )
     thread.start()
     assert up.wait(5)
+    return address, thread
+
+
+@pytest.fixture
+def served(monkeypatch):
+    policy = Echo()
+    address, _ = _serve(monkeypatch, policy, clients=2)
     return address, policy
 
 
@@ -145,24 +151,84 @@ def test_no_server_is_reported(monkeypatch):
 
 
 def test_a_slow_answer_times_out(monkeypatch):
-    monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
-    address, up, release = _free_address(), threading.Event(), threading.Event()
+    release = threading.Event()
 
     class Slow(Echo):
         def reset(self) -> None:
             release.wait(5)
 
-    threading.Thread(
-        target=R.serve,
-        args=(Slow(), address),
-        kwargs={"authkey": KEY, "clients": 1, "ready": up.set},
-        daemon=True,
-    ).start()
-    assert up.wait(5)
-    client = R.connect(address, timeout_s=0.2)
+    address, _ = _serve(monkeypatch, Slow(), clients=1)
+    client = R.connect(address, timeout_s=0.1)
     with pytest.raises(TimeoutError):
         client.reset()
     release.set()
+
+
+def test_an_answer_that_comes_after_its_call_timed_out_is_not_the_next_ones(
+    monkeypatch,
+):
+    release = threading.Event()
+
+    class NumberedSlow:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def reset(self) -> None:
+            pass
+
+        def infer(self, observation: dict) -> np.ndarray:
+            self.calls += 1
+            number = self.calls
+            if number == 1:
+                release.wait(5)
+            return np.asarray([[float(number)]])
+
+    address, _ = _serve(monkeypatch, NumberedSlow(), clients=1)
+    client = R.RemotePolicy(address, timeout_s=0.05)
+    try:
+        with pytest.raises(TimeoutError, match="no answer to infer within 0.05 s"):
+            client.infer({})
+        release.set()
+        client.timeout_s = 10.0
+        # the late answer (1) is on the connection before this call's (2)
+        assert client.infer({}).tolist() == [[2.0]]
+        assert client.infer({}).tolist() == [[3.0]]
+    finally:
+        release.set()
+        client.close()
+
+
+def test_a_second_policy_node_is_told_the_server_is_busy(monkeypatch):
+    address, _ = _serve(monkeypatch, Echo(), clients=3)
+    first = R.RemotePolicy(address, timeout_s=10)
+    try:
+        first.reset()
+        second = R.RemotePolicy(address, timeout_s=5)  # it used to wait here for ever
+        try:
+            with pytest.raises(
+                R.RemotePolicyError, match="serving another policy node"
+            ):
+                second.reset()
+        finally:
+            second.close()
+        first.reset()  # the first one is still served
+    finally:
+        first.close()
+    third = R.RemotePolicy(address, timeout_s=5)  # and once it left, the next one is
+    try:
+        third.reset()
+    finally:
+        third.close()
+
+
+def test_a_client_from_before_calls_had_numbers_is_still_answered(monkeypatch):
+    from multiprocessing.connection import Client
+
+    address, _ = _serve(monkeypatch, Echo(), clients=1)
+    host, _, port = address.rpartition(":")
+    with Client((host, int(port)), authkey=KEY.encode()) as connection:
+        connection.send_bytes(R.encode(["reset"]))  # the old form: no number
+        assert R.decode(connection.recv_bytes()) == ["ok", None]
 
 
 def test_the_server_side_needs_no_dataflow_or_learning_packages():
@@ -175,34 +241,20 @@ def test_the_server_side_needs_no_dataflow_or_learning_packages():
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-@pytest.mark.e2e
-def test_a_served_policy_drives_the_mock_robot(tmp_path, monkeypatch):
+def test_policy_controller_loads_remote_connect_by_reference(tmp_path, monkeypatch):
     from policies import Creep
 
-    from roboloom.runtime.session import Session
+    from roboloom.config import load_config
 
-    monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
-    address, up = _free_address(), threading.Event()
-    threading.Thread(
-        target=R.serve,
-        args=(Creep(step=5.0), address),
-        kwargs={"authkey": KEY, "clients": 1, "ready": up.set},
-        daemon=True,
-    ).start()
-    assert up.wait(5)
+    address, thread = _serve(monkeypatch, Creep(step=5.0), clients=1)
     project = mock_project(tmp_path / ".roboloom")
-    with Session.launch(
-        project / "config.yaml",
-        options=["policy"],
-        policy="roboloom.policy.remote:connect",
-        policy_kwargs={"address": address},
-    ) as s:
-        s.wait_ready(30)
-        s.record("creep", 1.5)
-        (result,) = s.wait_saves()
-        policy = s.status()["policy"]["fields"]
-    assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
-    assert policy["state"] in ("ready", "running") and "infer_ms" in policy, policy
+    controller = load_config(project / "config.yaml", options=["policy"]).controllers[
+        "policy"
+    ]
+    controller.load("roboloom.policy.remote:connect", {"address": address})
+    assert controller.state == "ready"
+    controller.policy.close()
+    thread.join(3)
 
 
 # -- backend: server ------------------------------------------------------------------
@@ -280,10 +332,12 @@ def test_one_file_starts_the_server_and_the_node_that_connects(tmp_path, monkeyp
             s.wait_ready(30)
             s.record("creep", 1.5)
             (result,) = s.wait_saves()
+            policy = s.status()["policy"]["fields"]
     finally:
         server.terminate()
         server.wait(10)
     assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
+    assert policy["state"] in ("ready", "running") and "infer_ms" in policy, policy
 
 
 class EventPolicy(Echo):
@@ -304,37 +358,28 @@ class EventPolicy(Echo):
         return [self.handler]
 
 
-def test_hook_capabilities_events_and_step_refusal(monkeypatch):
+@pytest.mark.parametrize("step", [False, True])
+def test_hook_capabilities_events_and_step_refusal(monkeypatch, step):
     from roboloom.hooks import EpisodeStarted
 
-    for step in (False, True):
-        policy, up = EventPolicy(step), threading.Event()
-        address = _free_address()
-        monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
-        thread = threading.Thread(
-            target=R.serve,
-            args=(policy, address),
-            kwargs={"authkey": KEY, "clients": 1, "ready": up.set},
-            daemon=True,
-        )
-        thread.start()
-        assert up.wait(3)
-        if step:
-            with pytest.raises(ConfigError, match="local factory.*backend: process"):
-                R.connect(address)
-        else:
-            client = R.connect(address)
-            caps = client._call("capabilities")
-            assert caps["protocol"] == 2 and caps["step_hooks"] == []
-            assert "episode_started" in caps["events"]
-            assert not hasattr(client.hooks()[0], "step")
-            event = EpisodeStarted("task", 9, "out", 123.0)
-            client.hooks()[0].on_event(event)
-            assert policy.events == [event]
-            assert client._call("infer", {"observation.state": np.ones(2)}) is not None
-            client.close()
-        thread.join(3)
-        assert not thread.is_alive()
+    policy = EventPolicy(step)
+    address, thread = _serve(monkeypatch, policy, clients=1)
+    if step:
+        with pytest.raises(ConfigError, match="local factory.*backend: process"):
+            R.connect(address)
+    else:
+        client = R.connect(address)
+        caps = client._call("capabilities")
+        assert caps["protocol"] == 2 and caps["step_hooks"] == []
+        assert "episode_started" in caps["events"]
+        assert not hasattr(client.hooks()[0], "step")
+        event = EpisodeStarted("task", 9, "out", 123.0)
+        client.hooks()[0].on_event(event)
+        assert policy.events == [event]
+        assert client._call("infer", {"observation.state": np.ones(2)}) is not None
+        client.close()
+    thread.join(3)
+    assert not thread.is_alive()
 
 
 def test_old_policy_server_has_no_event_hooks(monkeypatch):
@@ -349,16 +394,7 @@ def test_old_policy_server_has_no_event_hooks(monkeypatch):
         return original(policy, method, arguments, hooks)
 
     monkeypatch.setattr(R, "_answer", answer)
-    monkeypatch.setenv(R.AUTHKEY_ENV, KEY)
-    up, address = threading.Event(), _free_address()
-    thread = threading.Thread(
-        target=R.serve,
-        args=(Old(), address),
-        kwargs={"authkey": KEY, "clients": 1, "ready": up.set},
-        daemon=True,
-    )
-    thread.start()
-    assert up.wait(3)
+    address, thread = _serve(monkeypatch, Old(), clients=1)
     client = R.connect(address)
     assert client.hooks() == []
     assert client.infer({"observation.state": np.ones(2)}).tolist() == [2.0, 2.0]

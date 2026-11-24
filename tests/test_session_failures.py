@@ -6,21 +6,21 @@ from __future__ import annotations
 import itertools
 import json
 import os
-import shutil
 import subprocess
 import sys
 import textwrap
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import mock_project
+from conftest import make_fake_session, mock_project, run_session_node
 from test_policy_observation import Recorder, _controller, _run
 
 from roboloom.config import load_config
-from roboloom.core.protocol import Envelope
+from roboloom.core.protocol import Envelope, Publisher
 from roboloom.runtime import node as runtime
 from roboloom.runtime.session import (
     EpisodeFailed,
@@ -30,9 +30,12 @@ from roboloom.runtime.session import (
 )
 from roboloom.ui.client import SessionClient
 
-TESTS = str(Path(__file__).resolve().parent)
 S = 1_000_000_000
-needs_dora = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
+
+
+@pytest.fixture(scope="module")
+def mock_cfg():
+    return load_config("examples/mock/config.yaml")
 
 
 def _gone(pid: int, timeout: float) -> bool:
@@ -50,7 +53,6 @@ def _gone(pid: int, timeout: float) -> bool:
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_the_robot_stops_when_the_operator_process_is_killed(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     code = textwrap.dedent(
@@ -111,66 +113,11 @@ def test_a_fifo_nobody_reads_was_left_by_a_dead_run(tmp_path):
         os.close(reader)
 
 
-def _session_node(tmp_path, monkeypatch, reads):
-    """Run the session node on scripted FIFO reads (an exception is raised, bytes are
-    returned), 0.25 s apart; returns the commands it sent and its reports."""
-    cfg = load_config("examples/mock/config.yaml")
-    work = tmp_path / "work"
-    work.mkdir()
-    fifo = tmp_path / "session.fifo"
-    os.mkfifo(fifo)
-    monkeypatch.setenv("ROBOLOOM_SESSION_FIFO", str(fifo))
-    monkeypatch.setenv("ROBOLOOM_REPORT_PATH", str(work / "report.jsonl"))
-    monkeypatch.setenv("ROBOLOOM_STATUS_PATH", str(work / "status.json"))
-    now = S
-    script = iter(reads)
-    seen: list[dict] = []
-
-    def read(fd: int, count: int) -> bytes:
-        nonlocal now
-        now += S // 4
-        item = next(script)
-        if isinstance(item, BaseException):
-            raise item
-        return item
-
-    real_open = open
-
-    def keep(
-        path, mode="r", *args, **kwargs
-    ):  # the reports, before the node removes them
-        if str(path).endswith("report.jsonl") and "a" in mode:
-            return real_open(tmp_path / "reports.jsonl", mode, *args, **kwargs)
-        return real_open(path, mode, *args, **kwargs)
-
-    monkeypatch.setattr(runtime.os, "read", read)
-    monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: now)
-
-    def event(node):
-        if seen and seen[-1]["command"] == "quit":
-            return "report", Envelope(
-                "report", "recorder", "boot", 1, now, now, {"command": "quit"}
-            )
-        return None, None
-
-    monkeypatch.setattr(runtime, "_event", event)
-    monkeypatch.setattr("builtins.open", keep)
-
-    class Node:
-        def send_output(self, output: str, value: bytes) -> None:
-            seen.append(Envelope.decode(value).payload)
-
-    runtime._session(Node(), cfg)
-    reports = tmp_path / "reports.jsonl"
-    lines = reports.read_text().splitlines() if reports.exists() else []
-    return seen, [json.loads(line) for line in lines], fifo, work
-
-
 def test_the_session_node_ends_the_dataflow_when_the_fifo_loses_its_writer(
     tmp_path, monkeypatch
 ):
     held = BlockingIOError()  # the operator holds the FIFO open, nothing to read
-    sent, reports, fifo, work = _session_node(
+    sent, reports, _, fifo, work = run_session_node(
         tmp_path,
         monkeypatch,
         [b'{"command": "attach"}\n', held, held, *[b""] * 6],
@@ -184,11 +131,60 @@ def test_a_fifo_without_a_writer_ends_nothing_before_an_operator_attached(
     tmp_path, monkeypatch
 ):
     # `roboloom session` writers come and go; without `attach` nobody is expected to stay
-    sent, _, fifo, work = _session_node(
+    sent, _, _, fifo, work = run_session_node(
         tmp_path, monkeypatch, [b"", b"", b"", b"", b"", b"", b"quit\n"]
     )
     assert [m["command"] for m in sent] == ["quit"]
     assert fifo.exists() and work.exists()
+
+
+def test_session_warns_without_starting_then_accepts_aligned_retry(
+    tmp_path, monkeypatch
+):
+    publisher = Publisher("controller")
+    script = iter(
+        [
+            (
+                "controller_status",
+                {
+                    "state": "aligning",
+                    "worst_joint": "l_arm_wr_yaw",
+                    "worst_diff": 380.0,
+                    "tolerance": 150,
+                },
+            ),
+            ("follower_status", {"mode": "HOLD", "armed": False}),
+            ("controller_status", {"state": "following"}),
+            (None, None),
+            ("report", {"command": "quit"}),
+        ]
+    )
+
+    def events(node, now):
+        name, fields = next(script)
+        if name == "report":
+            return name, Publisher("recorder").make("report", fields, now)
+        msg = publisher.make("status", {"fields": fields}, now) if fields else None
+        return name, msg
+
+    sent, reports, status_path, _, _ = run_session_node(
+        tmp_path,
+        monkeypatch,
+        [b"", b"start rejected task\n", b"", b"start retry task\n", b"quit\n"],
+        events=events,
+    )
+    # The rejected request reaches neither the robot nor the recorder. The same
+    # session keeps consuming status and accepts a new start after alignment.
+    assert sent == [
+        {"command": "start", "task": "retry task"},
+        {"command": "quit", "task": ""},
+    ]
+    assert len(reports) == 1 and reports[0]["command"] == "start"
+    assert "l_arm_wr_yaw differs by 380.0 (tolerance 150)" in reports[0]["warning"]
+    assert "retry start" in reports[0]["warning"]
+    latest = json.loads(status_path.read_text())["nodes"]
+    assert latest["controller"]["fields"]["state"] == "following"
+    assert latest["follower"]["fields"] == {"mode": "HOLD", "armed": False}
 
 
 # -- a policy that raises -----------------------------------------------------------
@@ -224,14 +220,10 @@ def test_an_episode_that_ends_while_the_policy_waits_leaves_it_ready(tmp_path):
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_a_failed_policy_episode_is_discarded_and_the_next_one_runs(
-    tmp_path, monkeypatch
+    tmp_path, tests_pythonpath
 ):
     project = mock_project(tmp_path / ".roboloom")
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([TESTS, os.environ.get("PYTHONPATH", "")])
-    )
     with Session.launch(
         project / "config.yaml",
         options=["policy"],
@@ -255,6 +247,30 @@ def test_a_failed_policy_episode_is_discarded_and_the_next_one_runs(
 
 
 @pytest.mark.parametrize(
+    "latest",
+    [
+        {},
+        {"controller": {"t_ns": S - (S + 1), "fields": {"state": "following"}}},
+        {"controller": {"t_ns": S + 1, "fields": {"state": "following"}}},
+        {"controller": {"t_ns": S, "fields": {"state": "waiting_input"}}},
+        {"controller": {"t_ns": S, "fields": {"state": "input_stale"}}},
+        {"controller": {"t_ns": S, "fields": {"state": "follower_fault"}}},
+    ],
+)
+def test_start_requires_recent_following_status(mock_cfg, latest):
+    assert runtime.start_warning(mock_cfg, latest, S) is not None
+
+
+def test_every_start_checks_the_follower_is_at_the_leader(mock_cfg):
+    fields = {"state": "following", "tolerance": 100, "worst_joint": "head_yaw"}
+    latest = {"controller": {"t_ns": S, "fields": {**fields, "worst_diff": 140.0}}}
+    warning = runtime.start_warning(mock_cfg, latest, S)
+    assert warning is not None and "head_yaw differs by 140.0" in warning
+    latest["controller"]["fields"]["worst_diff"] = 60.0
+    assert runtime.start_warning(mock_cfg, latest, S) is None
+
+
+@pytest.mark.parametrize(
     ("state", "why"),
     [
         ("saving", "still being saved"),
@@ -262,21 +278,33 @@ def test_a_failed_policy_episode_is_discarded_and_the_next_one_runs(
         ("recording", "already being recorded"),
     ],
 )
-def test_start_waits_for_the_recorder(state, why):
-    cfg = load_config("examples/mock/config.yaml")
+def test_start_waits_for_the_recorder(mock_cfg, state, why):
     latest = {
         "controller": {"t_ns": S, "fields": {"state": "following"}},
         "recorder": {"t_ns": S, "fields": {"state": state}},
     }
-    assert why in runtime.start_warning(cfg, latest, S)
-    latest["recorder"]["fields"]["state"] = "idle"
-    assert runtime.start_warning(cfg, latest, S) is None
+    assert why in runtime.start_warning(mock_cfg, latest, S)
+
+
+def test_start_allows_idle_recorder_and_warns_when_silent(mock_cfg):
+    latest = {
+        "controller": {"t_ns": S, "fields": {"state": "following"}},
+        "recorder": {"t_ns": S, "fields": {"state": "idle"}},
+    }
+    assert runtime.start_warning(mock_cfg, latest, S) is None
     latest["recorder"]["t_ns"] = S - 2 * S  # a recorder that went silent
-    assert "recorder" in runtime.start_warning(cfg, latest, S)
+    assert "recorder" in runtime.start_warning(mock_cfg, latest, S)
+
+
+def test_work_time_is_reported_for_the_status_screen():
+    assert runtime._work_fields(deque()) == {"work_ms": None, "work_max_ms": None}
+    assert runtime._work_fields(deque([4.04, 6.51, 4.2])) == {
+        "work_ms": 4.2,
+        "work_max_ms": 6.5,
+    }
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_start_is_refused_while_the_last_episode_is_neither_saved_nor_discarded(
     tmp_path,
 ):
@@ -305,20 +333,11 @@ def test_estop_goes_out_when_a_node_has_failed(tmp_path):
     fifo = tmp_path / "config.fifo"
     os.mkfifo(fifo)
     reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-
-    class Alive:
-        returncode = None
-
-        def poll(self):
-            return None
-
-    session = Session.__new__(Session)
-    session.process = Alive()
-    session.client = SessionClient(fifo, tmp_path / "report", tmp_path / "status")
-    session.log_path = tmp_path / "dora.log"
+    session = make_fake_session(
+        tmp_path,
+        client=SessionClient(fifo, tmp_path / "report", tmp_path / "status"),
+    )
     session.log_path.write_text("node exited with error: ExitCode(1) node_id=policy\n")
-    session._ids = itertools.count(1)
-    session._cancel_local = threading.local()
     try:
         with pytest.raises(SessionError, match="a node failed"):
             session.send("stop")  # every other command refuses
@@ -332,8 +351,7 @@ def test_a_start_the_recorder_refuses_stops_what_already_started(tmp_path):
     """`start` reaches every node at once; if the recorder then refuses, the followers
     and the policy that took it are stopped again."""
     sent: list[str] = []
-    session = Session.__new__(Session)
-    session._episode = None
+    session = make_fake_session(tmp_path)
 
     def send(command: str, task: str = "") -> int:
         sent.append(command)

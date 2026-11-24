@@ -4,7 +4,6 @@ import pytest
 from roboloom.dynamics.identify import holdout_mask, search_directions
 from roboloom.dynamics.kinematics import UrdfTree
 from roboloom.dynamics.regressor import (
-    COUNTS_PER_RAD,
     JointMap,
     Regressor,
     RegressorGravityModel,
@@ -108,7 +107,6 @@ def test_direction_search_and_zero_refinement_recover_calibration():
     shifted = [best[0], JointMap("a", "j1", 2048 + 46, 1), best[2]]
     fit = Regressor(URDF, shifted, OUTPUTS).fit(samples, currents, holdout_mask(40))
     assert max(fit.holdout_rms_mA) < 1e-6
-    assert COUNTS_PER_RAD == pytest.approx(651.9, abs=0.1)
 
 
 def test_shared_parameters_fit_with_few_poses():

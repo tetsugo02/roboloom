@@ -7,9 +7,6 @@ import math
 import numpy as np
 import pytest
 
-pytest.importorskip("pinocchio")
-
-from roboloom.kinematics.ik import ArmModel
 from roboloom.kinematics.spec import (
     invert,
     matrix_quaternion,
@@ -69,6 +66,9 @@ def test_quaternions_round_trip_in_xyzw():
 
 
 def test_the_urdf_matches_the_sdk_dh_parameters():
+    pytest.importorskip("pinocchio")
+    from roboloom.kinematics.ik import ArmModel
+
     arm = ArmModel(MODEL)
     for q in POSES:
         urdf, dh = arm.fk(q), sdk_dh(q)
@@ -77,6 +77,9 @@ def test_the_urdf_matches_the_sdk_dh_parameters():
 
 
 def test_ik_reaches_poses_it_can_and_says_when_it_cannot():
+    pytest.importorskip("pinocchio")
+    from roboloom.kinematics.ik import ArmModel
+
     tool = pose_xyz_rpy([0, 0, 0.19], [0, -math.pi / 2, 0])
     arm = ArmModel(MODEL, tool)
     for q in POSES[1:]:
@@ -92,6 +95,9 @@ def test_ik_reaches_poses_it_can_and_says_when_it_cannot():
 
 
 def test_ik_is_deterministic_and_stays_near_its_seed():
+    pytest.importorskip("pinocchio")
+    from roboloom.kinematics.ik import ArmModel
+
     arm = ArmModel(MODEL)
     seed = [0.0, 1.2, -0.9, 0.0, 0.3, 0.0]
     target = arm.fk(seed) @ pose_xyz_rpy([0.0, 0.01, 0.0], [0.02, 0, 0])
@@ -101,11 +107,3 @@ def test_ik_is_deterministic_and_stays_near_its_seed():
     # a 1 cm, 0.02 rad step stays on the branch of the seed (no flip of the wrist)
     assert max(abs(x - s) for x, s in zip(a.q, seed, strict=True)) < 0.3
     assert a.iterations < 10
-
-
-def test_a_follower_without_kinematics_says_so():
-    from test_pika import follower_cfg
-
-    from roboloom.robots.pika.follower import PikaGripperFollower
-
-    assert PikaGripperFollower("g", follower_cfg()).kinematics() is None

@@ -110,8 +110,6 @@ def test_the_node_knows_the_robot_directory():
 
 
 def test_a_leader_shaped_like_the_follower_needs_no_joint_table():
-    from conftest import rakuda2_tree
-
     tree = rakuda2_tree()
     node = tree["controllers"]["controller"]
     assert "joints" not in node and "unit" not in node  # the shipped template

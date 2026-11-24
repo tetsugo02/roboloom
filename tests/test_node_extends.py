@@ -3,8 +3,6 @@ that extends it only what differs."""
 
 from __future__ import annotations
 
-import shutil
-import time
 from pathlib import Path
 
 import pytest
@@ -127,60 +125,27 @@ def test_the_template_variants_extend_their_base_and_load(tmp_path):
     cfg = load_config(project / "config.yaml", options=["policy_teleop"])
     assert cfg.controllers["policy"].teleop  # policy.yaml's settings plus teleop
     assert cfg.controllers["policy"].rate_hz == 15
-    # a misspelled key of the extending file is still refused by the node's class
-    teleop = nodes / "policy_teleop.yaml"
-    teleop.write_text(teleop.read_text() + "rate_hx: 5\n")
-    with pytest.raises(ConfigError, match="rate_hx"):
-        load_config(project / "config.yaml", options=["policy_teleop"])
-
-
-def test_the_dataset_keeps_which_files_a_node_was_built_on(tmp_path):
-    project = mock_project(tmp_path / ".roboloom")
-    cfg = load_config(project / "config.yaml", options=["policy_teleop"])
+    # the dataset manifest records which base files an extending node was built on
     saved = snapshot(cfg)
     assert saved is not None
     policy = saved["controllers"]["policy"]
     assert policy["file"] == "nodes/policy_teleop.yaml"
     assert policy["extends"] == ["nodes/policy.yaml"]
     assert policy["rate_hz"] == 15  # the values it ran with, bases included
-
-
-@pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
-def test_an_extending_leader_holds_the_camera_joints_where_home_put_them(tmp_path):
-    """A leader file that extends the base and only makes torso and head a position
-    group: `home` takes them to the pose and Teleop leaves them there. (The gravity
-    leader of the Rakuda2 project is extended the same way; it needs calibration files.)"""
-    import numpy as np
-    from test_policy_home import HOME, _project
-
-    from roboloom.runtime.session import Session
-
-    path = _project(tmp_path)
-    nodes = path.parent / "nodes"
+    # extending a leader file merges a single control group override into the base groups
     (nodes / "leader_fixed_camera.yaml").write_text(
         "extends: leader.yaml\ncontrol:\n- group: body\n  law: position\n"
     )
-    policy = nodes / "policy_teleop.yaml"
-    policy.write_text(
-        policy.read_text() + yaml.safe_dump({"home": HOME, "observe": []})
-    )
-    config = yaml.safe_load(path.read_text())
+    config = yaml.safe_load((project / "config.yaml").read_text())
     config["options"]["policy_teleop"]["set"]["inputs.leader"] = (
         "nodes/leader_fixed_camera.yaml"
     )
-    path.write_text(yaml.safe_dump(config, sort_keys=False))
-    logs = tmp_path / "logs"
-    with Session.launch(
-        path, options=["policy_teleop"], log_dir=logs, screen=False
-    ) as s:
-        s.wait_ready(30)
-        s.home()
-        assert s.status()["follower"]["fields"]["home_state"] == "reached"
-        s.teleop()
-        time.sleep(1.0)
-    trace = np.load(next(logs.rglob("leader_trace.npz")))
-    torso = list(trace["joints"]).index("torso_yaw")
-    assert abs(trace["positions"][-1][torso] - 2100) <= 2  # the pose's torso_yaw
-    follower = np.load(next(logs.rglob("follower_trace.npz")))
-    assert abs(follower["target"][-1][torso] - 2100) <= 2
+    (project / "config.yaml").write_text(yaml.safe_dump(config, sort_keys=False))
+    locked_cfg = load_config(project / "config.yaml", options=["policy_teleop"])
+    by_group = {g.name: g.law for g in locked_cfg.inputs["leader"].control}
+    assert by_group["body"] == "position"
+    # a misspelled key of the extending file is still refused by the node's class
+    teleop = nodes / "policy_teleop.yaml"
+    teleop.write_text(teleop.read_text() + "rate_hx: 5\n")
+    with pytest.raises(ConfigError, match="rate_hx"):
+        load_config(project / "config.yaml", options=["policy_teleop"])

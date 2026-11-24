@@ -4,7 +4,6 @@ the queued actions."""
 from __future__ import annotations
 
 import threading
-import time
 
 import numpy as np
 import pytest
@@ -167,10 +166,7 @@ def test_bad_async_settings_are_refused(tmp_path, settings, message):
 
 
 @pytest.mark.e2e
-def test_a_slow_policy_leaves_no_gap_in_the_commands(tmp_path, monkeypatch):
-    import os
-    from pathlib import Path
-
+def test_a_slow_policy_leaves_no_gap_in_the_commands(tmp_path, tests_pythonpath):
     import yaml
     from conftest import mock_project
 
@@ -181,21 +177,17 @@ def test_a_slow_policy_leaves_no_gap_in_the_commands(tmp_path, monkeypatch):
     settings = yaml.safe_load(node.read_text())
     settings.update(inference="async", action_horizon=8, observe=[])
     node.write_text(yaml.safe_dump(settings))
-    monkeypatch.setenv(
-        "PYTHONPATH",
-        os.pathsep.join([str(Path(__file__).parent), os.environ.get("PYTHONPATH", "")]),
-    )
     rates = []
     with Session.launch(
         project / "config.yaml",
         options=["policy"],
-        policy="test_policy_async:slow",
+        policy="policies:slow",
         log_dir=tmp_path / "logs",
     ) as s:
         s.wait_ready(30)
         s.record(
             "slow",
-            3.0,
+            2.0,
             on_tick=lambda status: rates.append(
                 status.get("policy", {}).get("fields", {}).get("command_hz", 0)
             ),
@@ -206,17 +198,3 @@ def test_a_slow_policy_leaves_no_gap_in_the_commands(tmp_path, monkeypatch):
     # 0.2 s per inference (3 actions at 15 Hz) would stop the commands when synchronous
     assert result.metrics["action_valid_rate"] > 0.8, result.metrics
     assert max(rates) > 100, rates
-
-
-class Slow:
-    def reset(self) -> None:
-        pass
-
-    def infer(self, observation: dict) -> np.ndarray:
-        time.sleep(0.2)
-        state = np.asarray(observation["observation.state"], dtype=float)
-        return np.repeat(state[None, :], 8, axis=0)
-
-
-def slow() -> Slow:
-    return Slow()

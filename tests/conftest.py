@@ -1,9 +1,18 @@
+import itertools
+import json
+import os
 import shutil
+import threading
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from roboloom.config import read_config
+from roboloom.config import load_config, read_config
+from roboloom.core.protocol import Envelope
+
+TESTS_DIR = Path(__file__).resolve().parent
+SECOND_NS = 1_000_000_000
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -121,3 +130,165 @@ def dual_mock(root: Path) -> Path:
     path = target / "config.yaml"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     return path
+
+
+class FakeClock:
+    """Deterministic monotonic clock and sleep replacement for unit tests."""
+
+    def __init__(self, start: float = 50.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+
+class FakeDataset:
+    """Minimal in-memory LeRobot dataset stub recording add_frame() rows."""
+
+    def __init__(self) -> None:
+        self.frames: list[dict] = []
+
+    def add_frame(self, frame: dict) -> None:
+        self.frames.append(frame)
+
+
+def add_tests_pythonpath(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prepend tests/ to PYTHONPATH so dora node subprocesses can import test policies."""
+    existing = os.environ.get("PYTHONPATH", "")
+    parts = [str(TESTS_DIR), *(p for p in existing.split(os.pathsep) if p)]
+    monkeypatch.setenv("PYTHONPATH", os.pathsep.join(parts))
+
+
+@pytest.fixture
+def tests_pythonpath(monkeypatch: pytest.MonkeyPatch) -> None:
+    add_tests_pythonpath(monkeypatch)
+
+
+def make_fake_session(
+    tmp_path: Path,
+    cfg=None,
+    *,
+    client=None,
+    process=None,
+    **attrs,
+):
+    """Build a lightweight Session instance without spawning dora."""
+    from roboloom.runtime.session import Session
+
+    session = Session.__new__(Session)
+    session.cfg = cfg if cfg is not None else load_config("examples/mock/config.yaml")
+    if client is None:
+        client = MagicMock()
+        client.status.return_value = {"nodes": {}}
+        client.new_reports.return_value = []
+    session.client = client
+    if process is None:
+        process = MagicMock()
+        process.poll.return_value = None
+        process.returncode = None
+    session.process = process
+    session.log_dir = tmp_path
+    session.log_path = tmp_path / "dora.log"
+    session.log_path.write_text("")
+    session.fifo = tmp_path / "session.fifo"
+    session._workdir = MagicMock()
+    session._ids = itertools.count(1)
+    session._closed = False
+    session._cancel_local = threading.local()
+    session._reports = []
+    session._recorded = []
+    session._episode = None
+    session._saved = 0
+    session._queued_saves = {}
+    session._save_progress = {}
+    session._recorder_closed = False
+    session._lock = threading.RLock()
+    session._listeners = []
+    session.screen = None
+    session.operator = None
+    session._lifeline = None
+    for key, value in attrs.items():
+        setattr(session, key, value)
+    return session
+
+
+def run_session_node(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reads,
+    *,
+    cfg=None,
+    events=None,
+    step_ns: int = SECOND_NS // 4,
+    start_ns: int = SECOND_NS,
+):
+    """Run roboloom.runtime.node._session on scripted FIFO reads and optional dora events.
+
+    Returns (sent_payloads, reports, status_path, fifo, work_dir).
+    """
+    from roboloom.runtime import node as runtime
+
+    config = cfg if cfg is not None else load_config("examples/mock/config.yaml")
+    work = tmp_path / "work"
+    work.mkdir(exist_ok=True)
+    fifo = tmp_path / "session.fifo"
+    os.mkfifo(fifo)
+    status_path = work / "status.json"
+    monkeypatch.setenv("ROBOLOOM_SESSION_FIFO", str(fifo))
+    monkeypatch.setenv("ROBOLOOM_REPORT_PATH", str(work / "report.jsonl"))
+    monkeypatch.setenv("ROBOLOOM_STATUS_PATH", str(status_path))
+    now = start_ns
+    script = iter(reads)
+    seen: list[dict] = []
+
+    def read(fd: int, count: int) -> bytes:
+        nonlocal now
+        now += step_ns
+        item = next(script)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+    real_open = open
+    kept_reports = tmp_path / "reports.jsonl"
+
+    def keep(path, mode="r", *args, **kwargs):
+        if str(path).endswith("report.jsonl") and "a" in mode:
+            return real_open(kept_reports, mode, *args, **kwargs)
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(runtime.os, "read", read)
+    monkeypatch.setattr(runtime.time, "monotonic_ns", lambda: now)
+
+    if events is None:
+
+        def event(node):
+            if seen and seen[-1]["command"] == "quit":
+                return "report", Envelope(
+                    "report", "recorder", "boot", 1, now, now, {"command": "quit"}
+                )
+            return None, None
+    elif callable(events):
+
+        def event(node):
+            return events(node, now)
+    else:
+        ev_iter = iter(events)
+
+        def event(node):
+            return next(ev_iter)
+
+    monkeypatch.setattr(runtime, "_event", event)
+    monkeypatch.setattr("builtins.open", keep)
+
+    class _Node:
+        def send_output(self, output: str, value: bytes) -> None:
+            assert output == "control"
+            seen.append(Envelope.decode(value).payload)
+
+    runtime._session(_Node(), config)
+    lines = kept_reports.read_text().splitlines() if kept_reports.exists() else []
+    return seen, [json.loads(line) for line in lines], status_path, fifo, work

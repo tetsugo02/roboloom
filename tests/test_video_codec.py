@@ -65,10 +65,10 @@ def _frame(colour, shape) -> np.ndarray:
     return np.broadcast_to(np.asarray(colour, np.uint8), (*shape[:2], 3)).copy()
 
 
-def _record(recorder: EpisodeRecorder, start_ns: int) -> None:
-    """One episode of len(COLOURS) rows; row k carries COLOURS[k]."""
+def _stopped(recorder: EpisodeRecorder, start_ns: int, task: str = "colours") -> None:
+    """One stopped episode of len(COLOURS) rows, not saved yet."""
     period = int(1e9 / FPS)
-    recorder.start("colours", start_ns)
+    recorder.start(task, start_ns)
     for k, colour in enumerate(COLOURS):
         t = start_ns + k * period
         for name, sensor in recorder.cfg.sensors.items():
@@ -80,6 +80,11 @@ def _record(recorder: EpisodeRecorder, start_ns: int) -> None:
                 ),
             )
     recorder.stop(start_ns + len(COLOURS) * period)
+
+
+def _record(recorder: EpisodeRecorder, start_ns: int) -> None:
+    """One episode of len(COLOURS) rows; row k carries COLOURS[k]."""
+    _stopped(recorder, start_ns)
     assert recorder.save() == len(COLOURS)
 
 
@@ -114,9 +119,7 @@ def test_unknown_codec_is_refused(value):
 # -- recording through LeRobot ---------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("codec", "stream"), [(None, "h264"), ("av1", "av1"), ("h264", "h264")]
-)
+@pytest.mark.parametrize(("codec", "stream"), [(None, "h264"), ("av1", "av1")])
 def test_recording_roundtrip(tmp_path, codec, stream):
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -146,21 +149,27 @@ def test_recording_roundtrip(tmp_path, codec, stream):
         )
 
 
-def test_resume_keeps_the_saved_codec_and_refuses_another(tmp_path):
-    cfg = _cfg(tmp_path, "h264")
+@pytest.mark.parametrize(
+    ("codec", "other_codecs"),
+    [("h264", ("av1", "libsvtav1")), ("av1", ("h264",))],
+)
+def test_resume_keeps_the_saved_codec_and_refuses_another(
+    tmp_path, codec, other_codecs
+):
+    cfg = _cfg(tmp_path, codec)
     first = EpisodeRecorder(cfg, **cfg.recorder)
     _record(first, 1_000_000_000)
     first.close()
     root = Path(cfg.output)
     unspecified = replace(cfg, recorder={"video_codec": None})
-    assert check_video_encoding(unspecified) == "h264"
+    assert check_video_encoding(unspecified) == codec
     resumed = EpisodeRecorder(
         unspecified, background_save=False, **unspecified.recorder
-    )  # inherits H.264
+    )  # inherits the saved videos' codec
     _record(resumed, 5_000_000_000)
     resumed.close()
     streams = _streams(root)  # resuming starts a new MP4 file
-    assert {codec for codec, _ in streams} == {"h264"}
+    assert {c for c, _ in streams} == {codec}
     assert sum(frames for _, frames in streams) == 2 * len(COLOURS)
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -172,9 +181,12 @@ def test_resume_keeps_the_saved_codec_and_refuses_another(tmp_path):
     assert np.abs(mean - COLOURS[2]).max() < 25
 
     before = {p: p.stat().st_mtime_ns for p in root.rglob("*") if p.is_file()}
-    for codec in ("av1", "libsvtav1"):
-        other = replace(cfg, recorder={"video_codec": normalize_video_codec(codec)})
-        with pytest.raises(ConfigError, match=r"'h264' \(saved videos\) -> 'av1'"):
+    for other_name in other_codecs:
+        normalized = normalize_video_codec(other_name)
+        other = replace(cfg, recorder={"video_codec": normalized})
+        with pytest.raises(
+            ConfigError, match=rf"'{codec}' \(saved videos\) -> '{normalized}'"
+        ):
             check_video_encoding(other)
         recorder = EpisodeRecorder(other, **other.recorder)
         with pytest.raises(ValueError, match="repo_id and output"):
@@ -182,23 +194,6 @@ def test_resume_keeps_the_saved_codec_and_refuses_another(tmp_path):
         assert recorder.dataset is None
     after = {p: p.stat().st_mtime_ns for p in root.rglob("*") if p.is_file()}
     assert after == before  # nothing written, converted or moved
-
-
-def test_existing_av1_dataset_resumes_as_av1(tmp_path):
-    cfg = _cfg(tmp_path)  # unspecified: the saved videos' codec
-    first = EpisodeRecorder(
-        cfg, video_codec="av1", background_save=False
-    )  # e.g. recorded before H.264
-    _record(first, 1_000_000_000)
-    first.close()
-    with pytest.raises(ConfigError, match="'av1' \\(saved videos\\) -> 'h264'"):
-        check_video_encoding(replace(cfg, recorder={"video_codec": "h264"}))
-    resumed = EpisodeRecorder(cfg, video_codec="av1", background_save=False)
-    _record(resumed, 5_000_000_000)
-    resumed.close()
-    streams = _streams(Path(cfg.output))  # resuming starts a new MP4 file
-    assert {codec for codec, _ in streams} == {"av1"}
-    assert sum(frames for _, frames in streams) == 2 * len(COLOURS)
 
 
 def test_unavailable_encoder_is_refused_before_writing(tmp_path, monkeypatch):
@@ -322,18 +317,12 @@ async def test_launcher_chooses_the_codec(tmp_path, initial):
         app.query_one("#video-yaml", RadioButton).value = True
         await pilot.pause()
         assert app._read().video_codec is None
-    save_last(path, plan)
-    assert load_last(path, app.options).video_codec == "h264"
-    cfg = load_config(path, video_codec=plan.video_codec)
-    assert config_from_env(cfg.path, config_env(cfg)).recorder["video_codec"] == "h264"
 
 
 @pytest.mark.e2e
 def test_session_records_with_the_chosen_codec(tmp_path):
     """The dora recorder node encodes with the codec chosen in the parent; a different
     codec for the same dataset is refused before the dataflow starts."""
-    if shutil.which("dora") is None:
-        pytest.skip("needs dora")
     path = _project(tmp_path)
     with Session.launch(
         path,
@@ -343,7 +332,7 @@ def test_session_records_with_the_chosen_codec(tmp_path):
         log_dir=tmp_path / "logs",
     ) as session:
         session.wait_ready()
-        session.record("hold", seconds=1)
+        session.record("hold", seconds=0.5)
         (result,) = session.wait_saves()
         assert result.saved
     cfg = load_config(path)

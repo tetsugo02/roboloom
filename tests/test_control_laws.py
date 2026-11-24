@@ -165,12 +165,8 @@ def test_runtime_switch_changes_one_group_with_torque_off():
     assert ("operating_mode", [0, 1], [0, 0]) in bus.eeprom_writes
 
 
-def hardware_tree():
-    return rakuda2_tree()
-
-
 def test_hardware_refuses_unvalidated_and_unprotected_current_laws():
-    tree = hardware_tree()
+    tree = rakuda2_tree()
     joints = [x["name"] for x in tree["followers"]["follower"]["limits"]]
     impedance = {
         "group": "all",
@@ -197,7 +193,7 @@ def test_hardware_refuses_unvalidated_and_unprotected_current_laws():
 
 
 def test_mock_leader_with_trigger_spring_runs_as_actuated_input():
-    tree = hardware_tree()
+    tree = rakuda2_tree()
     tree["settings"]["mode"] = "mock"
     joints = [x["name"] for x in tree["followers"]["follower"]["limits"]]
     arms = [j for j in joints if not j.endswith("grip")]
@@ -526,3 +522,28 @@ def test_tuning_session_changes_values_live_and_saves_them(tmp_path):
     bus.values[0] = 2048
     message = session.key("r")
     assert message is not None and "re-enabled" in message and bus.torque[0]
+
+
+def test_tuning_close_releases_position_groups_before_closing_the_bus(tmp_path):
+    from roboloom.control.tuning import TuningSession
+
+    path = tmp_path / "tuning.yaml"
+    path.write_text("joints: {}\n")
+    dev, bus = device(
+        [GRAVITY, {"group": "c", "law": "position", "joints": ["c"]}],
+        [0, 0, 3],
+        FlatGravity(),
+    )
+    law = dev.laws[0]
+    assert isinstance(law, GravityComp)
+    session = TuningSession(dev, law, path)
+    session.start()
+    assert bus.torque[2]
+    torque_at_close: list[list[bool]] = []
+
+    def close_bus() -> None:
+        torque_at_close.append(list(bus.torque))
+
+    bus.close = close_bus
+    session.close()
+    assert torque_at_close == [[False, False, False]]

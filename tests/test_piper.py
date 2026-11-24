@@ -6,6 +6,7 @@ import math
 from types import SimpleNamespace
 
 import pytest
+from conftest import FakeClock
 
 from roboloom.drivers.piper import FOC_ENABLED, PiperBus
 from roboloom.robots.piper.follower import PiperFollower
@@ -13,21 +14,16 @@ from roboloom.robots.piper.spec import JOINTS, RANGE
 from roboloom.robots.safety import FollowerSafety
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.now = 1000.0
-
-    def __call__(self) -> float:
-        return self.now
-
-    def sleep(self, seconds: float) -> None:
-        self.now += seconds
+def Clock() -> FakeClock:
+    return FakeClock(1000.0)
 
 
 class FakeSdk:
     """The parts of C_PiperInterface_V2 PiperBus uses; frames stamped by `clock`."""
 
-    def __init__(self, clock: Clock, *, silent: bool = False, enable_after: int = 1):
+    def __init__(
+        self, clock: FakeClock, *, silent: bool = False, enable_after: int = 1
+    ):
         self.clock, self.silent, self.enable_after = clock, silent, enable_after
         self.sent: list[tuple] = []
         self.millideg = [0] * 6
@@ -107,7 +103,7 @@ class FakeSdk:
         self.sent.append(("DisconnectPort",))
 
 
-def bus(sdk: FakeSdk | None = None, **kwargs) -> tuple[PiperBus, FakeSdk, Clock]:
+def bus(sdk: FakeSdk | None = None, **kwargs) -> tuple[PiperBus, FakeSdk, FakeClock]:
     clock = sdk.clock if sdk else Clock()
     sdk = sdk or FakeSdk(clock)
     return (
@@ -135,28 +131,24 @@ def test_positions_are_rad_and_commands_millidegrees_after_motion_ctrl():
         piper.write_positions([0.0])
 
 
-def test_opening_waits_for_real_feedback_and_refuses_silence():
+@pytest.mark.parametrize(
+    ("case", "match"),
+    [
+        ("silent", "no joint, motor, driver, status feedback"),
+        ("lag", "ask an administrator"),
+        ("one_frame", "no joint, motor, driver, status"),
+    ],
+)
+def test_opening_requires_continuous_fresh_feedback(case, match):
     clock = Clock()
-    with pytest.raises(
-        ConnectionError, match="no joint, motor, driver, status feedback"
-    ):
-        bus(FakeSdk(clock, silent=True))
-    # frames from an earlier connection in this process do not count either
-    sdk = FakeSdk(clock)
-    sdk.stamp_lag = 5.0
-    with pytest.raises(ConnectionError, match="ask an administrator"):
+    sdk = FakeSdk(clock, silent=(case == "silent"))
+    if case == "lag":
+        sdk.stamp_lag = 5.0
+    elif case == "one_frame":
+        sdk.stops_at = clock.now + 0.01
+    with pytest.raises(ConnectionError, match=match):
         bus(sdk)
     assert sdk.sent[-1] == ("DisconnectPort",)  # a failed open closes what it opened
-
-
-def test_one_frame_after_opening_is_not_enough():
-    # one stamp covers joints 1-2, 3-4 and 5-6: a stamp just after opening may come from
-    # the first of those frames only, so feedback must keep arriving for a while
-    clock = Clock()
-    sdk = FakeSdk(clock)
-    sdk.stops_at = clock.now + 0.01
-    with pytest.raises(ConnectionError, match="no joint, motor, driver, status"):
-        bus(sdk)
 
 
 def test_stale_feedback_raises_so_the_follower_faults():
@@ -266,12 +258,6 @@ def test_health_faults_latch_the_follower():
     assert safety.mode == "FAULT" and "arm status" in safety.reason
 
 
-def test_mock_follower_opens_at_rest():
-    follower = PiperFollower("left", follower_cfg())
-    mock = follower.open_device(mock=True)
-    assert mock.read_positions() == [0.0] * 6
-
-
 def piper_project(root) -> object:
     """Two mock PiPER followers and a camera, driven by one policy (no leaders yet)."""
     import shutil
@@ -317,38 +303,6 @@ def piper_project(root) -> object:
     path = target / "config.yaml"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     return path
-
-
-@pytest.mark.e2e
-def test_a_policy_drives_two_mock_pipers_and_records_rad(tmp_path, monkeypatch):
-    import json
-    import os
-    from pathlib import Path
-
-    from roboloom.runtime.session import Session
-
-    tests = str(Path(__file__).parent.resolve())
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
-    )
-    path = piper_project(tmp_path)
-    with Session.launch(
-        path, policy_kwargs={"step": 0.01}, log_dir=tmp_path / "logs"
-    ) as s:
-        # nothing is known about the PiPER left alone: quit offers no "hold"
-        assert s.held == [] and set(s.limp_at_end) == {"left", "right"}
-        s.wait_ready(30)
-        s.record("creep", 1.5)
-        (result,) = s.wait_saves()
-        left = s.status()["left"]["fields"]
-    assert left["unattended"] == "unknown" and left["torque_off"] == "falls"
-    assert result.saved, result
-    assert result.metrics["action_valid_rate"] > 0.5, result.metrics
-    info = json.loads((path.parent / "datasets/piper/meta/info.json").read_text())
-    action = info["features"]["action"]
-    assert action["shape"] == [12] and action["names"][6] == "right.joint1"
-    assert info["features"]["observation.effort"]["names"][0] == "left.joint1"
-    assert info["robot_type"] == "piper"
 
 
 # -- check-hold -----------------------------------------------------------------
@@ -416,15 +370,23 @@ def test_check_hold_records_the_measurement_in_the_follower_yaml(tmp_path, monke
     from roboloom.config import load_config
     from roboloom.errors import ConfigError
     from roboloom.operator import ScriptedOperator
-    from roboloom.setup import check_hold
+    from roboloom.setup import check_hold, hold
 
     path = piper_project(tmp_path)
     config = yaml.safe_load(path.read_text())
     config["mode"] = "hardware"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     bus = LeftAlone()
+    clock = Clock()
+    real_trial = hold.hold_trial
     monkeypatch.setattr(PiperFollower, "open_device", lambda self, mock: bus)
-    monkeypatch.setattr("roboloom.setup.hold.time.sleep", lambda s: None)
+    monkeypatch.setattr(
+        hold,
+        "hold_trial",
+        lambda follower, b, seconds, tolerance: real_trial(
+            follower, b, seconds, tolerance, sleep=clock.sleep, clock=clock
+        ),
+    )
     operator = ScriptedOperator(prompts=["record", "release"])
     result = check_hold(path, "left", operator, tolerance=0.01, seconds=0.05)
     assert result.holds

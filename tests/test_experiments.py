@@ -4,8 +4,6 @@ what the nodes are given on top of their files, where the episodes go, and how
 
 from __future__ import annotations
 
-import os
-import shutil
 import subprocess
 import sys
 import time
@@ -13,7 +11,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import mock_project
+from conftest import add_tests_pythonpath, mock_project
 from test_policy_remote import KEY, _free_address
 
 from roboloom import cli
@@ -24,9 +22,6 @@ from roboloom.recording import episodes
 from roboloom.recording.manifest import snapshot
 from roboloom.runtime.node import config_from_env
 from roboloom.runtime.session import Session, config_env, steps_done, steps_timeout
-
-TESTS = str(Path(__file__).resolve().parent)
-needs_dora = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 
 EXPERIMENT = {
     "help": "the slow policy on the drawer task",
@@ -54,9 +49,7 @@ def _project(tmp_path: Path, monkeypatch, **changes) -> Path:
     experiment = {k: v for k, v in {**EXPERIMENT, **changes}.items() if v is not None}
     (directory / "drawer.yaml").write_text(yaml.safe_dump(experiment))
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([TESTS, os.environ.get("PYTHONPATH", "")])
-    )
+    add_tests_pythonpath(monkeypatch)
     return directory / "drawer.yaml"
 
 
@@ -112,7 +105,7 @@ def test_a_node_may_be_given_another_file_of_the_robot(tmp_path, monkeypatch):
 
 
 def test_what_an_experiment_may_not_say_is_named(tmp_path, monkeypatch):
-    file = _project(tmp_path, monkeypatch)
+    _project(tmp_path, monkeypatch)
     for change, problem in (
         ({"secnds": 3}, "unknown keys secnds \\(did you mean seconds\\?\\)"),
         ({"seconds": 0}, "seconds: expected a positive number"),
@@ -143,7 +136,6 @@ def test_what_an_experiment_may_not_say_is_named(tmp_path, monkeypatch):
         run = load_experiment({**EXPERIMENT, "nodes": nodes})
         with pytest.raises(ConfigError, match=problem):
             load_config("rakuda2", options=run.options, experiment=run)
-    assert file.is_file()
 
 
 def test_infer_runs_as_the_experiment_says(tmp_path, monkeypatch):
@@ -265,26 +257,23 @@ def test_what_an_experiment_changes_is_not_blamed_on_an_option(tmp_path, monkeyp
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_an_episode_ends_when_the_policy_has_taken_its_steps(tmp_path, monkeypatch):
-    _project(tmp_path, monkeypatch)
+    policy = {**EXPERIMENT["nodes"]["controllers.policy"], "rate_hz": 15}
+    _project(tmp_path, monkeypatch, nodes={"controllers.policy": policy})
     with Session.launch(experiment="drawer", mock=True) as s:  # robot and options: its
         s.wait_ready(30)
         seen: list[int] = []
         began = time.monotonic()
-        s.record(
-            "creep", 30.0, steps=10, on_tick=lambda st: seen.append(steps_done(st))
-        )
+        s.record("creep", 30.0, steps=6, on_tick=lambda st: seen.append(steps_done(st)))
         (result,) = s.wait_saves()
         took = time.monotonic() - began
     assert result.saved
-    assert max(seen) >= 10 and took < 10  # 10 actions at 5 Hz: about 2 s, not 30
+    assert max(seen) >= 6 and took < 10  # 6 actions at 15 Hz, not 30 s
     assert seen == sorted(seen)  # counted up from the start of the episode
     assert episodes.read(tmp_path / "data" / "drawer")[0]["task"] == "creep"
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_an_experiment_runs_with_its_server_and_saves_where_it_says(
     tmp_path, monkeypatch, capsys
 ):
@@ -297,7 +286,9 @@ def test_an_experiment_runs_with_its_server_and_saves_where_it_says(
         "backend": "server",
         "server": server,
     }
-    file = _project(tmp_path, monkeypatch, nodes={"controllers.policy": policy})
+    file = _project(
+        tmp_path, monkeypatch, nodes={"controllers.policy": policy}, seconds=0.6
+    )
     command = [
         sys.executable,
         "-m",

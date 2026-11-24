@@ -57,20 +57,17 @@ def test_actions_that_do_not_fit_are_refused(tmp_path):
         load(str(tmp_path / "x.npy"), stride=0)
 
 
-@pytest.fixture
-def recorded(tmp_path, monkeypatch):
-    """A Rakuda2 mock project with one teleoperated episode recorded."""
-    project = mock_project(tmp_path / ".roboloom")
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([EXAMPLES, os.environ.get("PYTHONPATH", "")])
-    )
-    with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs") as s:
+@pytest.fixture(scope="module")
+def recorded_root(tmp_path_factory):
+    """One recorded mock Rakuda2 episode shared across replay and training tests."""
+    root_tmp = tmp_path_factory.mktemp("recorded")
+    project = mock_project(root_tmp / ".roboloom")
+    with Session.launch(project / "config.yaml", log_dir=root_tmp / "logs") as s:
         s.wait_ready(60)
         s.record("pick", 3.0)
         (result,) = s.wait_saves()
         assert result.saved
-        root = Path(s.cfg.output)
-    return project, root
+        return Path(s.cfg.output)
 
 
 def _column(root: Path, key: str) -> np.ndarray:
@@ -81,18 +78,18 @@ def _column(root: Path, key: str) -> np.ndarray:
 
 
 @pytest.mark.e2e
-def test_a_recorded_episode_replays_through_the_policy_path(recorded, tmp_path):
-    project, root = recorded
-    recorded_actions = _column(root, "action")
+def test_a_recorded_episode_replays_through_the_policy_path(recorded_root, tmp_path):
+    project = mock_project(tmp_path / ".roboloom")
+    recorded_actions = _column(recorded_root, "action")
     with Session.launch(
         project / "config.yaml",
         options=["policy"],
         policy="roboloom.policy.replay:load",
-        policy_kwargs={"path": str(root), "horizon": 4},
+        policy_kwargs={"path": str(recorded_root), "horizon": 4},
         log_dir=tmp_path / "logs2",
     ) as s:
         s.wait_ready(60)
-        s.record("replay", 2.0)
+        s.record("replay", 1.5)
         (result,) = s.wait_saves()
         replayed = Path(s.cfg.output)
         fields = s.status()["policy"]["fields"]
@@ -107,18 +104,23 @@ def test_a_recorded_episode_replays_through_the_policy_path(recorded, tmp_path):
 
 
 @pytest.mark.e2e
-def test_the_example_model_trains_on_a_recording_and_runs(recorded, tmp_path):
+def test_the_example_model_trains_on_a_recording_and_runs(
+    recorded_root, tmp_path, monkeypatch
+):
     pytest.importorskip("torch")
-    project, root = recorded
+    project = mock_project(tmp_path / ".roboloom")
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join([EXAMPLES, os.environ.get("PYTHONPATH", "")])
+    )
     sys.path.insert(0, EXAMPLES)
     try:
         import chunk_mlp
     finally:
         sys.path.remove(EXAMPLES)
     with pytest.raises(ValueError, match="at least 2"):  # no history, no past actions
-        chunk_mlp.train(str(root), str(tmp_path / "single.pt"), history=1)
+        chunk_mlp.train(str(recorded_root), str(tmp_path / "single.pt"), history=1)
     checkpoint = chunk_mlp.train(
-        str(root),
+        str(recorded_root),
         str(tmp_path / "model.pt"),
         history=3,
         horizon=4,
@@ -150,7 +152,7 @@ def test_the_example_model_trains_on_a_recording_and_runs(recorded, tmp_path):
         log_dir=tmp_path / "logs3",
     ) as s:
         s.wait_ready(60)
-        s.record("pick", 2.0)
+        s.record("pick", 1.5)
         (result,) = s.wait_saves()
         fields = s.status()["policy"]["fields"]
     assert fields["state"] in ("ready", "running") and "infer_ms" in fields, fields

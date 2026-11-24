@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import TEMPLATE, mock_project, rakuda2_tree
+from conftest import mock_project, rakuda2_tree
 from rich.console import Console
 from textual.widgets import Button, Checkbox
 
@@ -120,7 +120,7 @@ def test_configuration_words_move_into_config(tmp_path, monkeypatch):
     ]
 
 
-def test_the_hardware_flag_is_refused_with_a_hint(monkeypatch, capsys):
+def test_the_hardware_flag_is_refused_with_a_hint(capsys):
     from roboloom.cli import main
 
     with pytest.raises(SystemExit):
@@ -140,9 +140,14 @@ def test_validate_by_default_name_with_options(tmp_path, monkeypatch, capsys):
     assert "options: digit" in out and "local/rakuda2-digit" in out
 
 
-def test_last_choice_is_remembered(tmp_path):
+def _options_config(tmp_path: Path) -> Path:
     path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump({"options": OPTIONS}))
+    path.write_text(yaml.safe_dump({"repo_id": "local/x", "options": OPTIONS}))
+    return path
+
+
+def test_last_choice_is_remembered(tmp_path):
+    path = _options_config(tmp_path)
     options = parse_options(OPTIONS)
     assert load_last(path, options) is None
     save_last(path, LaunchPlan("record", ("a", "b"), True, "pick", 5.0, 2, True))
@@ -152,8 +157,7 @@ def test_last_choice_is_remembered(tmp_path):
 
 @pytest.mark.asyncio
 async def test_launcher_follows_requirements_and_conflicts(tmp_path: Path):
-    path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump({"repo_id": "local/x", "options": OPTIONS}))
+    path = _options_config(tmp_path)
     app = LauncherApp(path, LaunchPlan(options=("c",)))
     async with app.run_test(size=(100, 50)) as pilot:
         app.query_one("#opt-b", Checkbox).value = True  # b needs a, drops c
@@ -186,10 +190,6 @@ def test_launcher_summary_says_mock_when_the_yaml_declares_it(tmp_path: Path):
     assert app._summary(LaunchPlan(mock=True)).startswith("run · mock ·")
     path.write_text(yaml.safe_dump({"repo_id": "local/x"}))
     assert "HARDWARE" in LauncherApp(path, LaunchPlan())._summary(LaunchPlan())
-
-
-def test_template_declares_no_stale_experiment_files():
-    assert not list(TEMPLATE.glob("experiment*.yaml"))
 
 
 def _two_robots(root: Path) -> None:
@@ -248,8 +248,7 @@ def test_choose_robot_remembers_the_choice(tmp_path, monkeypatch):
 async def test_options_screen_goes_back_to_the_robot_list(tmp_path: Path):
     from roboloom.ui.launcher import BACK
 
-    path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump({"repo_id": "local/x", "options": OPTIONS}))
+    path = _options_config(tmp_path)
     app = LauncherApp(path, LaunchPlan(), back=True)
     async with app.run_test(size=(100, 50)) as pilot:
         await pilot.press("escape")
@@ -287,8 +286,7 @@ async def test_launcher_panes_resize_and_stack_when_narrow(tmp_path: Path):
     from roboloom.ui.launcher import RobotApp
     from roboloom.ui.splitter import Splitter
 
-    path = tmp_path / "config.yaml"
-    path.write_text(yaml.safe_dump({"repo_id": "local/x", "options": OPTIONS}))
+    path = _options_config(tmp_path)
     app = LauncherApp(path, LaunchPlan())
     async with app.run_test(size=(120, 40)) as pilot:
         left = app.query_one("#left").region.width

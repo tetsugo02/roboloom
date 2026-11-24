@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 from conftest import mock_project
-from test_recording import MS, msg
 from test_video_codec import CAMERA, COLOURS, _cfg, _frame, _record, _streams
 
 from roboloom.cli import main
@@ -94,7 +93,10 @@ def test_saved_episodes_survive_a_killed_process(tmp_path):
 
 
 def test_appending_keeps_the_earlier_episodes_when_the_process_is_killed(tmp_path):
-    _child(tmp_path, "record(); recorder.close(); os._exit(7)")
+    cfg = _cfg(tmp_path)
+    first = EpisodeRecorder(cfg, **cfg.recorder)
+    _record(first, 1_000_000_000)
+    first.close()
     _child(
         tmp_path,
         """
@@ -211,37 +213,25 @@ def test_another_lerobot_closes_the_files_through_its_public_api(tmp_path, monke
     recorder.close()
 
 
-def test_a_missing_sample_repeats_the_last_valid_one():
-    cfg = load_config(
-        "examples/mock/config.yaml"
-    )  # 10 fps; max_age_ms decides validity
-    recorder = EpisodeRecorder(cfg)
-    t = time.monotonic_ns()
-    recorder.start("gap", t, write=False)
-    recorder.ingest(
-        "follower",
-        msg(
-            "follower_state",
-            0,
-            t - MS,
-            t - MS,
-            t - MS,
-            {"positions": [2100] * 17, "target": [2090] * 17},
-        ),
-    )
-    late = int(cfg.max_age_ms["follower"] * MS) + 250 * MS
-    recorder.stop(t + late)
-    rows = recorder.frames()
-    first, last = rows[0], rows[-1]
-    assert first["observation.meta.follower.valid"][0] == 1
-    assert last["observation.meta.follower.valid"][0] == 0  # too old for this row
-    assert last["observation.state"][0] == 2100  # ... yet not zero
-    assert last["action"][0] == 2090 and last["action.valid"][0] == 0  # the held target
-    # a source that never sent anything has nothing to repeat
-    assert np.count_nonzero(last["observation.images.camera"]) == 0
-    assert (
-        recorder.frames()[0]["observation.state"][0] == 2100
-    )  # frames() is repeatable
+def test_manifest_records_sessions_and_deduplicates_configs(tmp_path):
+    project = mock_project(tmp_path / ".roboloom")
+    cfg = load_config(project / "config.yaml")
+    root = Path(cfg.output)
+    (root / "meta").mkdir(parents=True)
+    manifest.create(root, cfg, {}, new=True)
+    manifest.note_session(root, cfg, first_episode=0)
+    listed = manifest.read(root)
+    assert listed["roboloom"] and listed["robot"] == "rakuda2"
+    assert listed["units"]["action"] == ["dynamixel_count"] * 17
+    (run,) = listed["sessions"]
+    assert run["first_episode"] == 0 and run["mode"] == "mock"
+    kept = (root / manifest.CONFIGS / f"{run['config']}.json").read_text()
+    assert json.loads(kept)["followers"]["follower"]["control_hz"] == 120
+    assert str(tmp_path) not in kept  # no directories of this machine
+    manifest.note_session(root, cfg, first_episode=1)
+    runs = manifest.read(root)["sessions"]
+    assert [r["first_episode"] for r in runs] == [0, 1]
+    assert runs[0]["config"] == runs[1]["config"]  # the same configuration: one copy
 
 
 @pytest.mark.e2e
@@ -252,12 +242,12 @@ def test_an_episode_saved_through_the_dataflow_survives_killing_it(tmp_path):
     session = Session.launch(project / "config.yaml", log_dir=tmp_path / "logs")
     try:
         session.wait_ready(60)
-        session.record("pick", 2.0)
+        session.record("pick", 0.8)
         (saved,) = session.wait_saves()
         assert saved.saved
         root = Path(session.cfg.output)
         session.start("cut short")  # an episode is running when every node dies
-        time.sleep(0.7)
+        time.sleep(0.3)
         os.killpg(session.process.pid, signal.SIGKILL)
         session.process.wait()
     finally:
@@ -265,26 +255,17 @@ def test_an_episode_saved_through_the_dataflow_survives_killing_it(tmp_path):
     ds = LeRobotDataset(f"local/{root.name}", root=root, video_backend="pyav")
     assert ds.meta.total_episodes == 1 and len(ds) == saved.frames
     assert ds[len(ds) - 1]["observation.images.camera"].shape[0] == 3  # decodes
-    # how it was recorded: the version, the units and the configuration of the run
-    listed = manifest.read(root)
-    assert listed["roboloom"] and listed["robot"] == "rakuda2"
-    assert listed["units"]["action"] == ["dynamixel_count"] * 17
-    (run,) = listed["sessions"]
-    assert run["first_episode"] == 0 and run["mode"] == "mock"
-    kept = (root / manifest.CONFIGS / f"{run['config']}.json").read_text()
-    assert json.loads(kept)["followers"]["follower"]["control_hz"] == 120
-    assert str(tmp_path) not in kept  # no directories of this machine
     # the next session appends to it; the frames the dead recorder staged are not used
     with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs2") as s:
         s.wait_ready(60)
-        s.record("pick", 2.0)
+        s.record("pick", 0.8)
         (again,) = s.wait_saves()
     ds = LeRobotDataset(f"local/{root.name}", root=root, video_backend="pyav")
     assert ds.meta.total_episodes == 2 and len(ds) == saved.frames + again.frames
     assert ds[len(ds) - 1]["observation.images.camera"].shape[0] == 3
     runs = manifest.read(root)["sessions"]
     assert [r["first_episode"] for r in runs] == [0, 1]
-    assert runs[0]["config"] == runs[1]["config"]  # the same configuration: one copy
+    assert runs[0]["config"] == runs[1]["config"]
     checked = check_dataset(root)
     assert checked.ok and checked.episodes == 2, checked.describe()
 

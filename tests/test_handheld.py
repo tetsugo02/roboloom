@@ -9,6 +9,7 @@ import time
 import numpy as np
 import pytest
 import yaml
+from conftest import FakeDataset
 
 from roboloom.config import load_config
 from roboloom.core.protocol import Envelope
@@ -122,15 +123,7 @@ def test_without_followers_controllers_and_unpaced_inputs_are_refused(tmp_path):
 
 def test_rows_without_followers_close_with_time():
     cfg = load_config(f"{MOCK}/config.yaml")
-
-    class Rows:
-        def __init__(self):
-            self.frames = []
-
-        def add_frame(self, row):
-            self.frames.append(row)
-
-    rows = Rows()
+    rows = FakeDataset()
     recorder = EpisodeRecorder(cfg, rows, background_save=False)
     t = time.monotonic_ns()
     recorder.start("pick", t)
@@ -160,7 +153,6 @@ def test_rows_without_followers_close_with_time():
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_a_handheld_recording_converts_and_trains(tmp_path):
     pytest.importorskip("lerobot.policies.act.modeling_act")
     import torch

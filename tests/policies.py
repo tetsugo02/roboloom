@@ -1,5 +1,7 @@
 """Policies the dataflow tests load by reference ("policies:creep"); tests/ is on PYTHONPATH."""
 
+import time
+
 import numpy as np
 
 
@@ -8,7 +10,6 @@ class Creep:
 
     def __init__(self, step: float = 5.0, horizon: int = 4):
         self.step, self.horizon = step, horizon
-        self.seen: set[str] = set()
 
     def reset(self) -> None:
         pass
@@ -73,3 +74,19 @@ class Gate:
 
 def gate(joint: str) -> Gate:
     return Gate(joint)
+
+
+class Slow:
+    """Sleeps 0.2 s per inference to exercise asynchronous policy execution."""
+
+    def reset(self) -> None:
+        pass
+
+    def infer(self, observation: dict) -> np.ndarray:
+        time.sleep(0.2)
+        state = np.asarray(observation["observation.state"], dtype=float)
+        return np.repeat(state[None, :], 8, axis=0)
+
+
+def slow() -> Slow:
+    return Slow()

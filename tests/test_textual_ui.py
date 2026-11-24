@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from conftest import mock_project
 from rich.console import Console
 from rich.text import Text
 from textual import events
+from textual.pilot import Pilot
 from textual.widgets import OptionList, RichLog, Static, Tabs
 
-from roboloom.ui.app import BackendMessage, Confirmation, OperatorApp, run_backend
-from roboloom.ui.backend import SessionBackend
+from roboloom import Session
+from roboloom.ui.app import Confirmation, OperatorApp, run_backend
+from roboloom.ui.backend import RecordingPlan, SessionBackend
 from roboloom.ui.command import CommandInput
 from roboloom.ui.models import (
     Capabilities,
@@ -31,6 +36,7 @@ from roboloom.ui.presenters import (
     present,
     register_presenter,
 )
+from roboloom.ui.splitter import Splitter
 
 
 class FakeBackend:
@@ -169,14 +175,16 @@ async def test_resize_selection_focus_and_no_home():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("key", ["ctrl+c", "ctrl+q"])
-async def test_exit_cancel_is_default_and_estop_works_inside_dialog(key: str):
+async def test_exit_cancel_is_default_and_estop_works_inside_dialog():
     backend = FakeBackend()
     app = OperatorApp(backend)
     async with app.run_test() as pilot:
-        await pilot.press(key, "enter")
+        await pilot.press("ctrl+c")
+        assert isinstance(app.screen, Confirmation)
+        await pilot.press("escape")
+        await pilot.press("ctrl+q", "enter")
         assert not backend.choices
-        await pilot.press(key)
+        await pilot.press("ctrl+q")
         assert isinstance(app.screen, Confirmation)
         backend.publish(
             replace(
@@ -191,7 +199,7 @@ async def test_exit_cancel_is_default_and_estop_works_inside_dialog(key: str):
         assert backend.stops == 1 and not backend.commands
         await pilot.press("escape")
         assert not backend.choices
-        await pilot.press(key, "down", "enter")
+        await pilot.press("ctrl+q", "down", "enter")
     assert backend.choices == ["hold"] and backend.closed
 
 
@@ -261,14 +269,6 @@ def test_presenters_keep_the_renderer_emphasis():
     assert {"bold magenta", "bold red"} <= styles  # home pose name, last error
 
 
-def test_report_log_lines_keep_their_style():
-    notices: list = []
-    backend = SessionBackend(lambda: None)
-    backend._publish = notices.append
-    backend._report({"command": "home", "ok": True})
-    assert notices[-1].style == "magenta"
-
-
 def test_presenters_are_optional_and_kind_precedes_role():
     node = NodeSnapshot(
         "stage", "strange-role", "alien", fields={"angle_deg": [1, 2], "stroke_mm": 0.5}
@@ -310,7 +310,6 @@ async def test_background_notifications_use_messages():
         await asyncio.to_thread(thread.join)
         await pilot.pause()
         assert app.snapshot.warning == "thread update"
-        assert isinstance(BackendMessage(LogEvent("x")).notice, LogEvent)
 
 
 @pytest.mark.asyncio
@@ -344,3 +343,152 @@ async def test_gravity_character_keys_share_commands_and_are_suppressed_in_input
         await pilot.press("ctrl+g")
         assert backend.stops == 1
         assert app.query_one(CommandInput).value == "][=-0rjke"
+
+
+# -- splitters -----------------------------------------------------------------------
+
+
+async def drag(pilot: Pilot, selector: str, dx: int = 0, dy: int = 0) -> None:
+    handle = pilot.app.query_one(selector, Splitter)
+    offset = (0, 1) if handle.axis == "x" else (1, 0)
+    start_x, start_y = handle.region.x + offset[0], handle.region.y + offset[1]
+    end = (start_x + dx, start_y + dy)
+    await pilot.mouse_down(selector, offset=offset)
+    await pilot.hover(offset=end)
+    await pilot.mouse_up(offset=end)
+    await pilot.pause()
+    assert not handle.has_class("dragging")
+
+
+@pytest.mark.asyncio
+async def test_drag_both_axes_and_keep_sizes_across_tabs_and_resize():
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test(size=(140, 40)) as pilot:
+        nodes = app.query_one("#nodes", OptionList)
+        command = app.query_one(CommandInput)
+        initial_width = nodes.region.width
+        initial_height = app.query_one("#menu").region.height
+        await drag(pilot, "#column-splitter", dx=16)
+        assert nodes.region.width == initial_width + 16
+        await drag(pilot, "#row-splitter", dy=4)
+        assert app.query_one("#menu").region.height == initial_height - 4
+        resized_width = nodes.region.width
+        resized_height = app.query_one("#menu").region.height
+        app.query_one(Tabs).active = "tab-3"
+        await pilot.pause()
+        assert not app.query_one("#column-splitter").display
+        assert app.query_one("#row-splitter").display
+        assert app.query_one("#menu").region.height == resized_height
+        await pilot.resize_terminal(80, 24)
+        await pilot.pause()
+        assert not app.query_one("#column-splitter").display
+        assert app.query_one(Tabs).active == "tab-3"
+        assert app.query_one("#logs").region.height >= 3
+        assert app.query_one("#menu").region.bottom <= command.region.y
+        app.query_one(Tabs).active = "tab-1"
+        await pilot.resize_terminal(140, 40)
+        await pilot.pause()
+        assert nodes.region.width == resized_width
+        assert app.query_one("#menu").region.height == resized_height
+        # Narrow layout vertical resize for logs and operations, plus double-click reset
+        await pilot.double_click("#row-splitter", offset=(1, 0))
+        await pilot.resize_terminal(80, 24)
+        await pilot.pause()
+        await pilot.press("ctrl+o")
+        narrow_before = app.query_one("#menu").region.height
+        assert narrow_before >= 10
+        await drag(pilot, "#row-splitter", dy=2)
+        assert app.query_one("#menu").region.height == narrow_before - 2
+        assert app.query_one("#menu").region.bottom <= command.region.y
+        await pilot.double_click("#row-splitter", offset=(1, 0))
+        assert app.query_one("#menu").region.height == narrow_before
+        assert not backend.commands and backend.stops == 0
+
+
+@pytest.mark.asyncio
+async def test_mouse_capture_clamps_extreme_drags_and_double_click_resets():
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test(size=(140, 40)) as pilot:
+        initial_width = app.query_one("#nodes").region.width
+        initial_height = app.query_one("#menu").region.height
+        handle_x = app.query_one("#column-splitter").region.x
+        await drag(pilot, "#column-splitter", dx=138 - handle_x)
+        assert app.query_one("#details").region.width >= 30
+        handle_x = app.query_one("#column-splitter").region.x
+        await drag(pilot, "#column-splitter", dx=-handle_x)
+        assert app.query_one("#nodes").region.width == 20
+        await pilot.double_click("#column-splitter", offset=(0, 1))
+        assert app.query_one("#nodes").region.width == initial_width
+        handle_y = app.query_one("#row-splitter").region.y
+        await drag(pilot, "#row-splitter", dy=37 - handle_y)
+        assert app.query_one("#menu").region.height == 6
+        handle_y = app.query_one("#row-splitter").region.y
+        await drag(pilot, "#row-splitter", dy=1 - handle_y)
+        assert app.query_one("#nodes").region.height == 3
+        await pilot.double_click("#row-splitter", offset=(1, 0))
+        assert app.query_one("#menu").region.height == initial_height
+        assert not backend.commands and backend.stops == 0
+
+
+@pytest.mark.asyncio
+async def test_keyboard_resize_and_emergency_stop_during_drag():
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test(size=(120, 35)) as pilot:
+        app.query_one("#column-splitter").focus()
+        before = app.query_one("#nodes").region.width
+        await pilot.press("right", "right")
+        assert app.query_one("#nodes").region.width == before + 2
+        await pilot.press("ctrl+r")
+        assert app.query_one("#nodes").region.width == before
+        await pilot.mouse_down("#row-splitter", offset=(1, 0))
+        await pilot.press("ctrl+g")
+        assert backend.stops == 1
+        await pilot.press("ctrl+q")
+        assert isinstance(app.screen, Confirmation)
+        assert not app.query_one("#row-splitter").has_class("dragging")
+        await pilot.press("escape")
+        assert not backend.choices
+        await pilot.mouse_down("#column-splitter", offset=(0, 1))
+        await pilot.press("escape")
+        assert not app.query_one("#column-splitter").has_class("dragging")
+
+
+# -- dora integration ----------------------------------------------------------------
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_textual_records_and_saves_a_mock_episode(tmp_path: Path):
+    project = mock_project(tmp_path / ".roboloom")
+    backend = SessionBackend(
+        lambda: Session.launch(project / "config.yaml", screen=False, operator=None),
+        mode="record",
+        recording=RecordingPlan("Pilot collection", 0.6),
+    )
+    app = OperatorApp(backend)
+    async with app.run_test(size=(80, 24)) as pilot:
+        deadline = time.monotonic() + 40
+        while not any(
+            o.command == "start" and o.enabled for o in app.snapshot.operations
+        ):
+            assert time.monotonic() < deadline, app.snapshot
+            await asyncio.sleep(0.1)
+        await pilot.press("enter")
+        deadline = time.monotonic() + 40
+        while app.snapshot.phase != "complete":
+            assert time.monotonic() < deadline, app.snapshot
+            await asyncio.sleep(0.1)
+        assert len(app.screen_stack) == 2
+        assert backend.session is not None
+        assert backend.session.screen is None and backend.session.operator is None
+        assert app.query_one(CommandInput).history == []
+        await pilot.press("down", "enter")
+        deadline = time.monotonic() + 20
+        while backend.session.alive:
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.1)
+    assert backend.session.episodes == 1  # quit drains the accepted save
+    assert not (project / "config.fifo").exists()

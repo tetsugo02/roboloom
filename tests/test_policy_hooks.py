@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import shutil
 import threading
 import time
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -107,9 +105,9 @@ def test_once_per_action_period_and_chunk_context(tmp_path):
 
 def test_hold_substitution_then_hooks_then_speed_limit(tmp_path):
     gate = Gate(value=5000.0)
-    _, initial = _controller(tmp_path / "names")
-    held = initial.names[0]
+    held = "follower.torso_yaw"
     _, c = setup(tmp_path, gate, hold=[held], max_speed={"follower": 10})
+    assert c.names[0] == held
     c.policy.bad = 0  # held NaN is legal from infer; hook sees a finite value
     sent = tick(c)["follower"]
     assert gate.calls[0][0][0] == 2048.0
@@ -344,15 +342,6 @@ def test_teleop_source_only_and_transition_order(tmp_path):
     assert gate.events[-1].interventions == 1 and gate.events[-1].intervention_s >= 0
 
 
-def test_missing_policy_write_claim_refused_at_load(tmp_path, monkeypatch):
-    _, c = _controller(tmp_path)
-    gate = Gate()
-    gate.writes = (c.names[0],)
-    monkeypatch.setattr("roboloom.policy.load_policy", lambda *a, **k: Policy([gate]))
-    with pytest.raises(ConfigError, match="- from: policy\n  writes:"):
-        c.load()
-
-
 def test_records_filtered_is_yaml_only(tmp_path):
     cfg, c = _controller(tmp_path)
     assert not records_filtered(cfg)
@@ -364,13 +353,11 @@ def test_records_filtered_is_yaml_only(tmp_path):
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
-def test_session_launch_records_filtered_rows(tmp_path, monkeypatch):
+def test_session_launch_records_filtered_rows(tmp_path, tests_pythonpath):
     import pyarrow.parquet as pq
 
     from roboloom.runtime.session import Session
 
-    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parent.resolve()))
     _, c = _controller(tmp_path)
     # mock_project has a robot directory; get the actual node path from config
     path = next(tmp_path.rglob("nodes/policy.yaml"))
@@ -496,7 +483,7 @@ def test_failed_hook_bind_cannot_leave_a_startable_policy(tmp_path, monkeypatch)
     gate = Gate()
     gate.writes = (c.names[0],)
     monkeypatch.setattr("roboloom.policy.load_policy", lambda *a, **k: Policy([gate]))
-    with pytest.raises(ConfigError):
+    with pytest.raises(ConfigError, match="- from: policy\n  writes:"):
         c.load()
     assert c.policy is None
     with pytest.raises(RuntimeError, match="not loaded"):

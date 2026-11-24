@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -69,6 +68,9 @@ def test_pose_files_are_checked_against_the_robot(tmp_path, values, extra, match
     path = write_pose(tmp_path / "p.yaml", values, **extra)
     with pytest.raises(ConfigError, match=match):
         load_pose(path, "follower", "rakuda2", "dynamixel_count", JOINTS, LIMITS)
+
+
+def test_missing_pose_file_hints_capture_pose(tmp_path):
     with pytest.raises(ConfigError, match="capture-pose"):
         load_pose(
             tmp_path / "missing.yaml",
@@ -97,7 +99,6 @@ def test_capture_pose_saves_the_follower_pose_by_name(tmp_path):
 
 def home_tree(tmp_path: Path, **home) -> dict:
     tree = rakuda2_tree()
-    pose = {j: 2048 for j in tree["followers"]["follower"]["limits"][0:0] or []}
     names = [limit["name"] for limit in tree["followers"]["follower"]["limits"]]
     pose = {j: 2048 for j in names}
     pose["torso_yaw"], pose["head_yaw"] = 2148, 2000
@@ -299,7 +300,6 @@ def test_session_refuses_home_while_recording_and_start_while_moving(tmp_path):
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_session_moves_home_then_records_from_there(tmp_path):
     from roboloom.runtime.session import Session
 
