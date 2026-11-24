@@ -43,7 +43,7 @@ uv run roboloom check-dataset
 <span class="status status--mock">Mock only</span>
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra policy --extra train
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra policy --extra train
 uv run lerobot-train \
   --dataset.repo_id=local/rakuda2 \
   --dataset.root=.roboloom/rakuda2/datasets/rakuda2 \

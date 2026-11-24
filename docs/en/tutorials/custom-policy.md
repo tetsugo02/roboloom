@@ -21,7 +21,7 @@ flowchart LR
 
 ```bash
 uv init --python '>=3.12,<3.15' my_policy_trial && cd my_policy_trial
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra policy
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2 --extra record --extra policy
 uv run roboloom init rakuda2
 cp ../roboloom/examples/policies/chunk_mlp.py .roboloom/rakuda2/   # from a clone of the repository
 ```

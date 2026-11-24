@@ -8,7 +8,7 @@ description: >-
   roboloom CLI (init, validate, run, record, infer, commission, identify-gravity, ...);
   plugging in a policy or a local control hook; or training LeRobot policies on roboloom datasets.
 metadata:
-  roboloom-version: "0.2.0"
+  roboloom-version: "0.2.1"
 ---
 
 # roboloom
@@ -97,10 +97,10 @@ outdated, run `uv run roboloom skills install --force`.
 ## Install (in the user's uv project)
 
 ```bash
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0                                      # shared runtime, config, CLI, mocks
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2                       # + Dynamixel SDK
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika             # + PiPER SDK, IK, Pika tracker/cameras
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra hardware --extra digit  # Rakuda2 collection + sensors
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1                                      # shared runtime, config, CLI, mocks
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2                       # + Dynamixel SDK
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra piper --extra pika             # + PiPER SDK, IK, Pika tracker/cameras
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2 --extra record --extra hardware --extra digit  # Rakuda2 collection + sensors
 ```
 
 `project.requires-python` must lie within `">=3.12,<3.15"`; the LeRobot extras take a NumPy override (required on 3.14), and LeRobot policies/training need 3.12 or 3.13 (installation.md). Other extras: `record`, `hardware`, `digit`, `ik`, `viz`,

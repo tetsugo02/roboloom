@@ -2,7 +2,7 @@
 
 ## Development environment and checks
 
-For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0` in [Installation](../get-started/installation.md). The following is for developers changing roboloom itself or its docs. Use Python 3.12–3.14 and uv, clone the repository, and run commands from its root.
+For normal use, follow `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1` in [Installation](../get-started/installation.md). The following is for developers changing roboloom itself or its docs. Use Python 3.12–3.14 and uv, clone the repository, and run commands from its root.
 
 ```bash
 git clone https://github.com/tetsugo02/roboloom.git
