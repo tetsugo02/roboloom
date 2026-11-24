@@ -50,3 +50,13 @@ Which controllers, sensors and policies each robot can use. What the labels mean
 
 - LeRobot policies have gone from recording to inference on the mock PiPER + Pika ([LeRobot policies](../policy/lerobot.md)). They have not been used on the real Rakuda2 yet.
 - The policy chapter is [Policies and inference](../policy/index.md).
+
+## Live view (Rerun) { #viewer }
+
+| Robot | Live view (`viewer` option / `viewer:`) | Template / extra |
+| --- | --- | --- |
+| Rakuda2 | <span class="status status--mock">Mock only</span> | `viewer` option in template; needs `viz` |
+| PiPER + Pika Gripper | <span class="status status--mock">Mock only</span> | `viewer` option in `piper-pika` template; needs `viz` |
+| Your own robot | <span class="status status--mock">Mock only</span> | Set `viewer: nodes/viewer.yaml` or option `viewer`; needs `viz` |
+
+- Keys, output targets, logged entities, and status fields are in [Viewer configuration](../reference/configuration/viewer.md); commands are in [Live view (Rerun)](../data/recording.md#live-view).

@@ -9,6 +9,21 @@ episodeを保存・破棄する流れと，保存したdatasetに残るもので
 - episodeの途中でcontrollerが失敗したとき（方策の例外など）と，followerがFAULT・ESTOPになったときは，そのepisodeを破棄します．
 - Pythonの操作は [Session](../reference/python-api/session.md) にあります．
 
+## Live view（Rerun） { #live-view }
+
+<span class="status status--mock">模擬のみ</span> `viz` extra を install すると（[Installation](../get-started/installation.md)），`viewer` option で Rerun を開き，観測，follower ごとの行動（`action.<follower>`），取得からの経過時間（`meta/<stream>/capture_age_ms`），session の event（`start`，`stop`，`save`，`discard`）を live 表示できます．`run`，`record`，`infer` のどれでも使え，dataset 名は変わりません．
+
+```bash
+uv run roboloom record <robot> --with digit,viewer --task "pick" --seconds 30
+uv run roboloom infer <robot> --seconds 20 --with viewer
+```
+
+- **この機体で表示（既定）**：`nodes/viewer.yaml` の `ip`・`port`・`save` が `null` のままなら，同じ機体で Rerun window を起動します．
+- **別の PC から見る**：表示側の PC で `rerun --serve-grpc`（または gRPC で待ち受ける Rerun viewer）を起動し，robot 側の PC の `nodes/viewer.yaml` に `ip:` と `port:`（たとえば Rerun の既定 gRPC port `9876`）を設定します．
+- **制約**：LeRobot の Rerun helper が画像（`observation.images.<sensor>`）を static（`static=True`）として記録するため，view には最新の画像だけが残ります．scalar の stream（`observation.state`，`observation.leader`，`observation.effort`，`action.<follower>`，`meta/<stream>/capture_age_ms`）は `roboloom` timeline 上に履歴を保持します．
+
+設定 key，出力先（`spawn`，`ip:port`，`save` `.rrd`），entity path，status の項目は [Live viewer（viewer）](../reference/configuration/viewer.md) に，独立した node である理由は [viewer を独立した node にする理由](../explanation/viewer.md) にあります．
+
 ## background保存 { #background-saving }
 
 <span class="status status--mock">模擬のみ</span> mock dataflowと合成frameで確かめています．`roboloom run`，`roboloom record`，Pythonの `Session` で既定で使います．

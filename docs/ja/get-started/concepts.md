@@ -14,6 +14,7 @@ roboloomを使う前に知っておくと読みやすくなる，node，設定�
 | `sensors` | 観測を取得する | RealSense，DIGIT，音声 |
 | `recorder` | 全nodeの出力を記録の行にそろえて保存する | LeRobotDataset |
 | `session` | 操作（start，stop，save …）を受けて各nodeへ配る | 操作画面，`roboloom session` |
+| `viewer` | 最新値のみの入力で観測と行動をlive表示する（任意） <span class="status status--mock">模擬のみ</span> | [Rerun viewer](../reference/configuration/viewer.md) |
 | `trackers`，`estimators` | 姿勢の追跡，外力の推定 | Lighthouse，`effort` |
 
 ```mermaid

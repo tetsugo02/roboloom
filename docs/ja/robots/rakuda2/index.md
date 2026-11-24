@@ -64,6 +64,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 | `policy` | 学習した方策がfollowerを動かす．leaderとcontrollerを外し，`controllers.policy` を足す．`roboloom infer` が自動で有効にする | `gravity` と競合 | `-eval` を付ける |
 | `policy_teleop` | `policy` に加えて，episodeの前と途中にleaderで動かせる（[teleopと介入](../../policy/intervention.md)）．leaderを戻し，`nodes/policy_teleop.yaml` を使う | `policy` が必要 | `-teleop` を付ける |
 | `pika` | leaderの代わりに，腕ごとのPika SenseとIKで動かす（[開発中・模擬のみ](pika-sense-ik.md)） | `gravity`，`policy` と競合 | `-pika` を付ける |
+| `viewer` | Rerunで観測をlive表示する（`nodes/viewer.yaml`．`viz` extraが必要） <span class="status status--mock">模擬のみ</span> | | 変えない |
 
 | 有効なoption | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
@@ -86,6 +87,7 @@ followerは `type: rakuda2_follower`，操作入力（`leader` の役割）はRa
 - `policy` はleaderを使わないため `gravity` とは同時に使えません．`gravity` を必要とする `bilateral` とも併用できません．
 - `gravity` はdataset名を変えません．記録するfeatureが通常leaderと同じためです．通常leaderと重力補償付きleaderのepisodeは同じdatasetに入ります．
 - 画像featureが変わるため，`digit` の有無でdatasetが分かれます．RealSenseだけの既存datasetへDIGITのepisodeは追記しません．
+- `viewer` は記録するfeatureもdataset名も変えず，どのoptionとも併用できます．利用には `viz` extraが必要です（[Live viewer（viewer）](../../reference/configuration/viewer.md)）．
 
 ## bilateral（実機未検証）
 

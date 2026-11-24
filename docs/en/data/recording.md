@@ -9,6 +9,21 @@ How episodes are saved or discarded, and what a saved dataset keeps. The recorde
 - An episode in which a controller fails (a policy raising, for example) or a follower latches FAULT or ESTOP is discarded.
 - The Python calls are in [Session](../reference/python-api/session.md).
 
+## Live view (Rerun) { #live-view }
+
+<span class="status status--mock">Mock only</span> With the `viz` extra installed ([Installation](../get-started/installation.md)), the `viewer` option opens Rerun to display live observations, follower actions (`action.<follower>`), capture ages (`meta/<stream>/capture_age_ms`), and session events (`start`, `stop`, `save`, `discard`). It can be used with `run`, `record`, or `infer` without changing the dataset name:
+
+```bash
+uv run roboloom record <robot> --with digit,viewer --task "pick" --seconds 30
+uv run roboloom infer <robot> --seconds 20 --with viewer
+```
+
+- **Local window (default)**: leaving `ip`, `port`, and `save` as `null` in `nodes/viewer.yaml` spawns a Rerun window on the same machine.
+- **Viewing from another PC**: run `rerun --serve-grpc` (or open the Rerun viewer listening for gRPC) on the viewing PC, and set `ip:` and `port:` (for example Rerun's default gRPC port `9876`) in `nodes/viewer.yaml` on the robot PC.
+- **Limitation**: LeRobot's Rerun helper logs images (`observation.images.<sensor>`) as static entities (`static=True`), so Rerun keeps only the newest image in the view; scalar streams (`observation.state`, `observation.leader`, `observation.effort`, `action.<follower>`, `meta/<stream>/capture_age_ms`) keep their time history on the `roboloom` timeline.
+
+Keys, targets (`spawn`, `ip:port`, `save` `.rrd`), entity paths, and status fields are in [Viewer configuration](../reference/configuration/viewer.md). Why it runs as its own node is explained in [Why the viewer is a separate node](../explanation/viewer.md).
+
 ## Background saving { #background-saving }
 
 <span class="status status--mock">Mock only</span> Checked with mock dataflows and synthetic frames. The default applies to `roboloom run`, `roboloom record` and Python `Session`.

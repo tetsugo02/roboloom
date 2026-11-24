@@ -79,6 +79,7 @@ nav:
           - Policy: reference/configuration/policy.md
           - Sensors: reference/configuration/sensors.md
           - Recorder と session: reference/configuration/recorder.md
+          - Viewer: reference/configuration/viewer.md
           - 制御則と制限: reference/configuration/control.md
       - CLI: reference/cli.md
       - Python API:
@@ -92,6 +93,7 @@ nav:
       - 状態label: reference/status-labels.md
   - Explanation:
       - Hooks in the control loop: explanation/hooks.md
+      - viewer を独立した node にする理由: explanation/viewer.md
       - 機体を立ち上げる段階: explanation/robot-setup-flow.md
       - 重力補償の調整: explanation/gravity-compensation.md
   - Contribution:

@@ -18,6 +18,7 @@
 - **LeRobotDataset 0.7.0**: 関節状態・行動・RGB camera・DIGIT 触覚・音声を同期して記録し，そのまま `lerobot-train` で学習できます．
 - **実機安全機構と重力補償**: 関節ごとの速度制限・jump拒否・EEPROM 照合・watchdog・leader 重力補償を備えます．
 - **対話 UI・CLI・Python API**: Textual のlauncher／操作画面，非対話 CLI（`--plain`），`Session` / `InProcessSession` Python API を提供します．
+- **Live view（Rerun）** *(模擬のみ)*: 任意の独立した `viewer` node で，観測・行動・取得からの経過時間・session の event を Rerun に表示できます（`--with viewer`，`viz` extra）．
 - **高い拡張性**: roboloom 本体を変更せず，`module:Class` 指定で独自のrobot・入力・sensor・controller・方策を追加できます．
 
 ```mermaid
@@ -62,9 +63,10 @@ uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda
 | `hardware` | RealSense（`pyrealsense2`）および音声入力（`sounddevice`） |
 | `digit` | DIGIT 触覚sensor |
 | `piper`, `pika` | PiPER SDK，Pinocchio IK，Pika tracker／手首camera *(開発中)* |
+| `viz` | Rerun での live 表示（`lerobot[viz]==0.7.0`：`rerun-sdk`, `foxglove-sdk`．*模擬のみ*） |
 | `policy`, `train` | LeRobot 方策checkpoint読み込みと `lerobot-train` *(Python 3.12〜3.13)* |
 
-`record`・`policy`・`train` を使う場合は，projectの `pyproject.toml` に次の NumPy override を追記してください（Python 3.14 では必須，3.12〜3.13 では NumPy 2.3 以上を許可します）：
+`record`・`viz`・`policy`・`train` を使う場合は，projectの `pyproject.toml` に次の NumPy override を追記してください（Python 3.14 では必須，3.12〜3.13 では NumPy 2.3 以上を許可します）：
 
 ```toml
 [tool.uv]

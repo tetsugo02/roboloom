@@ -14,7 +14,7 @@ uv run roboloom --version
 For an existing project, first set `project.requires-python` in `pyproject.toml` to a range
 within `">=3.12,<3.15"`. Selecting an interpreter alone does not restrict what uv resolves.
 
-When using `record`, `policy` or `train`, also add the following to your own `pyproject.toml` (required on Python 3.14; on 3.12 and 3.13 it allows NumPy 2.3 and later). LeRobot 0.7.0 caps NumPy at `<2.3` (a bound inherited from opencv-python-headless 4.12 and dropped in 4.13), and NumPy below 2.3 has no Python 3.14 wheels. uv overrides do not travel in a dependency's metadata, so roboloom cannot set this for you. Loading LeRobot policies (`policy.lerobot`) and `lerobot-train` need Python 3.12 or 3.13: draccus, which LeRobot uses to parse its configs, does not support Python 3.14. Custom policies work on 3.14.
+When using `record`, `viz`, `policy` or `train`, also add the following to your own `pyproject.toml` (required on Python 3.14; on 3.12 and 3.13 it allows NumPy 2.3 and later). LeRobot 0.7.0 caps NumPy at `<2.3` (a bound inherited from opencv-python-headless 4.12 and dropped in 4.13), and NumPy below 2.3 has no Python 3.14 wheels. uv overrides do not travel in a dependency's metadata, so roboloom cannot set this for you. Loading LeRobot policies (`policy.lerobot`) and `lerobot-train` need Python 3.12 or 3.13: draccus, which LeRobot uses to parse its configs, does not support Python 3.14. Custom policies work on 3.14.
 
 ```toml
 [tool.uv]
@@ -36,6 +36,7 @@ override-dependencies = [
 | `hardware` | pyrealsense2, sounddevice | RealSense, microphone |
 | `digit` | digit-interface 0.2.1 (fork wheel, opencv-python-headless) | DIGIT |
 | `ik` | pinocchio (`pin`) | standalone IK without the PiPER SDK; also included in `piper` |
+| `viz` | `lerobot[viz]==0.7.0` (`rerun-sdk`, `foxglove-sdk`) | live view in Rerun (`viewer` option / `viewer:` key; mock only; off needs no Rerun) |
 | `policy` | `lerobot==0.7.0` (brings torch) | `roboloom.policy.lerobot:load` |
 | `train` | `lerobot[training]==0.7.0` | `lerobot-train` on roboloom datasets |
 
@@ -43,6 +44,7 @@ override-dependencies = [
 uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra hardware --extra digit
 uv add 'roboloom[rakuda2]'  # after registering the Git source
 uv add 'roboloom[piper,pika]'  # PiPER + Pika Sense/Gripper
+uv add 'roboloom[viz]'      # live view in Rerun (optional viewer node)
 uv add 'roboloom[policy]'   # once roboloom is already a dependency, extras can be added like this
 ```
 

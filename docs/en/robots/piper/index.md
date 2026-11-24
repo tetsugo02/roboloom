@@ -77,11 +77,21 @@ With two PiPER arms and two Pika Grippers, the recorded dataset and the policy's
 - The policy (option `policy`) observes `camera` and the two wrist cameras, and `infer` returns targets for the 14 entries in rad: one step `[14]` or a chunk `[H, 14]`. `max_speed` is in rad/s per follower.
 - The inference configuration has no Senses, so a policy cannot use `observation.left_sense` and the like. How to write a policy and LeRobot policies are in [Driving with a policy](../../policy/index.md).
 
+## Launch options (`roboloom init piper-pika`) { #options }
+
+The shipped `piper-pika` template (`roboloom init piper-pika`) declares:
+
+| Option | What it does | Dataset name | Status |
+| --- | --- | --- | --- |
+| `viewer` | Opens the live view in Rerun (`nodes/viewer.yaml`; needs the `viz` extra) | Unchanged | <span class="status status--mock">Mock only</span> |
+
+Details are in [Viewer configuration](../../reference/configuration/viewer.md).
+
 ## Checking the screen with mock devices
 
 `.roboloom/piper-mock/` configures two mock PiPER arms (`left`, `right`), two Pika Grippers (`left_gripper`, `right_gripper`) and a camera, so the operator screen can be checked without hardware. The arms and grippers are teleoperated by mock Pika Senses ([Teleoperation with Pika Sense and IK](../../controllers/pose-ik.md)). After Launch, "Move home" brings the arms to their starting pose; the mock Senses then engage and the arms move. With `--with policy`, the demo policy in the same directory (`demo_policy.py`) moves them instead.
 
-`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` has only the `rakuda2` template), so run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; it needs the `ik` extra ([Teleoperation with Pika Sense and IK](../../controllers/pose-ik.md)). Its values are for mock mode only; do not reuse them on hardware.
+`.roboloom/piper-mock/` is part of the roboloom repository, not of the installed package (`roboloom init` ships the `rakuda2` and `piper-pika` templates, while `piper-mock` lives only in the repository), so run the commands below from the root of a checkout of the repository. In your own project, you can copy the directory from [the repository](https://github.com/tetsugo02/roboloom) into your `.roboloom/`; it needs the `ik` extra ([Teleoperation with Pika Sense and IK](../../controllers/pose-ik.md)). Its values are for mock mode only; do not reuse them on hardware.
 
 ```bash
 uv run roboloom run piper-mock

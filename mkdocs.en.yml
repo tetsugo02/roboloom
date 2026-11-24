@@ -79,6 +79,7 @@ nav:
           - Policy: reference/configuration/policy.md
           - Sensors: reference/configuration/sensors.md
           - Recorder and session: reference/configuration/recorder.md
+          - Viewer: reference/configuration/viewer.md
           - Control laws and limits: reference/configuration/control.md
       - CLI: reference/cli.md
       - Python API:
@@ -92,6 +93,7 @@ nav:
       - Status labels: reference/status-labels.md
   - Explanation:
       - Hooks in the control loop: explanation/hooks.md
+      - Why the viewer is a separate node: explanation/viewer.md
       - Stages of bringing up a robot: explanation/robot-setup-flow.md
       - Gravity tuning: explanation/gravity-compensation.md
   - Contribution:

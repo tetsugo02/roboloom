@@ -18,6 +18,7 @@ Teleoperation, multimodal data collection, and policy inference on [dora-rs](htt
 - **LeRobotDataset 0.7.0**: Records synchronized robot state, actions, RGB cameras, DIGIT tactile sensors, and audio ready for `lerobot-train`.
 - **Hardware safety & gravity compensation**: Enforces per-joint speed clamping, jump rejection, EEPROM verification, watchdogs, and leader gravity compensation.
 - **Interactive UI, CLI & Python API**: Textual operator screen and launcher, `--plain` non-interactive CLI, and `Session` / `InProcessSession` Python APIs.
+- **Live view (Rerun)** *(mock only)*: Optional isolated `viewer` node streams observations, actions, capture ages, and session events to Rerun (`--with viewer`, `viz` extra).
 - **Extensible**: Add custom robots, inputs, sensors, controllers, or policies via `module:Class` without modifying roboloom.
 
 ```mermaid
@@ -63,9 +64,10 @@ uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda
 | `hardware` | RealSense (`pyrealsense2`) and audio input (`sounddevice`) |
 | `digit` | DIGIT tactile sensors |
 | `piper`, `pika` | PiPER SDK, Pinocchio IK, and Pika tracker/cameras *(in development)* |
+| `viz` | Live view in Rerun (`lerobot[viz]==0.7.0`: `rerun-sdk`, `foxglove-sdk`; *mock only*) |
 | `policy`, `train` | LeRobot policy checkpoints and `lerobot-train` *(Python 3.12–3.13)* |
 
-When using `record`, `policy`, or `train`, add the NumPy override below to your project's `pyproject.toml` (required on Python 3.14; allows NumPy 2.3+ on 3.12–3.13):
+When using `record`, `viz`, `policy`, or `train`, add the NumPy override below to your project's `pyproject.toml` (required on Python 3.14; allows NumPy 2.3+ on 3.12–3.13):
 
 ```toml
 [tool.uv]
