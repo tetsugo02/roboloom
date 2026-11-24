@@ -2,13 +2,15 @@
 
 The configuration YAML (`.roboloom/<robot>/config.yaml`) groups node files by role
 (`inputs`, `controllers`, `followers`, `sensors`, `estimators`) plus the `recorder` and
-`session` services. Each node's `type` selects its class from that role's registry. Its
-`options:` are features chosen at launch (gravity compensation, extra sensors, ...); each
-replaces, adds or removes node files. Nothing here opens a device.
+`session` services and the optional `viewer` service. Each node's `type` selects its
+class from that role's registry. Its `options:` are features chosen at launch (gravity
+compensation, extra sensors, ...); each replaces, adds or removes node files. Nothing
+here opens a device.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -19,7 +21,7 @@ import yaml
 
 from .controllers import CONTROLLERS
 from .controllers.base import Controller
-from .core.checks import identity, positive, unknown_keys
+from .core.checks import finite, identity, positive, unknown_keys
 from .core.source import Recordable, Source
 from .errors import ConfigError
 from .estimators import ESTIMATORS
@@ -37,8 +39,10 @@ from .trackers.base import Tracker
 
 ROLES = ("trackers", "inputs", "controllers", "followers", "sensors", "estimators")
 SERVICES = ("recorder", "session")
+# off unless config.yaml or an enabled option names their node file
+OPTIONAL_SERVICES = ("viewer",)
 # Service node ids and fixed dora input ids; LeRobot key collisions are checked by `features`.
-RESERVED = {*SERVICES, "action", "tick"}
+RESERVED = {*SERVICES, *OPTIONAL_SERVICES, "action", "tick"}
 RESERVED_PREFIXES = ("action_",)  # the recorder's per-follower action inputs
 RESERVED_SUFFIXES = ("_status",)  # the session's per-node status inputs
 # top-level keys of config.yaml besides the roles and services; anything else is refused
@@ -61,6 +65,8 @@ RECORDER_KEYS = (
     "quality",
 )
 SESSION_KEYS = ("type",)
+# the keys of the viewer's node file (the optional live view of the observations in Rerun)
+VIEWER_KEYS = ("rate_hz", "compress_images", "ip", "port", "save", "memory_limit")
 CONFIG_FILE = "config.yaml"
 INFER_OPTION = "policy"  # `infer` turns on the option of this name when one is declared
 NO_OPTIONS = (
@@ -72,8 +78,9 @@ OPTION_KEYS = {"help", "default", "requires", "conflicts", "set", "dataset"}
 @dataclass(frozen=True)
 class Option:
     """One launch-time feature. `set` maps `<role>.<node>` to a node file (relative to the
-    configuration), or to None to remove that node. `dataset` is appended to the dataset
-    name while the option is on (required when it changes the recorded features)."""
+    configuration), or to None to remove that node; the bare key `viewer` names the
+    viewer's node file (None: the viewer off). `dataset` is appended to the dataset name
+    while the option is on (required when it changes the recorded features)."""
 
     name: str
     help: str = ""
@@ -104,11 +111,13 @@ def parse_options(raw: object) -> dict[str, Option]:
         if not isinstance(changes, dict):
             raise ConfigError(f"{where}.set: expected mapping of <role>.<node> to file")
         for key, value in changes.items():
-            role, _, node = str(key).partition(".")
-            if role not in ROLES or not node:
-                raise ConfigError(
-                    f"{where}.set.{key}: expected <role>.<node>, role one of {ROLES}"
-                )
+            if str(key) not in OPTIONAL_SERVICES:
+                role, _, node = str(key).partition(".")
+                if role not in ROLES or not node:
+                    raise ConfigError(
+                        f"{where}.set.{key}: expected <role>.<node>, role one of "
+                        f"{ROLES}, or one of {OPTIONAL_SERVICES}"
+                    )
             if value is not None and not isinstance(value, str):
                 raise ConfigError(f"{where}.set.{key}: expected a file path or null")
         lists = {}
@@ -446,6 +455,7 @@ class RobotConfig:
     max_age_ms: dict[str, float] = field(default_factory=dict)
     recorder: dict = field(default_factory=dict)
     quality: dict = field(default_factory=dict)  # see recording.metrics.QUALITY
+    viewer: dict | None = None  # the live view's settings (VIEWER_KEYS); None: off
     mode: str = "hardware"
     path: str = ""
     options: tuple[str, ...] = ()  # enabled launch options, in declaration order
@@ -588,6 +598,12 @@ def read_config(
         else select_options(available, options, base=())
     )
     for key, value in option_changes(available, enabled).items():
+        if key in OPTIONAL_SERVICES:  # a bare service key: its node file, or off
+            if value is None:
+                raw.pop(key, None)
+            else:
+                raw[key] = value
+            continue
         role, _, name = key.partition(".")
         group = dict(raw.get(role) or {})
         if value is None:
@@ -704,6 +720,9 @@ def read_config(
                 controller["observe"] = observed
     for service in SERVICES:
         tree[service] = node(raw.pop(service, None), service)
+    for service in OPTIONAL_SERVICES:
+        given = raw.pop(service, None)
+        tree[service] = node(given, service) if given is not None else None
     if video_codec is not None:
         tree["recorder"]["video_codec"] = video_codec
     unknown = set(raw) - set(SETTINGS)
@@ -711,7 +730,9 @@ def read_config(
         problems = [f"{k}: {RENAMED[k]}" for k in sorted(unknown) if k in RENAMED]
         others = sorted(unknown - set(RENAMED))
         if others:
-            allowed = ", ".join((*SETTINGS, *ROLES, *SERVICES, "options"))
+            allowed = ", ".join(
+                (*SETTINGS, *ROLES, *SERVICES, *OPTIONAL_SERVICES, "options")
+            )
             problems.append(f"unknown keys {others} (allowed: {allowed})")
         raise ConfigError(f"{path}: " + "; ".join(problems))
     tree["settings"] = raw
@@ -719,6 +740,9 @@ def read_config(
         table = mock_values(path.parent)
         for part in (*ROLES, *SERVICES):
             tree[part] = _stand_in(tree[part], table)
+        for part in OPTIONAL_SERVICES:
+            if tree[part] is not None:
+                tree[part] = _stand_in(tree[part], table)
     return tree
 
 
@@ -1099,6 +1123,7 @@ def parse_config(tree: dict) -> RobotConfig:
             f"{where}: set background_save or streaming_encoding to false"
         )
     ages = recorder.get("max_age_ms", {})
+    viewer = _viewer(tree)
     cfg = RobotConfig(
         robot=robot,
         repo_id=repo_id,
@@ -1133,6 +1158,7 @@ def parse_config(tree: dict) -> RobotConfig:
             ),
         },
         quality=_quality(tree["recorder"].get("quality") or {}),
+        viewer=viewer,
         mode=e["mode"],
         path=tree["path"],
         options=tuple(tree.get("options", ())),
@@ -1195,6 +1221,53 @@ def _quality(cfg: dict) -> dict:
     if unknown:
         raise ConfigError(f"recorder.quality: unknown keys {sorted(unknown)}")
     return {k: float(v) for k, v in cfg.items()}
+
+
+def _viewer(tree: dict) -> dict | None:
+    """The viewer's settings, validated and defaulted; None when the viewer is off.
+    The rate must also suit a dora timer; `flow.timer` checks that when the flow is
+    built. Rerun is only looked for here, never imported while loading a config."""
+    settings = tree.get("viewer")
+    if settings is None:
+        return None
+    unknown_keys(settings, VIEWER_KEYS, "viewer")
+    where = settings.get("__file__", tree["path"])
+    if importlib.util.find_spec("rerun") is None:
+        raise ConfigError(
+            f"{where}: the viewer needs Rerun; install the viz extra: "
+            "pip install 'roboloom[viz]' (or uv sync --extra viz)"
+        )
+    rate = settings.get("rate_hz", 10)
+    if not finite(rate) or rate <= 0:
+        raise ConfigError(f"{where}: rate_hz must be a positive number")
+    compress = settings.get("compress_images", True)
+    if not isinstance(compress, bool):
+        raise ConfigError(f"{where}: compress_images must be true or false")
+    ip = settings.get("ip")
+    if ip is not None and not isinstance(ip, str):
+        raise ConfigError(f"{where}: ip must be text or null")
+    port = settings.get("port")
+    if port is not None and (type(port) is not int or not 1 <= port <= 65535):
+        raise ConfigError(f"{where}: port must be a whole number in 1..65535, or null")
+    if (ip is None) != (port is None):
+        raise ConfigError(f"{where}: give ip and port together, or neither")
+    save = settings.get("save")
+    if save is not None:
+        if not isinstance(save, str):
+            raise ConfigError(f"{where}: save must be the path of a .rrd file, or null")
+        directory = settings.get("__dir__") or str(Path(tree["path"]).parent)
+        save = str((Path(directory) / save).resolve())
+    memory_limit = settings.get("memory_limit", "10%")
+    if not isinstance(memory_limit, str):
+        raise ConfigError(f"{where}: memory_limit must be text such as 10%")
+    return {
+        "rate_hz": rate,
+        "compress_images": compress,
+        "ip": ip,
+        "port": port,
+        "save": save,
+        "memory_limit": memory_limit,
+    }
 
 
 def load_config(

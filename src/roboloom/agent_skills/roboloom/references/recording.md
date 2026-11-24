@@ -135,3 +135,25 @@ and repo_id for a different feature layout rather than silently appending.
 Controller status adds hook_ms, hook_max_ms, hook_errors, hook_over, filtered; per-hook
 ms/max_ms/errors/over/changed/notes are logged at end. EpisodeEnded.filtered_steps counts
 periods changed by the chain. See [policy](policy.md#local-hooks-mock-only).
+
+## Live view (Rerun)
+
+Mock only. Requires the `viz` extra and the `viewer` option (or top-level `viewer:` key).
+See [configuration.md](configuration.md#live-viewer) for keys and targets.
+
+```bash
+uv run roboloom record rakuda2 --with digit,viewer --task "pick" --seconds 30
+uv run roboloom infer rakuda2 --seconds 20 --with viewer
+```
+
+- Remote PC: run `rerun --serve-grpc` (or the Rerun viewer) on the viewing PC and set
+  `ip` and `port` in `nodes/viewer.yaml` on the robot PC (`save` writes a `.rrd` file).
+- Logged entities:
+  - `observation.images.<sensor>`: logged static by LeRobot (`static=True`), so only the
+    newest image is kept in the view.
+  - `observation.state`, `observation.leader`, `observation.effort`: scalars with history
+    on the `roboloom` timeline.
+  - `action.<follower>` (e.g. `action.follower`): per-follower scalars with history,
+    logged only when every follower sent a valid action of matching joint count.
+  - `meta/<stream>/capture_age_ms`: per-stream capture age in ms; `session/events`: text
+    log of `start`/`stop`/`save`/`discard`.

@@ -44,6 +44,11 @@ COMMANDS = (
     "policy",
     "stop_teleop",
 )
+from roboloom.runtime.events import (
+    _decode_event as _decode_event,  # noqa: PLC0414 - re-exported for the node loops
+)
+from roboloom.runtime.events import _event, _quit, _send
+from roboloom.runtime.events import _events as _batch_events
 from roboloom.runtime.flow import (
     INTENT_PREFIX,
     STATE_PREFIX,
@@ -53,45 +58,10 @@ from roboloom.runtime.flow import (
 from roboloom.trackers.base import Tracker
 
 
-def _send(node, output: str, msg: Envelope) -> None:
-    node.send_output(output, msg.encode())
-
-
-def _decode_event(event) -> tuple[str | None, Envelope | None]:
-    if event is None:
-        return None, None
-    if event.get("type") == "INPUT_CLOSED" and event.get("id") == "report":
-        return "report_closed", None
-    if event.get("type") != "INPUT":
-        return None, None
-    return event["id"], None if event["id"] == "tick" else Envelope.decode(
-        event["value"]
-    )
-
-
-def _event(node):
-    return _decode_event(node.next(timeout=0.1))
-
-
 def _events(node) -> list[tuple[str | None, Envelope | None]]:
-    """Take the next event (waiting up to 0.1 s) plus any already buffered on `node`,
-    collapsing a backlog of `tick`s into one after the incoming samples in the batch."""
-    first = _event(node)
-    if first == (None, None) or not hasattr(node, "drain"):
-        return [first]
-    batch = [first, *(_decode_event(e) for e in node.drain())]
-    out: list[tuple[str | None, Envelope | None]] = []
-    saw_tick = False
-    for eid, msg in batch:
-        if eid is None:
-            continue
-        if eid == "tick":
-            saw_tick = True
-        else:
-            out.append((eid, msg))
-    if saw_tick:
-        out.append(("tick", None))
-    return out or [(None, None)]
+    """The batch of events (`runtime.events._events`), read with this module's
+    `_event`, where tests patch it."""
+    return _batch_events(node, take=_event)
 
 
 READY = ("following", "ready", "running")  # controller states that may start an episode
@@ -471,12 +441,6 @@ def _session(node, cfg: RobotConfig):
                 except OSError:
                     pass
             shutil.rmtree(reports.parent, ignore_errors=True)
-
-
-def _quit(event_id, msg) -> bool:
-    return (
-        event_id == "session" and msg is not None and msg.payload["command"] == "quit"
-    )
 
 
 def _prepare(node, work, on_event=None) -> bool:
@@ -1394,6 +1358,10 @@ def main() -> None:
         _session(node, cfg)
     elif name == "recorder":
         _recorder(node, cfg)
+    elif name == "viewer":
+        from roboloom.runtime.viewer import run as _run_viewer
+
+        _run_viewer(node, cfg)
     elif name in cfg.followers:
         _follower(node, cfg.followers[name], cfg)
     elif name in cfg.controllers:

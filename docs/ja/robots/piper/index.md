@@ -77,11 +77,21 @@ PiPER 2台とPika Gripper 2台の構成で，記録するdatasetと方策の入�
 - 方策（option `policy`）は，`camera` と手首のcamera 2台を観測し，`infer` は14要素の目標をradで返します．1手 `[14]` か，まとめた行動 `[H, 14]` です．`max_speed` はfollowerごとのrad/sです．
 - 推論の構成にはSenseがないので，方策は `observation.left_sense` などを使えません．方策の書き方とLeRobotの方策は [方策で動かす](../../policy/index.md) にあります．
 
+## 起動option（`roboloom init piper-pika`） { #options }
+
+同梱の `piper-pika` template（`roboloom init piper-pika`）は次の option を宣言します．
+
+| option | 内容 | dataset名 | 状態 |
+| --- | --- | --- | --- |
+| `viewer` | Rerunで観測をlive表示する（`nodes/viewer.yaml`．`viz` extraが必要） | 変えない | <span class="status status--mock">模擬のみ</span> |
+
+詳細は [Live viewer（viewer）](../../reference/configuration/viewer.md) にあります．
+
 ## 模擬で画面を確かめる
 
 `.roboloom/piper-mock/` は，模擬のPiPER 2台（`left`，`right`）とPika Gripper 2台（`left_gripper`，`right_gripper`）とcameraの構成です．hardwareなしで操作画面を確かめられます．腕とgripperは，模擬のPika Senseで遠隔操作します（[Pika SenseとIKによる遠隔操作](../../controllers/pose-ik.md)）．Launchのあと「Move home」で腕を始める姿勢へ移すと，模擬のSenseが開始して腕が動きます．`--with policy` を付けると，同じdirectoryの確認用の方策（`demo_policy.py`）が動かします．
 
-`.roboloom/piper-mock/` はroboloomのrepositoryにあり，installしたpackageには入っていません（`roboloom init` のtemplateは `rakuda2` だけです）．下のcommandは，cloneしたrepositoryのrootで実行します．自分のprojectでは，[repository](https://github.com/tetsugo02/roboloom) からこのdirectoryを自分の `.roboloom/` にコピーして使えます．`ik` extraが要ります（[Pika SenseとIKによる遠隔操作](../../controllers/pose-ik.md)）．値は模擬のためのものなので，実機に使い回さないでください．
+`.roboloom/piper-mock/` はroboloomのrepositoryにあり，installしたpackageには入っていません（`roboloom init` が同梱するのは `rakuda2` と `piper-pika` のtemplateで，`piper-mock` はrepositoryだけにあります）．下のcommandは，cloneしたrepositoryのrootで実行します．自分のprojectでは，[repository](https://github.com/tetsugo02/roboloom) からこのdirectoryを自分の `.roboloom/` にコピーして使えます．`ik` extraが要ります（[Pika SenseとIKによる遠隔操作](../../controllers/pose-ik.md)）．値は模擬のためのものなので，実機に使い回さないでください．
 
 ```bash
 uv run roboloom run piper-mock

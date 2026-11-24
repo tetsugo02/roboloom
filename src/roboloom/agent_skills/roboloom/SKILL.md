@@ -19,8 +19,8 @@ sensors, recorder and policy as a **dora-rs dataflow** and saves episodes as
 
 Public docs: <https://tetsugo02.github.io/roboloom/en/> (Japanese: `/ja/`).
 Choose robot extras (`rakuda2`, or `piper,pika`) separately from shared features
-(`record`, `hardware`, `digit`, `policy`, `train`); see [installation](references/installation.md).
-This skill matches roboloom `0.1.0`; if `uv run roboloom skills check` says it is
+(`record`, `hardware`, `digit`, `viz`, `policy`, `train`); see [installation](references/installation.md).
+This skill matches roboloom `0.2.0`; if `uv run roboloom skills check` says it is
 outdated, run `uv run roboloom skills install --force`.
 
 ## Mental model
@@ -31,12 +31,12 @@ outdated, run `uv run roboloom skills install --force`.
 - `config.yaml` names nodes by **role**: `inputs` (leader arms, hand-held devices),
   `controllers` (`joint`, `pose_ik`, `policy`), `followers` (driven arms/grippers),
   `sensors`, `estimators`, `trackers` (a tracking system several inputs share, e.g.
-  libsurvive for Pika Senses), plus `recorder` and `session`. Each node YAML's `type` picks
+  libsurvive for Pika Senses), `recorder`, `session`, and optional `viewer`. Each node YAML's `type` picks
   the implementation. **Node names become dora IDs and dataset feature names.**
 - **Launch options** (`options:` in `config.yaml`) swap node files at launch: e.g.
-  `digit`, `gravity`, `policy`. Options with a `dataset:` name append it to `repo_id` and
+  `digit`, `gravity`, `policy`, `viewer`. Options with a `dataset:` name append it to `repo_id` and
   `output` (`local/rakuda2` + `digit` → `local/rakuda2-digit`), so different feature
-  layouts never share a dataset.
+  layouts never share a dataset (`viewer` has no suffix).
 - **Real hardware is the default.** `--mock` (CLI) / `mock=True` (Python) runs mock
   devices. `mode: mock` in YAML also works; the flag wins.
 - `SET_...` values in the template are per-robot measurements (ports, serials, limits).
@@ -86,6 +86,7 @@ outdated, run `uv run roboloom skills install --force`.
 | Own policies (`type: policy`): inference and intervention (`policy`, `policy_teleop`) on Rakuda2 | Hardware-verified | [policy.md](references/policy.md) |
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | Mock only (PiPER + Pika) | [policy.md](references/policy.md) |
 | Background episode saving in the dora dataflow (`background_save`, `max_pending_saves`) | Mock only | [recording.md](references/recording.md#background-saving) |
+| Live view in Rerun (`viewer` option / `viewer:`, `viz` extra) | Mock only | [configuration.md](references/configuration.md#live-viewer) |
 | PiPER follower, Pika Gripper, Pika Sense + `pose_ik` | In development, mock only | [robots/piper-pika.md](references/robots/piper-pika.md) |
 | Hand-held Pika Sense collection, `convert-handheld` | In development, mock only | [robots/handheld.md](references/robots/handheld.md) |
 | `opencv_rgb` web camera (Linux/macOS/Windows driver only) | Mock only; hardware unverified; Windows Session excluded | [sensors.md](references/sensors.md) |
@@ -102,7 +103,7 @@ uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper 
 uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra rakuda2 --extra record --extra hardware --extra digit  # Rakuda2 collection + sensors
 ```
 
-`project.requires-python` must lie within `">=3.12,<3.15"`; the LeRobot extras take a NumPy override (required on 3.14), and LeRobot policies/training need 3.12 or 3.13 (installation.md). Other extras: `record`, `hardware`, `digit`, `ik`,
+`project.requires-python` must lie within `">=3.12,<3.15"`; the LeRobot extras take a NumPy override (required on 3.14), and LeRobot policies/training need 3.12 or 3.13 (installation.md). Other extras: `record`, `hardware`, `digit`, `ik`, `viz`,
 `policy`, `train`. Run everything from the project root with `uv run`. Details:
 [installation.md](references/installation.md).
 

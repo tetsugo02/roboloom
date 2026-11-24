@@ -10,6 +10,7 @@ roboloomの設定は，機体ごとの設定file `config.yaml` と，そこか�
 | [方策のcontroller](policy.md) | `type: policy` のkey |
 | [sensor](sensors.md) | `sensors:` のkey，画像の保存形式，sensorの選択 |
 | [recorder と session](recorder.md) | `recorder:`，品質の警告，動画のcodec，`session:` |
+| [Viewer](viewer.md) | 任意の `viewer:` node の key，出力先，描画内容，status <span class="status status--mock">模擬のみ</span> |
 | [制御則](control.md) | `control:` の制御則ごとのkey，`limits`，`home` |
 
 ## fileの配置 { #layout }
@@ -74,13 +75,14 @@ node YAMLのpathと `output` は設定fileのdirectoryが基準です．option�
 | `estimators` | `{name: path}` | `{}` | — | 推定器（[controller](controllers.md#estimators)） <span class="status status--mock">模擬のみ</span> |
 | `recorder` | path | 必須 | — | [recorder](recorder.md#recorder) のnode YAML |
 | `session` | path | 必須 | — | [session](recorder.md#session) のnode YAML |
+| `viewer` | path | —（無効） | — | 任意の [viewer](viewer.md) のnode YAML <span class="status status--mock">模擬のみ</span> |
 | `options` | mapping | `{}` | — | [起動option](#launch-options) |
 
 `followers` には，指令を受けて動く装置（腕，gripperなど）を並べます．1つの設定に複数のfollowerを置けます．各followerには，それを動かすcontrollerがちょうど1つ必要です（[followerとcontroller](controllers.md#followers)）．`followers: {}` としてfollowerを置かない構成は，入力とsensorを記録するだけで，`action` を記録しません．このときcontrollerは置けず，入力とsensorは自分の周期（`poll_hz`，`fps`）を持つ必要があります（[Pika Senseを手に持った収集](../../tutorials/pika-handheld.md)，開発中）．
 
 ### node名 { #node-names }
 
-node名はdoraのIDとdatasetのfeature名に使われます．役割をまたいで重複できません．英数字，`-`，`_` だけを使います．`recorder`，`session`，`action`，`tick` と，`action_` で始まる名前，`_status` で終わる名前は，dataflowが使うので付けられません．
+node名はdoraのIDとdatasetのfeature名に使われます．役割をまたいで重複できません．英数字，`-`，`_` だけを使います．`recorder`，`session`，`viewer`，`action`，`tick` と，`action_` で始まる名前，`_status` で終わる名前は，dataflowが使うので付けられません．
 
 ### typeと未知のkey { #type }
 
@@ -147,7 +149,7 @@ Rakuda2のtemplateでは，`leader_gravity.yaml` が `leader.yaml` を，`policy
 | `default` | 真偽値 | `false` | — | `true` なら，指定がないときに有効 |
 | `requires` | 文字列のリスト | `[]` | — | 一緒に有効にするoption |
 | `conflicts` | 文字列のリスト | `[]` | — | 同時に使えないoption |
-| `set` | `{<role>.<node>: path or null}` | `{}` | — | roleは `trackers`，`inputs`，`controllers`，`followers`，`sensors`，`estimators` のどれか．`null` はそのnodeを削除する |
+| `set` | `{<role>.<node>: path or null}` | `{}` | — | roleは `trackers`，`inputs`，`controllers`，`followers`，`sensors`，`estimators` のどれか．`null` はそのnodeを削除する．単独のkey `viewer: path or null` は任意の [viewer](viewer.md) を指定または無効にする |
 | `dataset` | 文字列 | `""` | — | 有効なときにdataset名へ付ける短い名前（英数字，`.`，`-`，`_`） |
 
 規則は次のとおりです．
@@ -159,7 +161,7 @@ Rakuda2のtemplateでは，`leader_gravity.yaml` が `leader.yaml` を，`policy
 - `dataset` を持たないoptionが記録するfeatureを変える場合，読み込みを拒否します．
 - `roboloom infer` は，`policy` という名前のoptionがあれば有効にします．
 
-template（`src/roboloom/robots/rakuda2/template/config.yaml`）のoptionです．`bilateral` は <span class="status status--mock">模擬のみ</span>，`pika` は <span class="status status--dev">開発中</span> です．
+template（`src/roboloom/robots/rakuda2/template/config.yaml`）のoptionです．`bilateral` と `viewer` は <span class="status status--mock">模擬のみ</span>，`pika` は <span class="status status--dev">開発中</span> です．
 
 ```yaml
 options:
@@ -207,6 +209,10 @@ options:
       inputs.leader: nodes/leader.yaml
       controllers.policy: nodes/policy_teleop.yaml
     dataset: teleop
+  viewer:
+    help: show the observations live in Rerun (needs the viz extra)
+    set:
+      viewer: nodes/viewer.yaml
 ```
 
 | 有効なoption | `repo_id` |

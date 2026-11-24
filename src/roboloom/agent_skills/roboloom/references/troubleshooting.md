@@ -86,6 +86,7 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | `No module named 'dynamixel_sdk'` | `rakuda2` extra missing | `uv add 'roboloom[rakuda2]'` |
 | `pysurvive ... unavailable` | `pika` extra missing, or not Linux x86_64 (the wheel exists only there) | `uv add 'roboloom[pika]'` on Linux x86_64; ask an administrator for the tracker udev rules; see [installation.md](installation.md) |
 | `pose controllers need pinocchio` | `ik` extra missing | `uv add 'roboloom[ik]'` |
+| `the viewer needs Rerun; install the viz extra:` | `viewer` option / `viewer:` enabled without the `viz` extra | `uv add 'roboloom[viz]'` (or disable the `viewer` option) |
 | `LeRobot policies need lerobot with torch` | `policy` extra missing | `uv add 'roboloom[policy]'` (+ `lerobot[diffusion]` etc. per policy type) |
 | `policy 'x': expected 'module:callable'` | Missing `:` | `my_lab.policies:load` |
 | `policy 'x': No module named ...` / `has no attribute` | Module not installed nor in `.roboloom/<robot>/` | Put the file there or install the package ([policy.md](policy.md)) |

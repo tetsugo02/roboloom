@@ -50,3 +50,13 @@
 
 - LeRobotの方策は，模擬のPiPER＋Pikaで記録から推論まで通しました（[LeRobotの方策](../policy/lerobot.md)）．Rakuda2の実機ではまだ使っていません．
 - 方策の章は [方策と推論](../policy/index.md) にあります．
+
+## Live view（Rerun） { #viewer }
+
+| 機体 | Live view（`viewer` option / `viewer:`） | template / extra |
+| --- | --- | --- |
+| Rakuda2 | <span class="status status--mock">模擬のみ</span> | template に `viewer` option あり．`viz` が必要 |
+| PiPER＋Pika Gripper | <span class="status status--mock">模擬のみ</span> | `piper-pika` template に `viewer` option あり．`viz` が必要 |
+| 自分のrobot | <span class="status status--mock">模擬のみ</span> | `viewer: nodes/viewer.yaml` または option `viewer` を設定．`viz` が必要 |
+
+- 設定 key・出力先・描画内容・status は [Live viewer（viewer）](../reference/configuration/viewer.md)，実行command は [Live view（Rerun）](../data/recording.md#live-view) にあります．

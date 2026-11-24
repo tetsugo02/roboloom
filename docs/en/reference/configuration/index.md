@@ -10,6 +10,7 @@ A roboloom configuration is one file per robot, `config.yaml`, and the node YAML
 | [The policy controller](policy.md) | Keys of `type: policy` |
 | [Sensors](sensors.md) | Keys under `sensors:`, image storage, sensor selection |
 | [recorder and session](recorder.md) | `recorder:`, quality warnings, video codec, `session:` |
+| [Viewer](viewer.md) | Optional `viewer:` node keys, targets, logged entities, status fields <span class="status status--mock">Mock only</span> |
 | [Control laws](control.md) | Keys of each law under `control:`, `limits`, `home` |
 
 ## File layout { #layout }
@@ -74,13 +75,14 @@ Only the keys in this table are allowed at the top level; any other key is refus
 | `estimators` | `{name: path}` | `{}` | — | Estimators ([Controllers](controllers.md#estimators)) <span class="status status--mock">Mock only</span> |
 | `recorder` | path | required | — | Node YAML of the [recorder](recorder.md#recorder) |
 | `session` | path | required | — | Node YAML of the [session](recorder.md#session) |
+| `viewer` | path | — (off) | — | Optional node YAML of the [viewer](viewer.md) <span class="status status--mock">Mock only</span> |
 | `options` | mapping | `{}` | — | [Launch options](#launch-options) |
 
 `followers` lists the devices that move on command (arms, grippers, ...). One configuration may hold several followers. Each follower needs exactly one controller that drives it ([Followers and controllers](controllers.md#followers)). A configuration with `followers: {}` records its inputs and sensors only, with no `action`; it cannot have controllers, and its inputs and sensors need their own rate (`poll_hz`, `fps`) ([Hand-held collection with Pika Sense](../../tutorials/pika-handheld.md), in development).
 
 ### Node names { #node-names }
 
-Node names are used as dora IDs and as dataset feature names, and are unique across roles. Use letters, digits, `-` and `_` only. `recorder`, `session`, `action` and `tick`, names starting with `action_` and names ending in `_status` are used by the dataflow and cannot be node names.
+Node names are used as dora IDs and as dataset feature names, and are unique across roles. Use letters, digits, `-` and `_` only. `recorder`, `session`, `viewer`, `action` and `tick`, names starting with `action_` and names ending in `_status` are used by the dataflow and cannot be node names.
 
 ### type and unknown keys { #type }
 
@@ -147,7 +149,7 @@ In the Rakuda2 template `leader_gravity.yaml` is built on `leader.yaml` and `pol
 | `default` | boolean | `false` | — | `true` enables it when nothing is specified |
 | `requires` | list of text | `[]` | — | Options enabled together with it |
 | `conflicts` | list of text | `[]` | — | Options that cannot be used at the same time |
-| `set` | `{<role>.<node>: path or null}` | `{}` | — | Role is one of `trackers`, `inputs`, `controllers`, `followers`, `sensors`, `estimators`; `null` removes that node |
+| `set` | `{<role>.<node>: path or null}` | `{}` | — | Role is one of `trackers`, `inputs`, `controllers`, `followers`, `sensors`, `estimators`; `null` removes that node. The bare key `viewer: path or null` sets or disables the optional [viewer](viewer.md) |
 | `dataset` | text | `""` | — | Short name appended to the dataset name while the option is enabled (letters, digits, `.`, `-`, `_`) |
 
 The rules are:
@@ -159,7 +161,7 @@ The rules are:
 - Loading is refused when an option without `dataset` changes the recorded features.
 - `roboloom infer` enables the option named `policy` when there is one.
 
-The options of the template (`src/roboloom/robots/rakuda2/template/config.yaml`). `bilateral` is <span class="status status--mock">Mock only</span> and `pika` <span class="status status--dev">In development</span>.
+The options of the template (`src/roboloom/robots/rakuda2/template/config.yaml`). `bilateral` and `viewer` are <span class="status status--mock">Mock only</span> and `pika` <span class="status status--dev">In development</span>.
 
 ```yaml
 options:
@@ -207,6 +209,10 @@ options:
       inputs.leader: nodes/leader.yaml
       controllers.policy: nodes/policy_teleop.yaml
     dataset: teleop
+  viewer:
+    help: show the observations live in Rerun (needs the viz extra)
+    set:
+      viewer: nodes/viewer.yaml
 ```
 
 | Enabled options | `repo_id` |

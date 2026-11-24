@@ -55,8 +55,8 @@ Flags of commands that open devices:
 uv run roboloom validate --with digit
 uv run roboloom run --mock
 uv run roboloom run --with gravity              # skips the launcher
-uv run roboloom record --task "pick up the cup" --seconds 30 --episodes 3 --home
-uv run roboloom infer --seconds 20 --policy my_lab.policies:load --task "pick up the cup"
+uv run roboloom record --with digit,viewer --task "pick up the cup" --seconds 30 --episodes 3 --home
+uv run roboloom infer --seconds 20 --policy my_lab.policies:load --task "pick up the cup" --with viewer
 uv run roboloom session start handover          # from another terminal
 ```
 

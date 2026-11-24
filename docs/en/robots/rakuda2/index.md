@@ -64,6 +64,7 @@ There is one configuration, `.roboloom/rakuda2/config.yaml`. With no option enab
 | `policy` | A learned policy drives the follower; removes the leader and controller and adds `controllers.policy`; `roboloom infer` enables it automatically | Conflicts with `gravity` | Appends `-eval` |
 | `policy_teleop` | With `policy`, the leader can drive before and during an episode ([teleoperation and interventions](../../policy/intervention.md)); brings the leader back and uses `nodes/policy_teleop.yaml` | Requires `policy` | Appends `-teleop` |
 | `pika` | A Pika Sense per arm through IK instead of the leader ([in development, mock only](pika-sense-ik.md)) | conflicts with `gravity`, `policy` | appends `-pika` |
+| `viewer` | Opens the live view in Rerun (`nodes/viewer.yaml`; needs the `viz` extra) <span class="status status--mock">Mock only</span> | | Unchanged |
 
 | Enabled options | Leader | Sensors | `repo_id` |
 | --- | --- | --- | --- |
@@ -86,6 +87,7 @@ Limitations:
 - `policy` does not use the leader, so it cannot be combined with `gravity`, nor with `bilateral`, which requires `gravity`.
 - `gravity` does not change the dataset name because it records the same features as the standard leader; episodes with the standard and the gravity-compensated leader go into the same dataset.
 - Because the image features change, `digit` separates the dataset; DIGIT episodes are not appended to an existing RealSense-only dataset.
+- `viewer` does not change recorded features or the dataset name, and can be combined with any option; it needs the `viz` extra ([Viewer configuration](../../reference/configuration/viewer.md)).
 
 ## Bilateral (not verified on hardware)
 

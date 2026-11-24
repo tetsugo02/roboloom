@@ -14,6 +14,7 @@ A configuration is a set of nodes, one per role. Each node runs as its own proce
 | `sensors` | captures observations | RealSense, DIGIT, audio |
 | `recorder` | aligns every node's output to dataset rows and saves them | LeRobotDataset |
 | `session` | takes operations (start, stop, save, …) and passes them on to the nodes | the operator screen, `roboloom session` |
+| `viewer` | optional live view of observations and actions, with latest-only inputs <span class="status status--mock">Mock only</span> | [Rerun viewer](../reference/configuration/viewer.md) |
 | `trackers`, `estimators` | pose tracking, external-force estimation | Lighthouse, `effort` |
 
 ```mermaid

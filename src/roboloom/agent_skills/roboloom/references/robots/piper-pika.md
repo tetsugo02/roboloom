@@ -41,7 +41,9 @@ a Sense by opening and closing it, a tracker by moving its Sense (offers
 writes `can: {serial: <USB-CAN adapter serial>}`, `port: /dev/serial/by-path/...` and
 `tracker: {system, serial}`; CAN bring-up commands are only printed (root). Steps:
 `--step check,can,arms,senses,trackers,grippers,validate`. Unverified on hardware: tell
-the user. Docs: tutorials/piper-pika/ (setup, first-teleop, tighten).
+the user. Docs: tutorials/piper-pika/ (setup, first-teleop, tighten). The `piper-pika`
+template also ships `nodes/viewer.yaml` and the `viewer` option (`viz` extra, mock only;
+[../configuration.md](../configuration.md#live-viewer)).
 
 The mock configuration `.roboloom/piper-mock/` lives in the roboloom repository only
 (`mode: mock`): **never reuse its `can`, `port`, `tracker`, `limits`, `tool_offset` or

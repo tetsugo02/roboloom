@@ -202,6 +202,27 @@ def build_flow(cfg: RobotConfig) -> dict:
     for name, follower in cfg.followers.items():
         recorded[action_stream(name)] = bounded(f"{name}/{ACTION}", follower.control_hz)
     nodes.append(node("recorder", {**recorded, **session}, ["report", "status"]))
+    if cfg.viewer is not None:
+        # the same streams the recorder records, each only its newest sample: the
+        # view follows the observations without ever holding a source back
+        nodes.append(
+            node(
+                "viewer",
+                {
+                    **{
+                        name: latest(f"{name}/{published.get(name, 'sample')}")
+                        for name in cfg.sources
+                    },
+                    **{
+                        action_stream(name): latest(f"{name}/{ACTION}")
+                        for name in cfg.followers
+                    },
+                    **session,
+                },
+                ["status"],
+                cfg.viewer["rate_hz"],
+            )
+        )
     statuses = {
         f"{name}{STATUS_SUFFIX}": {
             "source": f"{name}/status",

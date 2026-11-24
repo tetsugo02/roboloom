@@ -18,14 +18,15 @@ sensors:
 # estimators: {}                # only for the paused bilateral feature
 recorder: nodes/recorder.yaml
 session: nodes/session.yaml
+# viewer: nodes/viewer.yaml     # optional live view in Rerun (mock only; or option `viewer`)
 options: {}                     # see below
 ```
 
 - Only these top-level keys are accepted: `repo_id`, `output`, `dataset_fps`, `mode`,
   `trackers`, `inputs`, `controllers`, `followers`, `sensors`, `estimators`, `recorder`, `session`,
-  `options`. Anything else is refused at load.
+  `viewer`, `options`. Anything else is refused at load.
 - **Node names** (keys under the roles) are dora IDs and dataset feature names: letters,
-  digits, `-`, `_`. Reserved: `recorder`, `session`, `action`, `tick`, names starting with
+  digits, `-`, `_`. Reserved: `recorder`, `session`, `viewer`, `action`, `tick`, names starting with
   `action_`, names ending in `_status`.
 - Each node YAML has a `type`:
   - followers: `rakuda2_follower`, `piper_follower`, `pika_gripper_follower`
@@ -116,7 +117,7 @@ options:
 | `help` | shown in the launcher |
 | `default` | `true` = on when nothing is chosen (default `false`) |
 | `requires` / `conflicts` | enabled together / disabled together |
-| `set` | `<role>.<node>` → node file, or `null` to remove |
+| `set` | `<role>.<node>` → node file, or `null` to remove; bare key `viewer` → viewer node file or `null` |
 | `dataset` | appended (`-name`, declaration order) to `repo_id` and `output` |
 
 Rules: unknown names are errors; two options setting one node differently is an error
@@ -230,3 +231,34 @@ one of factory/module:callable or from/policy, plus kwargs (factories only), wri
 Factory/policy-declared writes must fit the YAML claim. Writing policy hooks without a
 slot refuse load with the exact two YAML lines to add. sources: [teleop] requires teleop:.
 from: policy with writes + backend: server is refused before connecting.
+
+## Live viewer
+
+Mock only. Optional `viewer` service node (`nodes/viewer.yaml`) that streams live
+observations, follower actions, capture ages, and session events to Rerun. Needs the
+`viz` extra (`rerun-sdk` checked with `find_spec("rerun")` at config load when enabled;
+off needs no Rerun).
+
+- Enable via `options.viewer` (`set: {viewer: nodes/viewer.yaml}`, shipped in `rakuda2` and
+  `piper-pika` templates) or top-level `viewer: nodes/viewer.yaml` (`set: {viewer: null}`
+  turns it off). No `dataset:` suffix; `repo_id` and `output` stay unchanged.
+- Keys of `nodes/viewer.yaml` (`VIEWER_KEYS`):
+
+| Key | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `rate_hz` | number | `10` | Positive finite Hz; whole Hz or whole ms per tick (e.g. `12.5` = 80 ms) |
+| `compress_images` | bool | `true` | JPEG-compress images before logging |
+| `ip` | str or `null` | `null` | Rerun gRPC host; must be given with `port`, or neither |
+| `port` | int (1–65535) or `null` | `null` | Rerun gRPC port; must be given with `ip`, or neither |
+| `save` | path or `null` | `null` | `.rrd` path (relative to viewer YAML dir) |
+| `memory_limit` | str | `"10%"` | `LEROBOT_RERUN_MEMORY_LIMIT` when spawning a local window |
+
+- Targets: `ip`/`port`/`save` all `null` → spawn local window (`target: "spawn"`);
+  `ip`+`port` → gRPC `rerun+http://<ip>:<port>/proxy` (`target: "<ip>:<port>"`);
+  `save` alone → headless `.rrd` (`target: "<save path>"`);
+  `ip`+`port`+`save` → both gRPC and `.rrd` (`target: "<ip>:<port>"`).
+- Separate dora node with `latest` inputs (`queue_size: 1`, `drop_oldest`) and own timer,
+  never holding back sources or `recorder` (unlike hooks, which run inside policy loops).
+- Status fields (every ~0.5 s): `state` (`viewing` \| `failed`), `streams`, `drawn`,
+  `errors`, `target`, and `error` (last error; cleared after a later successful draw). See
+  [recording.md](recording.md#live-view-rerun).
