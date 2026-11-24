@@ -24,7 +24,7 @@
 ## 必要なもの
 
 - PiPER＋Pikaの実機ではrobotのextrasを両方選びます．`piper` にPiPER SDKとIK用のPinocchio，`pika` に `pysurvive` と手首camera用の依存が入ります．
-    - 自分のprojectでは：`uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.0 --extra piper --extra pika`（記録には `--extra record` も追加）
+    - 自分のprojectでは：`uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra piper --extra pika`（記録には `--extra record` も追加）
     - roboloomのrepositoryをcloneした中では：`uv sync --extra piper --extra pika`
 - trackerはlibsurvive（Pythonでは `pysurvive`）で読みます．`pika` extraが，libsurviveのforkがbuildしたwheel（Linux x86_64）を入れます．install時のbuildはありません．trackerのudev規則（`81-vive.rules`）は管理者に頼みます．詳しくは [Installation](../get-started/installation.md) にあります．pysurviveが入っていないと，Senseのnodeは理由を示して止まります．
 - `pysurvive` が必要なのは実機のSenseのtrackerの姿勢だけです．PiPERの関節制御，Pikaのserial・camera，模擬では使いません．模擬の `pose_ik` と `roboloom validate` には独立した `ik` extraだけで足ります（checkoutでは `uv sync --extra ik`）．

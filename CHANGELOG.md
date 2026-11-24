@@ -5,10 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/tetsugo02/roboloom/releases/tag/v0.2.1) - 2026-11-24
+
+### Features
+
+- **viewer**: 観測を Rerun に表示する任意の viewer node を足す ([#59](https://github.com/tetsugo02/roboloom/pull/59)) ([`aca9f2b`](https://github.com/tetsugo02/roboloom/commit/aca9f2b628e87ff28959e8a37316d2f70a35dcce))
+- episodeの保存をbackgroundで行い，保存を待たずに次のepisodeを始められるようにする ([#57](https://github.com/tetsugo02/roboloom/pull/57)) ([`d8c84d1`](https://github.com/tetsugo02/roboloom/commit/d8c84d13fad5e62f9855a5a2b12a98a3457140e9))
+
+### Bug Fixes
+
+- background保存の障害・timeout時の状態同期とspool掃除を直す ([#58](https://github.com/tetsugo02/roboloom/pull/58)) ([`0d8460f`](https://github.com/tetsugo02/roboloom/commit/0d8460f84a8a7a20ade815450bb9ec7ed20ecb85))
+
 ## [0.2.0](https://github.com/tetsugo02/roboloom/releases/tag/v0.2.0) - 2026-11-17
 
 ### Features
 
+- **hooks**: 方策から独立したフックを足し，v0.2.0 を出す ([#56](https://github.com/tetsugo02/roboloom/pull/56)) ([`f7a029b`](https://github.com/tetsugo02/roboloom/commit/f7a029bfc319b2e961054d18fe29c1cbbcdc39ec))
 - **hooks**: 方策から独立したフック（周期ごとの step と episode のイベント）を足す ([`bd8e433`](https://github.com/tetsugo02/roboloom/commit/bd8e433d745db97172de2c45cdce6d60db840952))
 - PiPER＋Pikaの機器を特定する roboloom setup と，ロボット別のtutorial ([#54](https://github.com/tetsugo02/roboloom/pull/54)) ([`11114ad`](https://github.com/tetsugo02/roboloom/commit/11114ad7bfa4824cfdf836a8a70a3252d40be7c9))
 
