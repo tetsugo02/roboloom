@@ -186,7 +186,13 @@ def test_start_refusal_does_not_disable_retry_and_close_once(tmp_path):
         session.refuse = True
         backend.submit("start first")
         notices.wait(lambda n: isinstance(n, LogEvent) and "retry" in n.text)
-        notices.wait(ready)
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot)
+                and n.phase == "operation refused; retry when ready"
+                and ready(n)
+            )
+        )
         backend.submit("start second")
         notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == "recording")
         assert session.started == ["second"]
