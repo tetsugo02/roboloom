@@ -3117,7 +3117,7 @@ record = [
 ]
 test = [
     { name = "dynamixel-sdk" },
-    { name = "lerobot", extra = ["dataset"] },
+    { name = "lerobot", extra = ["dataset", "viz"] },
     { name = "pin" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -3150,7 +3150,7 @@ requires-dist = [
     { name = "dynamixel-sdk", marker = "extra == 'test'", specifier = ">=3.7,<4" },
     { name = "lerobot", marker = "extra == 'policy'", specifier = "==0.7.0" },
     { name = "lerobot", extras = ["dataset"], marker = "extra == 'record'", specifier = "==0.7.0" },
-    { name = "lerobot", extras = ["dataset"], marker = "extra == 'test'", specifier = "==0.7.0" },
+    { name = "lerobot", extras = ["dataset", "viz"], marker = "extra == 'test'", specifier = "==0.7.0" },
     { name = "lerobot", extras = ["training"], marker = "extra == 'train'", specifier = "==0.7.0" },
     { name = "lerobot", extras = ["viz"], marker = "extra == 'viz'", specifier = "==0.7.0" },
     { name = "librosa", marker = "extra == 'audio'", specifier = ">=0.10,<1" },

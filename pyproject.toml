@@ -62,7 +62,7 @@ train = ["lerobot[training]==0.7.0"]  # lerobot-train on roboloom datasets (acce
 test = [
     "pytest>=8,<9",
     "dynamixel-sdk>=3.7,<4",
-    "lerobot[dataset]==0.7.0",
+    "lerobot[dataset,viz]==0.7.0",
     "pytest-asyncio>=1,<2",
     "pin>=4.1,<5",
 ]
