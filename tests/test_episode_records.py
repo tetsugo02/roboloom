@@ -4,44 +4,19 @@ evaluation episode, given when it is saved or afterwards with `roboloom label`."
 from __future__ import annotations
 
 import json
-import os
-import shutil
 from pathlib import Path
 
 import pytest
-from conftest import mock_project
-from test_session_failures import _session_node
-from test_video_codec import COLOURS, FPS, _cfg, _frame
+from conftest import mock_project, run_session_node
+from test_video_codec import COLOURS, _cfg, _stopped
 
 from roboloom.api import InProcessSession
 from roboloom.cli import _with_config, main
-from roboloom.core.protocol import Envelope
 from roboloom.drivers.mock import MockBus
 from roboloom.recording import EpisodeRecorder, SaveFailed, episodes
 from roboloom.recording.check import check_dataset
 from roboloom.runtime.node import parse_command
 from roboloom.runtime.session import Session
-
-TESTS = str(Path(__file__).resolve().parent)
-needs_dora = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
-
-
-def _stopped(recorder: EpisodeRecorder, start_ns: int, task: str = "colours") -> None:
-    """One stopped episode of len(COLOURS) rows, not saved yet."""
-    period = int(1e9 / FPS)
-    recorder.start(task, start_ns)
-    for k, colour in enumerate(COLOURS):
-        t = start_ns + k * period
-        for name, sensor in recorder.cfg.sensors.items():
-            image = _frame(colour, sensor.shape)
-            recorder.ingest(
-                name,
-                Envelope(
-                    "image", name, "boot", k, t, t, {"image": image}, t_receive_ns=t
-                ),
-            )
-    recorder.stop(start_ns + len(COLOURS) * period)
-
 
 # -- the record ----------------------------------------------------------------------
 
@@ -149,7 +124,7 @@ def test_the_in_process_session_saves_the_verdict(tmp_path):
         repo_id="local/my-mock",
     ) as session:
         session.start_episode("handover")
-        session.run(0.5)
+        session.run(0.2)
         session.stop_episode()
         session.save_episode(label="failure", note="too slow")
     record = episodes.read(tmp_path / "data")[0]
@@ -178,7 +153,7 @@ def test_save_carries_the_verdict_typed_or_sent():
 
 
 def test_the_session_node_refuses_a_mistyped_verdict(tmp_path, monkeypatch):
-    sent, reports, _, _ = _session_node(
+    sent, reports, _, _, _ = run_session_node(
         tmp_path, monkeypatch, [b"save succes\n", b"save success\n", b"quit\n"]
     )
     assert [m["command"] for m in sent] == ["save", "quit"]  # the first went nowhere
@@ -203,12 +178,10 @@ def test_the_command_line_takes_the_robot_before_the_episode():
 
 
 @pytest.mark.e2e
-@needs_dora
-def test_an_evaluation_run_records_each_verdict(tmp_path, monkeypatch, capsys):
+def test_an_evaluation_run_records_each_verdict(
+    tmp_path, monkeypatch, capsys, tests_pythonpath
+):
     project = mock_project(tmp_path / ".roboloom")
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([TESTS, os.environ.get("PYTHONPATH", "")])
-    )
     with Session.launch(
         project / "config.yaml",
         options=["policy"],
@@ -216,15 +189,15 @@ def test_an_evaluation_run_records_each_verdict(tmp_path, monkeypatch, capsys):
         log_dir=tmp_path / "logs",
     ) as s:
         s.wait_ready(30)
-        s.record("creep", 1.5, label="success", note="reached the mark")
+        s.record("creep", 0.6, label="success", note="reached the mark")
         (first,) = s.wait_saves()
         assert first.saved and first.label == "success"
         # decided from the stopped episode, e.g. by a check of the scene
-        s.record("creep", 1.5, label=lambda ep: "failure" if ep.frames else None)
+        s.record("creep", 0.6, label=lambda ep: "failure" if ep.frames else None)
         (second,) = s.wait_saves()
         assert second.label == "failure"
         with pytest.raises(ValueError, match="label must be success or failure"):
-            s.record("creep", 1.5, label="ok")  # refused before the robot moves
+            s.record("creep", 0.6, label="ok")  # refused before the robot moves
         s.start("creep")
         s.stop()
         with pytest.raises(ValueError, match="label must be success or failure"):

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from conftest import FakeClock
 
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.drivers.survive import SurviveSystem
@@ -22,18 +23,14 @@ from roboloom.kinematics.spec import pose_from
 from roboloom.trackers.base import TrackedPose, Tracker
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.now = 10.0
-
-    def __call__(self) -> float:
-        return self.now
+def Clock() -> FakeClock:
+    return FakeClock(10.0)
 
 
 class FakeLink:
     """PikaSerial's `latest` for the Sense keys, stamped by `clock`."""
 
-    def __init__(self, clock: Clock):
+    def __init__(self, clock: FakeClock):
         self.clock = clock
         self.values: dict = {"AS5047": {"angle": 40.0, "rad": 0.7}, "Command": 0}
         self.silent = False

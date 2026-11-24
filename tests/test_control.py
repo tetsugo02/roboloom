@@ -1,3 +1,4 @@
+import math
 import time
 
 import numpy as np
@@ -5,9 +6,11 @@ import pytest
 
 from roboloom.config import load_config
 from roboloom.controllers.joint import JointController
-from roboloom.core.protocol import Envelope
+from roboloom.core.protocol import Envelope, Publisher
 from roboloom.drivers.base import Health
 from roboloom.drivers.mock import MockBus
+from roboloom.inputs.base import JointInput
+from roboloom.robots.base import Follower
 from roboloom.robots.safety import FollowerSafety
 
 LIMIT = {"min": 0, "max": 4095, "max_speed": 3000, "max_jump": 400}
@@ -240,3 +243,149 @@ def test_controller_steps_from_the_follower_target_not_its_own_output():
     assert cmd is not None
     step = 500 * 0.033  # max_speed of the mock controller (counts/s)
     assert max(abs(x - 2048) for x in cmd.payload["positions"]) <= step + 1e-6
+
+
+def test_numpy_scalars_in_a_payload_encode_as_json_numbers():
+    msg = Publisher("x").make(
+        "status", {"fields": {"missing": {"leader": np.int64(3)}}}
+    )
+    assert Envelope.decode(msg.encode()).payload["fields"]["missing"]["leader"] == 3
+
+
+def test_a_state_that_could_not_be_read_keeps_the_time_it_was_read():
+    limits = [
+        {"name": j, "min": 0, "max": 4095, "max_speed": 5000, "max_jump": 500}
+        for j in ("a", "b")
+    ]
+    bus = MockBus(dimension=2)
+    ctl = FollowerSafety(
+        {"name": "arm", "limits": limits, "unit": "count", "control_hz": 100}, bus
+    )
+    ctl.start()
+    t1 = time.monotonic_ns() - 100_000_000
+    state, _ = ctl.tick(t1)
+    assert state.t_capture_ns == t1 and state.payload["mode"] == "HOLD"
+    bus.fail = True  # the cable came off
+    t2 = t1 + 50_000_000
+    state, action = ctl.tick(t2)
+    assert state.payload["mode"] == "FAULT" and not action.payload["valid"]
+    assert state.payload["positions"] == [2048.0, 2048.0]  # the last ones read ...
+    assert state.t_capture_ns == t1  # ... and they say when: not now
+    assert state.t_ready_ns >= t2
+
+
+# -- a leader with another gear ratio or unit -----------------------------------------
+
+
+def _arm(unit: str = "rad") -> Follower:
+    limits = [
+        {"name": j, "min": -4, "max": 4, "max_speed": 10, "max_jump": 4}
+        for j in ("a", "b")
+    ]
+    return Follower(
+        "arm", {"joints": ["a", "b"], "unit": unit, "control_hz": 50, "limits": limits}
+    )
+
+
+class Knob(JointInput):
+    safety_traits = Follower.safety_traits
+
+
+SCALED_CONTROLLER = {
+    "alignment_tolerance": 0.1,
+    "max_speed": 10.0,
+    "command_deadline_ms": 100,
+    "input_timeout_ms": 150,
+}
+PER_COUNT = 2 * math.pi / 4096
+
+
+def _scaled(**change) -> JointController:
+    # a leader in counts (0..4095, 2048 at the follower's zero) for an arm in rad
+    table = [
+        {
+            "leader": "a",
+            "follower": "a",
+            "sign": 1,
+            "offset": -math.pi,
+            "scale": PER_COUNT,
+        },
+        {
+            "leader": "b",
+            "follower": "b",
+            "sign": -1,
+            "offset": math.pi,
+            "scale": PER_COUNT,
+        },
+    ]
+    cfg = {**SCALED_CONTROLLER, "joints": table, **change}
+    leader = Knob("knob", {"joints": ["a", "b"], "unit": "dynamixel_count"})
+    return JointController("c", cfg, leader, {"arm": _arm()})
+
+
+def test_a_scale_maps_a_leader_of_another_unit_onto_the_follower():
+    controller = _scaled()
+    pose = controller.follower_pose([2048 + 1024, 2048 + 1024])
+    assert pose == pytest.approx([math.pi / 2, -math.pi / 2])
+    back = controller.leader_pose(pose)
+    assert back == pytest.approx({"a": 3072.0, "b": 3072.0})
+    # it follows: aligned at zero, then the leader turns 1/8 of a turn
+    t0 = time.monotonic_ns() - 1_000_000_000
+    first = Envelope(
+        "joint_intent", "knob", "boot", 0, t0, t0, {"positions": [2048, 2048]}
+    )
+    controller.step(first, [0, 0], t0 + 1)
+    second = Envelope(
+        "joint_intent",
+        "knob",
+        "boot",
+        1,
+        t0 + 10_000_000,
+        t0 + 10_000_000,
+        {"positions": [2560, 2560]},
+    )
+    cmd = controller.step(
+        second, [0.0, 0.0], t0 + 20_000_001, follower_target=[0.0, 0.0]
+    )
+    assert cmd is not None and controller.state == "following"
+    # limited to max_speed * dt = 0.2 rad of the 0.785 rad asked, in each direction
+    assert cmd.payload["positions"] == pytest.approx([0.2, -0.2])
+
+
+def test_units_that_differ_need_a_scale_on_every_joint():
+    leader = Knob("knob", {"joints": ["a", "b"], "unit": "dynamixel_count"})
+    with pytest.raises(ValueError, match="or give every joint a scale"):
+        JointController("c", dict(SCALED_CONTROLLER), leader, {"arm": _arm()})
+    table = [
+        {"leader": "a", "follower": "a", "sign": 1, "offset": 0, "scale": PER_COUNT},
+        {"leader": "b", "follower": "b", "sign": 1, "offset": 0},  # no scale here
+    ]
+    with pytest.raises(ValueError, match="or give every joint a scale"):
+        JointController(
+            "c", {**SCALED_CONTROLLER, "joints": table}, leader, {"arm": _arm()}
+        )
+    # the same unit: a scale is a gear ratio, and no scale is 1
+    same = Knob("knob", {"joints": ["a", "b"], "unit": "rad"})
+    table[0]["scale"] = 2.0
+    geared = JointController(
+        "c", {**SCALED_CONTROLLER, "joints": table}, same, {"arm": _arm()}
+    )
+    assert geared.follower_pose([0.5, 0.5]) == pytest.approx([1.0, 0.5])
+
+
+@pytest.mark.parametrize("scale", [0, -1.0, float("nan"), "2", True])
+def test_a_scale_is_a_positive_number(scale):
+    table = [
+        {"leader": j, "follower": j, "sign": 1, "offset": 0, "scale": scale}
+        for j in ("a", "b")
+    ]
+    same = Knob("knob", {"joints": ["a", "b"], "unit": "rad"})
+    with pytest.raises(ValueError, match="scale must be a positive number"):
+        JointController(
+            "c", {**SCALED_CONTROLLER, "joints": table}, same, {"arm": _arm()}
+        )
+
+
+def test_force_feedback_is_refused_with_scaled_joints():
+    with pytest.raises(ValueError, match="feedback: not with scaled joints"):
+        _scaled(feedback={"estimator": "effort"})

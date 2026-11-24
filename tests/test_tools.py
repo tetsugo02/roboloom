@@ -188,18 +188,53 @@ def test_commission_writes_only_differences_after_confirmation(tmp_path, monkeyp
         lambda *_: parse_config(deepcopy(tree)),
     )
     monkeypatch.setattr("roboloom.drivers.dynamixel.DynamixelBus", FakeDynamixel)
-    plan = setup.plan_commission("exp", "leader")
-    assert len(plan.changes) == 28  # mode and current limit of 12 arm joints + 2 grips
-    with pytest.raises(Cancelled):
-        setup.apply_commission(plan, ScriptedOperator(confirm=False))
-    assert FakeDynamixel.instances[-1].writes == []
-    assert setup.apply_commission(plan, ScriptedOperator()) == 28
-    bus = FakeDynamixel.instances[-1]
-    modes = dict(zip(bus.writes[0][1], bus.writes[0][2], strict=True))
-    assert len(modes) == 12 and set(modes.values()) == {0}  # arm joints to current mode
-    grips = [w for w in bus.writes if w[0] == "operating_mode" and w[2][0] == 5]
-    assert grips and sorted(grips[0][1]) == [9, 16]
     FakeDynamixel.instances.clear()
+    try:
+        plan = setup.plan_commission("exp", "leader")
+        assert len(plan.changes) == 28  # mode and current limit of 12 arm + 2 grips
+        with pytest.raises(Cancelled):
+            setup.apply_commission(plan, ScriptedOperator(confirm=False))
+        assert FakeDynamixel.instances[-1].writes == []
+        assert setup.apply_commission(plan, ScriptedOperator()) == 28
+        bus = FakeDynamixel.instances[-1]
+        modes = dict(zip(bus.writes[0][1], bus.writes[0][2], strict=True))
+        assert len(modes) == 12 and set(modes.values()) == {0}  # arm to current mode
+        grips = [w for w in bus.writes if w[0] == "operating_mode" and w[2][0] == 5]
+        assert grips and sorted(grips[0][1]) == [9, 16]
+    finally:
+        FakeDynamixel.instances.clear()
+
+
+def test_non_tty_tuning_is_rejected_before_open(tmp_path, monkeypatch):
+    import sys
+
+    from conftest import mock_project
+
+    from roboloom.cli import main
+
+    project = mock_project(tmp_path / ".roboloom")
+    opened: list[bool] = []
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        opened.append(True)
+        raise AssertionError("device opened without a terminal")
+
+    monkeypatch.setattr(setup, "open_tuning", forbidden)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "roboloom",
+            "tune-gravity",
+            str(project / "config.yaml"),
+            "leader",
+            "right_arm",
+        ],
+    )
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with pytest.raises(SystemExit, match="requires an interactive terminal"):
+        main()
+    assert not opened
 
 
 class WatchdogMotor:

@@ -1,14 +1,13 @@
 """Several followers in one configuration: names, flow, recording, poses."""
 
 import json
-import shutil
 import time
 from pathlib import Path
 
 import numpy as np
 import pytest
 import yaml
-from conftest import dual_mock
+from conftest import FakeDataset, dual_mock
 
 from roboloom.config import load_config, parse_config, read_config
 from roboloom.core.protocol import Envelope
@@ -140,15 +139,7 @@ def test_a_silent_follower_fills_its_action_with_the_target_it_held(tmp_path):
 
 def test_rows_wait_for_the_slowest_follower_then_for_grace(tmp_path):
     cfg = load_config(dual_mock(tmp_path))
-
-    class Rows:
-        def __init__(self):
-            self.frames = []
-
-        def add_frame(self, row):
-            self.frames.append(row)
-
-    dataset = Rows()
+    dataset = FakeDataset()
     recorder = EpisodeRecorder(cfg, dataset, grace_ms=500, background_save=False)
     t = time.monotonic_ns()
     recorder.start("two arms", t)
@@ -191,7 +182,6 @@ def test_capture_pose_needs_the_follower_when_there_are_several(tmp_path):
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_two_followers_record_one_episode_in_mock(tmp_path):
     from roboloom.runtime.session import Session
 
@@ -428,16 +418,9 @@ def test_a_silent_follower_resets_the_group(tmp_path, monkeypatch):
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
-def test_one_policy_drives_two_followers_in_mock(tmp_path, monkeypatch):
-    import os
-
+def test_one_policy_drives_two_followers_in_mock(tmp_path, tests_pythonpath):
     from roboloom.runtime.session import Session
 
-    tests = str(Path(__file__).parent.resolve())
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
-    )
     path = dual_mock(tmp_path)
     tree = policy_tree(tmp_path / "unused")
     (path.parent / "nodes" / "policy.yaml").write_text(

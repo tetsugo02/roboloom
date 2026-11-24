@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from conftest import make_fake_session, mock_project
 
 from roboloom.config import load_config
 from roboloom.control.device import GroupSpec
@@ -14,10 +15,14 @@ from roboloom.core.traits import (
 )
 from roboloom.inputs.base import JointInput
 from roboloom.robots.base import Follower
-from roboloom.runtime.session import Session
 from roboloom.ui.render import follower as render_follower
 
 LIMITS = [{"name": "j", "min": -1, "max": 1, "max_speed": 1, "max_jump": 1}]
+
+
+def _mock_cfg(tmp_path):
+    project = mock_project(tmp_path / ".roboloom")
+    return load_config(project / "config.yaml", options=[])
 
 
 def external(**cfg) -> Follower:
@@ -58,10 +63,7 @@ def test_an_external_bus_gets_the_worst_case_and_a_measurement_fills_it_in():
 def test_rakuda2_holds_only_without_current_mode_laws(tmp_path):
     from dataclasses import replace
 
-    from conftest import mock_project
-
-    project = mock_project(tmp_path / ".roboloom")
-    cfg = load_config(project / "config.yaml", options=[])
+    cfg = _mock_cfg(tmp_path)
     follower = cfg.followers["follower"]
     assert follower.traits() == SafetyTraits("falls", "holds")
     assert cfg.inputs["leader"].safety_traits.torque_off == "falls"
@@ -103,17 +105,8 @@ def test_precautions_name_what_falls_and_what_lets_go():
     assert note.startswith("left may go limp (not measured: roboloom check-hold): ")
 
 
-def session_for(cfg) -> Session:
-    session = Session.__new__(Session)
-    session.cfg = cfg
-    return session
-
-
 def test_session_holds_only_followers_that_hold_unattended(tmp_path):
-    from conftest import mock_project
-
-    project = mock_project(tmp_path / ".roboloom")
-    session = session_for(load_config(project / "config.yaml", options=[]))
+    session = make_fake_session(tmp_path, _mock_cfg(tmp_path))
     assert session.held == ["follower"]
     assert set(session.limp_at_end) == {"leader"}  # the leader's control laws
     session.cfg.followers["follower"].cfg["unattended"] = "torque_off"  # not declared
@@ -145,12 +138,9 @@ def test_the_screen_says_what_to_do_about_a_follower_left_alone():
 
 
 def test_quit_offers_the_release_also_when_nothing_holds(tmp_path):
-    from conftest import mock_project
-
     from roboloom.operator import ScriptedOperator
 
-    project = mock_project(tmp_path / ".roboloom")
-    session = session_for(load_config(project / "config.yaml", options=[]))
+    session = make_fake_session(tmp_path, _mock_cfg(tmp_path))
     session.cfg.followers["follower"] = external()  # unknown: nothing holds
     for answer, release in (("", True), ("hold", False)):
         session.operator = ScriptedOperator(prompts=[answer])

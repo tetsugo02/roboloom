@@ -195,45 +195,40 @@ def test_the_multiplier_is_computed_from_the_rates(rate_hz, control_hz, expected
     assert auto_multiplier(rate_hz, control_hz) == expected
 
 
-@pytest.mark.parametrize("given", [None, "auto"])
-def test_without_a_multiplier_commands_follow_the_control_rate(tmp_path, given):
-    policy = (
-        {"rate_hz": 5}
-        if given is None
-        else {"rate_hz": 5, "interpolation_multiplier": given}
-    )
-    controller = load_config(
-        _project(tmp_path, **policy), options=["policy"]
-    ).controllers["policy"]
-    assert (
-        controller.multiplier == 24 and controller.command_hz == 120
-    )  # control_hz 120
-    assert controller.status()["interpolation"] == 24
+@pytest.mark.parametrize(
+    ("policy_kwargs", "expected_multiplier", "expected_command_hz"),
+    [
+        ({"rate_hz": 5}, 24, 120),
+        ({"rate_hz": 5, "interpolation_multiplier": "auto"}, 24, 120),
+        ({"rate_hz": 5, "interpolation_multiplier": 1}, 1, 5),
+        ({"rate_hz": 5, "interpolation_multiplier": 6}, 6, 30),
+        ({"rate_hz": 7.33}, 1, 7.33),
+    ],
+)
+def test_multiplier_configuration(
+    tmp_path, policy_kwargs, expected_multiplier, expected_command_hz
+):
+    cfg = load_config(_project(tmp_path, **policy_kwargs), options=["policy"])
+    controller = cfg.controllers["policy"]
+    assert controller.multiplier == expected_multiplier
+    assert controller.command_hz == pytest.approx(expected_command_hz)
+    assert controller.status()["interpolation"] == expected_multiplier
 
 
-def test_a_given_multiplier_wins(tmp_path):
-    for n in (1, 6):
-        cfg = load_config(
-            _project(tmp_path / str(n), rate_hz=5, interpolation_multiplier=n),
-            options=["policy"],
-        )
-        assert cfg.controllers["policy"].command_hz == 5 * n
-
-
-def test_a_rate_that_is_not_whole_hz_keeps_one_action_per_command(tmp_path):
-    cfg = load_config(_project(tmp_path, rate_hz=7.33), options=["policy"])
-    assert cfg.controllers["policy"].multiplier == 1
-
-
-@pytest.mark.e2e
-def test_the_node_commands_at_the_interpolated_rate(tmp_path):
+def test_interpolated_policy_node_timer_uses_command_hz(tmp_path):
     from roboloom.runtime.flow import build_flow
-    from roboloom.runtime.session import Session
 
     path = _project(tmp_path, rate_hz=5, interpolation_multiplier=12, observe=[])
     cfg = load_config(path, options=["policy"])
     (policy,) = [n for n in build_flow(cfg)["nodes"] if n["id"] == "policy"]
     assert policy["inputs"]["tick"] == "dora/timer/hz/60"
+
+
+@pytest.mark.e2e
+def test_the_node_commands_at_the_interpolated_rate(tmp_path):
+    from roboloom.runtime.session import Session
+
+    path = _project(tmp_path, rate_hz=5, interpolation_multiplier=12, observe=[])
     rates: list[int] = []  # command_hz counts the commands of the last second
 
     def during(status: dict) -> None:

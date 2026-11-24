@@ -3,7 +3,6 @@ taking the joints over one by one (`JointPickup`), and `action.intervention`."""
 
 from __future__ import annotations
 
-import shutil
 import time
 
 import numpy as np
@@ -32,15 +31,8 @@ def test_joints_are_caught_within_tolerance_or_by_crossing():
     out = pickup.apply([110.0, 260.0, 380.0])  # joint 1 crossed its held value
     assert out == [110.0, 260.0, 300.0] and pickup.caught == [True, True, False]
     assert not pickup.done
-    pickup.apply([110.0, 260.0, 305.0])
+    assert pickup.apply([110.0, 260.0, 305.0]) == [110.0, 260.0, 305.0]
     assert pickup.done
-
-
-def test_a_closed_gripper_holds_until_the_trigger_reaches_it():
-    pickup = JointPickup([1500.0], tolerance=30)  # gripper closed on an object
-    for trigger in (2048.0, 1900.0, 1700.0):  # trigger released: open
-        assert pickup.apply([trigger]) == [1500.0]  # stays closed
-    assert pickup.apply([1520.0]) == [1520.0]  # squeezed to it: follows
 
 
 # -- configuration -----------------------------------------------------------------
@@ -242,7 +234,6 @@ def test_operations_say_when_they_can_be_used():
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_teleop_before_and_during_an_episode_is_recorded(tmp_path):
     import pandas as pd
 

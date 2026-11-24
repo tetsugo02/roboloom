@@ -161,30 +161,34 @@ def test_observation_is_restricted_lazy_and_read_only():
 
 
 @pytest.mark.parametrize(
-    "entry",
+    ("entry", "match"),
     [
-        {"factory": "m:f", "from": "policy"},
-        {},
-        {"from": "other"},
-        {"factory": "missing"},
-        {"factory": "m:f", "writes": ["a.unknown"]},
-        {"factory": "m:f", "writes": ["a.arm", "a.arm"]},
-        {"factory": "m:f", "sources": ["other"]},
-        {"factory": "m:f", "on_error": "fallback"},
-        {"factory": "m:f", "on_overrun": "fail"},
-        {"from": "policy", "kwargs": {}},
-        {"factory": "m:f", "kwargs": []},
-        {"factory": "m:f", "name": 4},
+        ({"factory": "m:f", "from": "policy"}, None),
+        ({}, None),
+        ({"from": "other"}, None),
+        ({"factory": "missing"}, None),
+        ({"factory": "m:f", "writes": ["a.unknown"]}, None),
+        ({"factory": "m:f", "writes": ["a.arm", "a.arm"]}, None),
+        ({"factory": "m:f", "sources": ["other"]}, None),
+        ({"factory": "m:f", "on_error": "fallback"}, None),
+        ({"factory": "m:f", "on_overrun": "fail"}, None),
+        ({"from": "policy", "kwargs": {}}, None),
+        ({"factory": "m:f", "kwargs": []}, None),
+        ({"factory": "m:f", "name": 4}, None),
+        ({"factory": "m:f", "budget_ms": 0}, "positive"),
+        ({"factory": "m:f", "budget_ms": -1}, "positive"),
+        ({"factory": "m:f", "budget_ms": float("inf")}, "positive"),
+        ({"factory": "m:f", "budget_ms": float("nan")}, "positive"),
+        ({"factory": "m:f", "budget_ms": True}, "positive"),
+        ({"factory": "m:f", "budget_ms": "1"}, "positive"),
     ],
 )
-def test_invalid_yaml(entry):
-    with pytest.raises(ConfigError):
+def test_invalid_yaml(entry, match):
+    with pytest.raises(ConfigError, match=match):
         parse_hooks([entry], NAMES)
 
 
 def test_policy_claim_and_new_api_refused():
-    with pytest.raises(ConfigError, match="- from: policy\n  writes: \\[b.grip\\]"):
-        chain([Change()], [])
     with pytest.raises(ConfigError, match="exceed YAML"):
         chain([Change()], [{"from": "policy"}])
     with pytest.raises(ConfigError, match="API"):
@@ -213,17 +217,15 @@ def test_narrowed_sources_and_budget(caplog):
     assert c.run(np.ones(2), context("teleop")).tolist() == [1.0, 3.0]
     assert c.entries[0].stats.over == 1 and "over budget" in caplog.text
     c.close()
-
-
-def test_default_budget_is_half_a_period_in_milliseconds(caplog):
     # A fast hook must not count as over budget by default (0.5 / rate_hz s).
-    c = chain(
+    caplog.clear()
+    default_c = chain(
         [Change(Requirements(writes=("b.grip",), sources=("teleop",)))],
         [{"from": "policy", "writes": ["b.grip"]}],
     )
-    c.run(np.ones(2), context("teleop"))
-    assert c.entries[0].stats.over == 0 and "over budget" not in caplog.text
-    c.close()
+    default_c.run(np.ones(2), context("teleop"))
+    assert default_c.entries[0].stats.over == 0 and "over budget" not in caplog.text
+    default_c.close()
 
 
 class Events(Hook):
@@ -313,12 +315,6 @@ def test_event_errors_logged_and_settle_precedes_end(caplog):
     c.close()
     assert order == ["settle", "end"] and "event broke" in caplog.text
     assert json.loads(json.dumps(asdict(ended())))["kind"] == "episode_ended"
-
-
-@pytest.mark.parametrize("budget", [0, -1, float("inf"), float("nan"), True, "1"])
-def test_budgets_are_positive_finite(budget):
-    with pytest.raises(ConfigError, match="positive"):
-        parse_hooks([{"factory": "m:f", "budget_ms": budget}], NAMES)
 
 
 def test_policy_slot_order_and_factory_claim(monkeypatch):

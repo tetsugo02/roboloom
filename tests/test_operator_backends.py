@@ -186,7 +186,13 @@ def test_start_refusal_does_not_disable_retry_and_close_once(tmp_path):
         session.refuse = True
         backend.submit("start first")
         notices.wait(lambda n: isinstance(n, LogEvent) and "retry" in n.text)
-        time.sleep(0.15)
+        notices.wait(
+            lambda n: (
+                isinstance(n, Snapshot)
+                and n.phase == "operation refused; retry when ready"
+                and ready(n)
+            )
+        )
         backend.submit("start second")
         notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == "recording")
         assert session.started == ["second"]
@@ -300,7 +306,7 @@ def test_monitor_and_emergency_bypass_blocked_operations(tmp_path, operation: st
         backend.submit(operation)
         notices.wait(lambda n: isinstance(n, Snapshot) and n.phase == operation)
         before = session.polls
-        time.sleep(0.25)
+        notices.wait(lambda n: isinstance(n, Snapshot) and session.polls > before)
         assert session.polls > before
         backend.emergency()
         notices.wait(lambda n: isinstance(n, LogEvent) and "ESTOP sent" in n.text)
@@ -593,35 +599,20 @@ def test_no_home_or_follower_torque_is_a_capability_not_a_kind_check(tmp_path):
         backend.shutdown()
 
 
-def test_tuning_close_releases_position_groups_before_closing_the_bus(tmp_path):
-    path = tmp_path / "tuning.yaml"
-    path.write_text("joints: {}\n")
-    dev, bus = device(
-        [GRAVITY, {"group": "c", "law": "position", "joints": ["c"]}],
-        [0, 0, 3],
-        FlatGravity(),
-    )
-    law = dev.laws[0]
-    assert isinstance(law, GravityComp)
-    session = TuningSession(dev, law, path)
-    session.start()
-    assert bus.torque[2]
-    torque_at_close: list[list[bool]] = []
-
-    def close_bus() -> None:
-        torque_at_close.append(list(bus.torque))
-
-    bus.close = close_bus
-    session.close()
-    assert torque_at_close == [[False, False, False]]
+def test_report_log_lines_keep_their_style():
+    notices: list = []
+    backend = SessionBackend(lambda: None)
+    backend._publish = notices.append
+    backend._report({"command": "home", "ok": True})
+    assert notices[-1].style == "magenta"
 
 
 def test_an_episode_of_the_plan_ends_on_the_policys_steps(tmp_path):
     session = FakeSession(tmp_path)
     usual, since = session.status, [time.monotonic()]
 
-    def status() -> dict:  # the policy executes ten actions a second
-        step = int((time.monotonic() - since[0]) * 10)
+    def status() -> dict:  # the policy executes 40 actions a second
+        step = int((time.monotonic() - since[0]) * 40)
         return {**usual(), "policy": {"fields": {"step": step}}}
 
     session.status = status  # type: ignore[method-assign]

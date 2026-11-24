@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import time
 
 import pytest
@@ -109,11 +108,16 @@ def _run(ctl: FollowerSafety, seconds: float, tolerance: float | None) -> None:
             return
 
 
-def test_home_is_reached_once_the_measured_joints_are_within_tolerance():
-    ctl = _safety(sag=10)
-    _run(ctl, 3, tolerance=30)
+@pytest.mark.parametrize(
+    ("sag", "tolerance", "expected_diff"),
+    [(10, 30, ("0", pytest.approx(10))), (50, None, None)],
+)
+def test_home_is_reached_within_tolerance_or_without_one(sag, tolerance, expected_diff):
+    ctl = _safety(sag=sag)
+    _run(ctl, 3, tolerance=tolerance)
     assert ctl.home_reached and not ctl.home_short
-    assert ctl.home_diff == ("0", pytest.approx(10))
+    if expected_diff is not None:
+        assert ctl.home_diff == expected_diff
 
 
 def test_home_is_short_when_a_joint_stays_out_of_tolerance():
@@ -128,12 +132,6 @@ def test_home_is_short_when_a_joint_stays_out_of_tolerance():
     assert ctl.home_diff == ("0", pytest.approx(50))
     ctl.arm()  # the next episode forgets it
     assert not ctl.home_short and ctl.home_diff is None
-
-
-def test_without_a_tolerance_the_end_of_the_move_counts():
-    ctl = _safety(sag=50)
-    _run(ctl, 3, tolerance=None)
-    assert ctl.home_reached
 
 
 def test_start_is_refused_while_settling_or_short(tmp_path):
@@ -175,7 +173,6 @@ def test_infer_takes_home(tmp_path, monkeypatch):
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_the_policy_moves_home_then_infers_from_there(tmp_path):
     from roboloom.runtime.session import Session
 
@@ -194,7 +191,6 @@ def test_the_policy_moves_home_then_infers_from_there(tmp_path):
 
 
 @pytest.mark.e2e
-@pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
 def test_home_takes_the_teleop_leader_along_and_its_locked_joints_stay(tmp_path):
     """With `teleop:`, `home` moves the leader too: joints it holds by position (the
     camera's torso and head) go to the pose and stay there while the arms are driven."""

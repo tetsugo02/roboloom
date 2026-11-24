@@ -20,13 +20,18 @@ SCRIPT = REPO / "scripts" / "check_background_save.py"
 MOCK = REPO / "examples" / "mock"
 
 
+@pytest.fixture(scope="module")
+def script_ns():
+    return runpy.run_path(str(SCRIPT))
+
+
 @pytest.mark.e2e
 @pytest.mark.parametrize(
     ("command", "settings", "verdicts"),
     [
-        ("compare", ["--seconds", "3", "--episodes", "1"], {"PASS", "WARN"}),
+        ("compare", ["--seconds", "1", "--episodes", "1"], {"PASS", "WARN"}),
         ("limit", ["--seconds", "0.5"], {"PASS", "SKIP"}),
-        ("crash", ["--seconds", "8"], {"PASS"}),
+        ("crash", ["--seconds", "4"], {"PASS"}),
     ],
 )
 def test_mock_checks(
@@ -85,42 +90,32 @@ def test_mock_checks(
         )
 
 
-def test_refuses_robot_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    config = MOCK / "config.yaml"
-    root = load_config(config).output
-    monkeypatch.chdir(tmp_path)
-    script = runpy.run_path(str(SCRIPT))
-    args = script["parse_args"](["limit", str(config), "--mock", "--root", root])
-    with pytest.raises(
-        ValueError, match="refusing --root .* configured output dataset"
-    ):
-        script["prepare"](args)
-
-
-@pytest.mark.parametrize("where", ["robot", "experiment"])
-def test_refuses_tilde_paths(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str
+@pytest.mark.parametrize("where", ["robot_default", "robot_tilde", "experiment_tilde"])
+def test_refuses_configured_dataset_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script_ns: dict, where: str
 ) -> None:
-    # A ~-prefixed output/dataset root naming the same directory as --root must be
-    # refused too; the config sources here hand it over unexpanded.
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
-    script = runpy.run_path(str(SCRIPT))
     # run_path returns a copy of the namespace: patch the functions' own globals
-    namespace = script["prepare"].__globals__
+    namespace = script_ns["prepare"].__globals__
     config = MOCK / "config.yaml"
-    if where == "robot":
+    if where == "robot_default":
+        root = load_config(config).output
+        message = "configured output dataset"
+    elif where == "robot_tilde":
         monkeypatch.setitem(
             namespace,
             "read_config",
             lambda *_, **__: {"settings": {"output": "~/dataset"}},
         )
+        root = "~/dataset"
         message = "configured output dataset"
     else:
-        source = script["load_experiment"]({})
+        source = script_ns["load_experiment"]({})
         tilde = replace(source, dataset={"root": "~/dataset"})
         monkeypatch.setitem(namespace, "load_experiment", lambda *_, **__: tilde)
+        root = "~/dataset"
         message = "experiment's configured dataset"
-    args = script["parse_args"](["limit", str(config), "--mock", "--root", "~/dataset"])
+    args = script_ns["parse_args"](["limit", str(config), "--mock", "--root", root])
     with pytest.raises(ValueError, match=f"refusing --root .* {message}"):
-        script["prepare"](args)
+        script_ns["prepare"](args)

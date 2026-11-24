@@ -1,22 +1,19 @@
 """The dataflow end to end (dora run, mock devices), driven through `Session` and the CLI."""
 
 import os
-import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
-from conftest import mock_project
+from conftest import make_fake_session, mock_project
 
 from roboloom.config import load_config
 from roboloom.runtime.session import EpisodeInfo, Session, SessionError
 
-needs_dora = pytest.mark.skipif(shutil.which("dora") is None, reason="needs dora")
-
 
 @pytest.mark.e2e
-@needs_dora
 def test_session_records_episodes_named_by_a_function(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     names: list[EpisodeInfo] = []
@@ -26,6 +23,7 @@ def test_session_records_episodes_named_by_a_function(tmp_path):
         return f"pick #{info.index}"
 
     with Session.launch(project / "config.yaml") as s:
+        assert s.screen is None and s.operator is None  # pytest: not a tty
         s.wait_ready(30)
         s.record(task, 1.0)
         (first,) = s.wait_saves()
@@ -58,7 +56,6 @@ def test_hardware_is_the_default_and_mock_overrides_it(tmp_path):
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_cli_records_one_episode_by_name(tmp_path):
     mock_project(tmp_path / ".roboloom")
     result = subprocess.run(
@@ -97,13 +94,10 @@ def test_quality_limits_become_warnings():
 
 
 @pytest.mark.e2e
-@needs_dora
-def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypatch):
+def test_policy_drives_the_follower_and_its_runs_are_recorded(
+    tmp_path, tests_pythonpath
+):
     project = mock_project(tmp_path / ".roboloom")
-    tests = str(Path(__file__).parent.resolve())
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
-    )
     with Session.launch(
         project / "config.yaml",
         options=["policy"],
@@ -126,11 +120,8 @@ def test_policy_drives_the_follower_and_its_runs_are_recorded(tmp_path, monkeypa
 
 
 @pytest.mark.e2e
-@needs_dora
-def test_a_policy_that_fails_to_load_blocks_start(tmp_path, monkeypatch):
+def test_a_policy_that_fails_to_load_blocks_start(tmp_path, tests_pythonpath):
     project = mock_project(tmp_path / ".roboloom")
-    tests = str(Path(__file__).parent.resolve())
-    monkeypatch.setenv("PYTHONPATH", tests)
     with Session.launch(
         project / "config.yaml", options=["policy"], policy="policies:broken"
     ) as s:
@@ -140,8 +131,7 @@ def test_a_policy_that_fails_to_load_blocks_start(tmp_path, monkeypatch):
 
 
 def test_node_failures_are_read_from_the_dora_log(tmp_path):
-    session = Session.__new__(Session)
-    session.log_path = tmp_path / "dora.log"
+    session = make_fake_session(tmp_path)
     session.log_path.write_text("starting\n")
     assert session.node_errors() == []
     session.log_path.write_text(
@@ -156,7 +146,6 @@ def test_node_failures_are_read_from_the_dora_log(tmp_path):
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
     from roboloom.operator import ScriptedOperator
 
@@ -181,15 +170,38 @@ def test_screen_and_the_question_before_the_leader_goes_limp(tmp_path, capsys):
 
 
 @pytest.mark.e2e
-@needs_dora
-def test_no_screen_or_question_without_a_terminal(tmp_path):
+def test_api_auto_screen_leaves_input_to_the_script(
+    tmp_path: Path, monkeypatch, capsys
+):
+    from io import StringIO
+
+    class ScriptInput(StringIO):
+        calls = 0
+
+        def isatty(self) -> bool:
+            return True
+
+        def readline(self, size: int | None = -1) -> str:
+            self.calls += 1
+            return super().readline(-1 if size is None else size)
+
+        def read(self, size: int | None = -1) -> str:
+            raise AssertionError("the status screen consumed stdin")
+
     project = mock_project(tmp_path / ".roboloom")
-    with Session.launch(project / "config.yaml") as s:  # pytest: not a tty
-        assert s.screen is None and s.operator is None
+    stdin = ScriptInput("answer from script\n")
+    monkeypatch.setattr(sys, "stdin", stdin)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    with Session.launch(project / "config.yaml", operator=None) as session:
+        assert session.screen is not None
+        print("script output")
+        assert input("script prompt: ") == "answer from script"
+        time.sleep(0.2)
+        assert stdin.calls == 1
+    assert stdin.calls == 1
+    assert "script output" in capsys.readouterr().out
 
 
-@pytest.mark.e2e
-@needs_dora
 @pytest.mark.parametrize(("answer", "released"), [("", True), ("hold", False)])
 def test_closing_releases_the_follower_unless_the_operator_says_hold(
     tmp_path, answer, released
@@ -197,22 +209,19 @@ def test_closing_releases_the_follower_unless_the_operator_says_hold(
     from roboloom.operator import ScriptedOperator
 
     project = mock_project(tmp_path / ".roboloom")
+    cfg = load_config(project / "config.yaml")
     operator = ScriptedOperator(prompts=[answer])
     sent: list[str] = []
-    with Session.launch(project / "config.yaml", screen=False, operator=operator) as s:
+    s = make_fake_session(tmp_path, cfg, operator=operator)
+    s.client.send.side_effect = sent.append
+    with s:
         assert s.held == ["follower"]
-        s.wait_ready(30)
-        send = s.client.send
-        s.client.send = lambda line: (sent.append(line), send(line))[1]  # type: ignore[method-assign]
     assert "Enter ends with the torque off" in operator.log[-1]
     assert sent == (["release", "quit"] if released else ["quit"])
 
 
 @pytest.mark.e2e
-@needs_dora
 def test_release_while_following_stops_then_turns_the_torque_off(tmp_path):
-    import time
-
     project = mock_project(tmp_path / ".roboloom")
     with Session.launch(project / "config.yaml", screen=False, operator=None) as s:
         s.wait_ready(30)

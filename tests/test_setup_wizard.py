@@ -62,7 +62,6 @@ class FakeTrackers:
         self.poses = {
             s: SimpleNamespace(position=(0.0, 0.0, 1.0), tracking=True) for s in serials
         }
-        self.opened_with: list[tuple] = []
 
     def read(self):
         return dict(self.poses)

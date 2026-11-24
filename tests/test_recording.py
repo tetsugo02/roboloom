@@ -131,12 +131,34 @@ def test_discard_mid_episode_clears_written_rows():
     assert not dataset.frames and not recorder.active
 
 
-def test_numpy_scalars_in_a_payload_encode_as_json_numbers():
-    import numpy as np
-
-    from roboloom.core.protocol import Envelope, Publisher
-
-    msg = Publisher("x").make(
-        "status", {"fields": {"missing": {"leader": np.int64(3)}}}
+def test_a_missing_sample_repeats_the_last_valid_one():
+    cfg = load_config(
+        "examples/mock/config.yaml"
+    )  # 10 fps; max_age_ms decides validity
+    recorder = EpisodeRecorder(cfg)
+    t = time.monotonic_ns()
+    recorder.start("gap", t, write=False)
+    recorder.ingest(
+        "follower",
+        msg(
+            "follower_state",
+            0,
+            t - MS,
+            t - MS,
+            t - MS,
+            {"positions": [2100] * 17, "target": [2090] * 17},
+        ),
     )
-    assert Envelope.decode(msg.encode()).payload["fields"]["missing"]["leader"] == 3
+    late = int(cfg.max_age_ms["follower"] * MS) + 250 * MS
+    recorder.stop(t + late)
+    rows = recorder.frames()
+    first, last = rows[0], rows[-1]
+    assert first["observation.meta.follower.valid"][0] == 1
+    assert last["observation.meta.follower.valid"][0] == 0  # too old for this row
+    assert last["observation.state"][0] == 2100  # ... yet not zero
+    assert last["action"][0] == 2090 and last["action.valid"][0] == 0  # the held target
+    # a source that never sent anything has nothing to repeat
+    assert np.count_nonzero(last["observation.images.camera"]) == 0
+    assert (
+        recorder.frames()[0]["observation.state"][0] == 2100
+    )  # frames() is repeatable

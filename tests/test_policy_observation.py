@@ -178,18 +178,16 @@ def test_a_policy_states_what_it_needs(tmp_path):
     assert controller.policy.seen[0]["history"]["observation.state"].shape == (4, 17)
 
 
-def test_unknown_policy_options_are_refused(tmp_path):
+def test_unknown_policy_options_are_refused(tmp_path, monkeypatch):
     _, controller = _controller(tmp_path)
 
     class Odd(Recorder):
         def options(self):
             return {"rate_hz": 5}
 
-    import test_policy_observation as module
-
-    module.odd = lambda: Odd()  # type: ignore[attr-defined]
+    monkeypatch.setattr("roboloom.policy.load_policy", lambda *a, **k: Odd())
     with pytest.raises(ValueError, match=r"options\(\)"):
-        controller.load("test_policy_observation:odd", {})
+        controller.load("unused:odd", {})
 
 
 def _image(cfg, t_ns: int) -> Envelope:

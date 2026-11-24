@@ -7,6 +7,7 @@ import threading
 import time
 
 import pytest
+from conftest import FakeClock
 
 from roboloom.drivers.pika_gripper import (
     CURRENT_LIMIT,
@@ -21,16 +22,7 @@ from roboloom.robots.pika.follower import PikaGripperFollower
 from roboloom.robots.pika.spec import RANGE
 from roboloom.robots.safety import FollowerSafety
 
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 50.0
-
-    def __call__(self) -> float:
-        return self.now
-
-    def sleep(self, seconds: float) -> None:
-        self.now += seconds
+Clock = FakeClock
 
 
 # -- the serial link ------------------------------------------------------------------
@@ -286,6 +278,7 @@ def test_follower_checks_its_configuration():
     assert follower.traits().torque_off == "lets_go"
     assert follower.traits().unattended == "unknown"
     assert follower.device_ids() == (follower_cfg()["port"],)
+    assert follower.open_device(mock=True).read_positions() == [0.0]
     over = [{**follower_cfg()["limits"][0], "max": 2.0}]
     for bad, match in (
         ({"limits": over}, "exceeds the Pika Gripper range"),
@@ -298,11 +291,6 @@ def test_follower_checks_its_configuration():
     ):
         with pytest.raises(ValueError, match=match):
             PikaGripperFollower("left_gripper", {**follower_cfg(), **bad})
-
-
-def test_mock_follower_opens_closed():
-    follower = PikaGripperFollower("left_gripper", follower_cfg())
-    assert follower.open_device(mock=True).read_positions() == [0.0]
 
 
 def test_probe_reads_a_pika_gripper_without_enabling_it(monkeypatch):
@@ -329,21 +317,15 @@ def test_probe_reads_a_pika_gripper_without_enabling_it(monkeypatch):
 
 
 @pytest.mark.e2e
-def test_a_policy_drives_two_pipers_and_two_grippers(tmp_path, monkeypatch):
+def test_a_policy_drives_two_pipers_and_two_grippers(tmp_path, tests_pythonpath):
     """The Pika Grippers are followers of their own beside the PiPER arms."""
     import json
-    import os
-    from pathlib import Path
 
     import yaml
     from test_piper import piper_project
 
     from roboloom.runtime.session import Session
 
-    tests = str(Path(__file__).parent.resolve())
-    monkeypatch.setenv(
-        "PYTHONPATH", os.pathsep.join([tests, os.environ.get("PYTHONPATH", "")])
-    )
     path = piper_project(tmp_path)
     nodes = path.parent / "nodes"
     config = yaml.safe_load(path.read_text())
@@ -368,13 +350,18 @@ def test_a_policy_drives_two_pipers_and_two_grippers(tmp_path, monkeypatch):
         s.wait_ready(30)
         s.record("creep", 1.5)
         (result,) = s.wait_saves()
-        gripper = s.status()["left_gripper"]["fields"]
+        status = s.status()
+        left = status["left"]["fields"]
+        gripper = status["left_gripper"]["fields"]
+    assert left["unattended"] == "unknown" and left["torque_off"] == "falls"
     assert gripper["torque_off"] == "lets_go" and gripper["unattended"] == "unknown"
-    assert result.saved, result
+    assert result.saved and result.metrics["action_valid_rate"] > 0.5, result.metrics
     info = json.loads((path.parent / "datasets/piper/meta/info.json").read_text())
     action = info["features"]["action"]
-    assert action["shape"] == [14]
+    assert action["shape"] == [14] and action["names"][6] == "right.joint1"
     assert action["names"][12:] == ["left_gripper.gripper", "right_gripper.gripper"]
+    assert info["features"]["observation.effort"]["names"][0] == "left.joint1"
+    assert info["robot_type"] == "piper"
 
 
 def test_check_hold_measures_a_gripper():

@@ -18,14 +18,8 @@ def mock_policy_controller():
     return load_config(MOCK, options=["policy"]).controllers["policy"]
 
 
-@pytest.mark.e2e
-@pytest.mark.parametrize(
-    "observe", [[], ["camera"], ["camera", "digit_left", "digit_right"]]
-)
-def test_rakuda_policy_runs_with_the_selected_sensors(tmp_path, observe):
+def _rakuda_sensor_project(tmp_path, observe: list[str]):
     import yaml
-
-    from roboloom.runtime.session import Session
 
     project = mock_project(tmp_path / ".roboloom")
     path = project / "nodes" / "policy.yaml"
@@ -45,7 +39,28 @@ def test_rakuda_policy_runs_with_the_selected_sensors(tmp_path, observe):
         tree["sensors"] = {}
         config.write_text(yaml.safe_dump(tree))
         (project / "nodes" / "camera.yaml").unlink()
+    return project, options
 
+
+@pytest.mark.parametrize("observe", [[], ["camera"]])
+def test_rakuda_policy_omits_unselected_sensors_without_their_files(tmp_path, observe):
+    from roboloom.runtime.flow import build_flow
+
+    project, options = _rakuda_sensor_project(tmp_path, observe)
+    cfg = load_config(project / "config.yaml", options=options)
+    assert set(cfg.sensors) == set(observe)
+    assert cfg.controllers["policy"].observes() == observe
+    flow_nodes = {n["id"] for n in build_flow(cfg)["nodes"]}
+    assert set(observe) <= flow_nodes
+    assert not ({"camera", "digit_left", "digit_right"} - set(observe)) & flow_nodes
+
+
+@pytest.mark.e2e
+def test_rakuda_policy_runs_with_the_selected_sensors(tmp_path):
+    from roboloom.runtime.session import Session
+
+    observe = ["camera", "digit_left", "digit_right"]
+    project, options = _rakuda_sensor_project(tmp_path, observe)
     with Session.launch(
         project / "config.yaml",
         options=options,
@@ -120,6 +135,23 @@ def test_a_policy_without_bind_loads_as_before():
     assert controller.state == "ready"
     controller.load("roboloom.policy:hold", {})
     assert controller.state == "ready"
+
+
+def test_a_failed_controller_says_why_instead_of_asking_to_wait():
+    import time
+
+    from roboloom.runtime.node import start_warning
+
+    cfg = load_config(MOCK, options=["policy"])
+    now = time.monotonic_ns()
+    latest = {
+        "policy": {
+            "t_ns": now,
+            "fields": {"state": "failed", "error": "loading the policy: no camera"},
+        }
+    }
+    warning = start_warning(cfg, latest, now)
+    assert warning == "policy: controller failed: loading the policy: no camera"
 
 
 # -- LeRobot -------------------------------------------------------------------------
@@ -261,23 +293,6 @@ def test_a_lerobot_policy_drives_the_mock(act_checkpoint, tmp_path):
     assert status["state"] in ("running", "ready") and "infer_ms" in status, status
 
 
-def test_a_failed_controller_says_why_instead_of_asking_to_wait():
-    import time
-
-    from roboloom.runtime.node import start_warning
-
-    cfg = load_config(MOCK, options=["policy"])
-    now = time.monotonic_ns()
-    latest = {
-        "policy": {
-            "t_ns": now,
-            "fields": {"state": "failed", "error": "loading the policy: no camera"},
-        }
-    }
-    warning = start_warning(cfg, latest, now)
-    assert warning == "policy: controller failed: loading the policy: no camera"
-
-
 @pytest.mark.e2e
 def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
     """The path of `lerobot-train` (LeRobot 0.7.0) on a dataset roboloom recorded: the
@@ -306,7 +321,7 @@ def test_a_recorded_mock_dataset_trains_a_lerobot_policy_that_loads(tmp_path):
     )
     with Session.launch(project / "config.yaml", log_dir=tmp_path / "logs") as s:
         s.wait_ready(60)
-        s.record("pick", 4.0, home=True)  # the mock Senses teleoperate
+        s.record("pick", 3.0, home=True)  # the mock Senses teleoperate
         (result,) = s.wait_saves()
         assert result.saved
     root = project / "datasets" / "piper-mock"

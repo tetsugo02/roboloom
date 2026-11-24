@@ -97,45 +97,44 @@ def test_the_gripper_follows_the_jaws_within_its_range():
 
 
 def test_targets_outside_the_workspace_or_reach_are_not_sent():
-    rig = Rig()
+    rig = Rig(max_input_jump={"position_m": 5.0, "rotation_rad": 5.0})
     rig.send(engaged=False)
     rig.send()
     held = list(rig.arm)
     assert rig.send(pose_xyz_rpy([0.0, 0.0, -0.4], [0, 0, 0])) == {}
-    assert rig.c.state in ("out_of_workspace", "input_jump")
-    assert rig.arm == held
-    rig = Rig(max_input_jump={"position_m": 5.0, "rotation_rad": 5.0})
-    rig.send(engaged=False)
-    rig.send()
-    assert rig.send(pose_xyz_rpy([0.0, 0.0, -0.4], [0, 0, 0])) == {}
-    assert rig.c.state == "out_of_workspace"
+    assert rig.c.state == "out_of_workspace" and rig.arm == held
     assert rig.send(pose_xyz_rpy([0.0, 0.0, 0.0], [0, 3.0, 0])) == {}
-    assert rig.c.state == "unreachable"
+    assert rig.c.state == "unreachable" and rig.arm == held
     assert rig.send() != {}  # back where it was: following again, still engaged
 
 
-def test_a_jump_a_lost_pose_a_fault_or_a_move_home_needs_a_new_engagement():
-    for interrupt in ("jump", "tracking", "reset", "homing", "boot"):
-        rig = Rig()
-        rig.send(engaged=False)
-        rig.send()
-        if interrupt == "jump":
-            assert rig.send(pose_xyz_rpy([0.1, 0, 0], [0, 0, 0])) == {}
-            assert rig.c.state == "input_jump"
-        elif interrupt == "tracking":
-            assert rig.send(tracking=False) == {}
-            assert rig.c.state == "tracking_lost"
-        elif interrupt == "reset":
-            rig.c.reset()
-        elif interrupt == "homing":
-            rig.mode = "HOMING"
-            assert rig.send() == {} and rig.c.state == "homing"
-            rig.mode = "HOLD"
-        else:
-            assert rig.send(boot="another-boot") == {}
-        assert rig.send() == {}, interrupt  # still engaged on the device: not enough
-        rig.send(engaged=False)
-        assert rig.send() != {}, interrupt  # engaged again on purpose
+@pytest.mark.parametrize(
+    "interrupt", ["jump", "tracking", "reset", "homing", "boot", "stale"]
+)
+def test_a_jump_a_lost_pose_a_fault_or_a_move_home_needs_a_new_engagement(interrupt):
+    rig = Rig()
+    rig.send(engaged=False)
+    assert rig.send() != {}
+    if interrupt == "jump":
+        assert rig.send(pose_xyz_rpy([0.1, 0, 0], [0, 0, 0])) == {}
+        assert rig.c.state == "input_jump"
+    elif interrupt == "tracking":
+        assert rig.send(tracking=False) == {}
+        assert rig.c.state == "tracking_lost"
+    elif interrupt == "reset":
+        rig.c.reset()
+    elif interrupt == "homing":
+        rig.mode = "HOMING"
+        assert rig.send() == {} and rig.c.state == "homing"
+        rig.mode = "HOLD"
+    elif interrupt == "stale":
+        rig.c.last_input_ns -= 1_000_000_000  # the input went silent for a second
+        assert rig.send() == {} and rig.c.state == "input_stale"
+    else:
+        assert rig.send(boot="another-boot") == {}
+    assert rig.send() == {}, interrupt  # still engaged on the device: not enough
+    rig.send(engaged=False)
+    assert rig.send() != {}, interrupt  # engaged again on purpose
 
 
 def test_the_configuration_is_checked():
@@ -212,17 +211,6 @@ def test_the_screen_says_what_the_operator_does():
     assert "cannot reach" in detail.plain and "12.0 mm" in detail.plain
     _, detail = RENDERERS["controller"]({"state": "ready"})  # a policy: no pose advice
     assert "double-click" not in detail.plain
-
-
-def test_a_gap_in_input_delivery_needs_a_new_engagement():
-    rig = Rig()
-    rig.send(engaged=False)
-    assert rig.send() != {}
-    rig.c.last_input_ns -= 1_000_000_000  # the input went silent for a second
-    assert rig.send() == {} and rig.c.state == "input_stale"  # fresh, but after a gap
-    assert rig.send() == {}  # still engaged on the device: not enough
-    rig.send(engaged=False)
-    assert rig.send() != {}
 
 
 def test_held_time_gives_no_extra_speed_budget():

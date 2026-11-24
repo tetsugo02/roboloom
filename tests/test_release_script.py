@@ -15,7 +15,8 @@ from roboloom.version import version
 REPO = Path(__file__).resolve().parents[1]
 
 
-def _load_release_module():
+@pytest.fixture(scope="module")
+def rel():
     spec = importlib.util.spec_from_file_location(
         "release_script", REPO / "scripts" / "release.py"
     )
@@ -48,8 +49,7 @@ def _make_fake_repo(root: Path, ver: str = "0.1.0") -> None:
     )
 
 
-def test_check_versions_passes_and_detects_mismatches(tmp_path):
-    rel = _load_release_module()
+def test_check_versions_passes_and_detects_mismatches(tmp_path, rel):
     _make_fake_repo(tmp_path, "0.1.0")
 
     ver, errors = rel.check_versions(tmp_path, expected_tag="v0.1.0")
@@ -68,8 +68,7 @@ def test_check_versions_passes_and_detects_mismatches(tmp_path):
     assert any("SKILL.md" in err for err in skill_errors)
 
 
-def test_update_skill_and_tag_references(tmp_path):
-    rel = _load_release_module()
+def test_update_skill_and_tag_references(tmp_path, rel):
     _make_fake_repo(tmp_path, "0.1.0")
 
     assert rel.update_skill_version(tmp_path, "0.2.0", dry_run=True) is True
@@ -85,8 +84,7 @@ def test_update_skill_and_tag_references(tmp_path):
     assert "--tag <tag>" in readme
 
 
-def test_repo_versions_are_currently_consistent():
-    rel = _load_release_module()
+def test_repo_versions_are_currently_consistent(rel):
     assert rel.main(["--root", str(REPO), "check"]) == 0
 
 

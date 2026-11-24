@@ -19,17 +19,31 @@ from roboloom.robots.base import Follower
 from roboloom.sensors import SENSORS
 
 
-def _rakuda2(change) -> None:
+def _rakuda2_base() -> dict:
     tree = rakuda2_tree()
     tree["settings"]["mode"] = "mock"
     parse_config(deepcopy(tree))  # loads as it is
+    return tree
+
+
+def _mock_base() -> dict:
+    tree = read_config("examples/mock/config.yaml")
+    parse_config(deepcopy(tree))
+    return tree
+
+
+_RAKUDA2_TREE = _rakuda2_base()
+_MOCK_TREE = _mock_base()
+
+
+def _rakuda2(change) -> None:
+    tree = deepcopy(_RAKUDA2_TREE)
     change(tree)
     parse_config(tree)
 
 
 def _mock(change) -> None:
-    tree = read_config("examples/mock/config.yaml")
-    parse_config(deepcopy(tree))
+    tree = deepcopy(_MOCK_TREE)
     change(tree)
     parse_config(tree)
 

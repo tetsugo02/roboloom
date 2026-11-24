@@ -132,8 +132,13 @@ def test_following_reports_how_far_the_follower_is_from_the_leader() -> None:
     ],
 )
 def test_invalid_couplings_fail_when_loading_yaml(raw: object) -> None:
+    with pytest.raises(ValueError, match="couplings"):
+        JointCouplings(raw, ("torso_yaw", "head_yaw"), "test")
+
+
+def test_invalid_couplings_fail_through_parse_config() -> None:
     tree = rakuda2_tree()
-    tree["controllers"]["controller"]["couplings"] = raw
+    tree["controllers"]["controller"]["couplings"] = [{**LINK, "typo": 1}]
     with pytest.raises(ValueError, match="couplings"):
         parse_config(tree)
 

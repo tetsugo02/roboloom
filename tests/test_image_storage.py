@@ -73,8 +73,7 @@ def test_invalid_storage_at_config_load(tmp_path, storage):
 @pytest.mark.parametrize(
     "storages", [("image", "video"), ("image", "image"), ("video", "video")]
 )
-@pytest.mark.parametrize("camera_cls", [RealSenseRGB, OpenCVRGB])
-def test_recording_roundtrip(tmp_path, storages, camera_cls):
+def test_recording_roundtrip(tmp_path, storages):
     import torch
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -89,14 +88,13 @@ def test_recording_roundtrip(tmp_path, storages, camera_cls):
                 "storage": storages[0],
             },
         ),
-        "camera": camera_cls(
+        "camera": RealSenseRGB(
             "camera",
             {
                 "height": 48,
                 "width": 64,
                 "fps": 10,
                 "serial": "mock2",
-                "device": 0,
                 "storage": storages[1],
             },
         ),

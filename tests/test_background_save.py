@@ -15,8 +15,16 @@ import numpy as np
 import pyarrow.parquet as pq
 import pytest
 from conftest import mock_project
-from test_episode_records import _stopped
-from test_video_codec import CAMERA, COLOURS, STILL, _cfg, _frame, _record, _streams
+from test_video_codec import (
+    CAMERA,
+    COLOURS,
+    STILL,
+    _cfg,
+    _frame,
+    _record,
+    _stopped,
+    _streams,
+)
 
 from roboloom.config import load_config
 from roboloom.core.protocol import Publisher
@@ -390,6 +398,10 @@ def test_start_limit_and_queued_state(tmp_path):
     assert runtime.start_warning(cfg, state, S) == (
         "2 episodes are waiting to be saved (max_pending_saves 2); wait, then retry start"
     )
+    # lifecycle events (hooks) get the index the started episode will have if saved
+    assert runtime.next_episode_index({"episodes": 3}) == 3
+    assert runtime.next_episode_index({"episodes": 3, "pending_saves": 2}) == 5
+    assert runtime.next_episode_index({"pending_saves": 1}) is None
 
 
 class _Client:
@@ -529,7 +541,7 @@ def test_session_close_waits_for_the_recorder_to_finish(fake_session):
         )
 
     session.process.wait.side_effect = wait
-    timer = threading.Timer(0.15, lambda: client.complete(1, "last", 3))
+    timer = threading.Timer(0.02, lambda: client.complete(1, "last", 3))
     client.after_quit = timer.start
     try:
         session.close(release=False)
@@ -542,64 +554,58 @@ def test_session_close_waits_for_the_recorder_to_finish(fake_session):
 def test_coordinator_uses_save_reports_before_next_recorder_status(
     tmp_path, monkeypatch
 ):
-    import os
+    from conftest import run_session_node
 
     cfg = _cfg(tmp_path)
-    fifo = tmp_path / "session.fifo"
-    log = tmp_path / "reports.jsonl"
-    os.mkfifo(fifo)
-    monkeypatch.setenv("ROBOLOOM_SESSION_FIFO", str(fifo))
-    monkeypatch.setenv("ROBOLOOM_REPORT_PATH", str(log))
-    monkeypatch.delenv("ROBOLOOM_STATUS_PATH", raising=False)
-    commands = iter([b"", b"", b"start blocked\n", b"start allowed\n", b"quit\n"])
     publisher = Publisher("recorder")
-    events = iter(
+    script = iter(
         [
             (
                 "recorder_status",
-                publisher.make(
-                    "status", {"fields": {"state": "stopped", "episodes": 0}}
-                ),
+                "status",
+                {"fields": {"state": "stopped", "episodes": 0}},
             ),
             (
                 "report",
-                publisher.make(
-                    "report",
-                    {
-                        "command": "save",
-                        "queued": True,
-                        "pending": 2,
-                        "total_episodes": 0,
-                    },
-                ),
+                "report",
+                {
+                    "command": "save",
+                    "queued": True,
+                    "pending": 2,
+                    "total_episodes": 0,
+                },
             ),
             (
                 "report",
-                publisher.make(
-                    "report",
-                    {
-                        "command": "saved",
-                        "pending": 1,
-                        "total_episodes": 1,
-                    },
-                ),
+                "report",
+                {
+                    "command": "saved",
+                    "pending": 1,
+                    "total_episodes": 1,
+                },
             ),
-            (None, None),
-            ("report", publisher.make("report", {"command": "quit"})),
+            (None, None, None),
+            ("report", "report", {"command": "quit"}),
         ]
     )
-    monkeypatch.setattr(runtime.os, "read", lambda *_: next(commands))
-    monkeypatch.setattr(runtime, "_event", lambda _: next(events))
-    sent = []
-    monkeypatch.setattr(
-        runtime, "_send", lambda _, output, msg: sent.append(msg.payload)
+
+    def events(node, now):
+        name, kind, payload = next(script)
+        if name is None:
+            return None, None
+        return name, publisher.make(kind, payload, now)
+
+    sent, reports, _, _, _ = run_session_node(
+        tmp_path,
+        monkeypatch,
+        [b"", b"", b"start blocked\n", b"start allowed\n", b"quit\n"],
+        cfg=cfg,
+        events=events,
     )
-    runtime._session(object(), cfg)
     assert [(m["command"], m["task"]) for m in sent] == [
         ("start", "allowed"),
         ("quit", ""),
     ]
-    reports = [json.loads(line) for line in log.read_text().splitlines()]
     assert (
         reports[1]["task"] == "blocked"
         and "max_pending_saves 2" in reports[1]["warning"]
@@ -646,56 +652,35 @@ def test_stop_failure_clears_the_episode_only_when_dropped(
         assert session._episode == "broken"
 
 
-def test_save_timeout_forgets_the_unaccepted_ticket(fake_session, monkeypatch):
+@pytest.mark.parametrize("outcome", ["timeout", "cancelled", "dropped"])
+def test_save_failure_cleans_up_ticket(fake_session, monkeypatch, outcome):
     session, client = fake_session
-    session._episode = "slow"
-    monkeypatch.setattr(client, "send", lambda line: None)  # no answer ever comes
-    with pytest.raises(SessionError, match="no answer"):
-        session.save(timeout=0.05)
+    session._episode = "ep"
+    if outcome == "timeout":
+        monkeypatch.setattr(client, "send", lambda line: None)
+        with pytest.raises(SessionError, match="no answer"):
+            session.save(timeout=0.05)
+        assert session._episode == "ep"  # not dropped: the operator may retry
+    elif outcome == "cancelled":
+        cancelled = threading.Event()
+        monkeypatch.setattr(client, "send", lambda line: cancelled.set())
+        with session._cancellable(cancelled), pytest.raises(Cancelled):
+            session.save()
+    else:
+
+        def send(line):
+            ident = json.loads(line)["id"]
+            client.reports.append(
+                {
+                    "command": "save",
+                    "id": ident,
+                    "error": "the episode was not saved and is dropped",
+                    "dropped": True,
+                }
+            )
+
+        monkeypatch.setattr(client, "send", send)
+        with pytest.raises(SessionError, match="save:"):
+            session.save()
+        assert session._episode is None
     assert session._queued_saves == {}
-    assert session._episode == "slow"  # not dropped: the operator may retry
-
-
-def test_save_cancelled_forgets_the_unaccepted_ticket(fake_session, monkeypatch):
-    session, client = fake_session
-    session._episode = "slow"
-    cancelled = threading.Event()
-
-    def send(line):
-        cancelled.set()  # the operator cancels while the answer is awaited
-
-    monkeypatch.setattr(client, "send", send)
-    with session._cancellable(cancelled), pytest.raises(Cancelled):
-        session.save()
-    assert session._queued_saves == {}
-
-
-def test_save_dropped_clears_the_episode_and_ticket(fake_session, monkeypatch):
-    session, client = fake_session
-    session._episode = "gone"
-
-    def send(line):
-        ident = json.loads(line)["id"]
-        client.reports.append(
-            {
-                "command": "save",
-                "id": ident,
-                "error": "the episode was not saved and is dropped",
-                "dropped": True,
-            }
-        )
-
-    monkeypatch.setattr(client, "send", send)
-    with pytest.raises(SessionError, match="save:"):
-        session.save()
-    assert session._episode is None
-    assert session._queued_saves == {}
-
-
-def test_the_next_episode_index_counts_the_queued_saves():
-    # lifecycle events (hooks) get the index the started episode will have if saved
-    from roboloom.runtime.node import next_episode_index
-
-    assert next_episode_index({"episodes": 3}) == 3
-    assert next_episode_index({"episodes": 3, "pending_saves": 2}) == 5
-    assert next_episode_index({"pending_saves": 1}) is None
