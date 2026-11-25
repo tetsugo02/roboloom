@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/tetsugo02/roboloom/releases/tag/v0.2.2) - 2026-11-25
+
+### Bug Fixes
+
+- **viewer, digit**: viewer を実機で使えるようにし，DIGIT の継ぎ目のある画像を捨てて開き直す ([#62](https://github.com/tetsugo02/roboloom/pull/62)) ([`95b7189`](https://github.com/tetsugo02/roboloom/commit/95b7189df1a770f7244edac21cdf405d1b56b2c2))
+
+### Refactoring
+
+- **tests**: 重複・冗長なテストの削除・統合と高速化 ([#61](https://github.com/tetsugo02/roboloom/pull/61)) ([`9b615ce`](https://github.com/tetsugo02/roboloom/commit/9b615ceb3c027a3c74614cdb9e95d40116869399))
+
 ## [0.2.1](https://github.com/tetsugo02/roboloom/releases/tag/v0.2.1) - 2026-11-24
 
 ### Features
