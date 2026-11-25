@@ -148,7 +148,8 @@ uv run roboloom infer rakuda2 --seconds 20 --with viewer
 
 - The robot PC starts or reuses the Rerun server by default. In the interactive screen,
   select the `viewer` node to see the shareable URL (`url`) and localhost URL (`local_url`)
-  in the Selected node details. With `--plain`, both URLs are printed to the terminal.
+  in the Selected node details. With `--plain`, check the viewer node's startup log or
+  `roboloom session status`.
 - Open the shareable URL on the viewing machine. If the robot PC's hostname does not resolve,
   set `public_host` to a hostname or IP the viewing machine can reach. A firewall can block
   either port. For SSH or Orca port forwarding, forward both `9090` (HTTP) and `9876` (gRPC)

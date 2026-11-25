@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 import time
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -54,54 +51,3 @@ class SessionClient:
             return json.loads(self.status_path.read_text())
         except (OSError, json.JSONDecodeError):
             return None
-
-
-class ViewerLinks:
-    """Announce the current viewer URL once per change in a terminal session."""
-
-    def __init__(self) -> None:
-        self._url: str | None = None
-
-    def messages(self, fields: Mapping[str, object]) -> tuple[str, ...]:
-        url = fields.get("url")
-        if not isinstance(url, str) or not url or url == self._url:
-            return ()
-        self._url = url
-        lines: tuple[str, ...] = (f"viewer: open Rerun in a browser: {url}",)
-        local_url = fields.get("local_url")
-        if isinstance(local_url, str) and local_url:
-            lines += (f"viewer: through SSH port forwarding: {local_url}",)
-        return lines
-
-    def from_status(self, status: dict | None) -> tuple[str, ...]:
-        nodes = (status or {}).get("nodes", {})
-        viewer = next(
-            (node for node in nodes.values() if node.get("role") == "viewer"),
-            nodes.get("viewer", {}),
-        )
-        return self.messages(viewer.get("fields", {}))
-
-
-@contextmanager
-def watch_viewer_links(client: SessionClient) -> Iterator[None]:
-    """Print URL changes even while the plain CLI is waiting for input."""
-    links = ViewerLinks()
-    stop = threading.Event()
-
-    def show() -> None:
-        if messages := links.from_status(client.status()):
-            print("\n".join(messages), flush=True)
-
-    def watch() -> None:
-        while not stop.wait(0.1):
-            show()
-
-    show()
-    thread = threading.Thread(target=watch, name="viewer-links")
-    thread.start()
-    try:
-        yield
-    finally:
-        stop.set()
-        thread.join()
-        show()
