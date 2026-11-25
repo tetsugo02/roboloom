@@ -66,7 +66,21 @@ RECORDER_KEYS = (
 )
 SESSION_KEYS = ("type",)
 # the keys of the viewer's node file (the optional live view of the observations in Rerun)
-VIEWER_KEYS = ("rate_hz", "compress_images", "ip", "port", "save", "memory_limit")
+VIEWER_KEYS = (
+    "rate_hz",
+    "compress_images",
+    "serve",
+    "ip",
+    "port",
+    "web_port",
+    "bind",
+    "public_host",
+    "cors_allow_origins",
+    "server_memory_limit",
+    "open_browser",
+    "save",
+    "memory_limit",
+)
 CONFIG_FILE = "config.yaml"
 INFER_OPTION = "policy"  # `infer` turns on the option of this name when one is declared
 NO_OPTIONS = (
@@ -1243,14 +1257,41 @@ def _viewer(tree: dict) -> dict | None:
     compress = settings.get("compress_images", True)
     if not isinstance(compress, bool):
         raise ConfigError(f"{where}: compress_images must be true or false")
+    serve = settings.get("serve", True)
+    if not isinstance(serve, bool):
+        raise ConfigError(f"{where}: serve must be true or false")
     ip = settings.get("ip")
     if ip is not None and not isinstance(ip, str):
         raise ConfigError(f"{where}: ip must be text or null")
     port = settings.get("port")
     if port is not None and (type(port) is not int or not 1 <= port <= 65535):
         raise ConfigError(f"{where}: port must be a whole number in 1..65535, or null")
-    if (ip is None) != (port is None):
-        raise ConfigError(f"{where}: give ip and port together, or neither")
+    if (ip is not None and port is None) or (
+        ip is None and port is not None and not serve
+    ):
+        raise ConfigError(f"{where}: give ip and port together for an external server")
+    web_port = settings.get("web_port", 9090)
+    if type(web_port) is not int or not 1 <= web_port <= 65535:
+        raise ConfigError(f"{where}: web_port must be a whole number in 1..65535")
+    bind = settings.get("bind", "0.0.0.0")
+    if not isinstance(bind, str):
+        raise ConfigError(f"{where}: bind must be text")
+    public_host = settings.get("public_host")
+    if public_host is not None and not isinstance(public_host, str):
+        raise ConfigError(f"{where}: public_host must be text or null")
+    cors_allow_origins = settings.get("cors_allow_origins", [])
+    if not isinstance(cors_allow_origins, list) or not all(
+        isinstance(origin, str) and origin.strip() for origin in cors_allow_origins
+    ):
+        raise ConfigError(
+            f"{where}: cors_allow_origins must be a list of non-empty strings"
+        )
+    server_memory_limit = settings.get("server_memory_limit", "25%")
+    if not isinstance(server_memory_limit, str):
+        raise ConfigError(f"{where}: server_memory_limit must be text such as 25%")
+    open_browser = settings.get("open_browser", False)
+    if not isinstance(open_browser, bool):
+        raise ConfigError(f"{where}: open_browser must be true or false")
     save = settings.get("save")
     if save is not None:
         if not isinstance(save, str):
@@ -1263,8 +1304,15 @@ def _viewer(tree: dict) -> dict | None:
     return {
         "rate_hz": rate,
         "compress_images": compress,
+        "serve": serve,
         "ip": ip,
         "port": port,
+        "web_port": web_port,
+        "bind": bind,
+        "public_host": public_host,
+        "cors_allow_origins": cors_allow_origins,
+        "server_memory_limit": server_memory_limit,
+        "open_browser": open_browser,
         "save": save,
         "memory_limit": memory_limit,
     }

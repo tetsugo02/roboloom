@@ -146,11 +146,23 @@ uv run roboloom record rakuda2 --with digit,viewer --task "pick" --seconds 30
 uv run roboloom infer rakuda2 --seconds 20 --with viewer
 ```
 
-- Remote PC: run `rerun --serve-grpc` (or the Rerun viewer) on the viewing PC and set
-  `ip` and `port` in `nodes/viewer.yaml` on the robot PC (`save` writes a `.rrd` file).
+- The robot PC starts or reuses the Rerun server by default. Open the shareable URL printed
+  in the interactive screen or `--plain` output. If the robot PC's hostname does not resolve,
+  set `public_host` to a hostname or IP the viewing machine can reach. A firewall can block
+  either port. For SSH or Orca port forwarding, forward both `9090` (HTTP) and `9876` (gRPC)
+  to the same local ports and open the printed localhost URL.
+- If the page opens but reports `Failed to fetch`, check the gRPC server's CORS settings.
+  A new server allows the shareable URL's origin. Add other page origins or glob patterns
+  to `cors_allow_origins`. A reused server keeps its original CORS settings, so stop it
+  before the next run to apply changes.
+- Set `open_browser: true` to open the web viewer on the robot PC. The server stays up
+  after the run. To stop it, replace `12345` in `kill -INT -- -12345` with the PID printed
+  in the viewer node's startup log. The leading minus addresses the process group.
+- Move back on the `roboloom` timeline to review earlier frames and scalars retained
+  within Rerun's memory limits. Set `save` to write a `.rrd` file for later review.
 - Logged entities:
-  - `observation.images.<sensor>`: logged static by LeRobot (`static=True`), so only the
-    newest image is kept in the view.
+  - `observation.images.<sensor>`: temporal images on `roboloom`. Repeated static writes
+    froze the live web viewer at 10 Hz.
   - `observation.state`, `observation.leader`, `observation.effort`: scalars with history
     on the `roboloom` timeline.
   - `action.<follower>` (e.g. `action.follower`): per-follower scalars with history,

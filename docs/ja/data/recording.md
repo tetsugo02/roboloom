@@ -11,18 +11,27 @@ episodeを保存・破棄する流れと，保存したdatasetに残るもので
 
 ## Live view（Rerun） { #live-view }
 
-<span class="status status--mock">模擬のみ</span> `viz` extra を install すると（[Installation](../get-started/installation.md)），`viewer` option で Rerun を開き，観測，follower ごとの行動（`action.<follower>`），取得からの経過時間（`meta/<stream>/capture_age_ms`），session の event（`start`，`stop`，`save`，`discard`）を live 表示できます．`run`，`record`，`infer` のどれでも使え，dataset 名は変わりません．
+<span class="status status--mock">模擬のみ</span> `viz` extra を install すると，`viewer` option で観測，follower ごとの行動（`action.<follower>`），取得からの経過時間（`meta/<stream>/capture_age_ms`），session の event（`start`，`stop`，`save`，`discard`）を live 表示できます．`run`，`record`，`infer` のどれでも使え，dataset 名は同じです．[Installation](../get-started/installation.md)
 
 ```bash
 uv run roboloom record <robot> --with digit,viewer --task "pick" --seconds 30
 uv run roboloom infer <robot> --seconds 20 --with viewer
 ```
 
-- **この機体で表示（既定）**：`nodes/viewer.yaml` の `ip`・`port`・`save` が `null` のままなら，同じ機体で Rerun window を起動します．
-- **別の PC から見る**：表示側の PC で `rerun --serve-grpc`（または gRPC で待ち受ける Rerun viewer）を起動し，robot 側の PC の `nodes/viewer.yaml` に `ip:` と `port:`（たとえば Rerun の既定 gRPC port `9876`）を設定します．
-- **制約**：LeRobot の Rerun helper が画像（`observation.images.<sensor>`）を static（`static=True`）として記録するため，view には最新の画像だけが残ります．scalar の stream（`observation.state`，`observation.leader`，`observation.effort`，`action.<follower>`，`meta/<stream>/capture_age_ms`）は `roboloom` timeline 上に履歴を保持します．
+1. `viewer` を有効にして実行します．既定では node が robot 側 PC の Rerun server を自動で起動または再利用します．対話画面と `--plain` 出力の両方に，共有用の URL と localhost の URL が表示されます．
+2. 手元の PC の browser で共有用の URL を開きます．robot 側 PC の host 名を解決できない場合は，`nodes/viewer.yaml` の `public_host` に手元から接続できる host 名または IP を設定し，改めて実行します．firewall により web viewer や gRPC の port に接続できない場合があります．
+3. SSH や Orca などの IDE からは，両方の port を同じ番号で手元に転送し，表示された localhost の URL を開きます．既定では viewer のページが `9090`，data stream が `9876` です．
 
-設定 key，出力先（`spawn`，`ip:port`，`save` `.rrd`），entity path，status の項目は [Live viewer（viewer）](../reference/configuration/viewer.md) に，独立した node である理由は [viewer を独立した node にする理由](../explanation/viewer.md) にあります．
+```bash
+ssh -N -L 9090:127.0.0.1:9090 -L 9876:127.0.0.1:9876 <robot-host>
+```
+
+- ページが開いても `Failed to fetch` と表示される場合は，gRPC server がページの origin（scheme・host・port）を許可しているか確認します．新しく起動する server は共有 URL の origin を自動で許可します．ほかのページの origin や glob pattern は `nodes/viewer.yaml` の `cors_allow_origins` に追加します．
+- robot 側 PC の画面でも web viewer を開く場合は，`nodes/viewer.yaml` に `open_browser: true` を設定します．
+- `roboloom` timeline をさかのぼると過去の画像や scalar sample を確認できます．Rerun は memory 上限に達すると古い live data から破棄します．`.rrd` file に残すには `save` を設定します．
+- 実行終了後も server は動き続けるため，browser での閲覧を続けられ，次の実行でも再利用できます．再利用した server は起動時の CORS 設定を使います．新しい設定を適用する場合は，次の実行前に server を停止します．node が起動した server を止めるには，robot 側 PC で `kill -INT -- -12345` を実行し，`12345` を viewer node の起動 log にある server の PID に置き換えます．先頭の負号により server の process group に signal を送ります．
+
+設定 key，出力 mode，entity path，status は [Live viewer（viewer）](../reference/configuration/viewer.md) に，process と timeline の設計は [viewer を独立した node にする理由](../explanation/viewer.md) にあります．
 
 ## background保存 { #background-saving }
 

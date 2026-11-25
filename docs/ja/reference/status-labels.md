@@ -21,6 +21,7 @@
 | Rakuda2 の teleop 収集 | <span class="status status--verified">Hardware-verified</span> |
 | 重力補償 | <span class="status status--verified">Hardware-verified</span> |
 | DIGIT を含む収集 | <span class="status status--verified">Hardware-verified</span> |
+| [DIGIT の継ぎ目のある frame への対策](../sensors/digit.md#row-seam)（`seam_check`，`recover_after`，`warmup_frames`） | <span class="status status--mock">Mock only</span> |
 | Rakuda2 での自作の方策による推論と介入（`policy`，`policy_teleop`） | <span class="status status--verified">Hardware-verified</span> |
 | LeRobot のcheckpoint（`roboloom.policy.lerobot:load`），`lerobot-train` | <span class="status status--mock">Mock only</span>（PiPER＋Pika） |
 | RealSense | <span class="status status--verified">Hardware-verified</span> |

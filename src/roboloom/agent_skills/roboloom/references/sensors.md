@@ -59,6 +59,9 @@ resolution: QVGA               # QVGA (default) or VGA
 height: 320                    # must match resolution
 width: 240
 fps: 30
+seam_check: true               # drop seamed frames, reopen a rolled stream (default true)
+recover_after: 3               # consecutive seamed frames before a reopen (default 3)
+warmup_frames: 10              # frames discarded after each open (default 10)
 ```
 
 | `resolution` | `height` | `width` | `fps` (digit-interface) |
@@ -73,6 +76,18 @@ fps: 30
   `uv run python -c "from digit_interface import DigitHandler; print(DigitHandler.list_digits())"`.
 - On Rakuda2 the nodes are `digit_left`/`digit_right`, enabled by option `digit`
   ([robots/rakuda2.md](robots/rakuda2.md)).
+- Row-seam recovery (Mock only): a frame with one row where most columns jump at once
+  (a rolled stream, or a pasted band of rows) is dropped — the node sends no sample, so the
+  recorded row repeats the last valid image with `observation.meta.<name>.valid` 0. After
+  `recover_after` consecutive seamed frames the stream is closed and reopened, discarding
+  `warmup_frames` frames (also at the first open); a reopen that keeps failing for 5 s stops
+  the node. `seam_check: false` keeps the previous behaviour. Thresholds were chosen on
+  36,524 recorded Rakuda2 DIGIT frames; the reopen path is tested with a fake device only.
+- The sensor status shows `seams N  recoveries M` once either is non-zero; each reopen logs
+  `<name>: row seam at <row>, reopening the DIGIT stream (recovery <n>)`. The cause is
+  unknown; reported upstream without a fix:
+  [digit-interface#10](https://github.com/facebookresearch/digit-interface/issues/10),
+  [digit-design#39](https://github.com/facebookresearch/digit-design/issues/39).
 
 ## V4L2 fisheye (`v4l2_rgb`) – in development, mock only
 

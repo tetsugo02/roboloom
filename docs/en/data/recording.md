@@ -11,18 +11,27 @@ How episodes are saved or discarded, and what a saved dataset keeps. The recorde
 
 ## Live view (Rerun) { #live-view }
 
-<span class="status status--mock">Mock only</span> With the `viz` extra installed ([Installation](../get-started/installation.md)), the `viewer` option opens Rerun to display live observations, follower actions (`action.<follower>`), capture ages (`meta/<stream>/capture_age_ms`), and session events (`start`, `stop`, `save`, `discard`). It can be used with `run`, `record`, or `infer` without changing the dataset name:
+<span class="status status--mock">Mock only</span> With the `viz` extra installed, the `viewer` option displays live observations, follower actions (`action.<follower>`), capture ages (`meta/<stream>/capture_age_ms`), and session events (`start`, `stop`, `save`, `discard`). Use it with `run`, `record`, or `infer`. The dataset name stays the same. [Installation](../get-started/installation.md)
 
 ```bash
 uv run roboloom record <robot> --with digit,viewer --task "pick" --seconds 30
 uv run roboloom infer <robot> --seconds 20 --with viewer
 ```
 
-- **Local window (default)**: leaving `ip`, `port`, and `save` as `null` in `nodes/viewer.yaml` spawns a Rerun window on the same machine.
-- **Viewing from another PC**: run `rerun --serve-grpc` (or open the Rerun viewer listening for gRPC) on the viewing PC, and set `ip:` and `port:` (for example Rerun's default gRPC port `9876`) in `nodes/viewer.yaml` on the robot PC.
-- **Limitation**: LeRobot's Rerun helper logs images (`observation.images.<sensor>`) as static entities (`static=True`), so Rerun keeps only the newest image in the view; scalar streams (`observation.state`, `observation.leader`, `observation.effort`, `action.<follower>`, `meta/<stream>/capture_age_ms`) keep their time history on the `roboloom` timeline.
+1. Start a run with `viewer` enabled. The node starts or reuses a Rerun server on the robot PC by default. The interactive screen and `--plain` output both show a shareable URL and a localhost URL.
+2. Open the shareable URL in a browser on the other machine. If the robot PC's hostname does not resolve there, set `public_host` in `nodes/viewer.yaml` to a hostname or IP that machine can reach, then start a new run. A firewall can block either the web viewer or the gRPC port.
+3. For access over SSH or an IDE such as Orca, forward both ports to the same local numbers and open the printed localhost URL. The defaults are `9090` for the viewer page and `9876` for the data stream.
 
-Keys, targets (`spawn`, `ip:port`, `save` `.rrd`), entity paths, and status fields are in [Viewer configuration](../reference/configuration/viewer.md). Why it runs as its own node is explained in [Why the viewer is a separate node](../explanation/viewer.md).
+```bash
+ssh -N -L 9090:127.0.0.1:9090 -L 9876:127.0.0.1:9876 <robot-host>
+```
+
+- If the page opens but reports `Failed to fetch`, check whether the gRPC server allows the page's origin (scheme, host, and port). A newly started server automatically allows the shareable URL's origin. Add any other page origins or glob patterns to `cors_allow_origins` in `nodes/viewer.yaml`.
+- Set `open_browser: true` in `nodes/viewer.yaml` to open the web viewer on the robot PC's own screen.
+- Scrub back on the `roboloom` timeline to review older images and scalar samples. Rerun drops older live data as it reaches its memory limits. Set `save` to keep a `.rrd` recording.
+- The server stays up when the run ends so the browser can keep viewing and later runs can reuse it. A reused server keeps its original CORS settings. To apply new settings, stop the server before the next run. For a server the node started, run `kill -INT -- -12345` on the robot PC, replacing `12345` with the server PID from the viewer node's startup log. The leading minus signals the server's process group.
+
+See [Viewer configuration](../reference/configuration/viewer.md) for keys, modes, entity paths, and status fields, and [Why the viewer is a separate node](../explanation/viewer.md) for the process and timeline design.
 
 ## Background saving { #background-saving }
 

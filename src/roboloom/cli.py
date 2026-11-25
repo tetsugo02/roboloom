@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -913,6 +914,7 @@ def _start(
     reselect: bool,
 ) -> str:
     from .runtime.session import Session
+    from .ui.client import watch_viewer_links
 
     policy = getattr(args, "policy", None)
     policy_kwargs = getattr(args, "policy_kwargs", None)
@@ -956,26 +958,33 @@ def _start(
     session = Session.launch(
         cfg, policy=policy, policy_kwargs=policy_kwargs, screen=False
     )
+    viewer = cfg.viewer
+    watching = (
+        watch_viewer_links(session.client)
+        if viewer is not None and viewer["serve"] and viewer["ip"] is None
+        else nullcontext()
+    )
     try:
-        if plan.mode == "record":
-            from .ui.record import record
+        with watching:
+            if plan.mode == "record":
+                from .ui.record import record
 
-            record(session, plan.task, plan.seconds, plan.episodes, home=plan.home)
-        elif plan.mode == "infer":
-            from .ui.record import record
+                record(session, plan.task, plan.seconds, plan.episodes, home=plan.home)
+            elif plan.mode == "infer":
+                from .ui.record import record
 
-            # a task names the run and keeps it; without one nothing is saved
-            record(
-                session,
-                plan.task or "inference",
-                plan.seconds,
-                plan.episodes,
-                keep=lambda _: bool(plan.task),
-                home=plan.home,
-                steps=steps,
-            )
-        else:
-            _plain_loop(session.client, session.process, session.release_note())
+                # a task names the run and keeps it; without one nothing is saved
+                record(
+                    session,
+                    plan.task or "inference",
+                    plan.seconds,
+                    plan.episodes,
+                    keep=lambda _: bool(plan.task),
+                    home=plan.home,
+                    steps=steps,
+                )
+            else:
+                _plain_loop(session.client, session.process, session.release_note())
     finally:
         session.close()
         if session.process.returncode:

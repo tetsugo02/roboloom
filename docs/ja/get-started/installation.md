@@ -33,7 +33,7 @@ override-dependencies = [
 | Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2` | followerとRakuda-mini leader用のDynamixel SDK |
 | PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra piper --extra pika` | PiPER SDK，IK，Pikaのtracker・手首camera（開発中・実機未検証） |
 | 記録 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra record` | LeRobotDatasetへの保存，模擬収集 |
-| Live viewer | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra viz` | Rerunでのlive表示（`lerobot[viz]` により `rerun-sdk` と `foxglove-sdk` を導入，模擬のみ） |
+| Live viewer | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra viz` | Rerunでのlive表示（`lerobot[viz]` により `rerun` CLI 付きの `rerun-sdk` と `foxglove-sdk` を導入，模擬のみ） |
 | Rakuda2実機収集 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2，記録，RealSense（`hardware`），DIGIT（`digit`） |
 
 Git sourceを登録した後は，package名でextrasを追加することもできます．zshなどのshellでは角括弧を引用符で囲みます．

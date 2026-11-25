@@ -24,7 +24,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.text import Text
 
-from .client import SessionClient
+from .client import SessionClient, ViewerLinks
 from .render import describe_report, home_available, render
 
 ALERT_WORDS = ("ERROR", "Error", "Traceback", "panicked", "exceeds maximum")
@@ -137,6 +137,7 @@ class LiveSession:
         self.held = held or []
         self.editor = LineEditor()
         self.messages: deque[Text] = deque(maxlen=8)
+        self._viewer_links = ViewerLinks()
         self.confirm_release = False
         self.confirm_quit = False
         self.quitting_since: float | None = None
@@ -216,8 +217,12 @@ class LiveSession:
                 self.quitting_since = time.monotonic()
 
     def view(self, prompt: Text | None = None):
+        status = self.client.status()
+        self.messages.extend(
+            Text(line) for line in self._viewer_links.from_status(status)
+        )
         return render(
-            self.client.status(),
+            status,
             self.messages,
             prompt or self.prompt(),
             title=self.title,
