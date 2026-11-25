@@ -24,7 +24,7 @@ import webbrowser
 from contextlib import suppress
 from numbers import Real
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import numpy as np
 
@@ -57,7 +57,7 @@ def _listening(port: int) -> bool:
 
 
 def _ensure_server(
-    port: int, web_port: int, bind: str, memory_limit: str
+    port: int, web_port: int, bind: str, memory_limit: str, cors_origins: list[str]
 ) -> int | None:
     """Return the PID of a new detached server, or reuse a listening server."""
     if _listening(port):
@@ -71,22 +71,25 @@ def _ensure_server(
     if executable is None:
         raise RuntimeError("Rerun CLI 'rerun' was not found; install the viz extra")
 
+    command = [
+        executable,
+        "--serve-web",
+        "--port",
+        str(port),
+        "--web-viewer-port",
+        str(web_port),
+        "--bind",
+        bind,
+        "--server-memory-limit",
+        memory_limit,
+    ]
+    for origin in cors_origins:
+        command.extend(("--cors-allow-origin", origin))
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     log_path = Path(log_dir) / "rerun-server.log" if log_dir else Path(os.devnull)
     with log_path.open("ab") as output:
         process = subprocess.Popen(
-            [
-                executable,
-                "--serve-web",
-                "--port",
-                str(port),
-                "--web-viewer-port",
-                str(web_port),
-                "--bind",
-                bind,
-                "--server-memory-limit",
-                memory_limit,
-            ],
+            command,
             stdin=subprocess.DEVNULL,
             stdout=output,
             stderr=subprocess.STDOUT,
@@ -158,9 +161,15 @@ def start(cfg: RobotConfig) -> tuple[str | None, str | None, str | None]:
         port = port or DEFAULT_GRPC_PORT
         web_port = settings["web_port"]
         bind = settings["bind"]
-        pid = _ensure_server(port, web_port, bind, settings["server_memory_limit"])
-        sinks.append(rr.GrpcSink(_proxy(LOOPBACK, port)))
         url = _web_url(settings["public_host"] or socket.gethostname(), port, web_port)
+        authority = urlsplit(url).netloc.lower()
+        if web_port == 80:  # Browsers omit the default HTTP port from Origin.
+            authority = authority.removesuffix(":80")
+        cors_origins = [f"http://{authority}", *settings["cors_allow_origins"]]
+        pid = _ensure_server(
+            port, web_port, bind, settings["server_memory_limit"], cors_origins
+        )
+        sinks.append(rr.GrpcSink(_proxy(LOOPBACK, port)))
         local_url = _web_url("localhost", port, web_port)
         browser_url = local_url if bind == LOOPBACK else url
         server = f"PID {pid}" if pid is not None else "reused server"

@@ -151,6 +151,10 @@ uv run roboloom infer rakuda2 --seconds 20 --with viewer
   set `public_host` to a hostname or IP the viewing machine can reach. A firewall can block
   either port. For SSH or Orca port forwarding, forward both `9090` (HTTP) and `9876` (gRPC)
   to the same local ports and open the printed localhost URL.
+- If the page opens but reports `Failed to fetch`, check the gRPC server's CORS settings.
+  A new server allows the shareable URL's origin. Add other page origins or glob patterns
+  to `cors_allow_origins`. A reused server keeps its original CORS settings, so stop it
+  before the next run to apply changes.
 - Set `open_browser: true` to open the web viewer on the robot PC. The server stays up
   after the run. To stop it, replace `12345` in `kill -INT -- -12345` with the PID printed
   in the viewer node's startup log. The leading minus addresses the process group.

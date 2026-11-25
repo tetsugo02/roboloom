@@ -7,6 +7,7 @@ port: null  # gRPC port (null uses 9876 for the local server)
 web_port: 9090  # HTTP port for the local web viewer
 bind: "0.0.0.0"  # address the local server listens on
 public_host: null  # host other machines use to reach this PC (null: hostname)
+cors_allow_origins: []  # extra web viewer origin patterns allowed by a new server
 server_memory_limit: "25%"  # local server budget for buffering data
 open_browser: false  # open the local server's viewer on this machine
 save: null  # also save to this .rrd file, or use serve: false for file only

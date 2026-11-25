@@ -254,6 +254,7 @@ off needs no Rerun).
 | `web_port` | int (1–65535) | `9090` | Local web viewer HTTP port |
 | `bind` | str | `"0.0.0.0"` | Listen address for a new server. Must accept the node's connection via `127.0.0.1` |
 | `public_host` | str or `null` | `null` | Hostname or IP in both parts of the shareable URL. Null uses the robot PC's hostname. `bind` controls the listener |
+| `cors_allow_origins` | list of non-empty strings | `[]` | Extra CORS origin patterns for a new local server, such as `https://*.example.org`. The shareable URL's origin is allowed automatically |
 | `server_memory_limit` | str | `"25%"` | Live buffer budget passed as `--server-memory-limit` |
 | `open_browser` | bool | `false` | Open the local server's web viewer on the robot PC |
 | `save` | path or `null` | `null` | `.rrd` path (relative to viewer YAML dir) |
@@ -265,7 +266,8 @@ off needs no Rerun).
   `save` is set. With `ip: null` and `serve: false`, it saves headlessly if `save` is set
   (`target: "<save path>"`) or opens a native window (`target: "spawn"`).
 - The separate dora node has `latest` inputs (`queue_size: 1`, `drop_oldest`) and its own
-  timer. The detached server can keep serving recent data after the node exits.
+  timer. The detached server can keep serving recent data after the node exits. A reused
+  server keeps its original CORS settings. Stop it before applying new settings.
 - Status every ~0.5 s includes `state` (`viewing` or `failed`), `streams`, `drawn`,
   `errors`, `target`, `url` (shareable URL), and `local_url` (both addresses use
   localhost). Both URLs are null outside local serving or on startup failure. Optional fields are

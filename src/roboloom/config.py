@@ -75,6 +75,7 @@ VIEWER_KEYS = (
     "web_port",
     "bind",
     "public_host",
+    "cors_allow_origins",
     "server_memory_limit",
     "open_browser",
     "save",
@@ -1278,6 +1279,13 @@ def _viewer(tree: dict) -> dict | None:
     public_host = settings.get("public_host")
     if public_host is not None and not isinstance(public_host, str):
         raise ConfigError(f"{where}: public_host must be text or null")
+    cors_allow_origins = settings.get("cors_allow_origins", [])
+    if not isinstance(cors_allow_origins, list) or not all(
+        isinstance(origin, str) and origin.strip() for origin in cors_allow_origins
+    ):
+        raise ConfigError(
+            f"{where}: cors_allow_origins must be a list of non-empty strings"
+        )
     server_memory_limit = settings.get("server_memory_limit", "25%")
     if not isinstance(server_memory_limit, str):
         raise ConfigError(f"{where}: server_memory_limit must be text such as 25%")
@@ -1302,6 +1310,7 @@ def _viewer(tree: dict) -> dict | None:
         "web_port": web_port,
         "bind": bind,
         "public_host": public_host,
+        "cors_allow_origins": cors_allow_origins,
         "server_memory_limit": server_memory_limit,
         "open_browser": open_browser,
         "save": save,
