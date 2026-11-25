@@ -30,6 +30,7 @@
 | `web_port` | integer (1–65535) | `9090` | — | HTTP port of the local server's web viewer |
 | `bind` | text | `"0.0.0.0"` | — | Listen address for a new local server. The node connects to `127.0.0.1`, so the bind address must accept IPv4 loopback |
 | `public_host` | text or `null` | `null` | Hostname or IP used in both parts of the shareable URL. Null uses the robot PC's hostname. The listen address comes from `bind` |
+| `cors_allow_origins` | list of non-empty strings | `[]` | Extra CORS origin patterns for a new local server, such as `https://*.example.org`. Rerun also receives the exact origin of the shareable URL |
 | `server_memory_limit` | text | `"25%"` | — | Live buffer budget passed to a new local server as `--server-memory-limit` |
 | `open_browser` | boolean | `false` | — | Open the local server's web viewer in a browser on the robot PC |
 | `save` | path or `null` | `null` | — | Path to a `.rrd` file. Relative paths resolve from the directory of the viewer node file |
@@ -47,6 +48,7 @@
 | Local server lifecycle | Behaviour |
 | --- | --- |
 | Startup | Reuses an existing listener on `127.0.0.1:<port>`. Keep `web_port` consistent with that server. For a new server, both ports must be distinct and free |
+| CORS | A reused server keeps its existing CORS settings. Stop the server before starting a run that applies new settings |
 | Logs and shutdown | The detached server writes to `rerun-server.log` in the run log directory when available. It stays up after the node exits. See [Live view (Rerun)](../../data/recording.md#live-view) for the stop command |
 
 ## Logged entities { #entities }

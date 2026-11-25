@@ -26,9 +26,10 @@ uv run roboloom infer <robot> --seconds 20 --with viewer
 ssh -N -L 9090:127.0.0.1:9090 -L 9876:127.0.0.1:9876 <robot-host>
 ```
 
+- If the page opens but reports `Failed to fetch`, check whether the gRPC server allows the page's origin (scheme, host, and port). A newly started server automatically allows the shareable URL's origin. Add any other page origins or glob patterns to `cors_allow_origins` in `nodes/viewer.yaml`.
 - Set `open_browser: true` in `nodes/viewer.yaml` to open the web viewer on the robot PC's own screen.
 - Scrub back on the `roboloom` timeline to review older images and scalar samples. Rerun drops older live data as it reaches its memory limits. Set `save` to keep a `.rrd` recording.
-- The server stays up when the run ends so the browser can keep viewing and later runs can reuse it. To stop a server the node started, run `kill -INT -- -12345` on the robot PC, replacing `12345` with the server PID from the viewer node's startup log. The leading minus signals the server's process group.
+- The server stays up when the run ends so the browser can keep viewing and later runs can reuse it. A reused server keeps its original CORS settings. To apply new settings, stop the server before the next run. For a server the node started, run `kill -INT -- -12345` on the robot PC, replacing `12345` with the server PID from the viewer node's startup log. The leading minus signals the server's process group.
 
 See [Viewer configuration](../reference/configuration/viewer.md) for keys, modes, entity paths, and status fields, and [Why the viewer is a separate node](../explanation/viewer.md) for the process and timeline design.
 

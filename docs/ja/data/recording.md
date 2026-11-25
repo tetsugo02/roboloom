@@ -26,9 +26,10 @@ uv run roboloom infer <robot> --seconds 20 --with viewer
 ssh -N -L 9090:127.0.0.1:9090 -L 9876:127.0.0.1:9876 <robot-host>
 ```
 
+- ページが開いても `Failed to fetch` と表示される場合は，gRPC server がページの origin（scheme・host・port）を許可しているか確認します．新しく起動する server は共有 URL の origin を自動で許可します．ほかのページの origin や glob pattern は `nodes/viewer.yaml` の `cors_allow_origins` に追加します．
 - robot 側 PC の画面でも web viewer を開く場合は，`nodes/viewer.yaml` に `open_browser: true` を設定します．
 - `roboloom` timeline をさかのぼると過去の画像や scalar sample を確認できます．Rerun は memory 上限に達すると古い live data から破棄します．`.rrd` file に残すには `save` を設定します．
-- 実行終了後も server は動き続けるため，browser での閲覧を続けられ，次の実行でも再利用できます．node が起動した server を止めるには，robot 側 PC で `kill -INT -- -12345` を実行し，`12345` を viewer node の起動 log にある server の PID に置き換えます．先頭の負号により server の process group に signal を送ります．
+- 実行終了後も server は動き続けるため，browser での閲覧を続けられ，次の実行でも再利用できます．再利用した server は起動時の CORS 設定を使います．新しい設定を適用する場合は，次の実行前に server を停止します．node が起動した server を止めるには，robot 側 PC で `kill -INT -- -12345` を実行し，`12345` を viewer node の起動 log にある server の PID に置き換えます．先頭の負号により server の process group に signal を送ります．
 
 設定 key，出力 mode，entity path，status は [Live viewer（viewer）](../reference/configuration/viewer.md) に，process と timeline の設計は [viewer を独立した node にする理由](../explanation/viewer.md) にあります．
 

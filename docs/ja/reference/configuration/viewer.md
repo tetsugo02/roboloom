@@ -30,6 +30,7 @@
 | `web_port` | 整数（1〜65535） | `9090` | — | local server の web viewer が使う HTTP port |
 | `bind` | 文字列 | `"0.0.0.0"` | — | 新しく起動する local server の待ち受け address．node は `127.0.0.1` に接続するため，IPv4 loopback 接続を受け付ける address が必要 |
 | `public_host` | 文字列か `null` | `null` | 共有 URL 内の両方の address に使う host 名または IP．null のときは robot 側 PC の host 名を使う．待ち受け address は `bind` で決まる |
+| `cors_allow_origins` | 空でない文字列のリスト | `[]` | 新しく起動する local server で許可する追加の CORS origin pattern．例は `https://*.example.org`．共有 URL の origin も完全一致で Rerun に渡す |
 | `server_memory_limit` | 文字列 | `"25%"` | — | 新しく起動する local server に `--server-memory-limit` で渡す live buffer の memory 上限 |
 | `open_browser` | 真偽値 | `false` | — | robot 側 PC の browser で local server の web viewer を開く |
 | `save` | path か `null` | `null` | — | `.rrd` file への path．相対 path は viewer node file の directory を基準に解決する |
@@ -47,6 +48,7 @@
 | local server の lifecycle | 動作 |
 | --- | --- |
 | 起動 | `127.0.0.1:<port>` で待ち受ける server を再利用する．`web_port` はその server の設定に揃える．新しく起動するときは異なる 2 つの空き port が必要 |
+| CORS | 再利用した server は起動時の CORS 設定を使う．新しい設定を適用する場合は，次の実行前に server を停止する |
 | log と停止 | 独立した server は実行 log の directory がある場合に `rerun-server.log` へ出力する．node が終了しても動き続ける．停止 command は [Live view（Rerun）](../../data/recording.md#live-view) に記載 |
 
 ## 描画される entity { #entities }
