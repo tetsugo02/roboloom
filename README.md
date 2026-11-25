@@ -53,7 +53,7 @@ Requires **Python 3.12–3.14**, [uv](https://docs.astral.sh/uv/), and Git. Add 
 ```bash
 uv init --python '>=3.12,<3.15' my-robot
 cd my-robot
-uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2 --extra record --extra hardware --extra digit
+uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.2 --extra rakuda2 --extra record --extra hardware --extra digit
 ```
 
 | Extra | Purpose |
