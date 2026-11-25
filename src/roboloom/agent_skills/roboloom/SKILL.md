@@ -86,7 +86,7 @@ outdated, run `uv run roboloom skills install --force`.
 | Own policies (`type: policy`): inference and intervention (`policy`, `policy_teleop`) on Rakuda2 | Hardware-verified | [policy.md](references/policy.md) |
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | Mock only (PiPER + Pika) | [policy.md](references/policy.md) |
 | Background episode saving in the dora dataflow (`background_save`, `max_pending_saves`) | Mock only | [recording.md](references/recording.md#background-saving) |
-| Live view in Rerun (`viewer` option / `viewer:`, `viz` extra) | Mock only | [configuration.md](references/configuration.md#live-viewer) |
+| Live view in Rerun's browser viewer (`viewer` option / `viewer:`, `viz` extra, `public_host` for remote URLs) | Mock only | [configuration.md](references/configuration.md#live-viewer), [recording.md](references/recording.md#live-view-rerun) |
 | PiPER follower, Pika Gripper, Pika Sense + `pose_ik` | In development, mock only | [robots/piper-pika.md](references/robots/piper-pika.md) |
 | Hand-held Pika Sense collection, `convert-handheld` | In development, mock only | [robots/handheld.md](references/robots/handheld.md) |
 | `opencv_rgb` web camera (Linux/macOS/Windows driver only) | Mock only; hardware unverified; Windows Session excluded | [sensors.md](references/sensors.md) |

@@ -247,18 +247,27 @@ off needs no Rerun).
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `rate_hz` | number | `10` | Positive finite Hz; whole Hz or whole ms per tick (e.g. `12.5` = 80 ms) |
-| `compress_images` | bool | `true` | JPEG-compress images before logging |
-| `ip` | str or `null` | `null` | Rerun gRPC host; must be given with `port`, or neither |
-| `port` | int (1–65535) or `null` | `null` | Rerun gRPC port; must be given with `ip`, or neither |
+| `compress_images` | bool | `true` | JPEG-compress color images before logging |
+| `serve` | bool | `true` | With `ip: null`, start or reuse a local Rerun web server |
+| `ip` | str or `null` | `null` | External Rerun gRPC host. Requires `port` |
+| `port` | int (1–65535) or `null` | `null` | External or local gRPC port. The local server uses `9876` when null. With `serve: false`, setting `port` requires `ip` |
+| `web_port` | int (1–65535) | `9090` | Local web viewer HTTP port |
+| `bind` | str | `"0.0.0.0"` | Listen address for a new server. Must accept the node's connection via `127.0.0.1` |
+| `public_host` | str or `null` | `null` | Hostname or IP in both parts of the shareable URL. Null uses the robot PC's hostname. `bind` controls the listener |
+| `server_memory_limit` | str | `"25%"` | Live buffer budget passed as `--server-memory-limit` |
+| `open_browser` | bool | `false` | Open the local server's web viewer on the robot PC |
 | `save` | path or `null` | `null` | `.rrd` path (relative to viewer YAML dir) |
-| `memory_limit` | str | `"10%"` | `LEROBOT_RERUN_MEMORY_LIMIT` when spawning a local window |
+| `memory_limit` | str | `"10%"` | Memory budget for the native viewer window |
 
-- Targets: `ip`/`port`/`save` all `null` → spawn local window (`target: "spawn"`);
-  `ip`+`port` → gRPC `rerun+http://<ip>:<port>/proxy` (`target: "<ip>:<port>"`);
-  `save` alone → headless `.rrd` (`target: "<save path>"`);
-  `ip`+`port`+`save` → both gRPC and `.rrd` (`target: "<ip>:<port>"`).
-- Separate dora node with `latest` inputs (`queue_size: 1`, `drop_oldest`) and own timer,
-  never holding back sources or `recorder` (unlike hooks, which run inside policy loops).
-- Status fields (every ~0.5 s): `state` (`viewing` \| `failed`), `streams`, `drawn`,
-  `errors`, `target`, and `error` (last error; cleared after a later successful draw). See
+- The node checks modes in order. With `ip` and `port` set, it streams to that external
+  server (`target: "<ip>:<port>"`). With `ip: null` and `serve: true`, it uses the local
+  server (`target: "127.0.0.1:<port>"`). Both streaming modes also write a `.rrd` when
+  `save` is set. With `ip: null` and `serve: false`, it saves headlessly if `save` is set
+  (`target: "<save path>"`) or opens a native window (`target: "spawn"`).
+- The separate dora node has `latest` inputs (`queue_size: 1`, `drop_oldest`) and its own
+  timer. The detached server can keep serving recent data after the node exits.
+- Status every ~0.5 s includes `state` (`viewing` or `failed`), `streams`, `drawn`,
+  `errors`, `target`, `url` (shareable URL), and `local_url` (both addresses use
+  localhost). Both URLs are null outside local serving or on startup failure. Optional fields are
+  `error` (startup or logging error) and `browser_error` (browser launch warning). See
   [recording.md](recording.md#live-view-rerun).

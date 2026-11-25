@@ -33,7 +33,7 @@ The base install contains the shared runtime (dora, YAML, NumPy, OpenCV, serial 
 | Rakuda2 | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2` | Dynamixel SDK for the follower and Rakuda-mini leader |
 | PiPER + Pika | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra piper --extra pika` | PiPER SDK, IK, Pika tracking and wrist cameras (in development, hardware unverified) |
 | Recording | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra record` | Saving to LeRobotDataset, mock collection |
-| Live viewer | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra viz` | Live view in Rerun (`rerun-sdk` and `foxglove-sdk` through `lerobot[viz]`, mock only) |
+| Live viewer | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra viz` | Live view in Rerun (`rerun-sdk` with the `rerun` CLI, plus `foxglove-sdk` through `lerobot[viz]`; mock only) |
 | Rakuda2 hardware collection | `uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.1 --extra rakuda2 --extra record --extra hardware --extra digit` | Rakuda2, recording, RealSense (`hardware`), DIGIT (`digit`) |
 
 Once the Git source is registered, extras can also be added by package name. Quote the brackets in shells such as zsh:
