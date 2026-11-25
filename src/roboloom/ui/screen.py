@@ -17,7 +17,6 @@ from rich.console import Console, RenderableType
 from rich.live import Live
 from rich.text import Text
 
-from .client import ViewerLinks
 from .live import tail_alerts
 from .render import describe_report, render
 
@@ -31,7 +30,6 @@ class SessionScreen:
     def __init__(self, session: Session, title: str):
         self.session, self.title = session, title
         self.messages: deque[Text] = deque(maxlen=8)
-        self._viewer_links = ViewerLinks()
         self.prompt = Text("Ctrl-C: discard the episode and stop", style="dim")
         self.keys: str | Text = ""  # help line; empty for scripts (no keys are read)
         self._log_offset = 0
@@ -44,12 +42,8 @@ class SessionScreen:
         self.messages.append(describe_report(report))
 
     def view(self) -> RenderableType:
-        status = self.session.client.status()
-        self.messages.extend(
-            Text(line) for line in self._viewer_links.from_status(status)
-        )
         return render(
-            status,
+            self.session.client.status(),
             self.messages,
             self.prompt,
             title=self.title,

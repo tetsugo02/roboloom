@@ -146,11 +146,14 @@ uv run roboloom record rakuda2 --with digit,viewer --task "pick" --seconds 30
 uv run roboloom infer rakuda2 --seconds 20 --with viewer
 ```
 
-- The robot PC starts or reuses the Rerun server by default. Open the shareable URL printed
-  in the interactive screen or `--plain` output. If the robot PC's hostname does not resolve,
+- The robot PC starts or reuses the Rerun server by default. In the interactive screen,
+  select the `viewer` node to see the shareable URL (`url`) and localhost URL (`local_url`)
+  in the Selected node details. With `--plain`, check the viewer node's startup log or
+  `roboloom session status`.
+- Open the shareable URL on the viewing machine. If the robot PC's hostname does not resolve,
   set `public_host` to a hostname or IP the viewing machine can reach. A firewall can block
   either port. For SSH or Orca port forwarding, forward both `9090` (HTTP) and `9876` (gRPC)
-  to the same local ports and open the printed localhost URL.
+  to the same local ports and open the localhost URL.
 - If the page opens but reports `Failed to fetch`, check the gRPC server's CORS settings.
   A new server allows the shareable URL's origin. Add other page origins or glob patterns
   to `cors_allow_origins`. A reused server keeps its original CORS settings, so stop it

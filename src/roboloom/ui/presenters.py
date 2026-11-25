@@ -40,8 +40,12 @@ def register_presenter(
 @register_presenter(role="viewer")
 def _viewer(node: NodeSnapshot) -> Presentation:
     state, detail = viewer(dict(node.fields))
-    target = node.fields.get("target")
-    return Presentation(state, detail, (("target", str(target)),) if target else ())
+    values = tuple(
+        (key, str(value))
+        for key in ("target", "url", "local_url")
+        if (value := node.fields.get(key))
+    )
+    return Presentation(state, detail, values)
 
 
 def present(node: NodeSnapshot) -> Presentation:
