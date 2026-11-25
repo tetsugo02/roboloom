@@ -45,6 +45,9 @@ DIGITの触覚画像です（[DIGIT](../../sensors/digit.md)）．
 | `serial` | 文字列 | 必須 | — | serial番号 |
 | `resolution` | 文字列 | `QVGA` | — | `QVGA` か `VGA`．`height` と `width` はこれに合わせる（`QVGA`：`height: 320`，`width: 240`．`VGA`：`height: 640`，`width: 480`） |
 | `name` | 文字列 | `serial` の値 | — | `digit_interface` に渡す名前 |
+| `seam_check` | 真偽値 | `true` | — | frameごとのrow seam検査．seamのあるframeを破棄し，rollしたstreamを開き直す（[DIGIT](../../sensors/digit.md#row-seam)）．`false` は従来の動作 <span class="status status--mock">模擬のみ</span> |
+| `recover_after` | 1以上の整数 | `3` | — | streamを閉じて開き直すまでの連続seam数 <span class="status status--mock">模擬のみ</span> |
+| `warmup_frames` | 0以上の整数 | `10` | — | openのあとに破棄するframe数（開き直しでも同じ） <span class="status status--mock">模擬のみ</span> |
 
 `fps` は，その解像度で機器が対応する値だけを受け付けます（開くときに確かめます）．
 

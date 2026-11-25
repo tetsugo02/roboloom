@@ -21,6 +21,7 @@
 | Rakuda2 teleoperated collection | <span class="status status--verified">Hardware-verified</span> |
 | Gravity compensation | <span class="status status--verified">Hardware-verified</span> |
 | Collection with DIGIT | <span class="status status--verified">Hardware-verified</span> |
+| [DIGIT row-seam recovery](../sensors/digit.md#row-seam) (`seam_check`, `recover_after`, `warmup_frames`) | <span class="status status--mock">Mock only</span> |
 | Policy inference and intervention on Rakuda2 with your own policy (`policy`, `policy_teleop`) | <span class="status status--verified">Hardware-verified</span> |
 | LeRobot checkpoints (`roboloom.policy.lerobot:load`), `lerobot-train` | <span class="status status--mock">Mock only</span> (PiPER + Pika) |
 | RealSense | <span class="status status--verified">Hardware-verified</span> |

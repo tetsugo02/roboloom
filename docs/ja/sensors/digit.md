@@ -28,6 +28,40 @@ DIGITのnodeごとに，`nodes/recorder.yaml` の `max_age_ms` の項目も必�
 
 Rakuda2の対応構成と重力補償との併用方法は [機体ページ](../robots/rakuda2/index.md) にあります．
 
+### 継ぎ目のある frame <span class="status status--mock">模擬のみ</span> { #row-seam }
+
+DIGITのstreamはときどき，sensorの行の途中から始まるframeを返します．画像は行に沿ってずれており（roll），ほとんどの列が一度に大きく変わる継ぎ目の行（row seam）が1行あります．この状態はstreamを開き直すまで続きます．一時的な形では，別の場所の行の帯が1つのframeに貼り付けられます．原因は不明で，同じ症状が上流でも修正なしに報告されています（[digit-interface#10](https://github.com/facebookresearch/digit-interface/issues/10)，[digit-design#39](https://github.com/facebookresearch/digit-design/issues/39)）．
+
+`seam_check`（既定 `true`）では，frameごとに，ほとんどの列が一度に大きく変わる行を1つ探します（`find_seam`）：
+
+```mermaid
+flowchart LR
+  A["frameを読む"] --> B{"row seam?"}
+  B -- なし --> C["sampleを送る"]
+  B -- あり --> D["frameを破棄<br/>連続seam数を数える"]
+  D --> E{"recover_after 連続?"}
+  E -- いいえ --> A
+  E -- はい --> F["streamを閉じて開き直す<br/>warmup_frames frameを破棄"]
+  F --> A
+```
+
+- seamのあるframeは破棄します：nodeはsampleを送りません．記録されたdatasetでは，その行は直前の有効なDIGIT画像を繰り返し，`observation.meta.<sensor>.valid` は 0 です（[Recorderの設定](index.md#recorder)）．
+- seamのあるframeが `recover_after` 回連続すると，streamを閉じて開き直し，`warmup_frames` frameを破棄します（最初のopenでも同じ）．seamのないframeが来ると連続数は0に戻ります．
+- 開き直しが5秒間失敗し続けると，nodeはerrorで停止します．
+- `seam_check: false` は従来の動作です：すべてのframeを送り，seamは数えません．
+
+| key | 既定値 | 意味 |
+| --- | --- | --- |
+| `seam_check` | `true` | frameごとのseam検査．`false` で従来の動作（破棄も開き直しもない） |
+| `recover_after` | `3` | 開き直しを起こす連続seam数（1以上の整数） |
+| `warmup_frames` | `10` | openのあとに破棄するframe数（0以上の整数） |
+
+keyの一覧は [Configuration](../reference/configuration/sensors.md#digit) にあります．
+
+操作画面のStatus tabでは，sensorの行に `seams N  recoveries M` が強調表示されます（どちらかが0でなくなると表示）．開き直しのたびにnodeのlogに1行出ます：`<name>: row seam at <row>, reopening the DIGIT stream (recovery <n>)`．
+
+ここまでの検証：しきい値は記録済みのRakuda2のDIGIT frame 36,524枚で選びました．rollしたframeと貼り付けられた帯をすべて検出し，seamのないframeは検出しません．開き直しの経路はfake deviceでのみ試験しています．実機で確かめるまで，この機能は模擬のみです．
+
 ### Image storage
 
 画像sensorのnode YAML に `storage: video | image` を指定します（RealSense、DIGIT、Pika 手首cameraを含む V4L2）。既定は `video` で、従来の非可逆 MP4 です。`image` は可逆 PNG frameを Parquet に埋め込みます。DIGIT と背景の微小な画素差を使う場合に推奨します。同じdataset内で混在できます。不正な値は `validate` を含む設定読み込み時に拒否します。

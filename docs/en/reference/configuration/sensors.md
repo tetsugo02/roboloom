@@ -45,6 +45,9 @@ Tactile images of a DIGIT ([DIGIT](../../sensors/digit.md)).
 | `serial` | text | required | — | Serial number |
 | `resolution` | text | `QVGA` | — | `QVGA` or `VGA`; `height` and `width` must match it (`QVGA`: `height: 320`, `width: 240`; `VGA`: `height: 640`, `width: 480`) |
 | `name` | text | the `serial` value | — | Name passed to `digit_interface` |
+| `seam_check` | boolean | `true` | — | Check every frame for a row seam; drop seamed frames and reopen a rolled stream ([DIGIT](../../sensors/digit.md#row-seam)). `false` keeps the previous behaviour <span class="status status--mock">Mock only</span> |
+| `recover_after` | integer ≥ 1 | `3` | — | Consecutive seamed frames before the stream is closed and reopened <span class="status status--mock">Mock only</span> |
+| `warmup_frames` | integer ≥ 0 | `10` | — | Frames discarded after each open, including a reopen <span class="status status--mock">Mock only</span> |
 
 `fps` must be a rate the device supports at that resolution (checked when it opens).
 
