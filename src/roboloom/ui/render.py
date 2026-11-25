@@ -223,6 +223,9 @@ def _source(f: dict, work: bool = False) -> tuple[str, Text]:
             if f.get("home_error")
             else None,
             Text(f"misses {f['misses']}", style=WATCH) if f.get("misses") else None,
+            Text(f"seams {f['seams']}  recoveries {f['recoveries']}", style=WATCH)
+            if f.get("seams") or f.get("recoveries")
+            else None,
             _gc(f),
         ]
     )

@@ -27,6 +27,10 @@ class ShapeCheckedReader:
             )
         return sample
 
+    def status(self) -> dict:
+        inner = getattr(self.reader, "status", None)
+        return inner() if callable(inner) else {}
+
     def close(self) -> None:
         self.reader.close()
 
