@@ -1,13 +1,21 @@
 import json
+import threading
 import time
+from argparse import Namespace
+from types import SimpleNamespace
 
+import pytest
 from rich.console import Console
 
+from roboloom import cli
 from roboloom.config import load_config
 from roboloom.controllers.joint import JointController
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.status import StatusReporter
+from roboloom.runtime.session import Session
+from roboloom.ui import record
 from roboloom.ui.client import SessionClient
+from roboloom.ui.launcher import LaunchPlan
 from roboloom.ui.live import LineEditor
 from roboloom.ui.render import RENDERERS, describe_report, render
 
@@ -165,6 +173,59 @@ def test_line_editor_and_client_files(tmp_path):
     assert client.status() is None
     status.write_text(json.dumps({"nodes": {}}))
     assert client.status() == {"nodes": {}}
+
+
+@pytest.mark.parametrize("mode", ["run", "record", "infer"])
+def test_plain_commands_announce_viewer_urls_once_per_change(
+    mode, tmp_path, monkeypatch, capsys
+):
+    def viewer_status(url, local_url):
+        return {"nodes": {"viewer": {"fields": {"url": url, "local_url": local_url}}}}
+
+    url = "http://robot.example:9090/"
+    updated = "http://other.example:9090/"
+    local_url = "http://localhost:9090/"
+    external = viewer_status(None, None)
+    first = viewer_status(url, local_url)
+    changed = viewer_status(updated, local_url)
+    statuses = iter([{}, external, first, first, {}, first, changed, changed])
+    finished = threading.Event()
+
+    def status():
+        item = next(statuses, None)
+        if item is None:
+            finished.set()
+            return changed
+        return item
+
+    def wait_for_status_updates(*args, **kwargs):
+        assert finished.wait(5)
+
+    session = SimpleNamespace(
+        client=SimpleNamespace(status=status),
+        process=SimpleNamespace(returncode=0),
+        log_dir=tmp_path,
+        release_note=lambda: "",
+        close=lambda: None,
+    )
+    cfg = load_config("examples/mock/config.yaml")
+    cfg.viewer = {"serve": True, "ip": None}
+    monkeypatch.setattr(Session, "launch", lambda *args, **kwargs: session)
+    monkeypatch.setattr(cli, "_plain_loop", wait_for_status_updates)
+    monkeypatch.setattr(record, "record", wait_for_status_updates)
+    cli._start(Namespace(), cfg, LaunchPlan(mode=mode), live=False, reselect=False)
+
+    lines = [
+        line
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("viewer:")
+    ]
+    assert lines == [
+        f"viewer: open Rerun in a browser: {url}",
+        f"viewer: through SSH port forwarding: {local_url}",
+        f"viewer: open Rerun in a browser: {updated}",
+        f"viewer: through SSH port forwarding: {local_url}",
+    ]
 
 
 def styles_of(text) -> dict[str, str]:

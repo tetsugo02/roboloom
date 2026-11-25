@@ -50,6 +50,21 @@ def generic(fields: dict) -> tuple[str, str]:
     return str(state), key_values(fields, ("state", "mode"))
 
 
+@register("viewer")
+def viewer(f: dict) -> tuple[str, Text]:
+    counts = {key: f.get(key) for key in ("streams", "drawn", "errors")}
+    detail = joined(
+        [
+            key_values(counts),
+            Text(str(f["error"]), style=BAD) if f.get("error") else None,
+            Text(str(f["browser_error"]), style=WATCH)
+            if f.get("browser_error")
+            else None,
+        ]
+    )
+    return str(f.get("state", "")), detail
+
+
 def joined(parts: Iterable[Text | str | None], sep: str = "  ") -> Text:
     """Detail parts (plain or styled) separated by two spaces; None parts are left out."""
     out = Text()

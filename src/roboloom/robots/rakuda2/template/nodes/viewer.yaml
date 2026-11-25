@@ -1,7 +1,13 @@
 # The live view of the observations in Rerun (option viewer; needs the viz extra).
-rate_hz: 10  # how often the view refreshes (whole Hz or whole milliseconds per tick)
-compress_images: true  # JPEG-compress images before logging (less bandwidth and memory)
-ip: null  # connect to a Rerun server at this address (with port); null: spawn a viewer
-port: null  # the server's port (with ip); null: spawn a viewer
-save: null  # save the view to this .rrd file instead of opening a viewer (with ip/port: both)
-memory_limit: "10%"  # the spawned viewer's memory budget before it drops old data
+rate_hz: 10  # redraw rate in Hz (whole Hz or whole milliseconds per tick)
+compress_images: true  # JPEG-compress color images before logging
+serve: true  # start or reuse a local web viewer server when ip is null
+ip: null  # connect to an external Rerun server when set, together with port
+port: null  # gRPC port (null uses 9876 for the local server)
+web_port: 9090  # HTTP port for the local web viewer
+bind: "0.0.0.0"  # address the local server listens on
+public_host: null  # host other machines use to reach this PC (null: hostname)
+server_memory_limit: "25%"  # local server budget for buffering data
+open_browser: false  # open the local server's viewer on this machine
+save: null  # also save to this .rrd file, or use serve: false for file only
+memory_limit: "10%"  # memory budget for the native viewer window

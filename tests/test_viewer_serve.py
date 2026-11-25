@@ -1,0 +1,254 @@
+"""The Rerun server lifecycle, over loopback and with browser launches stubbed."""
+
+from __future__ import annotations
+
+import os
+import signal
+import socket
+import subprocess
+from contextlib import suppress
+from http.client import HTTPConnection
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+import yaml
+from conftest import mock_project
+
+from roboloom.config import RobotConfig, load_config
+from roboloom.runtime import viewer
+
+
+@pytest.fixture
+def free_ports():
+    # Reserve both at once to avoid selecting the same ephemeral port twice.
+    with socket.socket() as grpc, socket.socket() as web:
+        grpc.bind(("127.0.0.1", 0))
+        web.bind(("127.0.0.1", 0))
+        ports = grpc.getsockname()[1], web.getsockname()[1]
+    return ports
+
+
+def _config(tmp_path: Path, **settings) -> RobotConfig:
+    project = mock_project(tmp_path / ".roboloom")
+    (project / "nodes" / "viewer.yaml").write_text(yaml.safe_dump(settings))
+    return load_config(project / "config.yaml", options=["viewer"], mock=True)
+
+
+@pytest.mark.skipif(viewer._rerun_cli() is None, reason="rerun CLI is unavailable")
+def test_start_serves_web_and_reuses_the_detached_server(
+    tmp_path, free_ports, monkeypatch, capsys
+):
+    import rerun as rr
+    from rerun.experimental import RrdReader
+
+    grpc_port, web_port = free_ports
+    recording = tmp_path / "view.rrd"
+    cfg = _config(
+        tmp_path,
+        bind="127.0.0.1",
+        port=grpc_port,
+        web_port=web_port,
+        server_memory_limit="64MiB",
+        save=str(recording),
+    )
+    monkeypatch.setenv("ROBOLOOM_LOG_DIR", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    monkeypatch.setenv("RERUN_TELEMETRY_ENDPOINT", "http://127.0.0.1:1")
+    processes = []
+    popen = subprocess.Popen
+
+    def track_process(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(viewer.subprocess, "Popen", track_process)
+    opened = []
+    monkeypatch.setattr(
+        viewer.webbrowser, "open", lambda url: opened.append(url) or True
+    )
+    try:
+        url, local_url, warning = viewer.start(cfg)
+        assert warning is None and opened == []
+        parsed = urlsplit(url)
+        host = socket.gethostname().lower()
+        assert parsed.hostname == host and parsed.port == web_port
+        assert parse_qs(parsed.query) == {
+            "url": [f"rerun+http://{socket.gethostname()}:{grpc_port}/proxy"],
+        }
+        parsed_local = urlsplit(local_url)
+        assert parsed_local.hostname == "localhost" and parsed_local.port == web_port
+        assert parse_qs(parsed_local.query) == {
+            "url": [f"rerun+http://localhost:{grpc_port}/proxy"],
+        }
+        (process,) = processes
+        assert os.getsid(process.pid) == process.pid
+        assert (tmp_path / "rerun-server.log").is_file()
+        lines = capsys.readouterr().err.splitlines()
+        assert any(f"PID {process.pid}" in line and url in line for line in lines)
+        assert sum(local_url in line for line in lines) == 1
+
+        http = HTTPConnection("127.0.0.1", web_port, timeout=2)
+        try:
+            http.request("GET", "/")
+            response = http.getresponse()
+            assert response.status == 200
+            assert "text/html" in response.getheader("Content-Type", "")
+            response.read()
+        finally:
+            http.close()
+        rr.log("test", rr.Scalars(1.0))
+        rr.rerun_shutdown()
+        assert any(
+            chunk.entity_path == "/test"
+            for chunk in RrdReader(recording).store().stream()
+        )
+        assert process.poll() is None  # SDK shutdown leaves the server up
+
+        cfg.viewer["open_browser"] = True
+        cfg.viewer["save"] = None
+        assert viewer.start(cfg) == (url, local_url, None)
+        assert processes == [process] and process.poll() is None
+        assert opened == [local_url]
+    finally:
+        try:
+            rr.rerun_shutdown()
+        finally:
+            for process in processes:
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGINT)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    with suppress(ProcessLookupError):
+                        os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+    assert not viewer._listening(grpc_port)
+    assert not viewer._listening(web_port)
+
+
+@pytest.mark.parametrize("save", [None, "view.rrd"])
+def test_an_explicit_server_takes_priority_over_local_serving(
+    tmp_path, monkeypatch, save
+):
+    import rerun as rr
+
+    cfg = _config(
+        tmp_path,
+        ip="127.0.0.1",
+        port=9876,
+        public_host="robot.example",
+        save=save,
+        open_browser=True,
+    )
+    sinks = []
+    monkeypatch.setattr(rr, "set_sinks", lambda *args: sinks.extend(args))
+
+    def unexpected(*args):
+        pytest.fail("external mode tried to launch a server or browser")
+
+    monkeypatch.setattr(viewer, "_ensure_server", unexpected)
+    monkeypatch.setattr(viewer.webbrowser, "open", unexpected)
+    try:
+        assert viewer.start(cfg) == (None, None, None)
+    finally:
+        rr.rerun_shutdown()
+    assert sinks[0] == rr.GrpcSink("rerun+http://127.0.0.1:9876/proxy")
+    if save is None:
+        assert len(sinks) == 1
+    else:
+        assert sinks[1:] == [
+            rr.FileSink(tmp_path / ".roboloom" / "rakuda2" / "nodes" / save)
+        ]
+
+
+def test_native_mode_passes_the_window_memory_limit(tmp_path, monkeypatch):
+    import rerun as rr
+
+    cfg = _config(tmp_path, serve=False, memory_limit="128MiB")
+    windows = []
+    monkeypatch.setattr(rr, "spawn", lambda **kwargs: windows.append(kwargs))
+    try:
+        assert viewer.start(cfg) == (None, None, None)
+    finally:
+        rr.rerun_shutdown()
+    assert windows == [{"memory_limit": "128MiB"}]
+
+
+def test_an_occupied_web_port_is_reported(tmp_path):
+    import rerun as rr
+
+    with socket.socket() as grpc, socket.socket() as web:
+        grpc.bind(("127.0.0.1", 0))
+        web.bind(("127.0.0.1", 0))
+        web.listen()
+        grpc_port, web_port = grpc.getsockname()[1], web.getsockname()[1]
+        cfg = _config(tmp_path, bind="127.0.0.1", port=grpc_port, web_port=web_port)
+        try:
+            with pytest.raises(
+                RuntimeError, match=f"web port {web_port}.*gRPC port {grpc_port}"
+            ):
+                viewer.start(cfg)
+        finally:
+            rr.rerun_shutdown()
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_browser_failure_does_not_fail_start(tmp_path, monkeypatch, raises):
+    import rerun as rr
+
+    cfg = _config(tmp_path, open_browser=True)
+    monkeypatch.setattr(viewer, "_ensure_server", lambda *args: None)
+    monkeypatch.setattr(rr, "set_sinks", lambda *args: None)
+
+    def open_browser(url):
+        if raises:
+            raise OSError("no display")
+        return False
+
+    monkeypatch.setattr(viewer.webbrowser, "open", open_browser)
+    try:
+        url, local_url, warning = viewer.start(cfg)
+    finally:
+        rr.rerun_shutdown()
+    assert url and local_url and "Could not open the Rerun web viewer" in warning
+    assert ("no display" in warning) == raises
+
+
+@pytest.mark.parametrize(
+    ("host", "authority"),
+    [("robot.example", "robot.example"), ("2001:db8::9", "[2001:db8::9]")],
+)
+def test_public_host_only_changes_the_shareable_url(
+    tmp_path, monkeypatch, host, authority
+):
+    import rerun as rr
+
+    cfg = _config(
+        tmp_path, public_host=host, port=23456, web_port=23457, open_browser=True
+    )
+    server = []
+    sinks = []
+    opened = []
+    monkeypatch.setattr(viewer, "_ensure_server", lambda *args: server.append(args))
+    monkeypatch.setattr(rr, "set_sinks", lambda *args: sinks.extend(args))
+    monkeypatch.setattr(
+        viewer.webbrowser, "open", lambda url: opened.append(url) or True
+    )
+    try:
+        url, local_url, warning = viewer.start(cfg)
+    finally:
+        rr.rerun_shutdown()
+    assert server == [(23456, 23457, "0.0.0.0", "25%")]
+    assert sinks == [rr.GrpcSink("rerun+http://127.0.0.1:23456/proxy")]
+    assert urlsplit(url).netloc == f"{authority}:23457"
+    assert parse_qs(urlsplit(url).query) == {
+        "url": [f"rerun+http://{authority}:23456/proxy"]
+    }
+    assert urlsplit(local_url).netloc == "localhost:23457"
+    assert parse_qs(urlsplit(local_url).query) == {
+        "url": ["rerun+http://localhost:23456/proxy"]
+    }
+    assert opened == [url] and warning is None

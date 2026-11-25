@@ -121,6 +121,8 @@ def test_the_viewer_loop_keeps_the_newest_and_quits(monkeypatch):
         "drawn": 1,
         "errors": 0,
         "target": None,  # examples/mock has no viewer; the loop still runs
+        "url": None,
+        "local_url": None,
     }
 
 

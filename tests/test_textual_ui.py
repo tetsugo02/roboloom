@@ -94,6 +94,70 @@ class FakeBackend:
 
 
 @pytest.mark.asyncio
+async def test_viewer_links_are_visible_on_status_and_update_only_on_url_change(
+    monkeypatch,
+):
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test(size=(80, 35)) as pilot:
+        banner = app.query_one("#viewer-links", Static)
+        assert not banner.display
+        published = []
+        update = banner.update
+
+        def track(content):
+            published.append(content.plain)
+            update(content)
+
+        monkeypatch.setattr(banner, "update", track)
+
+        def publish(url, local_url):
+            node = NodeSnapshot(
+                "viewer",
+                "viewer",
+                fields={
+                    "state": "viewing",
+                    "streams": 2,
+                    "drawn": 8,
+                    "errors": 0,
+                    "url": url,
+                    "local_url": local_url,
+                },
+            )
+            backend.publish(replace(backend.snapshot, nodes=(node,)))
+            return node
+
+        publish(None, None)
+        await pilot.pause()
+        assert not banner.display
+        url = "http://robot.example:9090/?url=rerun%2Bhttp%3A%2F%2Frobot.example%3A9876%2Fproxy"
+        local_url = (
+            "http://localhost:9090/?url=rerun%2Bhttp%3A%2F%2Flocalhost%3A9876%2Fproxy"
+        )
+        updated = url.replace("robot.example", "other.example")
+        node = publish(url, local_url)
+        await pilot.pause()
+        assert (
+            banner.display and banner.region.height > 2
+        )  # URLs wrap in a narrow terminal
+        assert app.query_one("#nodes").display and not app.query_one("#logs").display
+        assert present(node).state == "viewing"
+        assert present(node).explanation.plain == "streams=2  drawn=8  errors=0"
+        assert present(node).values == ()
+
+        publish(url, local_url)
+        backend.publish(backend.snapshot)  # absent briefly
+        publish(url, local_url)
+        publish(updated, local_url)
+        publish(updated, local_url)
+        await pilot.pause()
+        assert published == [
+            f"viewer: open Rerun in a browser: {url}\nviewer: through SSH port forwarding: {local_url}",
+            f"viewer: open Rerun in a browser: {updated}\nviewer: through SSH port forwarding: {local_url}",
+        ]
+
+
+@pytest.mark.asyncio
 async def test_edit_history_completion_paste_and_shortcut_isolation():
     backend = FakeBackend()
     app = OperatorApp(backend)

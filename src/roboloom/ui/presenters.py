@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from rich.text import Text
 
 from .models import NodeSnapshot
-from .render import RENDERERS
+from .render import RENDERERS, viewer
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,13 @@ def register_presenter(
         return presenter
 
     return add
+
+
+@register_presenter(role="viewer")
+def _viewer(node: NodeSnapshot) -> Presentation:
+    state, detail = viewer(dict(node.fields))
+    target = node.fields.get("target")
+    return Presentation(state, detail, (("target", str(target)),) if target else ())
 
 
 def present(node: NodeSnapshot) -> Presentation:
