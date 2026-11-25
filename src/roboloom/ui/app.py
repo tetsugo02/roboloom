@@ -16,7 +16,6 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Footer, OptionList, RichLog, Static, Tabs
 
-from .client import ViewerLinks
 from .command import CommandInput
 from .models import Backend, Closed, LogEvent, Notice, Snapshot
 from .presenters import present
@@ -80,7 +79,6 @@ class OperatorApp(App[str]):
     CSS = """
     Screen { layout: vertical; }
     #summary { height: 2; padding: 0 1; background: $boost; }
-    #viewer-links { height: auto; padding: 0 1; }
     #tabs { height: 3; }
     #panes { height: 1fr; layout: grid; grid-size: 3 3; grid-columns: 1fr 1 2fr; grid-rows: 1fr 1 1fr; }
     #nodes, #details, #menu, #logs { border: solid $primary; height: 1fr; }
@@ -109,13 +107,9 @@ class OperatorApp(App[str]):
         self._nodes_ratio = 1 / 3
         self._operations_ratio: float | None = None
         self._pending_logs: deque[LogEvent] = deque(maxlen=10000)
-        self._viewer_links = ViewerLinks()
 
     def compose(self) -> ComposeResult:
         yield Static("roboloom — launching", id="summary", markup=False)
-        viewer_links = Static(id="viewer-links", markup=False)
-        viewer_links.display = False
-        yield viewer_links
         yield Tabs("Status", "Details", "Logs", id="tabs")
         with Container(id="panes"):
             yield OptionList(id="nodes", markup=False)
@@ -152,8 +146,6 @@ class OperatorApp(App[str]):
     def on_resize(self, event: events.Resize) -> None:
         if self.query("#panes"):
             self._layout(event.size.width, event.size.height)
-            if self.query_one("#viewer-links").display:
-                self.call_after_refresh(self._layout)
 
     def _layout(self, width: int | None = None, height: int | None = None) -> None:
         if not self.query("#panes"):
@@ -165,12 +157,8 @@ class OperatorApp(App[str]):
         screen_height = height if height is not None else self.size.height
         completion = self.query_one("#completion")
         completion_height = completion.size.height if completion.display else 0
-        viewer_links = self.query_one("#viewer-links")
-        viewer_height = viewer_links.size.height if viewer_links.display else 0
         # Fixed chrome: summary (2), tabs (3), input (3), footer (1).
-        available_rows = max(
-            0, screen_height - 9 - completion_height - viewer_height - 1
-        )
+        available_rows = max(0, screen_height - 9 - completion_height - 1)
         operations_height = self._operations_height(available_rows)
         panes.styles.grid_rows = f"1fr 1 {operations_height}"
         available_columns = max(1, screen_width - 1)
@@ -237,14 +225,6 @@ class OperatorApp(App[str]):
             self._flush_logs()
         else:
             self.snapshot = notice
-            viewer = next(
-                (node for node in notice.nodes if node.role == "viewer"), None
-            )
-            if viewer and (links := self._viewer_links.messages(viewer.fields)):
-                banner = self.query_one("#viewer-links", Static)
-                banner.update(Text("\n".join(links), overflow="fold"))
-                banner.display = True
-                self.call_after_refresh(self._layout)
             summary = Text(notice.title, style="bold").append(
                 f"  |  {notice.mode}  |  {notice.phase}"
             )

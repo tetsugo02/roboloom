@@ -18,9 +18,9 @@ uv run roboloom record <robot> --with digit,viewer --task "pick" --seconds 30
 uv run roboloom infer <robot> --seconds 20 --with viewer
 ```
 
-1. Start a run with `viewer` enabled. The node starts or reuses a Rerun server on the robot PC by default. The interactive screen and `--plain` output both show a shareable URL and a localhost URL.
+1. Start a run with `viewer` enabled. The node starts or reuses a Rerun server on the robot PC by default. In the interactive screen, select the `viewer` node to see the shareable URL (`url`) and localhost URL (`local_url`) in the Selected node details. With `--plain`, both URLs are printed to the terminal.
 2. Open the shareable URL in a browser on the other machine. If the robot PC's hostname does not resolve there, set `public_host` in `nodes/viewer.yaml` to a hostname or IP that machine can reach, then start a new run. A firewall can block either the web viewer or the gRPC port.
-3. For access over SSH or an IDE such as Orca, forward both ports to the same local numbers and open the printed localhost URL. The defaults are `9090` for the viewer page and `9876` for the data stream.
+3. For access over SSH or an IDE such as Orca, forward both ports to the same local numbers and open the localhost URL. The defaults are `9090` for the viewer page and `9876` for the data stream.
 
 ```bash
 ssh -N -L 9090:127.0.0.1:9090 -L 9876:127.0.0.1:9876 <robot-host>

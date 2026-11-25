@@ -94,67 +94,53 @@ class FakeBackend:
 
 
 @pytest.mark.asyncio
-async def test_viewer_links_are_visible_on_status_and_update_only_on_url_change(
-    monkeypatch,
-):
+async def test_viewer_links_are_shown_in_selected_node_details():
     backend = FakeBackend()
+    target = "rerun+http://robot.example:9876/proxy"
+    url = "http://robot.example:9090/?url=rerun%2Bhttp%3A%2F%2Frobot.example%3A9876%2Fproxy"
+    local_url = (
+        "http://localhost:9090/?url=rerun%2Bhttp%3A%2F%2Flocalhost%3A9876%2Fproxy"
+    )
+    viewer = NodeSnapshot(
+        "viewer",
+        "viewer",
+        fields={
+            "state": "viewing",
+            "target": target,
+            "url": url,
+            "local_url": local_url,
+        },
+    )
+    backend.snapshot = replace(
+        backend.snapshot, nodes=(*backend.snapshot.nodes, viewer)
+    )
     app = OperatorApp(backend)
     async with app.run_test(size=(80, 35)) as pilot:
-        banner = app.query_one("#viewer-links", Static)
-        assert not banner.display
-        published = []
-        update = banner.update
-
-        def track(content):
-            published.append(content.plain)
-            update(content)
-
-        monkeypatch.setattr(banner, "update", track)
-
-        def publish(url, local_url):
-            node = NodeSnapshot(
-                "viewer",
-                "viewer",
-                fields={
-                    "state": "viewing",
-                    "streams": 2,
-                    "drawn": 8,
-                    "errors": 0,
-                    "url": url,
-                    "local_url": local_url,
-                },
-            )
-            backend.publish(replace(backend.snapshot, nodes=(node,)))
-            return node
-
-        publish(None, None)
+        assert not app.query("#viewer-links")
+        app.query_one("#nodes", OptionList).focus()
+        await pilot.press("down", "down")
+        app.query_one("#tabs", Tabs).active = "tab-2"
         await pilot.pause()
-        assert not banner.display
-        url = "http://robot.example:9090/?url=rerun%2Bhttp%3A%2F%2Frobot.example%3A9876%2Fproxy"
-        local_url = (
-            "http://localhost:9090/?url=rerun%2Bhttp%3A%2F%2Flocalhost%3A9876%2Fproxy"
+        assert app.query_one("#details").display
+        detail = app.query_one("#detail", Static)
+        console = Console(width=160)
+        with console.capture() as capture:
+            console.print(detail.content)
+        assert f"target{target}url{url}local_url{local_url}" in "".join(
+            capture.get().split()
         )
-        updated = url.replace("robot.example", "other.example")
-        node = publish(url, local_url)
-        await pilot.pause()
-        assert (
-            banner.display and banner.region.height > 2
-        )  # URLs wrap in a narrow terminal
-        assert app.query_one("#nodes").display and not app.query_one("#logs").display
-        assert present(node).state == "viewing"
-        assert present(node).explanation.plain == "streams=2  drawn=8  errors=0"
-        assert present(node).values == ()
 
-        publish(url, local_url)
-        backend.publish(backend.snapshot)  # absent briefly
-        publish(url, local_url)
-        publish(updated, local_url)
-        publish(updated, local_url)
-        await pilot.pause()
-        assert published == [
-            f"viewer: open Rerun in a browser: {url}\nviewer: through SSH port forwarding: {local_url}",
-            f"viewer: open Rerun in a browser: {updated}\nviewer: through SSH port forwarding: {local_url}",
-        ]
+        for url_fields in ({}, {"url": None, "local_url": None}):
+            node = replace(viewer, fields={"target": target, **url_fields})
+            backend.publish(
+                replace(backend.snapshot, nodes=(*backend.snapshot.nodes[:-1], node))
+            )
+            await pilot.pause()
+            with console.capture() as capture:
+                console.print(detail.content)
+            rendered = capture.get()
+            assert "target" in rendered and target in rendered
+            assert "url" not in rendered
 
 
 @pytest.mark.asyncio

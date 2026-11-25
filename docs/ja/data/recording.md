@@ -18,7 +18,7 @@ uv run roboloom record <robot> --with digit,viewer --task "pick" --seconds 30
 uv run roboloom infer <robot> --seconds 20 --with viewer
 ```
 
-1. `viewer` を有効にして実行します．既定では node が robot 側 PC の Rerun server を自動で起動または再利用します．対話画面と `--plain` 出力の両方に，共有用の URL と localhost の URL が表示されます．
+1. `viewer` を有効にして実行します．既定では node が robot 側 PC の Rerun server を自動で起動または再利用します．対話画面で `viewer` node を選ぶと，Selected node の詳細に共有用の URL（`url`）と localhost の URL（`local_url`）が表示されます．`--plain` では両方の URL が端末に出力されます．
 2. 手元の PC の browser で共有用の URL を開きます．robot 側 PC の host 名を解決できない場合は，`nodes/viewer.yaml` の `public_host` に手元から接続できる host 名または IP を設定し，改めて実行します．firewall により web viewer や gRPC の port に接続できない場合があります．
 3. SSH や Orca などの IDE からは，両方の port を同じ番号で手元に転送し，表示された localhost の URL を開きます．既定では viewer のページが `9090`，data stream が `9876` です．
 

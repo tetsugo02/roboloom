@@ -17,6 +17,8 @@ from roboloom.ui import record
 from roboloom.ui.client import SessionClient
 from roboloom.ui.launcher import LaunchPlan
 from roboloom.ui.live import LineEditor
+from roboloom.ui.models import NodeSnapshot
+from roboloom.ui.presenters import present
 from roboloom.ui.render import RENDERERS, describe_report, render
 
 S = 1_000_000_000
@@ -175,6 +177,43 @@ def test_line_editor_and_client_files(tmp_path):
     assert client.status() == {"nodes": {}}
 
 
+@pytest.mark.parametrize(
+    ("link_fields", "link_values"),
+    [
+        (
+            {
+                "local_url": "http://localhost:9090/",
+                "url": "http://robot.example:9090/",
+            },
+            (
+                ("url", "http://robot.example:9090/"),
+                ("local_url", "http://localhost:9090/"),
+            ),
+        ),
+        ({}, ()),
+        ({"url": None, "local_url": ""}, ()),
+    ],
+)
+def test_viewer_presentation_values(link_fields, link_values):
+    target = "rerun+http://robot.example:9876/proxy"
+    node = NodeSnapshot(
+        "viewer",
+        "viewer",
+        fields={
+            "state": "viewing",
+            "streams": 2,
+            "drawn": 8,
+            "errors": 0,
+            "target": target,
+            **link_fields,
+        },
+    )
+    description = present(node)
+    assert description.state == "viewing"
+    assert description.explanation.plain == "streams=2  drawn=8  errors=0"
+    assert description.values == (("target", target), *link_values)
+
+
 @pytest.mark.parametrize("mode", ["run", "record", "infer"])
 def test_plain_commands_announce_viewer_urls_once_per_change(
     mode, tmp_path, monkeypatch, capsys
@@ -187,7 +226,14 @@ def test_plain_commands_announce_viewer_urls_once_per_change(
     local_url = "http://localhost:9090/"
     external = viewer_status(None, None)
     first = viewer_status(url, local_url)
-    changed = viewer_status(updated, local_url)
+    changed = {
+        "nodes": {
+            "rerun": {
+                "role": "viewer",
+                "fields": {"url": updated, "local_url": local_url},
+            }
+        }
+    }
     statuses = iter([{}, external, first, first, {}, first, changed, changed])
     finished = threading.Event()
 

@@ -74,8 +74,12 @@ class ViewerLinks:
         return lines
 
     def from_status(self, status: dict | None) -> tuple[str, ...]:
-        fields = (status or {}).get("nodes", {}).get("viewer", {}).get("fields", {})
-        return self.messages(fields)
+        nodes = (status or {}).get("nodes", {})
+        viewer = next(
+            (node for node in nodes.values() if node.get("role") == "viewer"),
+            nodes.get("viewer", {}),
+        )
+        return self.messages(viewer.get("fields", {}))
 
 
 @contextmanager
