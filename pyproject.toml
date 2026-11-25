@@ -11,16 +11,17 @@ license = "MIT"
 license-files = ["LICENSE", "src/roboloom/robots/piper/model/LICENSE.piper_ros"]
 authors = [{ name = "tetsugo", email = "tetsugou2002@gmail.com" }]
 keywords = ["robotics", "teleoperation", "data-collection", "lerobot", "dora"]
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12"
 dependencies = [
-    "dora-rs==1.0.1",
-    "dora-rs-cli==1.0.1",
-    "PyYAML>=6,<7",
+    "dora-rs>=1.0.1,<2",
+    "dora-rs-cli>=1.0.1,<2",
+    "PyYAML>=6",
     "numpy>=1.26,<3",
-    "opencv-python-headless>=4.9,<4.14",  # same package and range as lerobot 0.7.0, so both share one cv2
-    "pyserial>=3.5,<4",  # shared by Dynamixel and Pika serial links
-    "rich>=13,<16",
-    "textual>=8,<9",
+    "opencv-python-headless>=4.9,<6",  # headless cv2; lerobot narrows this when record/policy/train is installed
+    "pyarrow>=14",
+    "pyserial>=3.5",  # shared by Dynamixel and Pika serial links
+    "rich>=13",
+    "textual>=6",
 ]
 
 [project.urls]
@@ -30,11 +31,11 @@ Repository = "https://github.com/tetsugo02/roboloom"
 Issues = "https://github.com/tetsugo02/roboloom/issues"
 
 [project.optional-dependencies]
-audio = ["sounddevice>=0.4,<1", "librosa>=0.10,<1"]
-rakuda2 = ["dynamixel-sdk>=3.7,<4"]  # Rakuda2 follower and Rakuda-mini leader
+audio = ["sounddevice>=0.4", "librosa>=0.10,<2"]
+rakuda2 = ["dynamixel-sdk>=3.7,<5"]  # Rakuda2 follower and Rakuda-mini leader
 piper = [
-    "piper_sdk>=0.6.2,<0.7",
-    "pin>=4.1,<5",  # pose_ik for Pika Sense teleoperation
+    "piper_sdk>=0.6,<0.7",
+    "pin>=4,<5",  # pose_ik for Pika Sense teleoperation
 ]
 pika = [
     # PyPI has no Python 3.12 wheels/sdist. A wheel from the libsurvive fork
@@ -43,10 +44,10 @@ pika = [
     "pysurvive @ https://github.com/tetsugo02/libsurvive/releases/download/roboloom-2/pysurvive-1.1.227-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.12'",
 ]
 # Shared features, independent of the robot.
-record = ["lerobot[dataset]==0.7.0"]
+record = ["lerobot[dataset]>=0.6.1,<0.8", "pillow>=10"]
 hardware = [
-    "pyrealsense2>=2.55,<3",
-    "sounddevice>=0.4,<1",
+    "pyrealsense2>=2.55",
+    "sounddevice>=0.4",
 ]
 digit = [
     # DIGIT tactile sensors. Upstream digit-interface 0.2.1 (archived) requires opencv-python,
@@ -55,23 +56,23 @@ digit = [
     # depends on opencv-python-headless instead.
     "digit-interface @ https://github.com/tetsugo02/digit-interface/releases/download/roboloom-1/digit_interface-0.2.1-py3-none-any.whl",
 ]
-ik = ["pin>=4.1,<5"]  # inverse kinematics (controllers.pose_ik)
-viz = ["lerobot[viz]==0.7.0"]  # live view of the observations in Rerun (viewer node)
-policy = ["lerobot==0.7.0"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
-train = ["lerobot[training]==0.7.0"]  # lerobot-train on roboloom datasets (accelerate, trackio)
+ik = ["pin>=4,<5"]  # inverse kinematics (controllers.pose_ik)
+viz = ["lerobot[viz]>=0.6.1,<0.8"]  # live view of the observations in Rerun (viewer node)
+policy = ["lerobot>=0.6.1,<0.8"]  # LeRobot checkpoints (policy.lerobot); torch comes with it
+train = ["lerobot[training]>=0.6.1,<0.8"]  # lerobot-train on roboloom datasets (accelerate, trackio)
 test = [
-    "pytest>=8,<9",
-    "dynamixel-sdk>=3.7,<4",
-    "lerobot[dataset,viz]==0.7.0",
-    "pytest-asyncio>=1,<2",
-    "pin>=4.1,<5",
+    "pytest>=8",
+    "dynamixel-sdk>=3.7,<5",
+    "lerobot[dataset,viz]>=0.6.1,<0.8",
+    "pytest-asyncio>=1",
+    "pin>=4,<5",
 ]
 
 [project.scripts]
 roboloom = "roboloom.cli:main"
 
 [tool.uv]
-# LeRobot 0.7.0 caps numpy<2.3, a bound inherited from opencv-python-headless 4.12 (4.13
+# LeRobot 0.6.1–0.7.0 caps numpy<2.3, a bound inherited from opencv-python-headless 4.12 (4.13
 # dropped it). Lift it everywhere (NumPy <2.3 also has no CPython 3.14 wheels). Not published
 # in the package metadata: a project using roboloom's LeRobot extras needs the same override.
 override-dependencies = [

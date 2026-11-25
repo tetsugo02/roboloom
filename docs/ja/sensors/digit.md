@@ -66,7 +66,7 @@ keyの一覧は [Configuration](../reference/configuration/sensors.md#digit) に
 
 画像sensorのnode YAML に `storage: video | image` を指定します（RealSense、DIGIT、Pika 手首cameraを含む V4L2）。既定は `video` で、従来の非可逆 MP4 です。`image` は可逆 PNG frameを Parquet に埋め込みます。DIGIT と背景の微小な画素差を使う場合に推奨します。同じdataset内で混在できます。不正な値は `validate` を含む設定読み込み時に拒否します。
 
-PNG は一般に容量と PNG 圧縮・書き込み負荷が増えます。実際の容量と速度は画像内容と機器に依存します。非圧縮 RGB の参考値は 320×240×3、dataset fps 30 でsensorあたり 6.9 MB/s（640×480 は 27.6 MB/s）です。PNG の実測値ではありません。LeRobot 0.7.0 の `image` の PNG 圧縮levelは 6 です。保存形式の変更は feature dtype の変更になるため、別のdataset `output` を指定してください。以前のschemaへの追記は拒否します。
+PNG は一般に容量と PNG 圧縮・書き込み負荷が増えます。実際の容量と速度は画像内容と機器に依存します。非圧縮 RGB の参考値は 320×240×3、dataset fps 30 でsensorあたり 6.9 MB/s（640×480 は 27.6 MB/s）です。PNG の実測値ではありません。LeRobot の `image` の PNG 圧縮levelは 6 です。保存形式の変更は feature dtype の変更になるため、別のdataset `output` を指定してください。以前のschemaへの追記は拒否します。
 
 live観測は引き続き HWC uint8 RGB です。LeRobot の読み出しは両形式とも既定で CHW float32、範囲 [0, 1] になり、checkpointの入力型は `VISUAL` のままです。保存形式は mock・合成frameのみで試験し、実機では未検証です。
 

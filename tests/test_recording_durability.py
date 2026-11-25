@@ -203,7 +203,8 @@ def test_frames_that_do_not_match_the_rows_fail_the_save(tmp_path):
 
 
 def test_another_lerobot_closes_the_files_through_its_public_api(tmp_path, monkeypatch):
-    monkeypatch.setattr(journal, "CHECKPOINT_VERSION", "not this one")
+    assert {"0.6.1", "0.7.0"} <= journal.CHECKPOINT_VERSIONS
+    monkeypatch.setattr(journal, "CHECKPOINT_VERSIONS", frozenset())
     cfg = _cfg(tmp_path)
     recorder = EpisodeRecorder(cfg, **cfg.recorder)
     _record(recorder, 1_000_000_000)

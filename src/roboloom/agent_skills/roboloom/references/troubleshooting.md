@@ -96,4 +96,4 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 | `has no` `` `type: policy` `` `controller` | `infer` without a policy option | Declare an option named `policy` |
 | `InProcessSession drives one follower` / `policy controllers run in the dora dataflow` / `a leader whose motors run control laws needs its own process` | Configuration too big for `InProcessSession` | Use `Session` ([in-process.md](in-process.md)) |
 | `the installed skill differs from this roboloom's` | Skill copy outdated | `uv run roboloom skills install --force` |
-| uv: Python version / `requires-python` resolution failure | Project allows Python outside 3.12–3.14 | `requires-python` within `">=3.12,<3.15"` ([installation.md](installation.md)) |
+| uv: Python version / `requires-python` resolution failure | Project allows Python below 3.12 | Set `requires-python` to `">=3.12"` or higher ([installation.md](installation.md)) |

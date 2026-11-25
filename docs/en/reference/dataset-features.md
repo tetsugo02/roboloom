@@ -2,7 +2,7 @@
 
 | Detail | Description |
 | --- | --- |
-| — | The columns (features) roboloom writes to a LeRobotDataset 0.7.0. Which columns exist depends on the configuration's followers, inputs, sensors and recorded estimators, and on the enabled options. `roboloom.recording.features(cfg)` lists them for a configuration (see [Recording](python-api/recording.md#features)). How rows are assigned and how missing data is handled is in [Data format](../data/format.md). |
+| — | The columns (features) roboloom writes to a LeRobotDataset (v3.0). Which columns exist depends on the configuration's followers, inputs, sensors and recorded estimators, and on the enabled options. `roboloom.recording.features(cfg)` lists them for a configuration (see [Recording](python-api/recording.md#features)). How rows are assigned and how missing data is handled is in [Data format](../data/format.md). |
 | — | `<follower>`, `<input>`, `<sensor>`, `<estimator>` and `<source>` are node names in the configuration (`follower`, `leader`, `camera`, `digit_left` and so on in the Rakuda2 template). |
 | — | `<source>` is every recorded node (inputs, followers, sensors, estimators with `record: true`). |
 | — | A column shared by several nodes (`observation.state` and others) joins their values in configuration order. Its `names` tell which entry belongs to which node (`follower.r_arm_sh_pitch1`). |

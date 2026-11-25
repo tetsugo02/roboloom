@@ -12,13 +12,18 @@ def load(name: str) -> dict:
 
 def test_only_headless_opencv_is_required():
     project = load("pyproject.toml")["project"]
+    assert project["requires-python"] == ">=3.12"
     requirements = [
         *project["dependencies"],
         *(r for extra in project["optional-dependencies"].values() for r in extra),
     ]
-    assert "opencv-python-headless>=4.9,<4.14" in [
-        r.split("#")[0].strip() for r in requirements
-    ]
+    cleaned = [r.split("#")[0].strip() for r in requirements]
+    assert "opencv-python-headless>=4.9,<6" in cleaned
+    assert not any(
+        r == "opencv-python"
+        or r.startswith(("opencv-python<", "opencv-python>", "opencv-python="))
+        for r in cleaned
+    )
     # opencv-python and opencv-python-headless both install cv2/
     locked = {p["name"] for p in load("uv.lock")["package"]}
     assert "opencv-python-headless" in locked and "opencv-python" not in locked
