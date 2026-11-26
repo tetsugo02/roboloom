@@ -1,6 +1,6 @@
 # roboloom
 
-roboloomは，robotのteleoperationで観測と行動を集め，LeRobotDataset（0.7.0）に保存し，学習した方策で同じrobotを動かすPython packageです．
+roboloomは，robotのteleoperationで観測と行動を集め，LeRobotDataset（v3.0）に保存し，学習した方策で同じrobotを動かすPython packageです．
 
 - **収集**：leaderや手に持つ機器でfollowerを動かし，cameraや触覚と一緒に記録する．
 - **学習**：記録をそのまま `lerobot-train` や自作のmodelで学習する．

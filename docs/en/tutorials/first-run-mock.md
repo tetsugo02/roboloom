@@ -3,7 +3,7 @@
 <span class="status status--mock">Mock only</span>
 
 - **Goal**: start, record, save and check a dataset with mock devices.
-- **Prerequisites**: a clone of the roboloom repository, Python 3.12–3.14 and uv. `examples/` exists only in the clone; it is not in the installed package.
+- **Prerequisites**: a clone of the roboloom repository, Python 3.12+ (tested on 3.12–3.14) and uv. `examples/` exists only in the clone; it is not in the installed package.
 - **Time**: 15 minutes.
 - **Result**: `datasets/rakuda-mock` holds a LeRobotDataset with two episodes, and `check-dataset` reports `problems: none`.
 

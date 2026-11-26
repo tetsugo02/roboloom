@@ -10,12 +10,12 @@
 [![Release](https://img.shields.io/github/v/release/tetsugo02/roboloom)](https://github.com/tetsugo02/roboloom/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Teleoperation, multimodal data collection, and policy inference on [dora-rs](https://github.com/dora-rs/dora), saving directly to **LeRobotDataset (0.7.0)**.
+Teleoperation, multimodal data collection, and policy inference on [dora-rs](https://github.com/dora-rs/dora), saving directly to **LeRobotDataset (v3.0)**.
 
 ## Features
 
-- **Process-isolated dataflow**: Runs inputs, controllers, followers, sensors, policy, and recorder as separate dora-rs (`1.0.1`) nodes.
-- **LeRobotDataset 0.7.0**: Records synchronized robot state, actions, RGB cameras, DIGIT tactile sensors, and audio ready for `lerobot-train`.
+- **Process-isolated dataflow**: Runs inputs, controllers, followers, sensors, policy, and recorder as separate dora-rs (`1.x`) nodes.
+- **LeRobotDataset v3.0**: Records synchronized robot state, actions, RGB cameras, DIGIT tactile sensors, and audio ready for `lerobot-train`.
 - **Hardware safety & gravity compensation**: Enforces per-joint speed clamping, jump rejection, EEPROM verification, watchdogs, and leader gravity compensation.
 - **Interactive UI, CLI & Python API**: Textual operator screen and launcher, `--plain` non-interactive CLI, and `Session` / `InProcessSession` Python APIs.
 - **Live view (Rerun)** *(mock only)*: Optional isolated `viewer` node streams observations, actions, capture ages, and session events to Rerun (`--with viewer`, `viz` extra).
@@ -48,10 +48,10 @@ See the full [Support matrix](https://tetsugo02.github.io/roboloom/en/get-starte
 
 ## Installation
 
-Requires **Python 3.12–3.14**, [uv](https://docs.astral.sh/uv/), and Git. Add roboloom to your project:
+Requires **Python 3.12+** (tested on 3.12–3.14), [uv](https://docs.astral.sh/uv/), and Git. Add roboloom to your project:
 
 ```bash
-uv init --python '>=3.12,<3.15' my-robot
+uv init --python '>=3.12' my-robot
 cd my-robot
 uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.2 --extra rakuda2 --extra record --extra hardware --extra digit
 ```
@@ -60,11 +60,11 @@ uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.2 --extra rakuda
 | --- | --- |
 | *(base)* | Core dora runtime, config validation, CLI, mock devices |
 | `rakuda2` | Dynamixel SDK for Rakuda2 follower & Rakuda-mini leader |
-| `record` | LeRobotDataset recording (`lerobot[dataset]==0.7.0`) |
+| `record` | LeRobotDataset recording (`lerobot[dataset]>=0.6.1,<0.8`) |
 | `hardware` | RealSense (`pyrealsense2`) and audio input (`sounddevice`) |
 | `digit` | DIGIT tactile sensors |
 | `piper`, `pika` | PiPER SDK, Pinocchio IK, and Pika tracker/cameras *(in development)* |
-| `viz` | Live view in Rerun (`lerobot[viz]==0.7.0`: `rerun-sdk`, `foxglove-sdk`; *mock only*) |
+| `viz` | Live view in Rerun (`lerobot[viz]>=0.6.1,<0.8`: `rerun-sdk`, `foxglove-sdk`; *mock only*) |
 | `policy`, `train` | LeRobot policy checkpoints and `lerobot-train` *(Python 3.12–3.13)* |
 
 When using `record`, `viz`, `policy`, or `train`, add the NumPy override below to your project's `pyproject.toml` (required on Python 3.14; allows NumPy 2.3+ on 3.12–3.13):

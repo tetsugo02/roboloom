@@ -25,7 +25,7 @@ action_horizon: 1     # mode: step のとき
 | `rename` | checkpointの特徴量の名前を，この構成の名前に対応させます．例：`{observation.images.wrist: observation.images.left_wrist}` |
 | `revision` | Hubのrevision（任意） |
 
-- 読み込みは，LeRobot 0.7.0のrolloutと同じ手順です．設定と重み，保存された前処理と後処理（正規化の統計を含む）をcheckpointから読みます．
+- 読み込みは，LeRobot（0.6.1+ / 0.7.x）のrolloutと同じ手順です．設定と重み，保存された前処理と後処理（正規化の統計を含む）をcheckpointから読みます．
 - 読み込むときに，checkpointの入力と出力を，この構成の観測とfollowerと照らします．足りない観測や大きさの違いがあれば，名前を挙げて断ります．
   - 入力として照らすのは，LeRobotの方策が読むもの（`observation.state`，`observation.images.*`，`observation.environment_state`）です．
   - LeRobotの学習は，datasetの `observation.*` をすべて入力として記録します（`observation.meta.*`，`observation.effort`，Pika Senseの `observation.left_sense` など）．LeRobotの方策はこれらを読まないので，推論の構成になくても構いません．

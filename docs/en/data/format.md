@@ -1,6 +1,6 @@
 # Dataset format
 
-With the `record` extra, data is saved as LeRobotDataset 0.7.0. Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by the last valid value and validity flags. `task` is recorded in each frame. Every column with its dtype and shape is listed in [Dataset features](../reference/dataset-features.md).
+With the `record` extra, data is saved as LeRobotDataset (v3.0). Monotonic-clock timestamps for capture, availability, reception, and command sending are kept distinct for alignment, and missing data is represented by the last valid value and validity flags. `task` is recorded in each frame. Every column with its dtype and shape is listed in [Dataset features](../reference/dataset-features.md).
 
 ## What is recorded { #features }
 

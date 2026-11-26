@@ -3,7 +3,7 @@
 <span class="status status--mock">Mock only</span>
 
 - **Goal**: train the sample policy `chunk_mlp.py` on a mock recording and run it with `roboloom infer`, and see where your own model goes.
-- **Prerequisites**: Python 3.12–3.14, uv, and a clone of the roboloom repository (next to the project, `../roboloom`). You have read [Installation](../get-started/installation.md). No hardware.
+- **Prerequisites**: Python 3.12+ (tested on 3.12–3.14), uv, and a clone of the roboloom repository (next to the project, `../roboloom`). You have read [Installation](../get-started/installation.md). No hardware.
 - **Time**: 30 minutes.
 - **Result**: the policy drives a mock Rakuda2 and one episode is saved in the evaluation dataset `datasets/rakuda2-eval`.
 
@@ -20,7 +20,7 @@ flowchart LR
 ## 1. Create a trial project
 
 ```bash
-uv init --python '>=3.12,<3.15' my_policy_trial && cd my_policy_trial
+uv init --python '>=3.12' my_policy_trial && cd my_policy_trial
 uv add git+https://github.com/tetsugo02/roboloom.git --tag v0.2.2 --extra rakuda2 --extra record --extra policy
 uv run roboloom init rakuda2
 cp ../roboloom/examples/policies/chunk_mlp.py .roboloom/rakuda2/   # from a clone of the repository

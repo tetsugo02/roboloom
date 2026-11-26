@@ -6,7 +6,7 @@
 | --- | --- |
 | 対象 | 観測・行動・取得からの経過時間・session の event を Rerun へ流す任意の `viewer` service node（[状態label](../status-labels.md)） |
 | 使い方と背景 | [Live view（Rerun）](../../data/recording.md#live-view)，[viewer を独立した node にする理由](../../explanation/viewer.md) |
-| 必要な extra | `viz`（`lerobot[viz]==0.7.0`：`rerun-sdk`，`foxglove-sdk`．[Installation](../../get-started/installation.md)）．無効のときは Rerun を確認も import もしない |
+| 必要な extra | `viz`（`lerobot[viz]>=0.6.1,<0.8`：`rerun-sdk`，`foxglove-sdk`．[Installation](../../get-started/installation.md)）．無効のときは Rerun を確認も import もしない |
 
 ## 有効化と node file { #enabling }
 

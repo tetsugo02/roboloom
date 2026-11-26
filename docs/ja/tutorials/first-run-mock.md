@@ -3,7 +3,7 @@
 <span class="status status--mock">模擬のみ</span>
 
 - **目的**：模擬のdeviceで，起動，記録，保存，検査を一周する．
-- **前提**：roboloomのrepositoryをcloneし，Python 3.12〜3.14とuvがある．`examples/` はcloneした中だけにあり，installしたpackageには入っていない．
+- **前提**：roboloomのrepositoryをcloneし，Python 3.12以上（3.12〜3.14で試験済み）とuvがある．`examples/` はcloneした中だけにあり，installしたpackageには入っていない．
 - **所要**：15分．
 - **結果**：`datasets/rakuda-mock` に2 episodeのLeRobotDatasetができ，`check-dataset` が `problems: none` を返す．
 

@@ -6,7 +6,7 @@
 | --- | --- |
 | Scope | Optional `viewer` service node streaming live observations, actions, capture ages, and session events to Rerun ([Status labels](../status-labels.md)) |
 | Usage and background | [Live view (Rerun)](../../data/recording.md#live-view), [Why the viewer is a separate node](../../explanation/viewer.md) |
-| Required extra | `viz` (`lerobot[viz]==0.7.0`: `rerun-sdk`, `foxglove-sdk`; [Installation](../../get-started/installation.md)). Off when unconfigured; Rerun is not checked or imported unless enabled |
+| Required extra | `viz` (`lerobot[viz]>=0.6.1,<0.8`: `rerun-sdk`, `foxglove-sdk`; [Installation](../../get-started/installation.md)). Off when unconfigured; Rerun is not checked or imported unless enabled |
 
 ## Enabling and node file { #enabling }
 
