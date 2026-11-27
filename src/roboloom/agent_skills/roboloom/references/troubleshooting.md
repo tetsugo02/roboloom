@@ -60,7 +60,7 @@ guessing a `SET_` value; or deleting a dataset. See [safety.md](safety.md).
 
 | Message fragment | Cause | Fix |
 | --- | --- | --- |
-| `move the leader: <joint> differs by D (tolerance T)` (state `aligning`) | Leader not within `alignment_tolerance` of the follower | The user moves the leader to the follower's pose and retries. Do not widen the tolerance |
+| `move the leader: <joint> differs by D (tolerance T)` (state `aligning`) | Leader not within `alignment_tolerance` of the follower | The user moves the leader to the follower's pose and retries. Do not widen the tolerance, except per joint for a gripper that holds an object (it cannot close to a squeezed leader): `alignment_tolerance` on that entry of `joints` |
 | `the follower is not at the leader:` | Follower lagging (speed/range limits) | Hold the leader still near the follower, retry |
 | `not ready after 30 s:` | `wait_ready` timed out on one of the above | Same; pass a longer `timeout` only if the user is aligning |
 | `controller failed:` | E.g. the policy did not load or `bind` raised | Read the error; waiting does not help |
