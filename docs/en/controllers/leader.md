@@ -21,7 +21,7 @@ These are the values from the distributed template. Set them after checking the 
 
 | Key | Meaning |
 | --- | --- |
-| `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it |
+| `alignment_tolerance` | Allowed joint difference between leader and follower before following begins and before every episode `start` (counts); `start` is refused above it. An entry of `joints` may set its own (`alignment_tolerance: 1000` on a gripper that holds an object and so stops short of a squeezed leader) <span class="status status--mock">Mock only</span> |
 | `joints` | Optional. Left out: each follower joint follows the input joint of the same name (the input must have every follower joint). Written: one `{leader, follower, sign, offset}` per follower joint, in the follower's order, for other names, flipped directions (`sign: -1`) or offsets (target = leader × sign + offset). A leader whose gear ratio or unit differs from the follower's (a GELLO-style leader read in counts for an arm in rad) adds `scale` (a positive number) to every joint: target = sign × scale × leader + offset. With a `scale` on every joint the input's unit may differ from the follower's (`offset`, `max_speed` and `alignment_tolerance` are in the follower's unit). Not together with force feedback (`feedback`) |
 | `unit` | Optional. The input's and the follower's unit must be the same (Rakuda2: `dynamixel_count`); when written it must equal both |
 | `max_speed` | Upper limit on the rate of change of the target (follower unit/s; counts/s on Rakuda2) |

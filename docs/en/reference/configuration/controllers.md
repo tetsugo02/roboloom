@@ -31,7 +31,7 @@ Maps a leader's joints onto one follower's joints. Its input is a joint input (s
 | Key | Type | Default | Unit | Description |
 | --- | --- | --- | --- | --- |
 | `input` | text | required | — | Name of the input node |
-| `alignment_tolerance` | number | required | follower unit | Leader-follower difference allowed before following starts and at every episode start |
+| `alignment_tolerance` | number | required | follower unit | Leader-follower difference allowed before following starts and at every episode start; a joint of `joints` may set its own |
 | `max_speed` | number | required | follower unit/s | How far a teleoperation target may move per period ([Units](index.md#units)) |
 | `input_timeout_ms` | number | required | ms | Commands stop when the input gets older than this |
 | `unit` | text | — | — | If written, the input's and the follower's unit; with a `scale` on every joint the input's unit may differ |
@@ -51,6 +51,7 @@ An input with the follower's joint names and unit (Rakuda-mini and Rakuda2) need
 | `sign` | `1` or `-1` | required | — | Direction |
 | `offset` | number | required | follower unit | Offset |
 | `scale` | positive number | `1.0` | follower unit / input unit | Gear ratio or unit conversion; not together with `feedback` |
+| `alignment_tolerance` | positive number | the controller's | follower unit | This joint's tolerance in the first alignment and before every start. For a gripper that holds an object: it stops at the object, short of a squeezed leader, and the controller's value would refuse `start`. A takeover by a policy's teleop keeps the controller's value <span class="status status--mock">Mock only</span> |
 
 ### Joint compensation (couplings) { #couplings }
 

@@ -21,6 +21,12 @@ GELLO-style leader in counts for an arm in rad) adds `scale` to every entry:
 
 With a `scale` on every joint the input's unit may differ from the follower's;
 `max_speed`, `alignment_tolerance` and `offset` stay in the follower's unit.
+
+An entry of `joints` may carry its own `alignment_tolerance` (the follower's unit), used
+for that joint instead of the controller's in the first alignment and in the check before
+every start: a gripper holding an object stops at the object, short of a squeezed leader,
+so it needs a wider one than the arm joints. A takeover (`begin_takeover`) keeps the
+controller's value for every joint.
 """
 
 from __future__ import annotations
@@ -109,7 +115,16 @@ class JointController(Controller):
             )
         for j in mapping:
             unknown_keys(
-                j, ("leader", "follower", "sign", "offset", "scale"), f"{name}.joints"
+                j,
+                (
+                    "leader",
+                    "follower",
+                    "sign",
+                    "offset",
+                    "scale",
+                    "alignment_tolerance",
+                ),
+                f"{name}.joints",
             )
         leaders = [j.get("leader") for j in mapping]
         if (
@@ -146,6 +161,14 @@ class JointController(Controller):
         for field in ("alignment_tolerance", "max_speed", "input_timeout_ms"):
             positive(cfg.get(field), f"{name}.{field}")
         self.mapping: list[dict] = mapping
+        # per follower joint: its own alignment_tolerance, or the controller's
+        self.tolerances = [
+            positive(
+                j.get("alignment_tolerance", cfg["alignment_tolerance"]),
+                f"{name}.joints[{j['follower']}].alignment_tolerance",
+            )
+            for j in mapping
+        ]
         self.source_joints = source.joint_names
         self.couplings = JointCouplings(
             cfg.get("couplings", []), robot.joint_names, name
@@ -172,9 +195,10 @@ class JointController(Controller):
         self.last_target_ns = 0
         self.aligned = False
         self.state = "waiting_input"
-        # Joint farthest from the leader at the last update, also while following: every
-        # start is checked against it, not only the first alignment.
-        self.worst: tuple[str, float] | None = None
+        # Joint farthest in units of its tolerance at the last update (name, difference,
+        # tolerance), also while following: every start is checked against it, not only
+        # the first alignment.
+        self.worst: tuple[str, float, float] | None = None
         # a takeover in progress (`begin_takeover`): joints hold until the leader reaches them
         self.pickup: JointPickup | None = None
 
@@ -218,7 +242,13 @@ class JointController(Controller):
         return self.homes.get(self.follower.name)
 
     def status(self) -> dict:
-        out: dict = {"state": self.state, "tolerance": self.cfg["alignment_tolerance"]}
+        out: dict = {
+            "state": self.state,
+            # the worst joint's own tolerance: `worst_diff` is compared with it
+            "tolerance": self.worst[2]
+            if self.worst
+            else self.cfg["alignment_tolerance"],
+        }
         if self.home is not None:
             out["home"] = self.home.pose.name
         if self.pickup is not None and not self.pickup.done:
@@ -294,10 +324,16 @@ class JointController(Controller):
             if self.pickup.done:
                 self.pickup = None
         diffs = [abs(a - b) for a, b in zip(target, current, strict=True)]
-        worst = max(range(len(diffs)), key=diffs.__getitem__)
-        self.worst = (self.follower.joint_names[worst], diffs[worst])
+        # the joint farthest in units of its own tolerance (the farthest one when all
+        # tolerances are equal); beyond 1 it is not aligned
+        worst = max(range(len(diffs)), key=lambda i: diffs[i] / self.tolerances[i])
+        self.worst = (
+            self.follower.joint_names[worst],
+            diffs[worst],
+            self.tolerances[worst],
+        )
         if not self.aligned:
-            if diffs[worst] > self.cfg["alignment_tolerance"]:
+            if diffs[worst] > self.tolerances[worst]:
                 self.state = "aligning"
                 return None
             self.aligned = True

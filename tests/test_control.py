@@ -389,3 +389,61 @@ def test_a_scale_is_a_positive_number(scale):
 def test_force_feedback_is_refused_with_scaled_joints():
     with pytest.raises(ValueError, match="feedback: not with scaled joints"):
         _scaled(feedback={"estimator": "effort"})
+
+
+def _gripper_arm(**grip) -> JointController:
+    # joint b is a gripper: holding an object it stops short of a squeezed leader
+    table = [
+        {"leader": "a", "follower": "a", "sign": 1, "offset": 0},
+        {"leader": "b", "follower": "b", "sign": 1, "offset": 0, **grip},
+    ]
+    cfg = {**SCALED_CONTROLLER, "alignment_tolerance": 300, "joints": table}
+    cfg["max_speed"] = 2048
+    leader = Knob("knob", {"joints": ["a", "b"], "unit": "dynamixel_count"})
+    return JointController("c", cfg, leader, {"arm": _arm("dynamixel_count")})
+
+
+def _intent(seq: int, positions: list[float], now: int) -> Envelope:
+    return Envelope(
+        "joint_intent", "knob", "boot", seq, now, now, {"positions": positions}
+    )
+
+
+def test_a_joint_may_have_its_own_alignment_tolerance():
+    now = time.monotonic_ns()
+    # the follower's gripper holds a pen at 2050; the leader squeezes to 1450
+    plain = _gripper_arm()
+    assert plain.step(_intent(0, [2048, 1450], now), [2048, 2050], now) is None
+    status = plain.status()
+    assert status["state"] == "aligning"
+    assert (status["worst_joint"], status["worst_diff"], status["tolerance"]) == (
+        "b",
+        600,
+        300,
+    )
+    wide = _gripper_arm(alignment_tolerance=1000)
+    assert wide.tolerances == [300, 1000]
+    assert wide.step(_intent(0, [2048, 1450], now), [2048, 2050], now) is not None
+    status = wide.status()
+    # the start check compares worst_diff with tolerance: 600 is within the gripper's
+    assert status["state"] == "following"
+    assert (status["worst_joint"], status["worst_diff"], status["tolerance"]) == (
+        "b",
+        600,
+        1000,
+    )
+    # an arm joint 301 off is reported (and refused) although the gripper is farther
+    wide = _gripper_arm(alignment_tolerance=1000)
+    assert wide.step(_intent(0, [2349, 1450], now), [2048, 2050], now) is None
+    status = wide.status()
+    assert (status["worst_joint"], status["worst_diff"], status["tolerance"]) == (
+        "a",
+        301,
+        300,
+    )
+
+
+@pytest.mark.parametrize("tolerance", [0, -5, float("nan"), "1000"])
+def test_a_joint_tolerance_is_a_positive_number(tolerance):
+    with pytest.raises(ValueError, match=r"joints\[b\].alignment_tolerance"):
+        _gripper_arm(alignment_tolerance=tolerance)
