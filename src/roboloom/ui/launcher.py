@@ -75,6 +75,7 @@ class LaunchPlan:
     sensors: list[str] | None = None
     observe: list[str] | None = None
     video_codec: str | None = None  # None: the recorder YAML (recording.video)
+    confirm: bool = False
 
     def problem(self) -> str:
         """Why it cannot start, or ''."""
@@ -85,6 +86,8 @@ class LaunchPlan:
                 return "seconds > 0 and episodes >= 1 are required"
             if self.mode == "record" and not self.task.strip():
                 return "record needs a task"
+            if self.mode == "infer" and self.confirm and not self.task.strip():
+                return "infer needs a task to ask whether to save or discard"
         return ""
 
 
@@ -107,6 +110,7 @@ def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
             seconds=float(data.get("seconds", 0.0)),
             episodes=int(data.get("episodes", 1)),
             home=bool(data.get("home", False)),
+            confirm=bool(data.get("confirm", False)),
         )
         check_options(options, plan.options)
         return plan
@@ -493,6 +497,11 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                     yield OptionToggle(
                         "Move home before every episode", self.plan.home, id="home"
                     )
+                    yield OptionToggle(
+                        "Ask to save or discard after every episode",
+                        self.plan.confirm,
+                        id="confirm",
+                    )
                 yield Static("Devices", classes="section")
                 yield OptionToggle(
                     "Mock devices (no hardware)", self.plan.mock, id="mock"
@@ -624,6 +633,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             seconds=float(number("seconds", float, 0.0)),
             episodes=int(number("episodes", int, 0)),
             home=self.query_one("#home", Checkbox).value,
+            confirm=self.query_one("#confirm", Checkbox).value,
         )
 
     def _refresh_observation_defaults(self) -> None:
@@ -674,6 +684,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             plan = self._read()
             self.query_one("#recording").display = plan.mode in ("record", "infer")
             self.query_one("#home").display = plan.mode in ("record", "infer")
+            self.query_one("#confirm").display = plan.mode in ("record", "infer")
             self.query_one("#summary", Static).update(self._summary(plan))
             self.query_one("#launch", Button).disabled = bool(self._problem(plan))
         finally:

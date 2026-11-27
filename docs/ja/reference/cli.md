@@ -16,7 +16,7 @@
 | `--without A,B` | 名前のリスト | — | 起動optionを無効にする（`default: true` のものも．これを必要とするoptionも無効になる） |
 | `--mock` | flag | 切 | 実機の代わりにmock deviceを使う |
 | `--video-codec CODEC` | `av1`，`libsvtav1`，`h264` | recorder の YAML | `storage: video` の画像の codec（省略時は recorder の YAML，追記では保存済みの動画の codec，どちらもなければ H.264．[Video codec](configuration/recorder.md#video-codec)） |
-| `--experiment NAME` | 名前かpath | — | 実験file（projectの `configs/roboloom/<NAME>.yaml` か，fileのpath）．robot，option，nodeへの上書き（方策など），保存先を与え，`record`・`infer` では task，長さ，回数，home も与える．command lineに書いた値が優先（[実験file](configuration/index.md#experiments)） |
+| `--experiment NAME` | 名前かpath | — | 実験file（projectの `configs/roboloom/<NAME>.yaml` か，fileのpath）．robot，option，nodeへの上書き（方策など），保存先を与え，`record`・`infer` では task，長さ，回数，home，保存確認も与える．command lineに書いた値が優先（[実験file](configuration/index.md#experiments)） |
 | `--sensors A,B` | 名前のリスト | 設定の既定 | 起動・記録するsensor（`""` で選択なし．[sensor選択](#sensor-selection)） |
 | `--observe A,B` | 名前のリスト | 方策の YAML の `observe` | 方策が観測するsensor（`""` で選択なし） |
 
@@ -24,7 +24,7 @@
 
 ## launcher { #launcher }
 
-端末で `roboloom`（または `roboloom launch`）を実行すると，まずrobotの一覧が開きます．`.roboloom/<robot>/config.yaml` を持つrobotを，dataset名と既定で有効なoptionつきで並べます．`run`・`record`・`infer` も，端末では `--with`・`--without`・`--plain` のどれも指定しなければ先にlauncherを開き，commandの引数を初期値にします．画面とkeyは [操作画面のlauncher](operator-screen.md#launcher) を参照してください．
+端末で `roboloom`（または `roboloom launch`）を実行すると，まずrobotの一覧が開きます．`.roboloom/<robot>/config.yaml` を持つrobotを，dataset名と既定で有効なoptionつきで並べます．`run`・`record`・`infer` も，端末では `--with`・`--without`・`--experiment`・`--plain` のどれも指定しなければ先にlauncherを開き，commandの引数を初期値にします．画面とkeyは [操作画面のlauncher](operator-screen.md#launcher) を参照してください．
 
 端末から実機で起動する前に，CLIは各Dynamixel nodeのEEPROM（Operating Mode，Current Limit）を選んだoptionと比べます．違いがあれば差分を表示し，操作者の確認後に書き込みます（[`roboloom commission`](#commission) と同じ手順です）．たとえば `gravity` を有効・無効にするとleaderのOperating Modeが変わります．
 
@@ -45,7 +45,7 @@
 
 Textualの操作menuは使えない操作も理由付きで表示し，初期姿勢がない `home` も含めます．Ctrl-Lで編集可能なcommand欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．key・pane・確認・時間指定mode・拡張契約は [操作画面](operator-screen.md) を参照してください．
 
-`run --plain` は行入力を維持し，`record --plain`・`infer --plain` はkey入力なしで収集します．非TTYも同じ経路です（launcherは開きません）．`tune-gravity` はdeviceを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
+`run --plain` は行入力を維持し，`record --plain`・`infer --plain` はepisodeを自動で開始します．非TTYでも同じ経路を使います．`--confirm` のpromptには標準入力にTTYが必要です．`tune-gravity` はdeviceを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
 `stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Rakuda2：teleopで収集](../tutorials/rakuda2/collect.md) にあります．
 
 ## sensor選択 { #sensor-selection }
@@ -183,7 +183,7 @@ uv run roboloom run --mock                        # mock device
 <span class="status status--mock">模擬のみ</span> [background保存](../data/recording.md#background-saving) では，`--plain` は最後のepisodeの後に保存待ちの処理が終わるまで待ち，保存結果を表示します．操作画面は結果が届くたびにlogに出し，終了を確定してから保存待ちの処理を待ちます．
 
 ```text
-roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--plain] [COMMON_OPTIONS]
+roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--confirm] [--plain] [COMMON_OPTIONS]
 ```
 
 | option | 型 | 既定値 | 説明 |
@@ -193,7 +193,8 @@ roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--plain
 | `--seconds N` | float | 必須（実験fileの `seconds:` でも可） | 1 episodeの長さ（秒） |
 | `--episodes N` | int | 1 | episodeの数 |
 | `--home` | flag | 切 | 毎回，controllerの初期姿勢へ動かしてから開始する |
-| `--plain` | flag | 切 | key入力なしで収集する |
+| `--confirm` | flag | 切 | episodeごとに保存するか破棄するかを確認する．plain modeでは標準入力にTTYが必要．promptでは `save`・`save success`・`save failure`・`discard` を入力する（`s`・`d` も可）．破棄すると同じepisode番号でやり直す．EOFかCtrl-Cでは破棄して終了する <span class="status status--mock">模擬のみ</span> |
+| `--plain` | flag | 切 | 操作画面を開かず，episodeを自動で開始する |
 | 共通のoption | — | — | [共通のoption](#common-options) |
 
 実験fileが `steps:` を与えるときは，`--seconds` を指定します（`steps` は方策の手数なので `record` では使えません）．
@@ -204,10 +205,10 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --home
 
 ## roboloom infer { #infer }
 
-方策でepisodeを走らせます．option `policy` を自動で有効にします．`--task` がある場合だけ保存します（[方策で動かす](../policy/run.md)）．
+方策でepisodeを走らせます．option `policy` を自動で有効にします．保存には `--task` または実験fileの `task:` が必要です（[方策で動かす](../policy/run.md)）．
 
 ```text
-roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
+roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--confirm] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
 ```
 
 | option | 型 | 既定値 | 説明 |
@@ -220,7 +221,8 @@ roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--poli
 | `--policy MODULE:CALLABLE` | str | YAML の `factory` | 方策を返す関数 |
 | `--policy-kwargs JSON` | JSON | YAML の `kwargs` | その関数の引数 |
 | `--task TEXT` | str | — | 方策に渡す task．指定すると実行を保存する |
-| `--plain` | flag | 切 | key入力なしで実行する |
+| `--confirm` | flag | 切 | [`record --confirm`](#record) と同じ確認を行う．`--task` または実験fileの `task:` が必要 <span class="status status--mock">模擬のみ</span> |
+| `--plain` | flag | 切 | 操作画面を開かず，episodeを自動で開始する |
 | 共通のoption | — | — | [共通のoption](#common-options) |
 
 ```bash

@@ -146,12 +146,16 @@ task: open the drawer               # --task
 steps: 200                          # --steps (infer; or seconds: 40)
 episodes: 10                        # --episodes
 home: true                          # --home
+confirm: true                       # --confirm (mock only)
 ```
 
 `dataset.root` is relative to the directory the command runs in; with `dataset` the
 options' names are not appended. `nodes` may name only nodes present after the options,
 never `followers.*` (their limits guard every command). Unknown keys are refused;
-command-line values win; `seconds` or `steps` must be in one of the two. Python:
+command-line values win; `seconds` or `steps` must be in one of the two.
+`confirm` is a boolean, off by default. `confirm: true` asks whether to save or
+discard after each episode of `record` or `infer`. Inference needs a task, and
+plain mode needs a TTY on stdin. Python:
 `Session.launch(experiment=<name|path|mapping>)` (pass what Hydra composed as a
 mapping; roboloom does not depend on Hydra). A `backend: server` policy is served from
 the same file: `roboloom serve-policy --experiment <file>`. In the operator screen the

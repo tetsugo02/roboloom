@@ -27,6 +27,7 @@
 | RealSense | <span class="status status--verified">Hardware-verified</span> |
 | 非同期の推論，記録の再生（replay），別processの方策（`serve-policy`） | <span class="status status--mock">Mock only</span> |
 | [episodeのbackground保存](../data/recording.md#background-saving) | <span class="status status--mock">Mock only</span>（mock dataflowと合成frame） |
+| [episodeの保存確認と記録計画中のDiscard](operator-screen.md#record-and-infer) | <span class="status status--mock">Mock only</span> |
 | [Rerun での live 表示](../reference/configuration/viewer.md)（`viewer` node，`viz` extra） | <span class="status status--mock">Mock only</span> |
 | PiPER，Pika（Gripper，Sense，手首camera），Web camera，音声 | <span class="status status--dev">In development</span> |
 | 力の逆送（`feedback`），推定器（`estimators`） | <span class="status status--mock">Mock only</span>（中断中） |

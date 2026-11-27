@@ -156,6 +156,33 @@ def test_last_choice_is_remembered(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_confirm_toggle_is_for_recording_modes_and_is_remembered(tmp_path):
+    path = _options_config(tmp_path)
+    app = LauncherApp(path, LaunchPlan(seconds=3))
+    async with app.run_test(size=(100, 50)) as pilot:
+        confirm = app.query_one("#confirm", Checkbox)
+        assert not confirm.display and not confirm.value
+        app.query_one("#mode-record").value = True
+        await pilot.pause()
+        assert confirm.display
+        await pilot.click("#confirm")
+        assert confirm.value
+        app.query_one("#mode-infer").value = True
+        await pilot.pause()
+        assert confirm.display
+        assert app.query_one(
+            "#launch", Button
+        ).disabled  # infer needs a task with confirm
+        app.query_one("#task").value = "pick"
+        await pilot.pause()
+        await pilot.click("#launch")
+    plan = app.return_value
+    assert isinstance(plan, LaunchPlan) and plan.mode == "infer" and plan.confirm
+    save_last(path, plan)
+    assert load_last(path, parse_options(OPTIONS)) == plan
+
+
+@pytest.mark.asyncio
 async def test_launcher_follows_requirements_and_conflicts(tmp_path: Path):
     path = _options_config(tmp_path)
     app = LauncherApp(path, LaunchPlan(options=("c",)))

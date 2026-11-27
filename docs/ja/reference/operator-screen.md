@@ -8,7 +8,7 @@
 
 | Detail | 説明 |
 | --- | --- |
-| — | `roboloom`（または `roboloom launch`）で開きます．`roboloom rakuda2` のようにrobotを指定した場合は一覧を出しません．`run`・`record`・`infer` も，対話端末では `--with`・`--without`・`--plain` を指定しなければ先にlauncherを開き，commandの引数を初期値にします． |
+| — | `roboloom`（または `roboloom launch`）で開きます．`roboloom rakuda2` のようにrobotを指定した場合は一覧を出しません．`run`・`record`・`infer` も，対話端末では `--with`・`--without`・`--experiment`・`--plain` を指定しなければ先にlauncherを開き，commandの引数を初期値にします． |
 
 ### Screens { #launcher-screens }
 
@@ -16,6 +16,7 @@
 | --- | --- |
 | robotの一覧 | 左に `.roboloom/` の下で `config.yaml` を持つrobot（dataset名と既定で有効なoptionつき），右に選択中のrobotの設定（file，dataset名，各optionの説明・`requires`・競合・dataset名，既定で有効か）．前回のrobotにcursorがある |
 | Operation | `run`・`record`・`infer` から選ぶ．`record` と `infer` ではtask・seconds・episodesを入力し，毎回初期姿勢へ動かすか（「move home before every episode」）も選べる |
+| Ask to save or discard after every episode | `record` と `infer` で，episodeごとの保存確認を有効にする．選択はlauncherに記憶される <span class="status status--mock">模擬のみ</span> |
 | Options | 設定の `options:` を `help` の説明付きのカードで並べる（有効は緑，競合で外れるものは黄の線と理由）．チェックを入れると `requires` のoptionも有効になり，`conflicts` のoptionは外れる．外すと，それを必要とするoptionも外れる．競合の理由はtooltipに出る．`infer` を選ぶと，`policy` という名前のoptionがあれば自動で有効になる |
 | Devices | 「mock devices (no hardware)」でmock deviceを使う．「Video codec (storage: video)」で動画の codec（`YAML / dataset`・`AV1`・`H.264`）を選ぶ．`YAML / dataset` は recorder の YAML の指定（追記では保存済みの動画の codec，どちらもなければ H.264．[Video codec](configuration/recorder.md#video-codec)） |
 | 要約 | 操作，`mock` か `HARDWARE` か（チェックを入れなくても YAML が `mode: mock` なら `mock (mode: mock in config.yaml)`），有効なoption，dataset名，動画の codec，置き換わるnode file（削除は `(removed)`）．起動できない組み合わせや入力の不足は，理由を表示してLaunchを無効にする |
@@ -174,7 +175,9 @@
 | 項目 | 動作 |
 | --- | --- |
 | 開始 | 毎回，準備後にStartを選ぶ．`record --home` は毎回homeへ移動する |
-| 保存 | `record` は保存し，`infer` は `--task` がある場合だけ保存する．Stopで時間指定の記録を早く終えた場合も，同じ保存方針を適用する |
+| 保存 | 既定では `record` は自動で保存し，`infer` はtaskがある場合に自動で保存する．Stopでepisodeを早く終えた場合も，同じ保存方針を適用する |
+| 保存確認 | 時間・step数・Stopでepisodeが止まると，`--confirm` では `stopped: save or discard (episode k/N)` と表示する．Saveを選べば保存し，`save success`・`save failure` を入力すれば成否を付けて保存する．Discardで破棄できる．判断を待つ間はStartとTeleopを無効にする．書き込みが終わるか，保存待ちに入った時点で回数に数える <span class="status status--mock">模擬のみ</span> |
+| Discard | 記録計画では，記録中も保存確認を待つ間もDiscardでepisodeを破棄できる．同じepisode番号を再び準備し，homeの指定があれば初期姿勢へ移動する <span class="status status--mock">模擬のみ</span> |
 | 回数 | 指定回数が完了すると終了確認が開く．回数は目安で，終了確認を閉じると，HomeやTeleopでrobotを動かし，Startで次のepisodeを続けられる（表示は `episode 3 (2 planned)`）．`--plain` は指定回数で終わる |
 | Detail | 説明 |
 | --- | --- |

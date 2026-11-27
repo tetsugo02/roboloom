@@ -54,15 +54,25 @@ def record(
     keep: Callable[[EpisodeResult], bool] | None = None,
     home: bool = False,
     steps: int | None = None,
+    *,
+    confirm: bool = False,
 ) -> list[EpisodeResult]:
     """Run `episodes` episodes of `seconds`; `keep`, `home` and `steps` as in
-    `Session.record`."""
+    `Session.record`. In plain mode, `confirm` asks before each save."""
     if session.screen is None or not sys.stdin.isatty():
-        return _plain(session, task, seconds, episodes, keep, home, steps)
+        return _plain(session, task, seconds, episodes, keep, home, steps, confirm)
+    if confirm:
+        raise ValueError("confirm is unavailable on the Session key screen")
     return _keys(session, task, seconds, episodes, keep, home, steps)
 
 
 BAR = 20  # characters of the progress bar
+
+
+def episode_number(index: int, planned: int) -> str:
+    if index < planned:
+        return f"episode {index + 1}/{planned}"
+    return f"episode {index + 1} ({planned} planned)"
 
 
 def progress(
@@ -78,11 +88,7 @@ def progress(
 
         episode 2/10  step 137/500  [█████░░░░░░░░░░░░░░░] 27%  72.6 s left
     """
-    number = (
-        f"episode {index + 1}/{planned}"
-        if index < planned
-        else f"episode {index + 1} ({planned} planned)"
-    )
+    number = episode_number(index, planned)
     if steps:
         done = min(1.0, (step or 0) / steps)
         count = f"  step {min(step or 0, steps)}/{steps}"
@@ -155,11 +161,39 @@ def _plain(
     keep: Callable[[EpisodeResult], bool] | None,
     home: bool,
     steps: int | None = None,
+    confirm: bool = False,
 ) -> list[EpisodeResult]:
     print("waiting until the controller is ready ...", flush=True)
     session.wait_ready(timeout=120)
     results = []
-    for k in range(episodes):
+    k = 0
+    verdict: str | None = None
+
+    def decide(stopped: EpisodeResult) -> bool:
+        nonlocal verdict
+        try:
+            if keep is not None and not keep(stopped):
+                return False
+            print(f"stopped '{stopped.task}' ({stopped.frames} rows)", flush=True)
+            for warning in stopped.warnings:
+                print(f"  quality: {warning}", flush=True)
+            prompt = (
+                f"{episode_number(k, episodes)}: "
+                "save, save success, save failure or discard? "
+            )
+            while True:
+                choice = input(prompt).strip().lower()
+                if choice in ("d", "discard"):
+                    return False
+                if choice in ("s", "save", "save success", "save failure"):
+                    verdict = choice.partition(" ")[2] or None
+                    return True
+        except (EOFError, KeyboardInterrupt) as exc:
+            # Session.record calls keep after stopping, outside its cleanup block.
+            session.discard()
+            raise Cancelled("stopped by the operator") from exc
+
+    while k < episodes:
         if home:
             print("moving home ...", flush=True)
         length = (
@@ -167,16 +201,24 @@ def _plain(
         )
         print(f"episode {k + 1}/{episodes}: recording {length}", flush=True)
         watch = _Progress(k, episodes, seconds, steps)
-        results.append(
-            session.record(
-                task, seconds, keep=keep, home=home, steps=steps, on_tick=watch
-            )
+        result = session.record(
+            task,
+            seconds,
+            keep=decide if confirm else keep,
+            label=(lambda _: verdict) if confirm else None,
+            home=home,
+            steps=steps,
+            on_tick=watch,
         )
+        results.append(result)
         if steps and watch.step < steps:
             print(f"ended by time at {watch.step}/{steps} steps", flush=True)
-        print(describe(results[-1]), flush=True)
-        for warning in results[-1].warnings:
-            print(f"  quality: {warning}", flush=True)
+        print(describe(result), flush=True)
+        if not confirm:
+            for warning in result.warnings:
+                print(f"  quality: {warning}", flush=True)
+        if not confirm or result.saved or result.pending:
+            k += 1
     return _collect_saves(session, results, lambda text: print(text, flush=True))
 
 
