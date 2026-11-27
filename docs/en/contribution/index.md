@@ -18,6 +18,8 @@ uv run pytest -m e2e         # e2e tests launching dora dataflows with mock devi
 uv run --group docs python scripts/docs.py build
 ```
 
+The `test` extra includes Rerun via `lerobot[viz]`, and viewer tests that require Rerun are skipped in environments without it.
+
 On pull requests, GitHub Actions (`.github/workflows/test.yml`) checks changed files and runs `ruff check .`, `mypy src`, and unit tests (`pytest -m "not e2e"`) across Python 3.12–3.14 only when source code, tests, runtime dependencies, or test CI files change, reporting the single required status check `Tests status` (changes limited to `docs/**`, `README*.md`, `LICENSE`, cosmetic `pyproject.toml` metadata, and similar non-code files skip the Python matrix and pass `Tests status` immediately so required checks never block non-code PRs). After a PR is merged to `main`, tests are not re-run; instead, `.github/workflows/badges.yml` reads the merged PR's test results and updates the status badge JSON files on the `badges` branch (manual `workflow_dispatch` runs on `main` also update them). The E2E tests that start dora processes with mock devices (`.github/workflows/e2e.yml`, 3 sharded jobs) run manually via `workflow_dispatch`; no hardware is used.
 
 Check the checkout's mock dataflow with `uv run roboloom validate examples/mock/config.yaml` and `uv run roboloom run examples/mock/config.yaml`. Saving requires the `record` or `test` extra. `examples/` and `scripts/` are for the checkout; users of the Git dependency use their own configuration and Python scripts.

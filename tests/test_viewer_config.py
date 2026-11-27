@@ -43,6 +43,7 @@ def test_the_viewer_is_off_without_the_option(tmp_path):
     assert read_config(path, mock=True)["viewer"] is None
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_the_option_turns_the_viewer_on_with_the_defaults(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     cfg = load_config(project / "config.yaml", options=["viewer"], mock=True)
@@ -53,6 +54,7 @@ def test_the_option_turns_the_viewer_on_with_the_defaults(tmp_path):
     assert cfg.output.endswith("datasets/rakuda2")
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_the_viewer_combines_with_other_options(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     cfg = load_config(project / "config.yaml", options=["digit", "viewer"], mock=True)
@@ -61,6 +63,7 @@ def test_the_viewer_combines_with_other_options(tmp_path):
     assert set(cfg.sensors) == {"camera", "digit_left", "digit_right"}
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_the_node_file_overrides_the_defaults(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     _viewer_file(
@@ -105,6 +108,7 @@ def test_the_node_file_overrides_the_defaults(tmp_path):
     assert cfg.viewer == {**DEFAULTS, "port": 5555}
 
 
+@pytest.mark.usefixtures("rerun_present")
 @pytest.mark.parametrize(
     ("settings", "message"),
     [
@@ -170,6 +174,7 @@ def test_the_viewer_needs_the_viz_extra(tmp_path, monkeypatch):
     assert load_config(project / "config.yaml", mock=True).viewer is None
 
 
+@pytest.mark.usefixtures("rerun_present")
 @pytest.mark.parametrize("robot", ["rakuda2", "piper-pika"])
 def test_the_template_loads_with_the_viewer_in_mock(tmp_path, robot):
     from roboloom.project import init_project
@@ -185,6 +190,7 @@ def test_the_template_loads_with_the_viewer_in_mock(tmp_path, robot):
         assert cfg.mock and cfg.viewer == DEFAULTS
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_the_nodes_reload_the_viewer_the_option_turned_on(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     _viewer_file(project, rate_hz=5, save="view.rrd")
@@ -195,6 +201,7 @@ def test_the_nodes_reload_the_viewer_the_option_turned_on(tmp_path):
     assert child.viewer == cfg.viewer
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_a_viewer_in_the_yaml_survives_the_round_trip(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = project / "config.yaml"
@@ -208,6 +215,7 @@ def test_a_viewer_in_the_yaml_survives_the_round_trip(tmp_path):
     assert child.viewer == cfg.viewer
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_an_option_can_turn_a_configured_viewer_off(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = project / "config.yaml"
@@ -219,6 +227,7 @@ def test_an_option_can_turn_a_configured_viewer_off(tmp_path):
     assert load_config(path, options=["no_view"], mock=True).viewer is None
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_two_options_setting_the_viewer_differently_clash(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = project / "config.yaml"
@@ -242,6 +251,7 @@ def test_bad_viewer_option_keys_are_refused(set_):
         parse_options({"x": {"set": set_}})
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_mock_stand_ins_fill_the_viewer_too(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     _viewer_file(project, memory_limit="SET_RERUN_MEMORY")

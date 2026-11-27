@@ -15,10 +15,12 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 import pytest
 import yaml
-from conftest import mock_project
+from conftest import mock_project, requires_rerun
 
 from roboloom.config import RobotConfig, load_config
 from roboloom.runtime import viewer
+
+pytestmark = requires_rerun
 
 
 @pytest.fixture

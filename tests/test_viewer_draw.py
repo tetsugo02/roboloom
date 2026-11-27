@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml
-from conftest import mock_project
+from conftest import mock_project, requires_rerun
 
 from roboloom.config import RobotConfig, load_config
 from roboloom.core.protocol import Envelope, Publisher
@@ -18,6 +18,8 @@ from roboloom.recording import action_stream
 from roboloom.recording.schema import state_names
 from roboloom.robots.safety import FollowerSafety
 from roboloom.runtime import viewer
+
+pytestmark = requires_rerun
 
 
 def _config(tmp_path: Path, **settings) -> RobotConfig:
