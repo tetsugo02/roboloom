@@ -168,7 +168,7 @@ def parse_options(raw: object) -> dict[str, Option]:
 
 
 EXPERIMENT_DIR = Path("configs") / "roboloom"  # in the project, next to .roboloom/
-RUN_KEYS = ("task", "seconds", "steps", "episodes", "home")
+RUN_KEYS = ("task", "seconds", "steps", "episodes", "home", "confirm")
 EXPERIMENT_KEYS = ("help", "robot", "options", "dataset", "nodes", *RUN_KEYS)
 DATASET_KEYS = ("root", "repo_id")
 # What an experiment may not change: the followers hold the limits every command is
@@ -196,6 +196,7 @@ class Experiment:
     episodes: int | None = None
     home: bool | None = None
     steps: int | None = None  # policy actions per episode, instead of seconds
+    confirm: bool | None = None
 
     def settings(self) -> dict[str, Any]:
         """What the nodes of the dataflow need to load the configuration as the
@@ -295,6 +296,7 @@ def load_experiment(
         )
     task, seconds, steps = raw.get("task"), raw.get("seconds"), raw.get("steps")
     episodes, home = raw.get("episodes"), raw.get("home")
+    confirm = raw.get("confirm")
     if task is not None and not isinstance(task, str):
         raise ConfigError(f"{where}.task: expected text")
     if seconds is not None and (
@@ -309,6 +311,8 @@ def load_experiment(
         raise ConfigError(f"{where}.episodes: expected a whole number, at least 1")
     if home is not None and not isinstance(home, bool):
         raise ConfigError(f"{where}.home: expected true or false")
+    if confirm is not None and not isinstance(confirm, bool):
+        raise ConfigError(f"{where}.confirm: expected true or false")
     if steps is not None and (
         isinstance(steps, bool) or not isinstance(steps, int) or steps < 1
     ):
@@ -328,6 +332,7 @@ def load_experiment(
         episodes=episodes,
         home=home,
         steps=steps,
+        confirm=confirm,
     )
 
 

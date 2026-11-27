@@ -25,7 +25,7 @@ from .models import (
     Snapshot,
     Value,
 )
-from .record import describe, progress
+from .record import describe, episode_number, progress
 from .render import describe_report
 
 
@@ -38,12 +38,15 @@ class RecordingPlan:
     home: bool = False
     # end an episode after this many actions of the policy; `seconds` is then its limit
     steps: int | None = None
+    confirm: bool = False
 
     def __post_init__(self) -> None:
         if not self.task.strip() or self.seconds <= 0 or self.episodes < 1:
             raise ValueError(
                 "task, positive seconds and at least one episode are required"
             )
+        if self.confirm and not self.save:
+            raise ValueError("confirm requires a plan that saves episodes")
 
 
 class SessionBackend:
@@ -66,6 +69,7 @@ class SessionBackend:
         self._emergencies: queue.Queue[bool] = queue.Queue()
         self._cancel = threading.Event()
         self._finish_recording = threading.Event()
+        self._discard_requested = False
         self._stop = threading.Event()
         self._ready = threading.Event()
         self._lock = threading.RLock()
@@ -199,7 +203,11 @@ class SessionBackend:
                 Operation(
                     "discard",
                     "Discard episode",
-                    not self._busy and self._episode,
+                    self._episode
+                    and (
+                        not self._busy
+                        or (self.recording is not None and self._recording)
+                    ),
                     busy_reason or "no episode",
                 ),
                 Operation(
@@ -301,6 +309,10 @@ class SessionBackend:
             if name == "stop" and self._busy and self._recording:
                 self._finish_recording.set()
                 return
+            if name == "discard" and self.recording is not None and self._recording:
+                self._discard_requested = True
+                self._finish_recording.set()
+                return
             if name in ("teleop", "policy") and self._busy and self._recording:
                 operation = next(
                     (o for o in self._snapshot().operations if o.command == name), None
@@ -331,9 +343,14 @@ class SessionBackend:
             self._queue.put(command)
 
     def _prepare(self, session: Session) -> None:
-        if self.recording is not None and self.recording.home:
-            self._phase = "moving home"
-            session.home()
+        plan = self.recording
+        if plan is not None:
+            if self._estop:
+                self._phase = "ESTOP: restart required"
+                return
+            if plan.home:
+                self._phase = "moving home"
+                session.home()
         self._phase = "waiting for readiness"
         session.wait_ready(120)
         self._phase = self._ready_phase()
@@ -342,9 +359,19 @@ class SessionBackend:
         plan = self.recording
         if plan is None:
             return "ready"
-        if self._index < plan.episodes:
-            return f"ready: episode {self._index + 1}/{plan.episodes}"
-        return f"ready: episode {self._index + 1} ({plan.episodes} planned)"
+        return f"ready: {episode_number(self._index, plan.episodes)}"
+
+    def _advance(self, session: Session) -> None:
+        plan = self.recording
+        assert plan is not None
+        self._index += 1
+        if self._index == plan.episodes:
+            # The app asks once whether to quit. Start can still run another episode.
+            self._phase = "complete"
+        elif self._index < plan.episodes:
+            self._prepare(session)
+        else:  # past the plan: the operator moves the robot (Home, Teleop)
+            self._phase = self._ready_phase()
 
     def _execute(self, session: Session, command: str) -> None:
         name, _, task = command.partition(" ")
@@ -359,6 +386,7 @@ class SessionBackend:
                 self._phase = "recording"
             else:
                 self._finish_recording.clear()
+                self._discard_requested = False
                 session.wait_ready(120)
                 session.start(plan.task)
                 self._episode = self._recording = True
@@ -391,33 +419,38 @@ class SessionBackend:
                         and not self._finish_recording.is_set()
                     ):
                         self._log(f"ended by time at {done}/{plan.steps} steps", "warn")
-                    self._phase = "stopping"
-                    self._recording = False
+                    with self._lock:
+                        self._phase = "stopping"
+                        self._recording = False
+                        discarded = self._discard_requested
+                        if discarded:
+                            # A handover queued for this episode must end with it.
+                            self._handovers = queue.Queue()
                     result = session.stop()
-                    self._phase = "saving" if plan.save else "discarding"
-                    if plan.save:
+                    if plan.confirm and not discarded:
+                        number = episode_number(self._index, plan.episodes)
+                        self._phase = f"stopped: save or discard ({number})"
+                        return
+                    if plan.save and not discarded:
+                        self._phase = "saving"
                         result = session.save()
                         if result.pending:
                             self._phase = "queued for save"
                     else:
+                        self._phase = "discarding"
                         session.discard()
                     self._log(describe(result))
                 except BaseException:
+                    self._episode = self._recording = False
                     if session.alive:
                         with session._cancellable(None):
                             session.discard()
                     raise
-                finally:
-                    self._episode = self._recording = False
-                self._index += 1
-                if self._index == plan.episodes:
-                    # the app asks once whether to quit; Home, Teleop and Start stay
-                    # available, and Start runs another episode
-                    self._phase = "complete"
-                elif self._index < plan.episodes:
+                self._episode = False
+                if discarded:
                     self._prepare(session)
-                else:  # past the plan: the operator moves the robot (Home, Teleop)
-                    self._phase = self._ready_phase()
+                else:
+                    self._advance(session)
         elif name == "home":
             session.home()
             session.wait_ready(120)
@@ -432,14 +465,24 @@ class SessionBackend:
             self._recording = False
             self._phase = "stopped: save or discard"
         elif name == "save":  # `save success` / `save failure`: with the verdict
-            result = session.save(label=task.strip() or None)
-            self._log(describe(result))
+            try:
+                result = session.save(label=task.strip() or None)
+            except SessionError as exc:
+                if self.recording is not None and exc.report.get("dropped"):
+                    self._episode = False
+                raise
             self._episode = False
-            self._phase = "queued for save" if result.pending else "saved"
+            self._log(describe(result))
+            if self.recording is not None:
+                self._advance(session)
+            else:
+                self._phase = "queued for save" if result.pending else "saved"
         elif name == "discard":
             session.discard()
             self._episode = self._recording = False
             self._phase = "discarded"
+            if self.recording is not None:
+                self._prepare(session)
         elif name == "release":
             session.release(confirm=True)
             self._phase = "release sent; check node status"
@@ -510,7 +553,13 @@ class SessionBackend:
                     self._phase = "cancelled"
                     self._log(str(exc), "warn")
                 except Exception as exc:  # noqa: BLE001 - report failures while preserving lifecycle cleanup
-                    self._phase = "operation refused; retry when ready"
+                    self._phase = (
+                        "save failed; retry or discard"
+                        if self.recording is not None
+                        and command.partition(" ")[0] == "save"
+                        and self._episode
+                        else "operation refused; retry when ready"
+                    )
                     self._warning = str(exc)
                     self._log(str(exc), "warn")
                 finally:

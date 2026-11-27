@@ -250,6 +250,7 @@ task: open the drawer
 steps: 200                           # または seconds: 40
 episodes: 10
 home: true
+confirm: true
 ```
 
 ```bash
@@ -268,6 +269,7 @@ uv run roboloom infer --experiment path/to/file.yaml
 | `seconds` | 数値 | — | s | `--seconds` の値 |
 | `episodes` | 整数 | — | — | `--episodes` の値 |
 | `home` | 真偽値 | — | — | `--home` の値 |
+| `confirm` | 真偽値 | `false` | — | `true` で `record` と `infer` の [`--confirm`](../cli.md#record) を有効にする．command lineの `--confirm` が優先 <span class="status status--mock">模擬のみ</span> |
 | `steps` | 整数 | — | 手 | `infer --steps` の値．episodeを，方策が実行した行動の数で終える．`seconds` とは同時に書けない |
 
 - **名前とpath**：`--experiment drawer` は，commandを実行したdirectoryの `configs/roboloom/drawer.yaml` です．`/` を含むか `.yaml` で終わるものはpathとして読みます．

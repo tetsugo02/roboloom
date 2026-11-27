@@ -35,9 +35,9 @@ Flags of commands that open devices:
 | `roboloom check-hold [robot] <follower> --tolerance <v> [--seconds 10]` | measure `unattended` for `unknown` models | energizes |
 | `roboloom capture-pose [robot] [follower] <name> [--force]` | save current follower pose to `poses/` | reads |
 | `roboloom run [robot] [--plain]` | operator screen, many episodes | yes |
-| `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--plain]` | fixed-length episodes. `--plain` waits for queued writes at the end and prints final results. The operator screen logs each result and drains the queue on exit ([background saving](recording.md#background-saving)) | yes |
+| `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--confirm] [--plain]` | fixed-length episodes. Saves automatically by default. `--confirm` asks whether to save or discard after each episode (mock only). `--plain` waits for queued writes at the end and prints final results. The operator screen logs each result and drains the queue on exit ([background saving](recording.md#background-saving)) | yes |
 | `roboloom record\|infer --experiment <name\|file>` | run as the project's `configs/roboloom/<name>.yaml` says (robot, options, node settings such as the policy, dataset, task, length; see configuration.md); words on the command line win. `validate`, `check-dataset`, `label` take `--experiment` too | yes |
-| `roboloom infer [robot] --seconds <n> \| --steps <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only with `--task` | yes |
+| `roboloom infer [robot] --seconds <n> \| --steps <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--confirm] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only when given a task. `--confirm` requires a task from the command line or experiment file (mock only) | yes |
 | `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit\|teleop\|policy\|stop_teleop> [task]` | send one operation to a running `run`; `save success` / `save failure` saves with the verdict | no |
 | `roboloom serve-policy --experiment <experiment file>` or `--from <policy YAML>` or `<module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node with `backend: server` (the file's `factory`, `kwargs`, `server.address`) | no |
 | `roboloom check-dataset [robot\|dataset dir] [--with a,b] [--recover]` | checks dataset integrity (exit 1 if broken) and row validity, and reports spool episodes in notes. `--recover` rolls back an interrupted dataset write | no |
@@ -63,13 +63,15 @@ uv run roboloom session start handover          # from another terminal
 ## Interactive vs. non-interactive
 
 - In a terminal, `run`/`record`/`infer` open the launcher first unless `--with`,
-  `--without` or `--plain` is given. The last choice is kept in
+  `--without`, `--experiment` or `--plain` is given. The last choice is kept in
   `.roboloom/<robot>/logs/last_launch.yaml`.
 - Before a hardware launch from a terminal the CLI compares Dynamixel EEPROM with the
   chosen options and writes differences after confirmation (e.g. `gravity` changes the
   leader's Operating Mode).
-- `record --plain` / `infer --plain` and non-TTY runs need no key input – use these from
-  an agent's shell (still hardware unless `--mock`). `run --plain` is line input.
+- `record --plain` / `infer --plain` and non-TTY runs start episodes automatically
+  (still hardware unless `--mock`). With `--confirm`, plain mode requires a TTY on
+  stdin. Reply `save`, `save success`, `save failure` or `discard` (`s` and `d`
+  also work). `run --plain` is line input.
   `tune-gravity` refuses non-TTY.
 
 ## Operator screen (Textual)
@@ -79,3 +81,8 @@ Operations: `start <task>`, `stop` (no torque change), `save`, `discard`, `home`
 again / supported release; Cancel selected first). Keys: Ctrl-L command input, Tab
 completion, ↑↓ history, Ctrl-N/Ctrl-P panes, **Ctrl-G emergency stop**, Ctrl-C/Ctrl-Q exit
 dialog. `FAULT`, `ESTOP`, `RELEASED` latch and never recover automatically.
+
+With `--confirm` (mock only), a stopped episode stays open for `save`,
+`save success`, `save failure` or `discard`. Discard also works while an episode
+of a recording plan is running (mock only). Discard repeats the episode number,
+with Home when configured.

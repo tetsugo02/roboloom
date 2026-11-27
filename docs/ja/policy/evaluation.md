@@ -7,12 +7,13 @@
 `roboloom infer --task <text>`（Pythonでは `record`）で保存した回は，評価のdatasetに入ります．それぞれの回が成功したかどうかは，episodeごとの記録（datasetの `meta/roboloom_episodes.jsonl`）に残せます．
 
 ```bash
-uv run roboloom infer --seconds 30 --episodes 10 --task "pick up the cup"
+uv run roboloom infer --seconds 30 --episodes 10 --confirm --task "pick up the cup"
 uv run roboloom label --with policy 3 failure --note "つかみ損ねた"   # あとから，episode 3に
 uv run roboloom check-dataset --with policy                            # labels: 7 success, 3 failure, ...
 ```
 
-- 保存のときに付けることもできます：操作画面の入力欄で `save success`・`save failure`，別端末から `roboloom session save success`，Pythonでは `record(..., label=...)`・`save(label=...)`（下の「Pythonから」）．
+- `--confirm` を指定した場合，操作画面の入力欄か `--plain` のpromptで `save success`・`save failure` を入力すると成否を付けて保存できます．`save` なら成否なしで保存し，`discard` なら同じepisode番号でやり直します． <span class="status status--mock">模擬のみ</span>
+- `roboloom run` で記録したepisodeは，操作画面で同じsave commandを入力するか，別端末から `roboloom session save success` を送れます．Pythonでは `record(..., label=...)`・`save(label=...)` を使います．
 - あとから付ける・付け直すときは `roboloom label [robot] <episode> success|failure` を使います（[CLI](../reference/cli.md#label)）．`roboloom check-dataset` が成否の数を表示します（[CLI](../reference/cli.md#check-dataset)）．
 - 記録には，その回の方策の状態（推論時間 `infer_max_ms`，非同期の推論で遅れて捨てた手数 `dropped`，error）と，recorderの指標も入ります．項目は [episodeごとの記録](../data/recording.md#episode-records) にあります．
 - 途中で方策が失敗した回は保存されないので，記録にも入りません．

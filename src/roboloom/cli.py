@@ -382,7 +382,7 @@ def main(argv: list[str] | None = None) -> None:
         help="record episodes of a fixed length (default: one) and exit",
     )
     rec.add_argument(
-        "--plain", action="store_true", help="use non-interactive recording"
+        "--plain", action="store_true", help="record without the operator screen"
     )
     rec.add_argument("--task", help="task text stored with every frame")
     rec.add_argument("--seconds", type=float)
@@ -398,7 +398,7 @@ def main(argv: list[str] | None = None) -> None:
         help="run a learned policy for fixed-length episodes (enables option `policy`)",
     )
     inf.add_argument(
-        "--plain", action="store_true", help="use non-interactive inference"
+        "--plain", action="store_true", help="infer without the operator screen"
     )
     inf.add_argument("--seconds", type=float)
     inf.add_argument(
@@ -420,6 +420,12 @@ def main(argv: list[str] | None = None) -> None:
         "--policy-kwargs", type=json.loads, default=None, help="JSON arguments"
     )
     inf.add_argument("--task", help="task given to the policy; with it, runs are saved")
+    for command in (rec, inf):
+        command.add_argument(
+            "--confirm",
+            action="store_true",
+            help="after every episode, ask whether to save or discard it",
+        )
     conv = sub.add_parser(
         "convert-handheld",
         parents=[configured],
@@ -531,6 +537,7 @@ def _run_settings(args: argparse.Namespace) -> None:
             if getattr(args, key) is None:
                 setattr(args, key, getattr(run, key))
         args.home = args.home or bool(run.home)
+        args.confirm = args.confirm or bool(run.confirm)
         # the length: what the command line says, else the file's seconds or steps
         if args.seconds is None and getattr(args, "steps", None) is None:
             args.seconds = run.seconds
@@ -552,6 +559,8 @@ def _run_settings(args: argparse.Namespace) -> None:
     if args.command == "record" and not args.task:
         raise ConfigError(f"record: give --task, or `task:` in {source}")
     args.task = args.task or ""
+    if args.command == "infer" and args.confirm and not args.task.strip():
+        raise ConfigError(f"infer: --confirm needs --task, or `task:` in {source}")
     args.episodes = args.episodes or 1
 
 
@@ -796,7 +805,10 @@ def _operate(args: argparse.Namespace) -> None:
     robot list; the options screen's Back returns to it."""
     from .ui.launcher import BACK, choose_robot
 
-    terminal = sys.stdin.isatty() and sys.stdout.isatty()
+    input_terminal = sys.stdin.isatty()
+    if getattr(args, "confirm", False) and not input_terminal:
+        raise ConfigError(f"{args.command}: --confirm requires a terminal on stdin")
+    terminal = input_terminal and sys.stdout.isatty()
     if args.command == "launch" and not terminal:
         raise ConfigError("the launcher needs an interactive terminal; use run --plain")
     pick = args.command == "launch" and args.config is None
@@ -840,6 +852,7 @@ def _operate_robot(
         steps=getattr(args, "steps", None) or 0,
         episodes=getattr(args, "episodes", 1) or 1,
         home=getattr(args, "home", False),
+        confirm=getattr(args, "confirm", False),
     )
     show = terminal and not plain and not asked
     if show:
@@ -934,6 +947,7 @@ def _start(
                 save=plan.mode == "record" or bool(plan.task),
                 home=plan.home,
                 steps=steps,
+                confirm=plan.confirm,
             )
         backend = SessionBackend(
             lambda: Session.launch(
@@ -960,7 +974,14 @@ def _start(
         if plan.mode == "record":
             from .ui.record import record
 
-            record(session, plan.task, plan.seconds, plan.episodes, home=plan.home)
+            record(
+                session,
+                plan.task,
+                plan.seconds,
+                plan.episodes,
+                home=plan.home,
+                confirm=plan.confirm,
+            )
         elif plan.mode == "infer":
             from .ui.record import record
 
@@ -973,6 +994,7 @@ def _start(
                 keep=lambda _: bool(plan.task),
                 home=plan.home,
                 steps=steps,
+                confirm=plan.confirm,
             )
         else:
             _plain_loop(session.client, session.process, session.release_note())

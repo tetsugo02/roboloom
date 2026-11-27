@@ -8,7 +8,7 @@
 
 | Detail | Description |
 | --- | --- |
-| — | `roboloom` (or `roboloom launch`) opens it. Naming the robot, as in `roboloom rakuda2`, skips the robot list. In an interactive terminal, `run`, `record`, and `infer` also open the launcher first unless `--with`, `--without`, or `--plain` is given; the command's arguments become its initial values. |
+| — | `roboloom` (or `roboloom launch`) opens it. Naming the robot, as in `roboloom rakuda2`, skips the robot list. In an interactive terminal, `run`, `record`, and `infer` also open the launcher first unless `--with`, `--without`, `--experiment`, or `--plain` is given; the command's arguments become its initial values. |
 
 ### Screens { #launcher-screens }
 
@@ -16,6 +16,7 @@
 | --- | --- |
 | Robot list | On the left the robots under `.roboloom/` with a `config.yaml` (with their dataset name and default options), on the right the highlighted robot's configuration (file, dataset name, and each option with its help, `requires`, conflicts, dataset name, and whether it is on by default). The cursor starts on the last robot |
 | Operation | Choose `run`, `record`, or `infer`. For `record` and `infer`, enter task, seconds, and episodes, and whether to move home before every episode ("move home before every episode") |
+| Ask to save or discard after every episode | For `record` and `infer`, enable per-episode save confirmation. The launcher remembers the choice <span class="status status--mock">Mock only</span> |
 | Options | The configuration's `options:` as cards with their `help` text (green when on, a yellow line and the reason when a conflict would turn one off). Ticking one also enables the options in its `requires` and unticks those in `conflicts`; unticking one also unticks the options that require it. The tooltip shows the reason for a conflict. Choosing `infer` turns on the option named `policy` when the configuration declares one |
 | Devices | "mock devices (no hardware)" uses mock devices. "Video codec (storage: video)" chooses the video codec (`YAML / dataset`, `AV1`, `H.264`); `YAML / dataset` keeps the recorder YAML's choice (when appending, the saved videos' codec; H.264 when neither says; [Video codec](configuration/recorder.md#video-codec)) |
 | Summary | The operation, `mock` or `HARDWARE` (`mock (mode: mock in config.yaml)` when the YAML declares mock without the checkbox), the enabled options, the dataset name, the video codec, and the node files that are replaced (removals as `(removed)`). For a combination that cannot start or missing input, it shows the reason and disables Launch |
@@ -174,7 +175,9 @@
 | Item | Behavior |
 | --- | --- |
 | Start | Select Start for each episode after readiness. `record --home` moves home before every episode |
-| Saving | `record` saves; `infer` saves only with `--task`. Stop can finish a timed episode early and apply the same save policy |
+| Saving | By default, `record` saves automatically, and `infer` saves automatically when given a task. Stop can end an episode early and apply the same save policy |
+| Save confirmation | After a time limit, step limit, or Stop, `--confirm` shows `stopped: save or discard (episode k/N)`. Choose Save, type `save success` or `save failure` to add a verdict, or choose Discard. Start and Teleop stay disabled while the episode is open. A save counts when written or queued. <span class="status status--mock">Mock only</span> |
+| Discard | In a recording plan, Discard drops the current episode during recording or while waiting for a save confirmation. The same episode number is prepared again, with Home when configured. <span class="status status--mock">Mock only</span> |
 | Count | After the requested episodes, the exit confirmation opens. The count is a goal, not a limit: close the confirmation and you can move the robot with Home or Teleop and run another episode with Start (shown as `episode 3 (2 planned)`). `--plain` ends after the count |
 | Detail | Description |
 | --- | --- |

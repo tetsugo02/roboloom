@@ -7,12 +7,13 @@ How to keep whether each policy run succeeded, and how to replay recorded action
 Runs saved with `roboloom infer --task <text>` (`record` in Python) go into the evaluation dataset. Whether each run succeeded can be kept in the episode records (`meta/roboloom_episodes.jsonl` in the dataset).
 
 ```bash
-uv run roboloom infer --seconds 30 --episodes 10 --task "pick up the cup"
+uv run roboloom infer --seconds 30 --episodes 10 --confirm --task "pick up the cup"
 uv run roboloom label --with policy 3 failure --note "missed the grasp"   # afterwards, for episode 3
 uv run roboloom check-dataset --with policy                                # labels: 7 success, 3 failure, ...
 ```
 
-- A verdict can also be given when saving: `save success` or `save failure` in the operator screen's input, `roboloom session save success` from another terminal, `record(..., label=...)` or `save(label=...)` in Python ("From Python" below).
+- With `--confirm`, type `save success` or `save failure` in the operator screen's input or at the `--plain` prompt. Use `save` to keep an episode without a verdict or `discard` to repeat its episode number. <span class="status status--mock">Mock only</span>
+- For episodes collected with `roboloom run`, type the same save commands in the operator screen or send `roboloom session save success` from another terminal. In Python, use `record(..., label=...)` or `save(label=...)`.
 - To set or change a verdict afterwards, use `roboloom label [robot] <episode> success|failure` ([CLI](../reference/cli.md#label)). `roboloom check-dataset` counts the verdicts ([CLI](../reference/cli.md#check-dataset)).
 - The record also holds what the policy reported for the run (inference time `infer_max_ms`, the steps asynchronous inference dropped as late `dropped`, its error) and the recorder's metrics. The keys are listed in [Episode records](../data/recording.md#episode-records).
 - A run in which the policy failed is not saved, so it has no record.

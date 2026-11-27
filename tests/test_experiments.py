@@ -111,6 +111,7 @@ def test_what_an_experiment_may_not_say_is_named(tmp_path, monkeypatch):
         ({"seconds": 0}, "seconds: expected a positive number"),
         ({"episodes": 1.5}, "episodes: expected a whole number"),
         ({"home": "yes please"}, "home: expected true or false"),
+        ({"confirm": 1}, "confirm: expected true or false"),
         ({"steps": 0}, "steps: expected a whole number, at least 1"),
         ({"steps": 50}, "write seconds or steps"),
         ({"dataset": {"rooot": "x"}}, "unknown keys rooot"),
@@ -186,6 +187,48 @@ def test_record_takes_an_experiment_too(tmp_path, monkeypatch):
     )
     with pytest.raises(SystemExit, match="record: give --task"):
         cli.main(["record", "--plain", "--seconds", "5"])
+
+
+@pytest.mark.parametrize(
+    ("configured", "flag", "expected"),
+    [
+        (None, False, False),
+        (False, False, False),
+        (True, False, True),
+        (False, True, True),
+    ],
+)
+def test_confirm_uses_the_flag_then_the_experiment(
+    tmp_path, monkeypatch, configured, flag, expected
+):
+    _project(tmp_path, monkeypatch, confirm=configured)
+    assert load_experiment("drawer").confirm is configured
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    started = _plans(monkeypatch)
+    for mode in ("record", "infer"):
+        cli.main(
+            [
+                mode,
+                "--plain",
+                "--experiment",
+                "drawer",
+                *(["--confirm"] if flag else []),
+            ]
+        )
+    assert [plan.confirm for _, plan in started] == [expected, expected]
+
+
+def test_infer_confirm_requires_a_task(monkeypatch):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    with pytest.raises(SystemExit, match="infer: --confirm needs --task"):
+        cli.main(["infer", "--seconds", "1", "--confirm"])
+
+
+@pytest.mark.parametrize("plain", [[], ["--plain"]])
+def test_confirm_requires_a_terminal_on_stdin(monkeypatch, plain):
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with pytest.raises(SystemExit, match="--confirm requires a terminal on stdin"):
+        cli.main(["record", "--task", "pick", "--seconds", "1", "--confirm", *plain])
 
 
 def test_an_episode_may_be_given_in_steps_of_the_policy(tmp_path, monkeypatch):

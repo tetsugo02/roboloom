@@ -16,7 +16,7 @@ Real hardware is the default. Most commands that read the configuration accept t
 | `--without A,B` | list of names | — | Disable launch options (also ones with `default: true`; options requiring them are disabled too) |
 | `--mock` | flag | off | Use mock devices instead of the hardware |
 | `--video-codec CODEC` | `av1`, `libsvtav1`, `h264` | the recorder YAML | Codec of `storage: video` images (omitted: the recorder YAML; when appending, the saved videos' codec; H.264 when neither says; [Video codec](configuration/recorder.md#video-codec)) |
-| `--experiment NAME` | name or path | — | An experiment file (`configs/roboloom/<NAME>.yaml` of the project, or a file path). It gives the robot, the options, what the nodes are given (the policy) and the dataset, and for `record` and `infer` the task, length, episodes and home. Values on the command line win ([experiment files](configuration/index.md#experiments)) |
+| `--experiment NAME` | name or path | — | An experiment file (`configs/roboloom/<NAME>.yaml` of the project, or a file path). It gives the robot, the options, what the nodes are given (the policy) and the dataset, and for `record` and `infer` the task, length, episodes, home, and save confirmation. Values on the command line win ([experiment files](configuration/index.md#experiments)) |
 | `--sensors A,B` | list of names | the configuration's defaults | Sensors to start and record (`""` selects none; [sensor selection](#sensor-selection)) |
 | `--observe A,B` | list of names | the policy YAML's `observe` | Sensors the policy observes (`""` selects none) |
 
@@ -24,7 +24,7 @@ Real hardware is the default. Most commands that read the configuration accept t
 
 ## Launcher { #launcher }
 
-Running `roboloom` in a terminal (or `roboloom launch`) first opens the robot list: the robots with a `.roboloom/<robot>/config.yaml`, each with its dataset name and default options. In a terminal, `run`, `record`, and `infer` also open the launcher first unless `--with`, `--without`, or `--plain` is given; the command's arguments become its initial values. For the screens and keys, see [the launcher](operator-screen.md#launcher) on the operator screen page.
+Running `roboloom` in a terminal (or `roboloom launch`) first opens the robot list: the robots with a `.roboloom/<robot>/config.yaml`, each with its dataset name and default options. In a terminal, `run`, `record`, and `infer` also open the launcher first unless `--with`, `--without`, `--experiment`, or `--plain` is given; the command's arguments become its initial values. For the screens and keys, see [the launcher](operator-screen.md#launcher) on the operator screen page.
 
 Before a hardware launch from a terminal, the CLI compares each Dynamixel node's EEPROM (Operating Mode, Current Limit) with the chosen options. If they differ, it prints the differences and writes them after the operator confirms (the same procedure as [`roboloom commission`](#commission)). For example, turning `gravity` on or off changes the leader's Operating Mode.
 
@@ -45,7 +45,7 @@ A running `run` takes these operations from the operator screen or from [`robolo
 
 The Textual operations menu shows unavailable actions with reasons, including `home` without a configured pose. Ctrl-L opens the editable command input; Ctrl-G requests emergency stop. Ctrl-C and Ctrl-Q open the same exit dialog, initially selecting Cancel. See [Operator screen](operator-screen.md) for keys, panes, confirmations, fixed-duration modes, and extension contracts.
 
-`run --plain` retains line input; `record --plain` and `infer --plain` collect without key input. Non-TTY invocation selects these paths automatically (no launcher). `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
+`run --plain` retains line input; `record --plain` and `infer --plain` start episodes automatically. Non-TTY invocation follows the same path. The `--confirm` prompt requires a TTY on stdin. `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
 `stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Rakuda2: teleoperated collection](../tutorials/rakuda2/collect.md).
 
 ## Sensor selection { #sensor-selection }
@@ -183,7 +183,7 @@ Collect episodes of a fixed length, then exit. Select Start for each episode onc
 <span class="status status--mock">Mock only</span> With [background saving](../data/recording.md#background-saving), `--plain` waits for queued saves after the last episode and prints the saved results. The operator screen logs results as they arrive and waits for the queue on confirmed exit.
 
 ```text
-roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--plain] [COMMON_OPTIONS]
+roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--confirm] [--plain] [COMMON_OPTIONS]
 ```
 
 | Option | Type | Default | Description |
@@ -193,7 +193,8 @@ roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--plain
 | `--seconds N` | float | required (or `seconds:` in the experiment file) | Length of an episode, in seconds |
 | `--episodes N` | int | 1 | Number of episodes |
 | `--home` | flag | off | Move to the controller's initial pose before every episode |
-| `--plain` | flag | off | Collect without key input |
+| `--confirm` | flag | off | Ask whether to save or discard after each episode. In plain mode, stdin must be a TTY. Answer `save`, `save success`, `save failure`, or `discard` (`s` and `d` also work). Discard repeats the episode number. EOF or Ctrl-C discards it and ends the run. <span class="status status--mock">Mock only</span> |
+| `--plain` | flag | off | Start episodes automatically without the operator screen |
 | Common options | — | — | [Common options](#common-options) |
 
 When the experiment file gives `steps:`, pass `--seconds` (steps count a policy's actions and do not apply to `record`).
@@ -204,10 +205,10 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --home
 
 ## roboloom infer { #infer }
 
-Run episodes with a policy. Enables the option `policy` automatically. Saves only with `--task` ([Running a policy](../policy/run.md)).
+Run episodes with a policy. Enables the option `policy` automatically. Saving requires a task from `--task` or the experiment file ([Running a policy](../policy/run.md)).
 
 ```text
-roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
+roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--confirm] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
 ```
 
 | Option | Type | Default | Description |
@@ -220,7 +221,8 @@ roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--poli
 | `--policy MODULE:CALLABLE` | str | the YAML's `factory` | The callable returning the policy |
 | `--policy-kwargs JSON` | JSON | the YAML's `kwargs` | Its arguments |
 | `--task TEXT` | str | — | Task given to the policy; with it, runs are saved |
-| `--plain` | flag | off | Run without key input |
+| `--confirm` | flag | off | Same prompt as [`record --confirm`](#record). Requires a task from `--task` or the experiment file. <span class="status status--mock">Mock only</span> |
+| `--plain` | flag | off | Start episodes automatically without the operator screen |
 | Common options | — | — | [Common options](#common-options) |
 
 ```bash

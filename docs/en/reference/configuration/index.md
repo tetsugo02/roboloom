@@ -250,6 +250,7 @@ task: open the drawer
 steps: 200                           # or seconds: 40
 episodes: 10
 home: true
+confirm: true
 ```
 
 ```bash
@@ -268,6 +269,7 @@ uv run roboloom infer --experiment path/to/file.yaml
 | `seconds` | number | — | s | The value of `--seconds` |
 | `episodes` | integer | — | — | The value of `--episodes` |
 | `home` | boolean | — | — | The value of `--home` |
+| `confirm` | boolean | `false` | — | `true` enables [`--confirm`](../cli.md#record) for `record` and `infer`. An explicit `--confirm` takes precedence. <span class="status status--mock">Mock only</span> |
 | `steps` | integer | — | actions | The value of `infer --steps`: the episode ends after this many actions of the policy. Not together with `seconds` |
 
 - **Name or path**: `--experiment drawer` is `configs/roboloom/drawer.yaml` under the directory the command runs in. A word with `/` or ending in `.yaml` is read as a path.
