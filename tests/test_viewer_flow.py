@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 
+import pytest
 from conftest import mock_project
 
 from roboloom.config import load_config
@@ -13,6 +14,7 @@ from roboloom.runtime import viewer
 from roboloom.runtime.flow import build_flow
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_viewer_off_leaves_the_flow_unchanged(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     path = project / "config.yaml"
@@ -27,6 +29,7 @@ def test_viewer_off_leaves_the_flow_unchanged(tmp_path):
     assert build_flow(on) == before
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_the_viewer_node_reads_every_recorded_stream(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     cfg = load_config(project / "config.yaml", options=["digit", "viewer"], mock=True)
@@ -57,6 +60,7 @@ def test_the_viewer_node_reads_every_recorded_stream(tmp_path):
     assert status["queue_size"] == 2 and status["queue_policy"] == "drop_oldest"
 
 
+@pytest.mark.usefixtures("rerun_present")
 def test_the_viewer_tick_follows_its_rate(tmp_path):
     project = mock_project(tmp_path / ".roboloom")
     (project / "nodes" / "viewer.yaml").write_text("rate_hz: 12.5\n")

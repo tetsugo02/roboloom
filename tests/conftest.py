@@ -1,3 +1,5 @@
+import importlib.machinery
+import importlib.util
 import itertools
 import json
 import os
@@ -13,6 +15,28 @@ from roboloom.core.protocol import Envelope
 
 TESTS_DIR = Path(__file__).resolve().parent
 SECOND_NS = 1_000_000_000
+
+requires_rerun = pytest.mark.skipif(
+    importlib.util.find_spec("rerun") is None, reason="needs Rerun (the viz extra)"
+)
+"""Skip viewer tests that use the Rerun SDK when it is unavailable."""
+
+
+@pytest.fixture
+def rerun_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Satisfy the viewer config check without importing the optional SDK."""
+    real_find_spec = importlib.util.find_spec
+    if real_find_spec("rerun") is not None:
+        return
+
+    def find_spec(
+        name: str, package: str | None = None
+    ) -> importlib.machinery.ModuleSpec | None:
+        if name == "rerun":
+            return importlib.machinery.ModuleSpec(name, loader=None)
+        return real_find_spec(name, package)
+
+    monkeypatch.setattr("roboloom.config.importlib.util.find_spec", find_spec)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

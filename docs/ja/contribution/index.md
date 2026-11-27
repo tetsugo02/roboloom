@@ -18,6 +18,8 @@ uv run pytest -m e2e         # mock deviceでdoraを起動するe2eのみ
 uv run --group docs python scripts/docs.py build
 ```
 
+`test` extraには `lerobot[viz]` 経由でRerunが入ります．Rerunがない環境では，Rerunを使うviewerのtestはskipされます．
+
 Pull Request では，GitHub Actions（`.github/workflows/test.yml`）が変更対象を確認し，source codeやtest・実行時依存・CI 設定等が変わっている場合のみ Python 3.12〜3.14 で `ruff check .`・`mypy src`・軽量test（`pytest -m "not e2e"`）を実行して必須チェック用job `Tests status` を報告します（`docs/**`・`README*.md`・`LICENSE`・`pyproject.toml` のmetadataのみ等の変更時はtestをskipして `Tests status` を成功扱いにするため，必須チェックを有効にしてもmergeが詰まりません）．`main` へmergeされた後はtestを再実行せず，`.github/workflows/badges.yml` がmerge元 PR のtest結果から `badges` branch上のstatus badge JSON を更新します（`workflow_dispatch` で手動実行した場合も更新します）．mock deviceでdoraのprocessを起動するE2E test（`.github/workflows/e2e.yml`，3並列）は手動実行（`workflow_dispatch`）で，実機は使いません．
 
 checkout内の模擬dataflowは `uv run roboloom validate examples/mock/config.yaml` と `uv run roboloom run examples/mock/config.yaml` で確認できます．保存には `record` または `test` extraが必要です．`examples/` と `scripts/` はcheckout用で，Git依存の利用者は自身の設定やPython scriptを使います．
