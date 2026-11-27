@@ -31,7 +31,7 @@ leaderの関節を1台のfollowerの関節へ対応させます．入力は関�
 | key | 型 | 既定値 | 単位 | 説明 |
 | --- | --- | --- | --- | --- |
 | `input` | 文字列 | 必須 | — | 入力のnode名 |
-| `alignment_tolerance` | 数値 | 必須 | followerの単位 | 追従を始める前と，episodeを始めるたびに許すleaderとfollowerの差 |
+| `alignment_tolerance` | 数値 | 必須 | followerの単位 | 追従を始める前と，episodeを始めるたびに許すleaderとfollowerの差．`joints` の関節ごとにも書ける |
 | `max_speed` | 数値 | 必須 | followerの単位/s | 遠隔操作の目標を1周期に動かせる幅（[単位](index.md#units)） |
 | `input_timeout_ms` | 数値 | 必須 | ms | 入力がこれより古くなると指令を止める |
 | `unit` | 文字列 | — | — | 書くなら入力とfollowerの単位．全関節に `scale` があれば入力の単位は違ってよい |
@@ -51,6 +51,7 @@ leaderの関節を1台のfollowerの関節へ対応させます．入力は関�
 | `sign` | `1` か `-1` | 必須 | — | 向き |
 | `offset` | 数値 | 必須 | followerの単位 | ずれ |
 | `scale` | 正の数 | `1.0` | followerの単位/入力の単位 | 歯車比や単位の違い．`feedback` とは併用できない |
+| `alignment_tolerance` | 正の数 | controllerの値 | followerの単位 | この関節だけの，最初の位置合わせと毎回の開始前の許容差．物を持つgripperに使う：gripperは物に当たって止まり，強く握ったleaderまで閉じられないため，controllerの値では `start` を拒否される．policyのteleopへの引き継ぎではcontrollerの値を使う <span class="status status--mock">模擬のみ</span> |
 
 ### 関節の相殺（couplings） { #couplings }
 
