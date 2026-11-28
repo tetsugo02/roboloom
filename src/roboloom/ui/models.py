@@ -8,6 +8,18 @@ from typing import Literal, Protocol
 
 type Value = str | int | float | bool | None | list["Value"] | dict[str, "Value"]
 Confirmation = Literal["release", "quit", "tuning-quit"]
+OperatorState = Literal[
+    "launching",
+    "hold",
+    "teleop",
+    "recording",
+    "stopped",
+    "homing",
+    "estop",
+    "fault",
+    "complete",
+    "",
+]
 
 
 @dataclass(frozen=True)
@@ -47,6 +59,18 @@ class NodeSnapshot:
 
 
 @dataclass(frozen=True)
+class HomeOption:
+    name: str
+    default: bool = False
+    valid: bool = True
+    reason: str = ""
+    worst_joint: str = ""
+    dist: float | None = None
+    eta_s: float | None = None
+    over_timeout: bool = False
+
+
+@dataclass(frozen=True)
 class Snapshot:
     title: str
     mode: str
@@ -57,6 +81,20 @@ class Snapshot:
     warning: str = ""
     selected: str = ""
     dirty: bool = False
+    state: OperatorState = ""
+    control: str = ""
+    episode: str = ""
+    task: str = ""
+    elapsed_s: float | None = None
+    duration_s: float | None = None
+    rows: int | None = None
+    step: int | None = None
+    steps: int | None = None
+    saved_episodes: int = 0
+    pending_saves: int = 0
+    alignment: str = ""
+    home_options: tuple[HomeOption, ...] = ()
+    home_moves: str = ""
 
 
 @dataclass(frozen=True)

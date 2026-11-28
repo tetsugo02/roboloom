@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import yaml
 from conftest import mock_project
+from test_operator_backends import FakeSession
 
 from roboloom.config import load_config
 from roboloom.control.takeover import JointPickup
@@ -16,6 +17,8 @@ from roboloom.controllers.base import FollowerView
 from roboloom.core.protocol import Envelope
 from roboloom.errors import ConfigError
 from roboloom.runtime.node import teleop_warning
+from roboloom.ui.backend import RecordingPlan, SessionBackend
+from roboloom.ui.models import LogEvent, Operation
 
 OPTIONS = ["policy", "policy_teleop"]
 
@@ -213,21 +216,78 @@ def test_session_checks_teleop_policy_and_stop_teleop(tmp_path):
     assert "no teleoperation" in teleop_warning(plain, "teleop", idle, now)
 
 
-def test_operations_say_when_they_can_be_used():
-    from roboloom.ui.backend import SessionBackend
-    from roboloom.ui.models import Capabilities
+def test_policy_toggle_and_typed_commands_follow_live_status(tmp_path, monkeypatch):
+    session = FakeSession(tmp_path)
+    session.cfg = load_config(_project(tmp_path), options=OPTIONS)
+    plan = RecordingPlan("planned", 10, steps=20)
+    backend = SessionBackend(lambda: session, mode="infer", recording=plan)
+    backend.session = session
+    backend._busy = False
+    policy = {"state": "ready", "control": "hold"}
+    recorder = {"state": "idle"}
 
-    backend = SessionBackend(lambda: None)  # type: ignore[arg-type,return-value]
-    caps = Capabilities(teleop=True, handback=True)
-    assert backend._teleop_operations(Capabilities(), None, "") == ()
-    ops = {o.command: o for o in backend._teleop_operations(caps, "hold", "")}
-    assert ops["teleop"].enabled and not ops["policy"].enabled
-    assert "only during an episode" in ops["policy"].reason
-    assert "not teleoperating" in ops["stop_teleop"].reason
-    backend._episode = backend._recording = True
-    ops = {o.command: o for o in backend._teleop_operations(caps, "teleop", "busy")}
-    assert ops["policy"].enabled and not ops["teleop"].enabled
-    assert not ops["stop_teleop"].enabled
+    def status():
+        now = time.monotonic_ns()
+        return {"policy": _status(now, **policy), "recorder": _status(now, **recorder)}
+
+    monkeypatch.setattr(session, "status", status)
+    commands = {"teleop", "stop_teleop", "policy"}
+
+    def toggle(snapshot):
+        (op,) = (o for o in snapshot.operations if o.command in commands)
+        return op
+
+    assert toggle(backend._snapshot()) == Operation("teleop", "TELEOP: OFF")
+    notices = []
+    backend._publish = notices.append
+
+    backend.submit("policy")
+    assert isinstance(notices[-1], LogEvent)
+    assert "no episode running" in notices[-1].text
+    backend.submit("stop_teleop")
+    assert backend._queue.get_nowait() == "stop_teleop"
+
+    backend._busy = False
+    policy["control"] = "teleop"
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.control) == ("teleop", "leader")
+    assert toggle(snapshot) == Operation("stop_teleop", "TELEOP: ON")
+
+    backend._busy = backend._episode = backend._recording = True
+    backend._rec_started = time.monotonic() - 1.0
+    recorder.update(
+        state="recording",
+        task="live task",
+        rows=12,
+        elapsed_s=0.5,
+        episodes=2,
+        pending_saves=1,
+    )
+    policy.update(control="policy", step=4)
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.control) == ("recording", "policy")
+    assert 1.0 <= snapshot.elapsed_s < 2.0
+    assert (snapshot.task, snapshot.rows) == ("live task", 12)
+    assert (snapshot.duration_s, snapshot.step, snapshot.steps) == (10, 4, 20)
+    assert (snapshot.saved_episodes, snapshot.pending_saves) == (2, 1)
+    assert toggle(snapshot) == Operation("teleop", "DRIVER: POLICY")
+
+    backend.submit("teleop")
+    assert backend._handovers.get_nowait() == "teleop"
+    backend.submit("policy")
+    assert "already driving" in notices[-1].text
+
+    policy["control"] = "teleop"
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.control) == ("recording", "leader")
+    assert toggle(snapshot) == Operation("policy", "DRIVER: LEADER")
+    backend.submit("policy")
+    assert backend._handovers.get_nowait() == "policy"
+
+    backend.emergency()
+    backend.submit("policy")
+    assert notices[-1] == LogEvent("ESTOP: restart required", "warn")
+    assert backend._handovers.empty()
 
 
 # -- the dataflow ------------------------------------------------------------------

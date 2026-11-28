@@ -10,24 +10,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from ..config import CONFIG_FILE
+from ..config import CONFIG_FILE, RobotConfig
+from ..control.homing import available_homes
 from ..controllers.teleop import teleop_mode
 from ..core.traits import ending_note
 from ..errors import Cancelled
-from ..runtime.node import start_warning
+from ..runtime.node import start_warning, teleop_warning
 from ..runtime.session import Session, SessionError, _ui_launch, steps_done
 from .models import (
     Capabilities,
     Closed,
+    HomeOption,
     LogEvent,
     NodeSnapshot,
     Operation,
+    OperatorState,
     Publish,
     Snapshot,
     Value,
 )
 from .record import describe, episode_number, progress
-from .render import describe_report
+from .render import STALE_S, describe_report
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,55 @@ class RecordingPlan:
             )
         if self.confirm and not self.save:
             raise ValueError("confirm requires a plan that saves episodes")
+
+
+def _home_details(
+    cfg: RobotConfig, followers: list[NodeSnapshot]
+) -> tuple[tuple[HomeOption, ...], str]:
+    valid, invalid, default = available_homes(cfg)
+    options: list[HomeOption] = []
+    for name in valid:
+        worst: dict[str, Value] = {}
+        eta: float | None = None
+        over_timeout = False
+        for follower in followers:
+            estimates = follower.fields.get("home_estimates")
+            estimate = estimates.get(name) if isinstance(estimates, dict) else None
+            if not isinstance(estimate, dict):
+                continue
+            over_timeout |= estimate.get("over_timeout") is True
+            candidate = estimate.get("eta_s")
+            if isinstance(candidate, int | float) and (eta is None or candidate > eta):
+                worst, eta = estimate, candidate
+        distance = worst.get("dist")
+        options.append(
+            HomeOption(
+                name,
+                default=name == default,
+                worst_joint=str(worst.get("worst_joint") or ""),
+                dist=distance if isinstance(distance, int | float) else None,
+                eta_s=eta,
+                over_timeout=over_timeout,
+            )
+        )
+    options.extend(
+        HomeOption(name, valid=False, reason=reason) for name, reason in invalid.items()
+    )
+    moves = [
+        f"{name} ({len(cfg.followers[name].joint_names)} joints)"
+        for owner in cfg.controllers.values()
+        for name in owner.homes
+    ]
+    leaders = dict.fromkeys(
+        pair.source.name
+        for owner in cfg.controllers.values()
+        for pair in (owner, *owner.nested())
+        if pair.source is not None
+        and getattr(pair.source, "actuated", False)
+        and getattr(pair, "leader_pose", None) is not None
+        and pair.follower.name in owner.homes
+    )
+    return tuple(options), " + ".join([*moves, *leaders])
 
 
 class SessionBackend:
@@ -82,6 +134,7 @@ class SessionBackend:
         self._warning = ""
         self._episode = False
         self._recording = False
+        self._rec_started: float | None = None
         self._index = 0
         self._estop = False
         self._estop_ns = 0
@@ -121,6 +174,7 @@ class SessionBackend:
                         Operation("estop", "Emergency stop"),
                         Operation("quit", "Quit", confirmation="quit"),
                     ),
+                    state="launching",
                 )
             status = session.status()
             now = time.monotonic_ns()
@@ -146,17 +200,19 @@ class SessionBackend:
                         int(item.get("t_ns", 0)),
                     )
                 )
+            followers = [n for n in nodes if n.name in session.cfg.followers]
+            controllers = [n for n in nodes if n.name in session.cfg.controllers]
+            recorder = status.get("recorder", {}).get("fields", {})
+            recording = self._recording or recorder.get("state") == "recording"
+            stopped = self._episode or recorder.get("state") == "stopped"
             mode = teleop_mode(session.cfg.controllers)
             control = None
             if mode is not None and mode.policy is not None:
                 control = status.get(mode.policy, {}).get("fields", {}).get("control")
             elif (
                 mode is not None
-                and not self._recording
-                and any(
-                    status.get(f, {}).get("fields", {}).get("armed")
-                    for f in session.cfg.followers
-                )
+                and not recording
+                and any(n.fields.get("armed") for n in followers)
             ):
                 control = "teleop"
             caps = Capabilities(
@@ -170,15 +226,91 @@ class SessionBackend:
                 release_note=session.release_note(),
                 quit_note=ending_note(session.limp_at_end),
             )
-            readiness = start_warning(session.cfg, status, now) or ""
-            warning = self._warning or readiness
-            busy_reason = (
-                "closing"
-                if self._closing
-                else "operation in progress"
-                if self._busy
-                else ""
+            estopped = [n for n in followers if n.fields.get("mode") == "ESTOP"]
+            faulted = [n for n in followers if n.fields.get("mode") == "FAULT"]
+            homing = any(
+                n.fields.get("mode") == "HOMING"
+                or n.fields.get("home_state") in ("moving", "settling")
+                for n in followers
             )
+            state: OperatorState
+            if self._estop or estopped:
+                state = "estop"
+            elif faulted:
+                state = "fault"
+            elif homing:
+                state = "homing"
+            elif recording:
+                state = "recording"
+            elif stopped:
+                state = "stopped"
+            elif control == "teleop":
+                state = "teleop"
+            elif self._phase == "complete":
+                state = "complete"
+            else:
+                state = "hold"
+
+            control_owner = ""
+            if caps.handback and control == "teleop":
+                control_owner = "leader"
+            elif mode is not None and mode.policy is not None and recording:
+                control_owner = "policy"
+            elif (
+                caps.teleop and not caps.handback and (recording or control == "teleop")
+            ):
+                control_owner = "leader"
+
+            alignment = ""
+            problems = [
+                f"{n.name}: {n.fields['mode']}"
+                + (
+                    f": {reason}"
+                    if (reason := n.fields.get("reason") or n.fields.get("error"))
+                    else ""
+                )
+                for n in (*estopped, *faulted)
+            ]
+            problems.extend(
+                f"{n.name}: no status for {n.age_s:.0f} s"
+                for n in nodes
+                if "t_ns" in status[n.name] and n.age_s > STALE_S
+            )
+            for node in controllers:
+                fields = node.fields
+                if fields.get("state") == "failed":
+                    problems.append(
+                        f"{node.name}: controller failed: {fields.get('error') or 'see its log'}"
+                    )
+                diff, tolerance = fields.get("worst_diff"), fields.get("tolerance")
+                if not alignment and (
+                    fields.get("state") == "aligning"
+                    or (
+                        isinstance(diff, int | float)
+                        and isinstance(tolerance, int | float)
+                        and diff > tolerance
+                    )
+                ):
+                    alignment = (
+                        f"{fields.get('worst_joint') or node.name} {diff}/{tolerance}"
+                        if diff is not None and tolerance is not None
+                        else f"{node.name}: aligning"
+                    )
+
+            plan = self.recording
+            elapsed = recorder.get("elapsed_s")
+            if self._rec_started is not None and recording:
+                elapsed = max(0.0, now / 1e9 - self._rec_started)
+            rows = recorder.get("rows")
+            task = plan.task if plan is not None else ""
+            if recording or stopped:
+                task = str(recorder.get("task") or task)
+            saved = int(recorder.get("episodes") or 0)
+            steps = plan.steps if plan is not None else None
+            home_options, home_moves = _home_details(session.cfg, followers)
+
+            readiness = start_warning(session.cfg, status, now) or ""
+            busy_reason = self._busy_reason()
             start_reason = (
                 busy_reason
                 or ("ESTOP: restart required" if self._estop else "")
@@ -241,7 +373,9 @@ class SessionBackend:
                     else busy_reason,
                     "release",
                 ),
-                *self._teleop_operations(caps, control, busy_reason),
+                *self._teleop_operations(
+                    session.cfg, caps, control, busy_reason, status, now
+                ),
                 Operation("estop", "Emergency stop"),
                 Operation("quit", "Quit", confirmation="quit"),
             )
@@ -259,69 +393,86 @@ class SessionBackend:
                 tuple(nodes),
                 operations,
                 caps,
-                warning,
+                self._warning or "; ".join(problems),
+                state=state,
+                control=control_owner,
+                episode=(
+                    episode_number(self._index, plan.episodes)
+                    if plan is not None
+                    else f"saved {saved}"
+                    if saved
+                    else ""
+                ),
+                task=task,
+                elapsed_s=elapsed if isinstance(elapsed, int | float) else None,
+                duration_s=plan.seconds if plan is not None and recording else None,
+                rows=rows if isinstance(rows, int) else None,
+                step=steps_done(status) if steps else None,
+                steps=steps or None,
+                saved_episodes=saved,
+                pending_saves=int(recorder.get("pending_saves") or 0),
+                alignment=alignment,
+                home_options=home_options,
+                home_moves=home_moves,
             )
 
+    def _busy_reason(self) -> str:
+        if self._closing:
+            return "closing"
+        return "operation in progress" if self._busy else ""
+
     def _teleop_operations(
-        self, caps: Capabilities, control: object, busy_reason: str
+        self,
+        cfg: RobotConfig,
+        caps: Capabilities,
+        control: object,
+        busy_reason: str,
+        status: dict[str, dict],
+        now: int,
     ) -> tuple[Operation, ...]:
-        """Teleop and Stop teleop for operator input, plus Policy when hand-back is
-        available. A policy allows Teleop and Policy while recording an intervention."""
         if not caps.teleop:
             return ()
-        busy = "" if self._recording and caps.handback else busy_reason
-        teleop_reason = (
-            "ESTOP: restart required"
-            if self._estop
-            else (
-                "the input already drives the episode"
-                if self._recording and not caps.handback
-                else ""
+        if self._recording:
+            if not caps.handback:
+                return (
+                    Operation(
+                        "teleop",
+                        "TELEOP: ON",
+                        False,
+                        "the input already drives the episode",
+                    ),
+                )
+            if control == "teleop":
+                name, label = "policy", "DRIVER: LEADER"
+            else:
+                name, label = "teleop", "DRIVER: POLICY"
+            reason = teleop_warning(cfg, name, status, now) or ""
+        elif control == "teleop":
+            name, label = "stop_teleop", "TELEOP: ON"
+            reason = busy_reason or teleop_warning(cfg, name, status, now) or ""
+        else:
+            name, label = "teleop", "TELEOP: OFF"
+            reason = (
+                ("ESTOP: restart required" if self._estop else "")
+                or ("stopped episode: save or discard first" if self._episode else "")
+                or busy_reason
+                or teleop_warning(cfg, name, status, now)
+                or ""
             )
-            or (
-                "stopped episode: save or discard first"
-                if self._episode and not self._recording
-                else ""
-            )
-            or busy
-            or ("already teleoperating" if control == "teleop" else "")
-        )
-        policy_reason = (
-            "only during an episode (start begins with the policy)"
-            if not self._recording
-            else "the policy is driving"
-            if control != "teleop"
-            else ""
-        )
-        stop_reason = (
-            (
-                "during an episode: Stop, or Policy to hand back"
-                if caps.handback
-                else "during an episode: Stop"
-            )
-            if self._episode
-            else busy_reason or ("not teleoperating" if control != "teleop" else "")
-        )
-        teleop = Operation(
-            "teleop",
-            "Teleoperate (take over)"
-            if caps.handback
-            else "Teleoperate (no recording)",
-            not teleop_reason,
-            teleop_reason,
-        )
-        stop = Operation(
-            "stop_teleop", "Stop teleoperating", not stop_reason, stop_reason
-        )
-        if not caps.handback:
-            return (teleop, stop)
-        return (
-            teleop,
-            Operation(
-                "policy", "Hand back to policy", not policy_reason, policy_reason
-            ),
-            stop,
-        )
+        return (Operation(name, label, not reason, reason),)
+
+    def _explicit_teleop_reason(self, session: Session, name: str) -> str:
+        if self._estop:
+            return "ESTOP: restart required"
+        if self._episode and not self._recording and name == "teleop":
+            return "stopped episode: save or discard first"
+        if self._recording and name == "stop_teleop":
+            return "during an episode: Stop"
+        busy = self._busy_reason()
+        if busy and (self._closing or not self._recording):
+            return busy
+        status = session.status()
+        return teleop_warning(session.cfg, name, status, time.monotonic_ns()) or ""
 
     def submit(self, command: str) -> None:
         name = command.split(" ", 1)[0]
@@ -329,6 +480,9 @@ class SessionBackend:
             self.emergency()
             return
         with self._lock:
+            if self._estop and name in ("teleop", "policy"):
+                self._log("ESTOP: restart required", "warn")
+                return
             if name == "stop" and self._busy and self._recording:
                 self._finish_recording.set()
                 return
@@ -336,23 +490,27 @@ class SessionBackend:
                 self._discard_requested = True
                 self._finish_recording.set()
                 return
-            if name in ("teleop", "policy") and self._busy and self._recording:
-                operation = next(
-                    (o for o in self._snapshot().operations if o.command == name), None
-                )
-                if operation is None or not operation.enabled:
-                    self._log(operation.reason if operation else name, "warn")
-                    return
-                self._handovers.put(name)  # the recording loop sends it
-                return
+            snapshot = self._snapshot()
             operation = next(
-                (o for o in self._snapshot().operations if o.command == name), None
+                (o for o in snapshot.operations if o.command == name), None
             )
-            if operation is None or not operation.enabled or name == "quit":
-                self._log(
-                    operation.reason if operation else f"unknown command: {name}",
-                    "warn",
-                )
+            if operation is None:
+                if self.session is None or name not in (
+                    "teleop",
+                    "stop_teleop",
+                    "policy",
+                ):
+                    self._log(f"unknown command: {name}", "warn")
+                    return
+                reason = self._explicit_teleop_reason(self.session, name)
+                if reason:
+                    self._log(reason, "warn")
+                    return
+            elif not operation.enabled or name == "quit":
+                self._log(operation.reason, "warn")
+                return
+            if name in ("teleop", "policy") and self._busy and self._recording:
+                self._handovers.put(name)  # the recording loop sends it
                 return
             if (
                 name == "start"
@@ -415,9 +573,11 @@ class SessionBackend:
                 self._discard_requested = False
                 session.wait_ready(120)
                 session.start(plan.task)
-                self._episode = self._recording = True
+                began = time.monotonic()
+                with self._lock:
+                    self._episode = self._recording = True
+                    self._rec_started = began
                 try:
-                    began = time.monotonic()
                     end, done = began + plan.seconds, 0
                     while (
                         time.monotonic() < end and not self._finish_recording.is_set()
@@ -448,6 +608,7 @@ class SessionBackend:
                     with self._lock:
                         self._phase = "stopping"
                         self._recording = False
+                        self._rec_started = None
                         discarded = self._discard_requested
                         if discarded:
                             # A handover queued for this episode must end with it.
@@ -467,7 +628,9 @@ class SessionBackend:
                         session.discard()
                     self._log(describe(result))
                 except BaseException:
-                    self._episode = self._recording = False
+                    with self._lock:
+                        self._episode = self._recording = False
+                        self._rec_started = None
                     if session.alive:
                         with session._cancellable(None):
                             session.discard()
