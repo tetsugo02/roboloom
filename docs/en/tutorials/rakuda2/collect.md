@@ -26,11 +26,12 @@ With `--with`, the launcher is not opened. To start from the launcher, run `uv r
 
 1. Check the robot status, sensor acquisition rates, and recorder. If an initial pose ([home](../../controllers/leader.md)) is configured, `home` moves both arms there before you start.
 2. Align the leader to the follower and confirm the controller is `following`. While an `aligning` warning is shown, match the pose and retry starting.
-3. Start following and recording with `start pick up the cup`, and operate with the leader.
-4. Stop with `stop`. `stop` holds the follower and does not turn off torque.
-5. Accept the episode with `save`, or drop it with `discard`. Check the completed result's warnings for missing-data rate, valid-command rate, and control period in Logs.
-6. Collect another episode with the next `start <task>`.
-7. To finish, do `stop` → save or discard → support the leader and follower arms and `quit`, then explicitly select supported Release or follower Hold in the confirmation. Cancel is selected initially; Enter alone cancels.
+3. Optionally, use [teleop outside an episode](../../controllers/index.md#teleop) with `t` (`teleop`) to follow the leader without recording. For example, bring the arms from `home` to where the episode begins. Use `stop_teleop` to hold the follower again. <span class="status status--mock">Mock only</span>
+4. Start following and recording with `start pick up the cup`, and operate with the leader.
+5. Stop with `stop`. `stop` holds the follower and does not turn off torque.
+6. Accept the episode with `save`, or drop it with `discard`. Check the completed result's warnings for missing-data rate, valid-command rate, and control period in Logs.
+7. Collect another episode with the next `start <task>`.
+8. To finish, do `stop` → save or discard → support the leader and follower arms and `quit`, then explicitly select supported Release or follower Hold in the confirmation. Cancel is selected initially; Enter alone cancels.
 
 `estop` on a fault is latched and does not recover automatically. Operate with physical support and stop means available.
 

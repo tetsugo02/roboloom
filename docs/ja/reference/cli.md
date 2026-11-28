@@ -38,6 +38,8 @@
 | `stop` | 追従・記録を止める（保存は別操作） |
 | `save` | 停止したepisodeを保存する．既定では保存待ちに入れた時点で応答する．[background保存](../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> |
 | `discard` | episodeを破棄する |
+| `teleop` | followerを操作者の入力に従わせる．利用条件は [episodeの外でのteleop](../controllers/index.md#teleop)（<span class="status status--mock">Mock only</span>）と [teleopと介入](../policy/intervention.md#teleop) を参照． |
+| `stop_teleop` | episodeの外でteleopを終え，followerを保持する．[episodeの外でのteleop](../controllers/index.md#teleop)（<span class="status status--mock">Mock only</span>）と [teleopと介入](../policy/intervention.md#teleop) を参照． |
 | `release` | 支持確認後に追従を止め，通電している入力機器とfollowerを脱力する |
 | `home` | leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かす．到着後，leaderは通常の制御に戻る |
 | `estop` | 非常停止する |
@@ -241,7 +243,7 @@ roboloom session [robot] <operation> [task]
 | option | 型 | 既定値 | 説明 |
 | --- | --- | --- | --- |
 | `robot` | 機体名かpath | 唯一の機体 | 操作を送る `run` の設定（optionは問わない） |
-| `operation` | 下記のどれか | 必須 | `start`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も（[teleopと介入](../policy/intervention.md#teleop)） |
+| `operation` | 下記のどれか | 必須 | `start`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も（[teleopと介入](../policy/intervention.md#teleop)）．すべてのcontrollerが操作者の入力に従う構成では，[episodeの外でのteleop](../controllers/index.md#teleop) に `teleop`・`stop_teleop` を使えます．記録はありません．<span class="status status--mock">Mock only</span> |
 | `task` | str | — | `start` では task，`save` では成否（`success` か `failure`） |
 
 ```bash

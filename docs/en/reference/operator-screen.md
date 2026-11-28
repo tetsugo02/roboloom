@@ -99,11 +99,12 @@
 | `h` | home |
 | `s` | save |
 | `d` | discard |
-| `t` | Teleop (hand over to the leader; only with `teleop:` in the policy) |
+| `t` | When every controller follows operator input, [teleop outside an episode](../controllers/index.md#teleop) drives the followers without recording (<span class="status status--mock">Mock only</span>). With `teleop:` in the policy, Teleop hands over from the policy. |
 | `p` | Policy (hand back; only with `teleop:` in the policy) |
 | Detail | Description |
 | --- | --- |
-| — | `t` and `p` work while recording and say why when unavailable ([teleoperation and interventions](../policy/intervention.md#teleop)). |
+| — | With a policy, `t` and `p` work while recording and say why when unavailable ([teleoperation and interventions](../policy/intervention.md#teleop)). |
+| — | For [teleop outside an episode](../controllers/index.md#teleop), Start records from the current pose and Stop teleoperating holds the followers. Home is unavailable while teleoperating. Save or discard a stopped episode before using Teleop. <span class="status status--mock">Mock only</span> |
 
 | Alias | Same as |
 | --- | --- |

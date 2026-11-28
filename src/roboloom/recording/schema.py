@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import numpy as np
 
+from ..controllers.teleop import teleop_mode
 from ..core.protocol import Envelope
 from ..core.source import Features, Joined, Recordable
 
@@ -101,7 +102,8 @@ INTERVENTION = "action.intervention"  # 1 where a person drove the row (policy t
 def records_intervention(cfg: RobotConfig) -> bool:
     """A policy that can hand the followers to teleoperation (`teleop:`) records which
     rows a person drove."""
-    return any(getattr(c, "teleop", None) for c in cfg.controllers.values())
+    mode = teleop_mode(cfg.controllers)
+    return mode is not None and mode.handback
 
 
 def state_names(followers: Mapping[str, Follower]) -> list[str]:

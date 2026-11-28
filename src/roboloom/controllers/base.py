@@ -165,6 +165,11 @@ class Controller(ABC):
     def reset(self) -> None:
         """Require re-alignment before any further command (see the module docstring)."""
 
+    def follows_operator(self) -> bool:
+        """Whether armed followers follow an operator's input, so `teleop` can arm
+        them outside an episode without recording."""
+        return self.uses_input
+
     def nested(self) -> list[Controller]:
         """Controllers this one owns and steps itself (a policy's teleop controllers,
         the parts of a `type: parts` controller); they follow inputs too."""

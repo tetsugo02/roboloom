@@ -133,6 +133,7 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 - When the process that called `Session.launch` ends, however it ends (killed, an exception, its terminal closed), the dataflow discards the episode in progress, lets the followers hold and ends. A robot never keeps following a policy after its script is gone, with or without `close()`. Child processes made with `multiprocessing` and the like count as the process still being there.
 - `home(timeout=None)`: move the leader and follower slowly to the initial pose chosen in the controller and wait until both arrive. Raises `SessionError` if they do not arrive or a node refuses. `record(..., home=True)` does this before every episode. See "Move to an initial pose" in [Leader](../../controllers/leader.md).
 - `teleop()`, `policy()`, `stop_teleop()`: with `teleop:` in the policy, hand the followers to the leader (before an episode, or during one as an intervention), hand back to the policy, and end teleoperation outside an episode. See [teleoperation and interventions](../../policy/intervention.md#teleop).
+- When every controller follows operator input, `teleop()` uses the readiness and alignment checks of `start` and arms the followers without recording. `stop_teleop()` holds them, and `home()` requires that teleop has stopped. See [teleop outside an episode](../../controllers/index.md#teleop). <span class="status status--mock">Mock only</span>
 
 ```python
 s.start("wipe the table")

@@ -218,7 +218,7 @@ def test_operations_say_when_they_can_be_used():
     from roboloom.ui.models import Capabilities
 
     backend = SessionBackend(lambda: None)  # type: ignore[arg-type,return-value]
-    caps = Capabilities(teleop=True)
+    caps = Capabilities(teleop=True, handback=True)
     assert backend._teleop_operations(Capabilities(), None, "") == ()
     ops = {o.command: o for o in backend._teleop_operations(caps, "hold", "")}
     assert ops["teleop"].enabled and not ops["policy"].enabled

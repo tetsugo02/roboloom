@@ -89,6 +89,11 @@ class PartsController(Controller):
             raise ValueError(f"{self.name}.parts: name at least one controller file")
         self.inner = dict(controllers)
 
+    def follows_operator(self) -> bool:
+        return bool(self.inner) and all(
+            c.follows_operator() for c in self.inner.values()
+        )
+
     def nested(self) -> list[Controller]:
         return list(self.inner.values())
 

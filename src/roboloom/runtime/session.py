@@ -1106,13 +1106,17 @@ class Session:
                     waiting.append(f"{name} ({fields.get('home_state', 'waiting')})")
         return waiting
 
-    # -- teleoperation of a policy (`teleop:` in the policy YAML) ------------------
+    # -- teleoperation outside an episode, and a policy's interventions ------------
 
     def teleop(self) -> None:
-        """Drive the followers with the leader: before an episode (nothing is recorded)
-        or during one (an intervention, recorded as `action.intervention`). Each joint
-        holds until the leader reaches it, then follows; the policy's status lists the
-        joints still to reach (`pickup`)."""
+        """Drive the followers with operator input outside an episode (nothing is recorded).
+
+        - When every controller follows operator input, `teleop` checks controller
+          readiness and alignment as `start` does. The followers hold on `stop_teleop`.
+          Use `start` to record an episode from the current position.
+        - A policy with `teleop:`: also during an episode (an intervention, recorded as
+          `action.intervention`). Each joint holds until the leader reaches it, then
+          follows; the policy's status lists the joints still to reach (`pickup`)."""
         self.wait_report(self.send("teleop"))
 
     def policy(self) -> None:
