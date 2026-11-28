@@ -49,7 +49,7 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
     print(r.index, r.frames, r.warnings, r.ok)
 ```
 
-`record(task, seconds, *, keep=None, on_tick=None, tick_s=0.2, ready_timeout=60.0, home=False, label=None, note=None) -> EpisodeResult`
+`record(task, seconds, *, keep=None, on_tick=None, tick_s=0.2, ready_timeout=60.0, home: bool | str = False, label=None, note=None) -> EpisodeResult`
 
 - Waits until start is allowed, starts, records, stops, and saves unless
   `keep(result)` returns `False`. A kept episode returns a pending result by default
@@ -65,7 +65,8 @@ with Session.launch("rakuda2", options=["gravity"]) as s:
   `EpisodeInfo(index, number, dataset, previous)`: next dataset index assuming queued
   saves succeed (`next_info()` adds saved and pending counts), number in this session,
   dataset name (e.g. `rakuda2-digit`), tasks saved in this session.
-- `home=True` moves leader and follower to the controller's `home` pose first.
+- `home=True` moves to the configured default poses before recording. A string selects
+  a named pose. `home=False` skips the move.
 - `label`: an evaluation verdict, `"success"` / `"failure"`, or a function of the
   stopped `EpisodeResult` returning one (None: none); `note`: free text. Both go to
   the dataset's `meta/roboloom_episodes.jsonl` ([recording.md](recording.md)).
@@ -89,7 +90,8 @@ s.record(lambda info: f"pick up the {next(objects)}", seconds=20, keep=lambda ep
 | `save(timeout=300, *, label=None, note=None, wait=None) -> EpisodeResult` | `wait=None` follows `background_save`. `wait=True` waits for this episode's final result and raises `SessionError` on a failed write. Synchronous mode always waits. `label` and `note` work as in `record` |
 | `wait_saves(timeout=None) -> list[EpisodeResult]` | Collect this Session's uncollected queued results in submission order. After all finish, raise `SessionError` on failures. `report["results"]` holds successes and `report["failures"]` holds the failure reports |
 | `discard()` | drop the episode in progress |
-| `home(timeout=None)` | slow move to the home pose; refused while recording |
+| `home(timeout=None, *, pose=None)` | Move slowly to the default poses or the named `pose`, and wait for arrival. Refused while recording |
+| `begin_home(pose=None)` | Send the move and return the monotonic send time in ns and the largest configured timeout in s. Check progress with `home_waiting(sent_ns)` |
 | `estop()` | emergency stop (latched); goes out even after a node failed |
 | `release(confirm=False)` | torque off; with `confirm=False` raises `HardwareError` carrying `release_note()` |
 | `status() -> dict` | latest status per node `{name: {"role", "level", "fields", "t_ns"}}`, e.g. `s.status()["follower"]["fields"]["mode"]` |

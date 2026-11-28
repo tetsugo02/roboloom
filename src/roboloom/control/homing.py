@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from ..core.checks import finite, positive
 from ..errors import ConfigError
+
+if TYPE_CHECKING:
+    from ..config import RobotConfig
 
 
 class Trajectory:
@@ -65,7 +69,10 @@ def load_pose(
         raise ConfigError(
             f"{path}: no such pose (save one with `roboloom capture-pose`)"
         )
-    data = yaml.safe_load(path.read_text())
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except UnicodeError as exc:
+        raise ConfigError(f"{path}: pose file must be UTF-8 text") from exc
     if not isinstance(data, dict) or not isinstance(data.get("pose"), dict):
         raise ConfigError(f"{path}: expected follower, model, unit and pose")
     if data.get("follower") != follower:
@@ -81,7 +88,7 @@ def load_pose(
     values = data["pose"]
     if set(values) != set(joint_names):
         missing = sorted(set(joint_names) - set(values))
-        extra = sorted(set(values) - set(joint_names))
+        extra = sorted(set(values) - set(joint_names), key=str)
         raise ConfigError(f"{path}: joints differ (missing {missing}, unknown {extra})")
     for joint, limit in zip(joint_names, limits, strict=True):
         value = values[joint]
@@ -101,8 +108,47 @@ class HomeSpec:
     tolerance: float
     timeout_s: float
 
-    def target(self, joint_names: Sequence[str]) -> list[float]:
-        return [self.pose.values[j] for j in joint_names]
+    poses: Mapping[str, Pose] = field(default_factory=dict)
+    invalid: Mapping[str, str] = field(default_factory=dict)
+    choices: tuple[str, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.poses:
+            object.__setattr__(self, "poses", {self.pose.name: self.pose})
+
+    def get(self, name: str | None = None) -> Pose:
+        if not name:
+            return self.pose
+        if name in self.poses:
+            return self.poses[name]
+        if name in self.invalid:
+            raise ConfigError(f"invalid home pose {name!r}: {self.invalid[name]}")
+        raise ConfigError(f"unknown home pose {name!r}")
+
+    def target(
+        self, joint_names: Sequence[str], name: str | None = None
+    ) -> list[float]:
+        pose = self.get(name)
+        return [pose.values[j] for j in joint_names]
+
+    def estimate(
+        self,
+        current: Sequence[float],
+        joint_names: Sequence[str],
+        name: str | None = None,
+    ) -> dict[str, object]:
+        diffs = [
+            abs(g - c)
+            for g, c in zip(self.target(joint_names, name), current, strict=True)
+        ]
+        worst = max(range(len(diffs)), key=diffs.__getitem__)
+        eta = math.pi / 2 * diffs[worst] / self.max_speed
+        return {
+            "worst_joint": joint_names[worst],
+            "dist": round(diffs[worst], 4),
+            "eta_s": round(eta, 1),
+            "over_timeout": eta > self.timeout_s,
+        }
 
 
 def parse_home(
@@ -114,14 +160,14 @@ def parse_home(
 ) -> HomeSpec | None:
     if raw is None:
         return None
-    keys = {"pose", "max_speed", "tolerance", "timeout_s"}
+    keys = {"pose", "max_speed", "tolerance", "timeout_s", "choices"}
     if (
         not isinstance(raw, dict)
         or not {"pose", "max_speed", "tolerance"} <= set(raw) <= keys
     ):
         raise ConfigError(
             f"{owner}.home needs pose, max_speed and tolerance (in the follower's "
-            "unit; it may set timeout_s)"
+            "unit; it may set timeout_s and choices)"
         )
     if not isinstance(raw["pose"], str):
         raise ConfigError(f"{owner}.home.pose must be a path to a saved pose")
@@ -136,13 +182,74 @@ def parse_home(
             f"{owner}.home.max_speed {max_speed} exceeds the controller's max_speed "
             f"{speed_limit} ({robot.unit}/s)"
         )
+    choices = None
+    if "choices" in raw:
+        names = raw["choices"]
+        if (
+            not isinstance(names, list)
+            or not names
+            or any(
+                not isinstance(name, str) or not name or "/" in name or "\\" in name
+                for name in names
+            )
+        ):
+            raise ConfigError(
+                f"{owner}.home.choices must be a non-empty list of pose names"
+            )
+        choices = tuple(names)
+
     path = Path(base_dir or ".") / raw["pose"]
-    pose = load_pose(
-        path.resolve(),
-        robot.name,
-        robot.model,
-        robot.unit,
-        robot.joint_names,
-        robot.limits,
+    pose_args = (robot.name, robot.model, robot.unit, robot.joint_names, robot.limits)
+    try:
+        path = path.resolve()
+        pose = load_pose(path, *pose_args)
+    except (yaml.YAMLError, OSError) as exc:
+        raise ConfigError(f"{path}: {exc}") from exc
+    if choices is not None and pose.name not in choices:
+        raise ConfigError(
+            f"{owner}.home.choices must include the default pose {pose.name!r}"
+        )
+
+    poses = {pose.name: pose}
+    invalid: dict[str, str] = {}
+    candidates = (
+        sorted(path.parent.glob("*.yaml"), key=lambda candidate: candidate.stem)
+        if choices is None
+        else [path.parent / f"{name}.yaml" for name in sorted(set(choices))]
     )
-    return HomeSpec(pose, max_speed, tolerance, timeout_s)
+    for candidate in candidates:
+        name = candidate.stem
+        if name == pose.name:
+            continue
+        try:
+            if choices is not None and not candidate.is_file():
+                invalid[name] = "no such pose"
+                continue
+            poses[name] = load_pose(candidate, *pose_args)
+        except (ConfigError, yaml.YAMLError, OSError) as exc:
+            invalid[name] = str(exc)
+    return HomeSpec(pose, max_speed, tolerance, timeout_s, poses, invalid, choices)
+
+
+def available_homes(cfg: RobotConfig) -> tuple[tuple[str, ...], dict[str, str], str]:
+    """Named poses that every configured homing follower can use together."""
+    homes = [
+        (follower, spec)
+        for c in cfg.controllers.values()
+        for follower, spec in c.homes.items()
+    ]
+    if not homes:
+        return (), {}, ""
+
+    defaults = {spec.pose.name for _, spec in homes}
+    default = next(iter(defaults)) if len(defaults) == 1 else ""
+    common = set.intersection(*(set(spec.poses) for _, spec in homes))
+    valid = tuple(sorted(common, key=lambda name: (name != default, name)))
+    seen = {name for _, spec in homes for name in (*spec.poses, *spec.invalid)}
+    invalid = {}
+    for name in sorted(seen - common):
+        for follower, spec in homes:
+            if name not in spec.poses:
+                invalid[name] = f"{follower}: {spec.invalid.get(name, 'missing pose')}"
+                break
+    return valid, invalid, default

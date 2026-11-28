@@ -24,7 +24,7 @@ from roboloom.recording.episodes import check_label
 from roboloom.runtime.session import EpisodeResult, Session, SessionError
 from roboloom.ui.backend import RecordingPlan, SessionBackend
 from roboloom.ui.client import SessionClient
-from roboloom.ui.models import Closed, LogEvent, Notice, Snapshot
+from roboloom.ui.models import Closed, HomeOption, LogEvent, Notice, Snapshot
 from roboloom.ui.record import record
 from roboloom.ui.tuning_backend import TuningBackend
 
@@ -195,6 +195,113 @@ def ready(notice: Notice) -> bool:
     return isinstance(notice, Snapshot) and any(
         o.command == "start" and o.enabled for o in notice.operations
     )
+
+
+def test_snapshot_tracks_live_recorder_and_follower_state(tmp_path, monkeypatch):
+    session = FakeSession(tmp_path)
+    backend = SessionBackend(lambda: session)
+    assert backend._snapshot().state == "launching"
+    backend.session = session
+    backend._busy = False
+    report = session.status
+    recorder = {}
+    follower = {"armed": False}
+
+    def status():
+        live = report()
+        live["recorder"] = {
+            "role": "recorder",
+            "fields": recorder.copy(),
+            "t_ns": time.monotonic_ns(),
+        }
+        live["follower"]["fields"].update(follower)
+        return live
+
+    monkeypatch.setattr(session, "status", status)
+    assert backend._snapshot().state == "hold"
+    follower["armed"] = True
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.control) == ("teleop", "leader")
+
+    recorder.update(state="recording", elapsed_s=2.5, rows=25, task="move")
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.control) == ("recording", "leader")
+    assert (snapshot.elapsed_s, snapshot.rows, snapshot.task) == (2.5, 25, "move")
+    assert snapshot.duration_s is None
+    assert snapshot.warning == ""
+
+    follower.update(armed=False, home_state="settling")
+    assert backend._snapshot().state == "homing"
+    follower.update(mode="FAULT", reason="joint limit")
+    snapshot = backend._snapshot()
+    assert snapshot.state == "fault"
+    assert snapshot.warning == "follower: FAULT: joint limit"
+    follower.update(mode="ESTOP", reason="emergency stop")
+    assert backend._snapshot().state == "estop"
+    follower.update(mode="HOLD", home_state="reached")
+
+    recorder.update(state="stopped", elapsed_s=None, rows=30)
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.control, snapshot.task) == ("stopped", "", "move")
+    assert (snapshot.elapsed_s, snapshot.rows) == (None, 30)
+    recorder.update(state="idle", episodes=2, pending_saves=1)
+    snapshot = backend._snapshot()
+    assert (snapshot.state, snapshot.task, snapshot.episode) == ("hold", "", "saved 2")
+    assert (snapshot.saved_episodes, snapshot.pending_saves) == (2, 1)
+
+
+def test_home_options_use_live_estimates_and_describe_moving_devices(
+    tmp_path, monkeypatch
+):
+    session = FakeSession(tmp_path, home=True)
+    follower = session.cfg.followers["follower"]
+    controller = session.cfg.controllers["controller"]
+    spec = controller.homes["follower"]
+    spec.poses["alternate"] = spec.pose
+    spec.invalid["bad"] = "joint limit"
+    # Include two follower reports with different estimates for the same pose.
+    session.cfg.followers["second"] = follower
+    controller.homes["second"] = spec
+    monkeypatch.setattr(type(controller.source), "actuated", True)
+    report = session.status
+
+    def status():
+        live = report()
+        live["follower"]["fields"]["home_estimates"] = {
+            "ready": {
+                "worst_joint": "head_yaw",
+                "dist": 10.0,
+                "eta_s": 0.2,
+                "over_timeout": True,
+            }
+        }
+        live["second"]["fields"]["home_estimates"] = {
+            "ready": {
+                "worst_joint": "torso_yaw",
+                "dist": 70.0,
+                "eta_s": 0.6,
+                "over_timeout": False,
+            }
+        }
+        return live
+
+    monkeypatch.setattr(session, "status", status)
+    backend = SessionBackend(lambda: session)
+    backend.session = session
+    snapshot = backend._snapshot()
+    assert snapshot.home_options == (
+        HomeOption(
+            "ready",
+            default=True,
+            worst_joint="torso_yaw",
+            dist=70,
+            eta_s=0.6,
+            over_timeout=True,
+        ),
+        HomeOption("alternate"),
+        HomeOption("bad", valid=False, reason="follower: joint limit"),
+    )
+    assert snapshot.home_moves == "follower (17 joints) + second (17 joints) + leader"
 
 
 def test_start_refusal_does_not_disable_retry_and_close_once(tmp_path):
@@ -374,17 +481,27 @@ def test_timed_recording_progress_and_policy_save_choice(tmp_path, save: bool):
         assert session.discarded == (0 if save else 2)
         assert session.started == ["task", "task"]
         assert any(
-            isinstance(n, Snapshot) and n.phase.startswith("episode 2/2  [")
+            isinstance(n, Snapshot)
+            and n.phase.startswith("episode 2/2  [")
+            and n.state == "recording"
+            and n.episode == "episode 2/2"
+            and n.task == "task"
+            and n.duration_s == 0.15
+            and n.elapsed_s is not None
+            and n.elapsed_s > 0
             for n in notices.items
         )
         # the plan is a goal, not a limit: Start is still there and runs another
-        notices.wait(
+        complete = notices.wait(
             lambda n: (
                 isinstance(n, Snapshot)
                 and n.phase == "complete"
                 and any(o.command == "start" and o.enabled for o in n.operations)
             )
         )
+        assert isinstance(complete, Snapshot)
+        assert complete.state == "complete"
+        assert complete.elapsed_s is complete.duration_s is None
         backend.submit("start")
         notices.wait(
             lambda n: (
@@ -426,6 +543,7 @@ def test_confirm_stops_for_a_decision_and_counts_only_saves(tmp_path, monkeypatc
         assert not ops["start"].enabled
         assert ops["start"].reason == "episode already open"
         assert not ops["teleop"].enabled
+        assert ops["teleop"].label == "TELEOP: OFF"
         assert ops["teleop"].reason == "stopped episode: save or discard first"
 
     try:

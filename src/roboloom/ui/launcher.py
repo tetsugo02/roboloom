@@ -31,25 +31,31 @@ from textual.widgets import (
     RadioSet,
     Static,
 )
+from textual.widgets.option_list import Option as ListOption
 
 from ..config import (
     CONFIG_FILE,
     INFER_OPTION,
     PROJECT_ROOT,
+    Experiment,
     Option,
+    RobotConfig,
     check_options,
     dataset_suffix,
     declared_options,
+    load_config,
     option_changes,
     project_robots,
     read_config,
     toggle_option,
 )
-from ..errors import ConfigError
+from ..control.homing import available_homes
+from ..errors import ConfigError, RoboloomError
 from ..recording.video import VIDEO_CODECS, normalize_video_codec
 from .splitter import Splitter
 
 MODES = ("run", "record", "infer")
+HOME_DEFAULT_ID = "__default__"
 # Video codec choices: `VIDEO_DEFAULT` leaves the choice to the recorder YAML (and, when
 # appending, to the saved videos); the others are recording.video.VIDEO_CODECS names.
 VIDEO_DEFAULT = "yaml"
@@ -76,6 +82,7 @@ class LaunchPlan:
     observe: list[str] | None = None
     video_codec: str | None = None  # None: the recorder YAML (recording.video)
     confirm: bool = False
+    home_pose: str | None = None
 
     def problem(self) -> str:
         """Why it cannot start, or ''."""
@@ -99,6 +106,7 @@ def last_path(config: Path) -> Path:
 def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
     try:
         data = yaml.safe_load(last_path(config).read_text()) or {}
+        raw_pose = data.get("home_pose")
         plan = LaunchPlan(
             mode=str(data.get("mode", "run")),
             sensors=data.get("sensors"),
@@ -111,6 +119,9 @@ def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
             episodes=int(data.get("episodes", 1)),
             home=bool(data.get("home", False)),
             confirm=bool(data.get("confirm", False)),
+            home_pose=str(raw_pose)
+            if isinstance(raw_pose, str) and raw_pose.strip()
+            else None,
         )
         check_options(options, plan.options)
         return plan
@@ -390,6 +401,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     #numbers > Vertical:first-of-type { margin-right: 2; }
     #numbers Input { width: 1fr; }
     #home, #mock { margin-top: 1; }
+    #home-pose-box, #home-pose { height: auto; }
+    #home-pose { max-height: 8; }
     .option {
         height: auto; margin-bottom: 1; padding: 0 1;
         border: none; border-left: outer $panel-lighten-2; background: $boost;
@@ -410,11 +423,46 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         Binding("escape", "escape", "Back / Cancel"),
     ]
 
-    def __init__(self, config: Path, initial: LaunchPlan, *, back: bool = False):
+    def __init__(
+        self,
+        config: Path,
+        initial: LaunchPlan,
+        *,
+        back: bool = False,
+        launch_error: str = "",
+        experiment: Experiment | None = None,
+    ):
         """`back`: offer Back (and Esc) to return to the robot list."""
         super().__init__()
-        self.config, self.back = config, back
+        self.config, self.back, self.experiment = config, back, experiment
+        self._launch_error = launch_error
         raw = yaml.safe_load(config.read_text()) or {}
+        self._validates_full_config = any(
+            key in raw
+            for key in (
+                "followers",
+                "controllers",
+                "inputs",
+                "sensors",
+                "trackers",
+                "recorder",
+                "session",
+            )
+        )
+        self._config_cache: dict[
+            tuple[
+                tuple[str, ...],
+                bool,
+                tuple[str, ...] | None,
+                tuple[str, ...] | None,
+                str | None,
+            ],
+            tuple[RobotConfig | None, str],
+        ] = {}
+        self._home_pose = initial.home_pose
+        self._home_choices: (
+            tuple[tuple[str, ...], dict[str, str], str, str | None] | None
+        ) = None
         self.options = declared_options(config, raw.get("options"))
         self.sensor_names = list(raw.get("sensors") or {})
         for option in self.options.values():
@@ -435,7 +483,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
         observation_defaults: list[str]
         try:
-            tree = read_config(config, initial.options)
+            tree = read_config(config, initial.options, experiment=self.experiment)
             sensor_defaults = list(tree["sensors"])
             observation_defaults = next(
                 (
@@ -472,7 +520,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                         yield RadioButton(
                             mode, value=mode == self.plan.mode, id=f"mode-{mode}"
                         )
-                with Vertical(id="recording"):
+                # Initial field values should leave the last launch error visible.
+                with Vertical(id="recording"), self.prevent(Input.Changed):
                     yield Label("Task (stored with every frame)", classes="field-label")
                     yield Input(
                         self.plan.task, placeholder="e.g. pick up the cup", id="task"
@@ -497,6 +546,9 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                     yield OptionToggle(
                         "Move home before every episode", self.plan.home, id="home"
                     )
+                    with Vertical(id="home-pose-box"):
+                        yield Label("Home pose", classes="field-label")
+                        yield OptionList(id="home-pose")
                     yield OptionToggle(
                         "Ask to save or discard after every episode",
                         self.plan.confirm,
@@ -634,6 +686,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             episodes=int(number("episodes", int, 0)),
             home=self.query_one("#home", Checkbox).value,
             confirm=self.query_one("#confirm", Checkbox).value,
+            home_pose=self._home_pose,
         )
 
     def _refresh_observation_defaults(self) -> None:
@@ -646,7 +699,9 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             return
         try:
             # Only controller defaults are needed; inactive sensor files stay unread.
-            tree = read_config(self.config, self.chosen, sensors=[])
+            tree = read_config(
+                self.config, self.chosen, sensors=[], experiment=self.experiment
+            )
         except (ValueError, TypeError, OSError):
             return  # incomplete configurations remain editable in the launcher
         self.observation_selection = list(
@@ -683,12 +738,70 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 why.display = bool(reason)
             plan = self._read()
             self.query_one("#recording").display = plan.mode in ("record", "infer")
-            self.query_one("#home").display = plan.mode in ("record", "infer")
+            self._sync_home(plan)
             self.query_one("#confirm").display = plan.mode in ("record", "infer")
             self.query_one("#summary", Static).update(self._summary(plan))
             self.query_one("#launch", Button).disabled = bool(self._problem(plan))
         finally:
             self._syncing = False
+
+    def _sync_home(self, plan: LaunchPlan) -> None:
+        valid, invalid, default = self._homes(plan)
+        episodic = plan.mode in ("record", "infer")
+        has_home = bool(valid or invalid)
+        self.query_one("#home").display = episodic and (
+            has_home or not self._validates_full_config
+        )
+        poses = self.query_one("#home-pose", OptionList)
+        poses.display = self.query_one("#home-pose-box").display = episodic and has_home
+
+        choices = (valid, invalid, default, plan.home_pose)
+        if choices == self._home_choices:
+            return
+        self._home_choices = choices
+        if default:
+            fallback = default if default in valid else next(iter(valid), None)
+            selected = plan.home_pose if plan.home_pose in valid else fallback
+            options = [
+                ListOption(
+                    f"{'▸ ' if name == selected else ''}{name}"
+                    f"{' (default)' if name == default else ''}",
+                    id=name,
+                )
+                for name in valid
+            ]
+            highlighted = valid.index(selected) if selected is not None else None
+        else:
+            selected = plan.home_pose if plan.home_pose in valid else None
+            options = [
+                ListOption(
+                    f"{'▸ ' if selected is None else ''}Each follower's default",
+                    id=HOME_DEFAULT_ID,
+                ),
+                *(
+                    ListOption(
+                        f"{'▸ ' if name == selected else ''}{name}",
+                        id=name,
+                    )
+                    for name in valid
+                ),
+            ]
+            highlighted = 0 if selected is None else 1 + valid.index(selected)
+        with poses.prevent(OptionList.OptionHighlighted):
+            poses.clear_options().add_options(
+                [
+                    *options,
+                    *(
+                        ListOption(
+                            Text(f"{name} — unavailable: {reason}"),
+                            id=name,
+                            disabled=True,
+                        )
+                        for name, reason in invalid.items()
+                    ),
+                ]
+            )
+            poses.highlighted = highlighted
 
     def _problem(self, plan: LaunchPlan) -> str:
         try:
@@ -699,7 +812,47 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         missing = set(observed) & (set(self.sensor_names) - set(plan.sensors or []))
         if missing:
             return f"policy observes inactive sensors: {sorted(missing)}"
+        cfg, problem = self._validated_config(plan)
+        if problem:
+            return problem
+        if cfg is not None and plan.home and plan.home_pose:
+            valid, invalid, _ = available_homes(cfg)
+            if plan.home_pose in invalid:
+                return f"home pose {plan.home_pose!r} is unavailable: {invalid[plan.home_pose]}"
+            if (valid or invalid) and plan.home_pose not in valid:
+                return f"unknown home pose {plan.home_pose!r}"
         return plan.problem()
+
+    def _homes(self, plan: LaunchPlan) -> tuple[tuple[str, ...], dict[str, str], str]:
+        cfg, _ = self._validated_config(plan)
+        return available_homes(cfg) if cfg is not None else ((), {}, "")
+
+    def _validated_config(self, plan: LaunchPlan) -> tuple[RobotConfig | None, str]:
+        if not self._validates_full_config:
+            return None, ""
+        key = (
+            plan.options,
+            plan.mock,
+            tuple(plan.sensors) if plan.sensors is not None else None,
+            tuple(plan.observe) if plan.observe is not None else None,
+            plan.video_codec,
+        )
+        if key not in self._config_cache:
+            try:
+                cfg = load_config(
+                    self.config,
+                    options=plan.options,
+                    mock=True if plan.mock else None,
+                    sensors=plan.sensors,
+                    observe=plan.observe,
+                    video_codec=plan.video_codec,
+                    experiment=self.experiment,
+                )
+            except RoboloomError as exc:
+                self._config_cache[key] = None, str(exc)
+            else:
+                self._config_cache[key] = cfg, ""
+        return self._config_cache[key]
 
     def _devices(self, plan: LaunchPlan) -> str:
         if plan.mock:
@@ -713,6 +866,13 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             f"{plan.mode} · {self._devices(plan)} · options: "
             + (", ".join(plan.options) or "none")
         ]
+        if self._launch_error:
+            lines.insert(0, f"last launch failed: {self._launch_error}")
+        if plan.mode in ("record", "infer") and plan.home:
+            valid, invalid, default = self._homes(plan)
+            if valid or invalid:
+                label = plan.home_pose or default or "each follower's default"
+                lines.append(f"home: {label}")
         problem = self._problem(plan)
         if problem:
             return "\n".join([*lines, f"cannot launch: {problem}"])
@@ -732,9 +892,18 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
     # -- events ------------------------------------------------------------------
 
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if not self._syncing and event.option_list.id == "home-pose":
+            self._home_pose = (
+                None if event.option.id == HOME_DEFAULT_ID else event.option.id
+            )
+            self._launch_error = ""
+            self._sync()
+
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if self._syncing:
             return
+        self._launch_error = ""
         widget_id = event.checkbox.id or ""
         if widget_id.startswith("observe-"):
             source = self.observation_names[int(widget_id.removeprefix("observe-"))]
@@ -762,6 +931,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         if self._syncing:
             return
+        self._launch_error = ""
         if (
             event.radio_set.id == "mode"
             and self._read().mode == "infer"
@@ -772,6 +942,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
     def on_input_changed(self, _: Input.Changed) -> None:
         if not self._syncing:
+            self._launch_error = ""
             self._sync()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -785,6 +956,10 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def action_launch(self) -> None:
         plan = self._read()
         if not self._problem(plan):
+            if self._validates_full_config and plan.home:
+                valid, invalid, _ = self._homes(plan)
+                if not (valid or invalid):
+                    plan = replace(plan, home=False)
             self.exit(plan)
 
     def action_cancel(self) -> None:
@@ -795,11 +970,22 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
 
 def choose(
-    config: Path, initial: LaunchPlan, *, back: bool = False
+    config: Path,
+    initial: LaunchPlan,
+    *,
+    back: bool = False,
+    launch_error: str = "",
+    experiment: Experiment | None = None,
 ) -> LaunchPlan | Literal["back"] | None:
     """Show the launcher; the chosen plan (saved as the next initial one), BACK (only
     with `back`) or None (cancelled)."""
-    plan = LauncherApp(config, initial, back=back).run()
+    plan = LauncherApp(
+        config,
+        initial,
+        back=back,
+        launch_error=launch_error,
+        experiment=experiment,
+    ).run()
     if isinstance(plan, LaunchPlan):
         save_last(config, plan)
     return plan

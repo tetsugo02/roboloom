@@ -268,7 +268,7 @@ uv run roboloom infer --experiment path/to/file.yaml
 | `task` | text | — | — | The value of `--task` |
 | `seconds` | number | — | s | The value of `--seconds` |
 | `episodes` | integer | — | — | The value of `--episodes` |
-| `home` | boolean | — | — | The value of `--home` |
+| `home` | `true` / `false` / `<name>` | `false` | — | Move to the configured defaults (`true`), skip the move (`false`), or select a named pose (`<name>`) before every episode. See [home](control.md#home) |
 | `confirm` | boolean | `false` | — | `true` enables [`--confirm`](../cli.md#record) for `record` and `infer`. An explicit `--confirm` takes precedence. <span class="status status--mock">Mock only</span> |
 | `steps` | integer | — | actions | The value of `infer --steps`: the episode ends after this many actions of the policy. Not together with `seconds` |
 

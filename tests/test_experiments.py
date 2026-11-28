@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -110,7 +111,8 @@ def test_what_an_experiment_may_not_say_is_named(tmp_path, monkeypatch):
         ({"secnds": 3}, "unknown keys secnds \\(did you mean seconds\\?\\)"),
         ({"seconds": 0}, "seconds: expected a positive number"),
         ({"episodes": 1.5}, "episodes: expected a whole number"),
-        ({"home": "yes please"}, "home: expected true or false"),
+        ({"home": ""}, "home: expected true, false, or a non-empty pose name"),
+        ({"home": 1}, "home: expected true, false, or a non-empty pose name"),
         ({"confirm": 1}, "confirm: expected true or false"),
         ({"steps": 0}, "steps: expected a whole number, at least 1"),
         ({"steps": 50}, "write seconds or steps"),
@@ -162,6 +164,49 @@ def test_infer_runs_as_the_experiment_says(tmp_path, monkeypatch):
         cli.main(["infer", "--plain", "--experiment", "drawr"])
     with pytest.raises(SystemExit, match="give --seconds or --steps, or `seconds:`"):
         cli.main(["infer", "--plain"])
+
+
+@pytest.mark.parametrize("command", ["record", "infer"])
+@pytest.mark.parametrize(
+    ("home_flag", "expected"),
+    [([], "stow"), (["--home"], True), (["--home", "ready"], "ready")],
+)
+def test_home_name_reaches_plain_recording(
+    tmp_path, monkeypatch, command, home_flag, expected
+):
+    from roboloom.ui import record
+
+    file = _project(tmp_path, monkeypatch, home="stow")
+    assert load_experiment(file).home == "stow"
+    session = Mock()
+    session.process.returncode = 0
+    monkeypatch.setattr(Session, "launch", Mock(return_value=session))
+    runner = Mock()
+    monkeypatch.setattr(record, "record", runner)
+    cli.main([command, "--plain", "--experiment", str(file), *home_flag])
+    assert runner.call_args.kwargs["home"] == expected
+
+
+def test_named_home_reaches_the_live_backend_without_the_launcher(
+    tmp_path, monkeypatch
+):
+    from roboloom.ui import app
+
+    file = _project(tmp_path, monkeypatch, home="stow")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    run_backend = Mock(return_value="quit")
+    monkeypatch.setattr(app, "run_backend", run_backend)
+    cli.main(["record", "--experiment", str(file), "--home", "ready"])
+    backend = run_backend.call_args.args[0]
+    assert backend.recording.home == "ready"
+    session = Mock()
+    backend._prepare(session)
+    backend._execute(session, "home stow")
+    assert [call.kwargs for call in session.home.call_args_list] == [
+        {"pose": "ready"},
+        {"pose": "stow"},
+    ]
 
 
 def test_record_takes_an_experiment_too(tmp_path, monkeypatch):

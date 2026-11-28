@@ -34,10 +34,11 @@ flowchart LR
 | --- | --- |
 | 利用条件 | controllerが1つ以上あり，すべてのcontrollerが操作者の入力に従う構成で使えます．`joint`，`pose_ik`，内部のcontrollerがすべて操作者の入力に従う `parts`，同じ条件を満たす自作controllerが対象です．方策に `teleop:` がある場合は [teleopと介入](../policy/intervention.md#teleop) を使います． |
 | 準備状態 | `teleop` は `start` と同じように，controllerの準備状態と姿勢合わせを確認します． |
-| `t` / `teleop` | followerを入力に従わせます．何も記録しません．操作画面でepisodeを停止したあとは，保存か破棄を済ませてからteleopします． |
+| `t` / `TELEOP: OFF ⇄ ON` | 記録せずに入力へ追従する状態と保持を切り替える．停止した episode は切り替えの前に保存か破棄を済ませる |
+| `teleop` | 記録せずに follower を入力に追従させる |
 | `stop_teleop` | followerを保持します．episodeの外では，teleop中でなくても受け付けます．episode中は `stop` を使います． |
 | `start` | 現在の姿勢から記録を始めます．followerは引き続き入力に従います． |
-| `home` | 初期姿勢へ動かす前に `stop_teleop` を使います． |
+| `home [NAME]` | 初期姿勢へ動かす前に teleop をオフへ切り替えるか，`stop_teleop` を送る |
 
 ## 機体ごとの対応 { #by-robot }
 

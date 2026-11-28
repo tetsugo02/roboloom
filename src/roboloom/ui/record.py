@@ -53,7 +53,7 @@ def record(
     seconds: float,
     episodes: int = 1,
     keep: Callable[[EpisodeResult], bool] | None = None,
-    home: bool = False,
+    home: bool | str = False,
     steps: int | None = None,
     *,
     confirm: bool = False,
@@ -160,7 +160,7 @@ def _plain(
     seconds: float,
     episodes: int,
     keep: Callable[[EpisodeResult], bool] | None,
-    home: bool,
+    home: bool | str,
     steps: int | None = None,
     confirm: bool = False,
 ) -> list[EpisodeResult]:
@@ -229,7 +229,7 @@ def _keys(
     seconds: float,
     episodes: int,
     keep: Callable[[EpisodeResult], bool] | None,
-    home: bool,
+    home: bool | str,
     steps: int | None = None,
 ) -> list[EpisodeResult]:
     screen = session.screen
@@ -278,11 +278,11 @@ def _keys(
                 return None
             return ch
 
-        def go_home() -> None:
+        def go_home(pose: str | None = None) -> None:
             """Move home; keys stay live (q, e) while the arms move."""
             if teleop and not handback:
                 session.stop_teleop()
-            sent_ns, limit = session.begin_home()
+            sent_ns, limit = session.begin_home(pose)
             deadline = time.monotonic() + limit
             while waiting := session.home_waiting(sent_ns):
                 key()
@@ -293,7 +293,7 @@ def _keys(
 
         for k in range(episodes):
             if home:
-                go_home()
+                go_home(home if isinstance(home, str) else None)
             while True:  # ready and Enter
                 warning = start_warning(
                     session.cfg, session.status(), time.monotonic_ns()

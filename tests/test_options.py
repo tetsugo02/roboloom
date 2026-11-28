@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import shutil
 import sys
+from argparse import Namespace
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
 from conftest import mock_project, rakuda2_tree
 from rich.console import Console
-from textual.widgets import Button, Checkbox
+from textual.widgets import Button, Checkbox, Input, OptionList, Static
 
 from roboloom.cli import _with_config
 from roboloom.config import (
@@ -308,6 +311,37 @@ def test_launch_without_a_robot_starts_with_the_robot_list(tmp_path, monkeypatch
     assert shown == [("alpha", True), ("beta", True)]  # Back twice, then Esc
 
 
+@pytest.mark.parametrize("failure", ["load_config", "_start"])
+def test_failed_launch_returns_to_the_same_plan(tmp_path, monkeypatch, failure):
+    from roboloom import cli
+    from roboloom.ui import launcher
+
+    path = mock_project(tmp_path) / "config.yaml"
+    selected = LaunchPlan(mode="infer", options=("policy",), mock=True, seconds=3)
+    choose = Mock(side_effect=[selected, selected, None])
+    error = ConfigError("launch failed in test")
+    start = Mock(return_value="reselect")
+    monkeypatch.setattr(launcher, "choose", choose)
+    monkeypatch.setattr(cli, "_start", start)
+    if failure == "load_config":
+        cfg = load_config(path, options=selected.options)
+        monkeypatch.setattr(cli, "load_config", Mock(side_effect=[error, cfg]))
+    else:
+        start.side_effect = [error, "reselect"]
+
+    assert (
+        cli._operate_robot(Namespace(command="launch", config=path), True, back=False)
+        is None
+    )
+
+    first, retry, reselect = choose.call_args_list
+    assert first.kwargs == {"back": False}
+    assert retry.args[0] == path
+    assert retry.args[1] is selected
+    assert retry.kwargs == {"back": False, "launch_error": str(error)}
+    assert reselect.kwargs == {"back": False}
+
+
 @pytest.mark.asyncio
 async def test_launcher_panes_resize_and_stack_when_narrow(tmp_path: Path):
     from roboloom.ui.launcher import RobotApp
@@ -398,3 +432,368 @@ async def test_launcher_preserves_explicit_observations(tmp_path, explicit):
         expected = ["digit_left"] if explicit == "initial_other" else []
         assert app._read().observe == expected
         assert not app.query_one(f"#observe-{camera}", Checkbox).value
+
+
+@pytest.mark.asyncio
+async def test_launcher_validates_config_before_infer(tmp_path, monkeypatch):
+    from roboloom.ui import launcher
+
+    path = mock_project(tmp_path) / "config.yaml"
+    validate = Mock(wraps=load_config)
+    monkeypatch.setattr(launcher, "load_config", validate)
+    app = LauncherApp(
+        path,
+        LaunchPlan(mode="infer", options=("policy",), seconds=3),
+        launch_error="session failed in test",
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        summary = app.query_one("#summary", Static)
+        launch = app.query_one("#launch", Button)
+        assert str(summary.render()).startswith(
+            "last launch failed: session failed in test"
+        )
+        assert not launch.disabled
+        assert validate.call_count == 1
+
+        app.query_one("#task", Input).value = "pick"
+        await pilot.pause()
+        assert "last launch failed" not in str(summary.render())
+        assert validate.call_count == 1
+
+        leader = app.observation_names.index("leader")
+        await pilot.click(f"#observe-{leader}")
+        assert launch.disabled
+        assert (
+            f"cannot launch: {path}: controllers.policy observes unknown nodes ['leader']"
+            in str(summary.render())
+        )
+        assert validate.call_count == 2
+        await pilot.press("ctrl+s")
+        await pilot.press("escape")
+    assert app.return_value is None
+
+
+@pytest.fixture
+def home_config(tmp_path: Path) -> Path:
+    from roboloom.setup import capture_pose
+
+    project = mock_project(tmp_path)
+    path = project / "config.yaml"
+    capture_pose(path, "ready")
+    poses = project / "poses" / "follower"
+    shutil.copyfile(poses / "ready.yaml", poses / "camera_pose.yaml")
+    (poses / "broken.yaml").write_text("pose: [")
+    controller = project / "nodes" / "controller.yaml"
+    controller.write_text(
+        controller.read_text()
+        + "home:\n  pose: ../poses/follower/ready.yaml\n  max_speed: 400\n  tolerance: 30\n"
+    )
+    return path
+
+
+@pytest.mark.asyncio
+async def test_launcher_selects_and_saves_home_pose(home_config: Path):
+    app = LauncherApp(
+        home_config, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        poses = app.query_one("#home-pose", OptionList)
+        summary = app.query_one("#summary", Static)
+        assert app.query_one("#home").display and poses.display
+        assert [option.id for option in poses.options] == [
+            "ready",
+            "camera_pose",
+            "broken",
+        ]
+        assert "ready (default)" in str(poses.options[0].prompt)
+        broken = poses.get_option("broken")
+        assert broken.disabled
+        reason = str(broken.prompt)
+        assert reason.startswith("broken — unavailable: follower:")
+        assert "expected the node content" in reason
+        assert poses.highlighted == 0
+        assert app._read().home_pose is None
+        assert "home: ready" in str(summary.render())
+
+        assert await pilot.click("#home-pose", offset=(2, 2))
+        assert app._read().home_pose == "camera_pose"
+        assert "home: camera_pose" in str(summary.render())
+        poses.focus()
+        await pilot.press("up")
+        assert poses.highlighted == 0
+        assert app._read().home_pose == "camera_pose"
+        await pilot.press("enter")
+        assert app._read().home_pose == "ready"
+        await pilot.press("down", "enter")
+        assert app._read().home_pose == "camera_pose"
+        assert app._problem(replace(app._read(), home_pose="broken")) == (
+            "home pose 'broken' is unavailable: "
+            + reason.removeprefix("broken — unavailable: ")
+        )
+        assert app._problem(replace(app._read(), home_pose="missing")) == (
+            "unknown home pose 'missing'"
+        )
+
+        await pilot.click("#opt-policy")
+        assert not poses.display and not app.query_one("#home").display
+        await pilot.click("#opt-policy")
+        assert poses.display and poses.highlighted == 1
+        await pilot.press("ctrl+s")
+    plan = app.return_value
+    assert isinstance(plan, LaunchPlan)
+    assert plan.home_pose == "camera_pose"
+    save_last(home_config, plan)
+    assert load_last(home_config, app.options) == plan
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("full_config", [True, False])
+async def test_launcher_without_home_poses(tmp_path: Path, full_config: bool):
+    if full_config:
+        path = mock_project(tmp_path) / "config.yaml"
+    else:
+        path = tmp_path / "config.yaml"
+        path.write_text("options: {}\n")
+    app = LauncherApp(
+        path, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        assert app.query_one("#home").display is not full_config
+        assert not app.query_one("#home-pose").display
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home is not full_config
+
+
+@pytest.mark.parametrize(
+    ("command", "args_home", "expected"),
+    [
+        ("launch", None, "camera_pose"),
+        ("launch", "ready", "ready"),
+        ("record", "ready", "ready"),
+        ("record", True, True),
+        ("record", False, False),
+    ],
+)
+def test_operate_robot_passes_home_to_recording_plan(
+    home_config: Path, monkeypatch, command, args_home, expected
+):
+    from roboloom import cli
+    from roboloom.ui import app, launcher
+
+    save_last(
+        home_config,
+        LaunchPlan(
+            mode="record", task="pick", seconds=3, home=True, home_pose="camera_pose"
+        ),
+    )
+    monkeypatch.setattr(launcher, "choose", lambda path, plan, *, back: plan)
+    run_backend = Mock(return_value="done")
+    monkeypatch.setattr(app, "run_backend", run_backend)
+    args = Namespace(command=command, config=home_config, task="pick", seconds=3)
+    if args_home is not None:
+        args.home = args_home
+    cli._operate_robot(args, True, back=False)
+    recording = run_backend.call_args.args[0].recording
+    assert recording is not None
+    assert recording.home == expected
+
+
+@pytest.mark.asyncio
+async def test_launcher_uses_active_experiment_for_validation_and_homes(
+    tmp_path: Path, monkeypatch
+):
+    from roboloom import cli
+    from roboloom.config import Experiment
+    from roboloom.ui import launcher
+
+    project = mock_project(tmp_path)
+    path = project / "config.yaml"
+    poses = project / "poses" / "follower"
+    poses.mkdir(parents=True)
+    pose = {
+        limit["name"]: 2048
+        for limit in yaml.safe_load((project / "nodes" / "follower.yaml").read_text())[
+            "limits"
+        ]
+    }
+    (poses / "ready.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "follower": "follower",
+                "model": "rakuda2",
+                "unit": "dynamixel_count",
+                "pose": pose,
+            }
+        )
+    )
+    experiment = Experiment(
+        name="with-home",
+        nodes={
+            "controllers.controller": {
+                "home": {
+                    "pose": "../poses/follower/ready.yaml",
+                    "max_speed": 200,
+                    "tolerance": 30,
+                }
+            }
+        },
+    )
+
+    app = LauncherApp(
+        path,
+        LaunchPlan(mode="record", task="pick", seconds=3, home=True),
+        experiment=experiment,
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        assert app.query_one("#home").display
+        assert app.query_one("#home-pose").display
+        assert not app.query_one("#launch", Button).disabled
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home is True
+
+    choose = Mock(
+        side_effect=[
+            LaunchPlan(mode="record", task="pick", seconds=3, home=True),
+            None,
+        ]
+    )
+    monkeypatch.setattr(launcher, "choose", choose)
+    monkeypatch.setattr(cli, "_start", Mock(return_value="reselect"))
+    cli._operate_robot(
+        Namespace(
+            command="record",
+            config=path,
+            task="pick",
+            seconds=3,
+            home=True,
+            experiment=experiment,
+        ),
+        True,
+        back=False,
+    )
+    assert choose.call_args.kwargs["experiment"] is experiment
+
+
+@pytest.mark.asyncio
+async def test_launcher_shows_per_follower_defaults_when_defaults_differ(
+    tmp_path: Path,
+):
+    from roboloom.ui.launcher import HOME_DEFAULT_ID
+
+    project = mock_project(tmp_path)
+    nodes = project / "nodes"
+    follower_cfg = yaml.safe_load((nodes / "follower.yaml").read_text())
+    leader_cfg = yaml.safe_load((nodes / "leader.yaml").read_text())
+    recorder_cfg = yaml.safe_load((nodes / "recorder.yaml").read_text())
+    recorder_cfg["max_age_ms"].update(
+        {"left": 200, "right": 200, "leader_left": 200, "leader_right": 200}
+    )
+    (nodes / "recorder.yaml").write_text(yaml.safe_dump(recorder_cfg))
+    joint_names = [limit["name"] for limit in follower_cfg["limits"]]
+    (nodes / "left.yaml").write_text(
+        yaml.safe_dump({**follower_cfg, "port": "/dev/mock-left"})
+    )
+    (nodes / "right.yaml").write_text(
+        yaml.safe_dump({**follower_cfg, "port": "/dev/mock-right"})
+    )
+    (nodes / "leader_left.yaml").write_text(
+        yaml.safe_dump({**leader_cfg, "port": "/dev/mock-leader-left"})
+    )
+    (nodes / "leader_right.yaml").write_text(
+        yaml.safe_dump({**leader_cfg, "port": "/dev/mock-leader-right"})
+    )
+
+    for follower, default_pose in (("left", "ready"), ("right", "park")):
+        pose_dir = project / "poses" / follower
+        pose_dir.mkdir(parents=True)
+        for name, value in (("ready", 2048), ("park", 2100)):
+            (pose_dir / f"{name}.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "follower": follower,
+                        "model": "rakuda2",
+                        "unit": "dynamixel_count",
+                        "pose": {joint: value for joint in joint_names},
+                    }
+                )
+            )
+        (nodes / f"ctrl_{follower}.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "type": "joint",
+                    "input": f"leader_{follower}",
+                    "followers": [follower],
+                    "alignment_tolerance": 300,
+                    "max_speed": 2048,
+                    "command_deadline_ms": 100,
+                    "input_timeout_ms": 150,
+                    "home": {
+                        "pose": f"../poses/{follower}/{default_pose}.yaml",
+                        "max_speed": 200,
+                        "tolerance": 30,
+                    },
+                }
+            )
+        )
+
+    path = project / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "repo_id": "local/dual",
+                "output": str(tmp_path / "datasets"),
+                "dataset_fps": 15,
+                "mode": "mock",
+                "inputs": {
+                    "leader_left": "nodes/leader_left.yaml",
+                    "leader_right": "nodes/leader_right.yaml",
+                },
+                "controllers": {
+                    "ctrl_left": "nodes/ctrl_left.yaml",
+                    "ctrl_right": "nodes/ctrl_right.yaml",
+                },
+                "followers": {
+                    "left": "nodes/left.yaml",
+                    "right": "nodes/right.yaml",
+                },
+                "sensors": {},
+                "recorder": "nodes/recorder.yaml",
+                "session": "nodes/session.yaml",
+            }
+        )
+    )
+
+    app = LauncherApp(
+        path, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        poses = app.query_one("#home-pose", OptionList)
+        summary = app.query_one("#summary", Static)
+        assert poses.option_count == 3
+        assert poses.get_option_at_index(0).id == HOME_DEFAULT_ID
+        assert "Each follower's default" in str(poses.get_option_at_index(0).prompt)
+        assert poses.highlighted == 0
+        assert "home: each follower's default" in str(summary.render())
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home_pose is None
+
+    app = LauncherApp(
+        path, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        poses = app.query_one("#home-pose", OptionList)
+        poses.focus()
+        await pilot.press("down", "enter")
+        assert app._read().home_pose == "park"
+        assert "home: park" in str(app.query_one("#summary", Static).render())
+        await pilot.press("up", "enter")
+        assert app._read().home_pose is None
+        assert "home: each follower's default" in str(
+            app.query_one("#summary", Static).render()
+        )
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home_pose is None

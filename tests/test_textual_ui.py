@@ -14,15 +14,16 @@ from rich.console import Console
 from rich.text import Text
 from textual import events
 from textual.pilot import Pilot
-from textual.widgets import OptionList, RichLog, Static, Tabs
+from textual.widgets import Button, Footer, OptionList, RichLog, Static, Tabs
 
 from roboloom import Session
-from roboloom.ui.app import Confirmation, OperatorApp, run_backend
+from roboloom.ui.app import Confirmation, HomeModal, OperatorApp, run_backend
 from roboloom.ui.backend import RecordingPlan, SessionBackend
 from roboloom.ui.command import CommandInput
 from roboloom.ui.models import (
     Capabilities,
     Closed,
+    HomeOption,
     LogEvent,
     NodeSnapshot,
     Operation,
@@ -148,7 +149,7 @@ async def test_edit_history_completion_paste_and_shortcut_isolation():
     backend = FakeBackend()
     app = OperatorApp(backend)
     async with app.run_test(size=(120, 35)) as pilot:
-        assert app.focused is app.query_one("#menu")
+        assert app.focused is app.query_one("#act-start")
         await pilot.press("ctrl+l", "s", "tab")
         command = app.query_one(CommandInput)
         assert command.value == "start"
@@ -210,9 +211,10 @@ async def test_resize_selection_focus_and_no_home():
         await pilot.press("ctrl+p")
         assert app.focused is app.query_one("#row-splitter")
         await pilot.press("ctrl+l", "ctrl+n")
-        assert app.focused is app.query_one("#menu")
+        assert app.focused is app.query_one("#act-start")
         await pilot.press("h")
         assert not backend.commands
+        assert _status_text(app, "#action-hint") == "no home pose"
         await pilot.resize_terminal(140, 40)
         await pilot.pause()
         assert not app.query_one("#nodes").display and app.query_one("#details").display
@@ -379,6 +381,8 @@ async def test_gravity_character_keys_share_commands_and_are_suppressed_in_input
     )
     app = OperatorApp(backend)
     async with app.run_test() as pilot:
+        assert app.focused is app.query_one("#tuning-menu", OptionList)
+        assert not app.query_one("#session-actions").display
         await pilot.press("]", "[", "=", "-", "0", "r")
         assert backend.commands == [
             "gain +",
@@ -393,6 +397,322 @@ async def test_gravity_character_keys_share_commands_and_are_suppressed_in_input
         await pilot.press("ctrl+g")
         assert backend.stops == 1
         assert app.query_one(CommandInput).value == "][=-0rjke"
+
+
+def _status_text(app: OperatorApp, selector: str) -> str:
+    content = app.query_one(selector, Static).content
+    assert isinstance(content, Text)
+    return content.plain
+
+
+@pytest.mark.asyncio
+async def test_session_banner_displays_state_progress_and_driver():
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test(size=(80, 24)) as pilot:
+        snapshot = backend.snapshot
+        backend.publish(
+            replace(snapshot, dirty=True, saved_episodes=3, pending_saves=2)
+        )
+        await pilot.pause()
+        assert app.query_one("#summary").region.height == 3
+        for y, selector in enumerate(
+            ("#summary-head", "#summary-state", "#summary-detail")
+        ):
+            region = app.query_one(selector).region
+            assert (region.y, region.height) == (y, 1)
+        assert "unknown robot · run  UNSAVED" == _status_text(app, "#summary-head")
+        assert "HOLD  saved 3 (2 queued)" == _status_text(app, "#summary-state")
+        assert app.query_one("#summary").has_class("state-hold")
+        assert "three-axis ●" in _status_text(app, "#summary-detail")
+
+        for status, expected in (
+            (
+                replace(snapshot, state="teleop", saved_episodes=3),
+                ("TELEOP (no recording)", "saved 3"),
+            ),
+            (
+                replace(
+                    snapshot,
+                    state="recording",
+                    mode="record / mock",
+                    episode="2/3",
+                    step=10,
+                    steps=20,
+                    elapsed_s=3,
+                    duration_s=8,
+                    task="pick",
+                ),
+                (
+                    "● REC",
+                    "2/3",
+                    "10/20",
+                    "00:03 / 00:08",
+                    "[█████░░░░░] 50%",
+                    "task: pick",
+                ),
+            ),
+            (
+                replace(
+                    snapshot,
+                    state="recording",
+                    elapsed_s=85,
+                    rows=240,
+                    saved_episodes=2,
+                ),
+                ("● REC", "01:25", "240 rows", "saved 2"),
+            ),
+            (
+                replace(snapshot, state="stopped", episode="2/3", rows=240),
+                ("STOPPED — save or discard", "2/3", "240 rows"),
+            ),
+            (replace(snapshot, phase="ESTOP: latched"), ("ESTOP — restart required",)),
+        ):
+            backend.publish(status)
+            await pilot.pause()
+            assert all(part in _status_text(app, "#summary-state") for part in expected)
+
+        assert app.query_one("#summary").has_class("state-estop")
+        for owner, color in (("policy", "#653a99"), ("leader", "#ff9c4a")):
+            backend.publish(
+                replace(
+                    snapshot, state="recording", control=owner, warning="real warning"
+                )
+            )
+            await pilot.pause()
+            detail = app.query_one("#summary-detail", Static).content
+            assert isinstance(detail, Text)
+            assert f"Driver: {owner.upper()}" in detail.plain
+            assert "real warning" in detail.plain
+            assert any(color in str(span.style) for span in detail.spans)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("size", [(80, 24), (120, 36), (200, 50)])
+async def test_session_actions_fit_viewport(size):
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test(size=size) as pilot:
+        for state, ids in (
+            ("hold", ("act-start", "act-home")),
+            (
+                "stopped",
+                ("act-save", "act-save-success", "act-save-failure", "act-discard"),
+            ),
+        ):
+            backend.publish(replace(backend.snapshot, state=state))
+            await pilot.pause()
+            for selector in (
+                "#btn-estop",
+                "#primary-actions",
+                "#secondary-actions",
+                "#sec-release",
+                "#sec-quit",
+                "#command",
+                Footer,
+                *(f"#{button_id}" for button_id in ids),
+            ):
+                widget = app.query_one(selector)
+                assert widget.display
+                assert widget.region.width > 0 and widget.region.height > 0
+                assert 0 <= widget.region.x < widget.region.right <= size[0]
+                assert 0 <= widget.region.y < widget.region.bottom <= size[1]
+            for button_id in ids:
+                assert app.query_one(f"#{button_id}").region.height == 3
+            assert (
+                app.query_one("#secondary-actions").region.bottom
+                <= app.query_one("#menu").content_region.bottom
+            )
+
+        estop = app.query_one("#btn-estop", Button)
+        assert str(estop.label) == "[e] ESTOP"
+        await pilot.click(estop)
+        assert backend.stops == 1
+
+
+@pytest.mark.asyncio
+async def test_state_transitions_focus_primary_buttons_and_keep_command_focus():
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test() as pilot:
+        assert app.focused is app.query_one("#act-start")
+        for state, selector in (
+            ("recording", "#act-stop"),
+            ("stopped", "#act-save"),
+            ("estop", "#act-quit"),
+        ):
+            backend.publish(replace(backend.snapshot, state=state))
+            await pilot.pause()
+            assert app.focused is app.query_one(selector)
+        assert app.query_one("#estop-notice").display
+        assert not any(
+            button.display for button in app.query("#secondary-actions Button")
+        )
+        assert [
+            button.id
+            for button in app.query("#primary-actions Button")
+            if button.display
+        ] == ["act-quit"]
+
+        await pilot.press("ctrl+l")
+        backend.publish(replace(backend.snapshot, state="hold"))
+        await pilot.pause()
+        assert isinstance(app.focused, CommandInput)
+
+
+@pytest.mark.asyncio
+async def test_refusals_appear_without_opening_logs_and_flash_available_targets():
+    backend = FakeBackend()
+    backend.snapshot = replace(
+        backend.snapshot,
+        state="recording",
+        capabilities=replace(backend.snapshot.capabilities, teleop=True, handback=True),
+        operations=tuple(
+            replace(op, enabled=False, reason="stop an episode first")
+            if op.command == "save"
+            else op
+            for op in backend.snapshot.operations
+        )
+        + (Operation("teleop", "DRIVER: POLICY", False, "leader is unaligned"),),
+    )
+    app = OperatorApp(backend)
+    async with app.run_test() as pilot:
+        await pilot.press("s")
+        assert "stop an episode first" == _status_text(app, "#action-hint")
+        assert app.query_one("#act-stop").has_class("flash-reject")
+        assert not app.query_one("#logs").display
+        assert app.query_one("#action-hint").has_class("refused")
+        await pilot.press("t")
+        assert "leader is unaligned" == _status_text(app, "#action-hint")
+        toggle = app.query_one("#act-teleop", Button)
+        assert toggle.has_class("flash-reject", "unavailable") and not toggle.disabled
+        await pilot.pause(0.45)
+        assert not toggle.has_class("flash-reject")
+        assert "leader is unaligned" == _status_text(app, "#action-hint")
+        await pilot.click(toggle)
+        assert toggle.has_class("flash-reject")
+        assert not backend.commands
+        assert not app.query_one("#logs").display
+
+        await pilot.press("s")
+        app.query_one("#act-stop", Button).focus()
+        await pilot.press("space")
+        assert backend.commands == ["stop"]
+        assert app.query_one("#act-stop").has_class("flash-ok")
+        assert _status_text(app, "#action-hint").startswith("NEXT: ")
+
+
+@pytest.mark.asyncio
+async def test_teleop_toggle_and_space_shortcuts_use_current_operations():
+    backend = FakeBackend()
+    app = OperatorApp(backend)
+    async with app.run_test() as pilot:
+        for state, command, label in (
+            ("hold", "teleop", "TELEOP: OFF"),
+            ("teleop", "stop_teleop", "TELEOP: ON"),
+            ("recording", "policy", "DRIVER: LEADER"),
+        ):
+            backend.publish(
+                replace(
+                    backend.snapshot,
+                    state=state,
+                    mode="record",
+                    capabilities=Capabilities(teleop=True, handback=True),
+                    operations=(
+                        *backend.snapshot.operations,
+                        Operation(command, label),
+                    ),
+                )
+            )
+            await pilot.pause()
+            assert str(app.query_one("#act-teleop", Button).label) == f"[t] {label}"
+            await pilot.press("t")
+        assert backend.commands == ["teleop", "stop_teleop", "policy"]
+        await pilot.press("space")
+        app.query_one("#nodes", OptionList).focus()
+        await pilot.press("space")
+        assert backend.commands[-2:] == ["stop", "stop"]
+
+        backend.publish(replace(backend.snapshot, state="hold"))
+        await pilot.pause()
+        await pilot.press("space")
+        assert app.focused is app.query_one(CommandInput)
+        assert app.query_one(CommandInput).value == "start "
+
+
+@pytest.mark.asyncio
+async def test_home_modal_renders_poses_and_submits_only_selected_named_pose():
+    backend = FakeBackend()
+    backend.snapshot = replace(
+        backend.snapshot,
+        capabilities=replace(backend.snapshot.capabilities, home=True),
+        operations=tuple(
+            Operation("home", "Home") if op.command == "home" else op
+            for op in backend.snapshot.operations
+        ),
+        home_options=(
+            HomeOption(
+                "park",
+                default=True,
+                worst_joint="wrist",
+                dist=1.2,
+                eta_s=5.6,
+                over_timeout=True,
+            ),
+            HomeOption("invalid", valid=False, reason="missing joint"),
+            HomeOption("ready", worst_joint="elbow", dist=0.3, eta_s=1.2),
+        ),
+        home_moves="followers and leaders",
+    )
+    app = OperatorApp(backend)
+    async with app.run_test() as pilot:
+        await pilot.click("#act-home")
+        modal = app.screen
+        assert isinstance(modal, HomeModal)
+        assert "worst joint" in str(modal.query_one("#home-columns", Static).content)
+        poses = modal.query_one(OptionList)
+        assert poses.highlighted == 0
+        assert all(
+            part in str(poses.get_option_at_index(0).prompt)
+            for part in ("park (default)", "wrist", "1.2", "5.6 s", "> timeout!")
+        )
+        invalid = poses.get_option_at_index(1)
+        assert invalid.disabled and "unavailable: missing joint" in str(invalid.prompt)
+        lines = [str(widget.content) for widget in modal.query(Static)]
+        assert "Moves: followers and leaders" in lines
+        assert "Enter: move   Esc: cancel   e: ESTOP" in lines
+        await pilot.press("down", "enter")
+        assert backend.commands == ["home ready"]
+
+        await pilot.press("h", "escape")
+        assert not isinstance(app.screen, HomeModal)
+        assert backend.commands == ["home ready"]
+        for i, key in enumerate(("e", "ctrl+g", "f12"), 1):
+            await pilot.press("h")
+            assert isinstance(app.screen, HomeModal)
+            await pilot.press(key)
+            assert not isinstance(app.screen, HomeModal)
+            assert backend.stops == i and backend.commands == ["home ready"]
+
+        await pilot.press("ctrl+l", "h", "o", "m", "e", "enter")
+        assert not isinstance(app.screen, HomeModal)
+        assert backend.commands == ["home ready", "home"]
+
+
+@pytest.mark.asyncio
+async def test_home_shortcut_falls_back_to_direct_dispatch_without_pose_options():
+    backend = FakeBackend()
+    backend.snapshot = replace(
+        backend.snapshot,
+        operations=tuple(
+            Operation("home", "Home") if op.command == "home" else op
+            for op in backend.snapshot.operations
+        ),
+    )
+    app = OperatorApp(backend)
+    async with app.run_test() as pilot:
+        await pilot.press("h")
+        assert backend.commands == ["home"] and not isinstance(app.screen, HomeModal)
 
 
 # -- splitters -----------------------------------------------------------------------
@@ -473,7 +793,7 @@ async def test_mouse_capture_clamps_extreme_drags_and_double_click_resets():
         assert app.query_one("#nodes").region.width == initial_width
         handle_y = app.query_one("#row-splitter").region.y
         await drag(pilot, "#row-splitter", dy=37 - handle_y)
-        assert app.query_one("#menu").region.height == 6
+        assert app.query_one("#menu").region.height == 8
         handle_y = app.query_one("#row-splitter").region.y
         await drag(pilot, "#row-splitter", dy=1 - handle_y)
         assert app.query_one("#nodes").region.height == 3

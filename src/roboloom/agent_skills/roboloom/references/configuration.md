@@ -57,6 +57,11 @@ A multi-follower controller sends nothing until every follower reported state, a
 commanding all of them when one latches `FAULT`/`ESTOP` or goes stale; it waits to
 re-align before commanding again.
 
+`home.pose` sets the default pose file. Candidates are discovered alongside it,
+typically in `poses/<follower>/*.yaml`. Set `home.choices` to a non-empty list of
+pose names (file stems) to filter the candidates. Include the default name. A
+named move requires the same name on every homing follower.
+
 ## Units
 
 Every follower and input declares its joint unit (no default). Rakuda2:
@@ -150,7 +155,7 @@ nodes:
 task: open the drawer               # --task
 steps: 200                          # --steps (infer; or seconds: 40)
 episodes: 10                        # --episodes
-home: true                          # --home
+home: true                          # --home; use a name for --home NAME
 confirm: true                       # --confirm (mock only)
 ```
 
@@ -158,14 +163,15 @@ confirm: true                       # --confirm (mock only)
 options' names are not appended. `nodes` may name only nodes present after the options,
 never `followers.*` (their limits guard every command). Unknown keys are refused;
 command-line values win; `seconds` or `steps` must be in one of the two.
-`confirm` is a boolean, off by default. `confirm: true` asks whether to save or
+`home: true | false | <name>` uses the default poses, skips homing (default), or
+selects a saved pose before each episode. `confirm` is a boolean, off by default. `confirm: true` asks whether to save or
 discard after each episode of `record` or `infer`. Inference needs a task, and
 plain mode needs a TTY on stdin. Python:
 `Session.launch(experiment=<name|path|mapping>)` (pass what Hydra composed as a
 mapping; roboloom does not depend on Hydra). A `backend: server` policy is served from
 the same file: `roboloom serve-policy --experiment <file>`. In the operator screen the
-episode count is a goal: after it, Home/Teleop/Start run further episodes; the top line
-shows `episode 2/10  step 137/500  [bar] 27%`.
+episode count is a goal: after it, use Move home or the teleop toggle as needed and Start to run further
+episodes. The status banner shows episode progress.
 
 Choosing options: CLI `--with a,b` / `--without a,b` (added to / removed from the
 defaults); Python `options=[...]` is the **whole set** (not added to defaults), `None`

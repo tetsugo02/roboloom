@@ -41,11 +41,11 @@
 | `teleop` | followerを操作者の入力に従わせる．利用条件は [episodeの外でのteleop](../controllers/index.md#teleop)（<span class="status status--mock">Mock only</span>）と [teleopと介入](../policy/intervention.md#teleop) を参照． |
 | `stop_teleop` | episodeの外でteleopを終え，followerを保持する．[episodeの外でのteleop](../controllers/index.md#teleop)（<span class="status status--mock">Mock only</span>）と [teleopと介入](../policy/intervention.md#teleop) を参照． |
 | `release` | 支持確認後に追従を止め，通電している入力機器とfollowerを脱力する |
-| `home` | leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かす．到着後，leaderは通常の制御に戻る |
+| `home [NAME]` | 設定の既定姿勢または指定した姿勢へゆっくり動く．駆動する leader は follower と一緒に動き，到着後に通常の制御へ戻る |
 | `estop` | 非常停止する |
 | `quit` | 終了確認を開く．Cancel・follower保持・optionを選び直す・支持確認後の脱力から選ぶ |
 
-Textualの操作menuは使えない操作も理由付きで表示し，初期姿勢がない `home` も含めます．Ctrl-Lで編集可能なcommand欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．key・pane・確認・時間指定mode・拡張契約は [操作画面](operator-screen.md) を参照してください．
+Textual は状態別の操作ボタンを表示し，拒否時に理由を示します．Ctrl-Lで編集可能なcommand欄，Ctrl-Gで非常停止へ進みます．Ctrl-CとCtrl-Qは同じ終了確認を開き，初期選択はCancelです．key・pane・確認・時間指定mode・拡張契約は [操作画面](operator-screen.md) を参照してください．
 
 `run --plain` は行入力を維持し，`record --plain`・`infer --plain` はepisodeを自動で開始します．非TTYでも同じ経路を使います．`--confirm` のpromptには標準入力にTTYが必要です．`tune-gravity` はdeviceを開く前にTTYを要求します．Python APIのRich表示と確認は従来どおりです．
 `stop` は脱力操作ではありません．`FAULT` / `ESTOP` / `RELEASED` は自動復帰しません．実機の開始・終了手順は [Rakuda2：teleopで収集](../tutorials/rakuda2/collect.md) にあります．
@@ -185,7 +185,7 @@ uv run roboloom run --mock                        # mock device
 <span class="status status--mock">模擬のみ</span> [background保存](../data/recording.md#background-saving) では，`--plain` は最後のepisodeの後に保存待ちの処理が終わるまで待ち，保存結果を表示します．操作画面は結果が届くたびにlogに出し，終了を確定してから保存待ちの処理を待ちます．
 
 ```text
-roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--confirm] [--plain] [COMMON_OPTIONS]
+roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home [NAME]] [--confirm] [--plain] [COMMON_OPTIONS]
 ```
 
 | option | 型 | 既定値 | 説明 |
@@ -194,7 +194,7 @@ roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--confi
 | `--task TEXT` | str | 必須（実験fileの `task:` でも可） | 各frameに保存する task |
 | `--seconds N` | float | 必須（実験fileの `seconds:` でも可） | 1 episodeの長さ（秒） |
 | `--episodes N` | int | 1 | episodeの数 |
-| `--home` | flag | 切 | 毎回，controllerの初期姿勢へ動かしてから開始する |
+| `--home [NAME]` | flag または姿勢名 | 切 | episode ごとに controller の既定姿勢または指定した姿勢へ動かす |
 | `--confirm` | flag | 切 | episodeごとに保存するか破棄するかを確認する．plain modeでは標準入力にTTYが必要．promptでは `save`・`save success`・`save failure`・`discard` を入力する（`s`・`d` も可）．破棄すると同じepisode番号でやり直す．EOFかCtrl-Cでは破棄して終了する <span class="status status--mock">模擬のみ</span> |
 | `--plain` | flag | 切 | 操作画面を開かず，episodeを自動で開始する |
 | 共通のoption | — | — | [共通のoption](#common-options) |
@@ -210,7 +210,7 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --home
 方策でepisodeを走らせます．option `policy` を自動で有効にします．保存には `--task` または実験fileの `task:` が必要です（[方策で動かす](../policy/run.md)）．
 
 ```text
-roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--confirm] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
+roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home [NAME]] [--confirm] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
 ```
 
 | option | 型 | 既定値 | 説明 |
@@ -219,7 +219,7 @@ roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--conf
 | `--seconds N` | float | `--steps` かどちらか必須（実験fileでも可） | 1 episodeの長さ（秒） |
 | `--steps N` | int | — | 方策が実行した行動の手数で，episodeを終える（1以上．`--seconds` とは同時に使えない） |
 | `--episodes N` | int | 1 | episodeの数 |
-| `--home` | flag | 切 | 毎回，方策の初期姿勢へ動かしてから開始する（[方策の home](../policy/run.md#home)） |
+| `--home [NAME]` | flag または姿勢名 | 切 | episode ごとに方策の既定姿勢または指定した姿勢へ動かす（[方策の home](../policy/run.md#home)） |
 | `--policy MODULE:CALLABLE` | str | YAML の `factory` | 方策を返す関数 |
 | `--policy-kwargs JSON` | JSON | YAML の `kwargs` | その関数の引数 |
 | `--task TEXT` | str | — | 方策に渡す task．指定すると実行を保存する |
@@ -237,18 +237,20 @@ uv run roboloom infer --experiment drawer         # configs/roboloom/drawer.yaml
 起動済みの `run` へ操作を1つ送ります．
 
 ```text
-roboloom session [robot] <operation> [task]
+roboloom session [robot] <operation> [argument]
+roboloom session [robot] home [NAME]
 ```
 
 | option | 型 | 既定値 | 説明 |
 | --- | --- | --- | --- |
 | `robot` | 機体名かpath | 唯一の機体 | 操作を送る `run` の設定（optionは問わない） |
 | `operation` | 下記のどれか | 必須 | `start`，`stop`，`save`，`discard`，`home`，`estop`，`release`，`quit`．方策に `teleop:` があれば `teleop`・`policy`・`stop_teleop` も（[teleopと介入](../policy/intervention.md#teleop)）．すべてのcontrollerが操作者の入力に従う構成では，[episodeの外でのteleop](../controllers/index.md#teleop) に `teleop`・`stop_teleop` を使えます．記録はありません．<span class="status status--mock">Mock only</span> |
-| `task` | str | — | `start` では task，`save` では成否（`success` か `failure`） |
+| `argument` | str | — | `start` の task，`save` の成否（`success` または `failure`），`home` の姿勢名．`NAME` を省くと各 controller の既定姿勢を使う |
 
 ```bash
 uv run roboloom session home
-uv run roboloom session save success               # 別端末から，成否を付けて保存
+uv run roboloom session home ready
+uv run roboloom session save success
 ```
 
 ## roboloom serve-policy { #serve-policy }

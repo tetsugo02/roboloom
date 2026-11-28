@@ -97,10 +97,11 @@ writes it after confirmation.
   (every joint in exactly one group; motors must be in Operating Mode 3).
 - **`couplings`** in `controller.yaml` (keys `joint`, `source`, `scale`, `reference`,
   optional `lead_ms`): adds a measured follower joint's displacement to a target.
-- **`home` moves**: `home:` (`pose`, `max_speed`, `tolerance`; optional `timeout_s`) in
-  `controller.yaml`, poses saved with `roboloom capture-pose <name>`; a gravity leader's arm
-  groups need `homing:`. Triggered by `home`, `roboloom session home`, `Session.home()`,
-  `record --home`.
+- **`home` moves**: save multiple poses under `poses/follower/` with
+  `roboloom capture-pose <name>`. Set the default with `home.pose` in `controller.yaml`
+  or `policy.yaml`. Use `home.choices` to restrict the names. Switch poses in the
+  Move home dialog, choose one in the launcher, or use `--home NAME` with `record`
+  or `infer`. A gravity leader's arm groups need `homing:`.
 
 ## Pre-launch checks (tell the user)
 
