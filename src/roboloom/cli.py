@@ -389,8 +389,11 @@ def main(argv: list[str] | None = None) -> None:
     rec.add_argument("--episodes", type=int)
     rec.add_argument(
         "--home",
-        action="store_true",
-        help="move to the controller's saved home pose before every episode",
+        nargs="?",
+        const=True,
+        default=False,
+        metavar="NAME",
+        help="move to the controller's default or named home pose before every episode",
     )
     inf = sub.add_parser(
         "infer",
@@ -410,8 +413,11 @@ def main(argv: list[str] | None = None) -> None:
     inf.add_argument("--episodes", type=int)
     inf.add_argument(
         "--home",
-        action="store_true",
-        help="move to the policy's saved home pose before every episode",
+        nargs="?",
+        const=True,
+        default=False,
+        metavar="NAME",
+        help="move to the policy's default or named home pose before every episode",
     )
     inf.add_argument(
         "--policy", help="module:callable returning the policy (default: the YAML's)"
@@ -468,7 +474,7 @@ def main(argv: list[str] | None = None) -> None:
         "task",
         nargs="?",
         default="",
-        help="start: the task; save: the episode's verdict (success or failure)",
+        help="start: the task; home: the pose name; save: the episode's verdict (success or failure)",
     )
     lab = sub.add_parser(
         "label",
@@ -536,7 +542,8 @@ def _run_settings(args: argparse.Namespace) -> None:
         for key in ("task", "episodes"):
             if getattr(args, key) is None:
                 setattr(args, key, getattr(run, key))
-        args.home = args.home or bool(run.home)
+        if args.home is False and run.home:
+            args.home = run.home
         args.confirm = args.confirm or bool(run.confirm)
         # the length: what the command line says, else the file's seconds or steps
         if args.seconds is None and getattr(args, "steps", None) is None:
@@ -840,6 +847,7 @@ def _operate_robot(
         or getattr(args, "experiment", None)  # it says which options
     )
     mock = bool(getattr(args, "mock", False))
+    args_home = getattr(args, "home", False)
     plan = LaunchPlan(
         mode="run" if args.command == "launch" else args.command,
         options=given or (),
@@ -851,7 +859,7 @@ def _operate_robot(
         seconds=getattr(args, "seconds", 0.0) or 0.0,
         steps=getattr(args, "steps", None) or 0,
         episodes=getattr(args, "episodes", 1) or 1,
-        home=getattr(args, "home", False),
+        home=bool(args_home),
         confirm=getattr(args, "confirm", False),
     )
     show = terminal and not plain and not asked
@@ -899,7 +907,12 @@ def _operate_robot(
             if terminal and not cfg.mock:
                 _commission(cfg)
             outcome = _start(
-                args, cfg, plan, live=terminal and not plain, reselect=terminal
+                args,
+                cfg,
+                plan,
+                live=terminal and not plain,
+                reselect=terminal,
+                cli_home=args_home if not show else None,
             )
         except RoboloomError as exc:
             if not show:
@@ -937,11 +950,13 @@ def _start(
     *,
     live: bool,
     reselect: bool,
+    cli_home: bool | str | None = None,
 ) -> str:
     from .runtime.session import Session
 
     policy = getattr(args, "policy", None)
     policy_kwargs = getattr(args, "policy_kwargs", None)
+    home = plan.home if cli_home is None else cli_home
     steps = plan.steps or None
     if steps:  # the episode ends on the count; the time is only its limit
         from .runtime.session import steps_timeout
@@ -958,7 +973,7 @@ def _start(
                 plan.seconds,
                 plan.episodes,
                 save=plan.mode == "record" or bool(plan.task),
-                home=plan.home,
+                home=home,
                 steps=steps,
                 confirm=plan.confirm,
             )
@@ -992,7 +1007,7 @@ def _start(
                 plan.task,
                 plan.seconds,
                 plan.episodes,
-                home=plan.home,
+                home=home,
                 confirm=plan.confirm,
             )
         elif plan.mode == "infer":
@@ -1005,7 +1020,7 @@ def _start(
                 plan.seconds,
                 plan.episodes,
                 keep=lambda _: bool(plan.task),
-                home=plan.home,
+                home=home,
                 steps=steps,
                 confirm=plan.confirm,
             )
@@ -1042,7 +1057,7 @@ def _plain_loop(client, process: subprocess.Popen, release_note: str) -> None:
 
     print(
         "Commands: start <task>, stop, save [success|failure], discard, estop, "
-        "release, quit"
+        "home [name], release, quit"
     )
     while process.poll() is None:
         try:

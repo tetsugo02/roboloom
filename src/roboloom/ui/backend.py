@@ -36,7 +36,7 @@ class RecordingPlan:
     seconds: float
     episodes: int = 1
     save: bool = True
-    home: bool = False
+    home: bool | str = False
     # end an episode after this many actions of the policy; `seconds` is then its limit
     steps: int | None = None
     confirm: bool = False
@@ -373,7 +373,10 @@ class SessionBackend:
                 return
             if plan.home:
                 self._phase = "moving home"
-                session.home()
+                if isinstance(plan.home, str):
+                    session.home(pose=plan.home)
+                else:
+                    session.home()
         self._phase = "waiting for readiness"
         session.wait_ready(120)
         self._phase = self._ready_phase()
@@ -475,7 +478,10 @@ class SessionBackend:
                 else:
                     self._advance(session)
         elif name == "home":
-            session.home()
+            if pose := task.strip():
+                session.home(pose=pose)
+            else:
+                session.home()
             session.wait_ready(120)
             self._phase = "ready"
         elif name == "stop":

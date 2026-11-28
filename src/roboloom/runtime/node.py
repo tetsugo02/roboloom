@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from roboloom.config import RobotConfig, env_options, parse_config, read_config
+from roboloom.control.homing import available_homes
 from roboloom.control.trace import FollowerTrace
 from roboloom.controllers.base import Controller, FollowerView
 from roboloom.controllers.policy import PolicyController
@@ -22,6 +23,7 @@ from roboloom.controllers.teleop import teleop_mode
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
+from roboloom.errors import ConfigError
 from roboloom.estimators.base import Estimate, Estimator
 from roboloom.hooks import EndReason
 from roboloom.recording import ACTION, EpisodeRecorder, SaveFailed, spool
@@ -193,10 +195,20 @@ def home_short(fields: dict) -> str:
     )
 
 
-def home_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str | None:
+def home_warning(
+    cfg: RobotConfig, latest: dict[str, dict], now_ns: int, pose: str = ""
+) -> str | None:
     """Why `home` may not run now (the robot would move during an episode), or None."""
     if not any(c.homes for c in cfg.controllers.values()):
         return "no controller has a home pose (home: in the controller YAML)"
+    if pose:
+        valid, invalid, _ = available_homes(cfg)
+        if pose in invalid:
+            return f"invalid home pose {pose!r}: {invalid[pose]}"
+        if pose not in valid:
+            return (
+                f"unknown home pose {pose!r}; valid poses: {', '.join(valid) or 'none'}"
+            )
     recorder = latest.get("recorder", {}).get("fields", {})
     if recorder.get("state") == "recording":
         return "stop the episode before moving home"
@@ -281,7 +293,7 @@ def parse_command(line: str) -> dict:
             "command": str(data.get("command", "")),
             "task": str(data.get("task", "")),
         }
-        for key in ("label", "note"):
+        for key in ("label", "note", "pose"):
             if data.get(key):
                 request[key] = str(data[key])
         return request
@@ -290,6 +302,10 @@ def parse_command(line: str) -> dict:
     if command == "save" and request["task"]:  # `save success`
         request["label"], request["task"] = request["task"], ""
     return request
+
+
+def _home_pose_arg(payload: Mapping[str, object]) -> str:
+    return str(payload.get("pose") or payload.get("task") or "").strip()
 
 
 def _session(node, cfg: RobotConfig):
@@ -392,8 +408,12 @@ def _session(node, cfg: RobotConfig):
                     report({**request, "error": f"unknown command {cmd!r}"})
                     continue
                 if cmd in ("start", "home"):
-                    check = start_warning if cmd == "start" else home_warning
-                    warning = check(cfg, latest, time.monotonic_ns())
+                    now = time.monotonic_ns()
+                    warning = (
+                        start_warning(cfg, latest, now)
+                        if cmd == "start"
+                        else home_warning(cfg, latest, now, _home_pose_arg(request))
+                    )
                     if warning is not None:
                         report({**request, "warning": warning})
                         continue
@@ -522,7 +542,11 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
                 continue
             home = owner.homes.get(pair.follower.name)
             if home is not None:
-                set_home(leader_pose(home.target(pair.follower.joint_names)), home)
+                goals = {
+                    name: leader_pose(home.target(pair.follower.joint_names, name))
+                    for name in home.poses
+                }
+                set_home(goals[home.pose.name], home, goals=goals)
     log_dir = os.environ.get("ROBOLOOM_LOG_DIR")
     start_trace = getattr(reader, "start_trace", None)
     if log_dir and start_trace is not None:
@@ -542,7 +566,13 @@ def _source(node, source: Source, cfg: RobotConfig, role: str):
             event_id, msg = _event(node)
             if event_id == "session" and msg is not None:
                 if on_session is not None:
-                    on_session(msg.payload["command"], msg.payload.get("task", ""))
+                    command = msg.payload["command"]
+                    argument = (
+                        _home_pose_arg(msg.payload)
+                        if command == "home"
+                        else msg.payload.get("task", "")
+                    )
+                    on_session(command, argument)
                 if _quit(event_id, msg):
                     return
                 continue
@@ -636,19 +666,22 @@ def _work_fields(work: deque[float]) -> dict:
     return {"work_ms": round(work[-1], 1), "work_max_ms": round(max(work), 1)}
 
 
-def _home_follower(safety: FollowerSafety, robot: Follower, cfg: RobotConfig) -> str:
+def _home_follower(
+    safety: FollowerSafety, robot: Follower, cfg: RobotConfig, pose_name: str = ""
+) -> str:
     """Start the move to the controller's saved pose; the error text, or ""."""
     spec = cfg.controller_for(robot.name).homes.get(robot.name)
     if spec is None:
         return ""  # this follower has no home pose; it stays where it is
     try:
+        pose = spec.get(pose_name or None)
         safety.home(
-            spec.target(robot.joint_names),
+            spec.target(robot.joint_names, pose.name),
             spec.max_speed,
-            spec.pose.name,
+            pose.name,
             tolerance=spec.tolerance,
         )
-    except (RuntimeError, ValueError) as exc:
+    except (ConfigError, RuntimeError, ValueError) as exc:
         return str(exc)
     return ""
 
@@ -713,6 +746,7 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
         _mock_start(bus, robot, cfg)
     safety = FollowerSafety(robot.safety_config(), bus)
     traits = robot.traits()
+    spec = cfg.controller_for(robot.name).homes.get(robot.name)
     status = StatusReporter(Publisher(robot.name), "follower")
     intervals: deque[float] = deque(maxlen=int(robot.control_hz * 2))
     clamped: deque[bool] = deque(maxlen=int(robot.control_hz * 2))
@@ -751,7 +785,9 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                     except RuntimeError as exc:
                         error = str(exc)
                 elif command == "home":
-                    error = _home_follower(safety, robot, cfg)
+                    error = _home_follower(
+                        safety, robot, cfg, _home_pose_arg(msg.payload)
+                    )
                 if command == "quit":
                     return
             elif event_id == "tick":
@@ -787,6 +823,12 @@ def _follower(node, robot: Follower, cfg: RobotConfig):
                     "torque_off": traits.torque_off,
                     "unattended": traits.unattended,
                 }
+                current = safety.current or safety.hold_target
+                if spec is not None and current is not None:
+                    fields["home_estimates"] = {
+                        name: spec.estimate(current, robot.joint_names, name)
+                        for name in spec.poses
+                    }
                 level = {"FAULT": "error", "ESTOP": "error", "RELEASED": "warn"}.get(
                     safety.mode, "warn" if any(rejected) else "ok"
                 )

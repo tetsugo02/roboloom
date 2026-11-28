@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +15,13 @@ from test_control_laws import GRAVITY, FlatGravity
 
 from roboloom.config import parse_config
 from roboloom.control.device import JointDevice, build_laws, parse_groups
-from roboloom.control.homing import Trajectory, load_pose
+from roboloom.control.homing import (
+    HomeSpec,
+    Pose,
+    Trajectory,
+    available_homes,
+    load_pose,
+)
 from roboloom.controllers.joint import JointController
 from roboloom.drivers.mock import MockBus
 from roboloom.errors import ConfigError, SetupError
@@ -102,13 +109,105 @@ def home_tree(tmp_path: Path, **home) -> dict:
     names = [limit["name"] for limit in tree["followers"]["follower"]["limits"]]
     pose = {j: 2048 for j in names}
     pose["torso_yaw"], pose["head_yaw"] = 2148, 2000
-    path = write_pose(tmp_path / "ready.yaml", pose)
+    directory = tmp_path / "poses" / "follower"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = write_pose(directory / "ready.yaml", pose)
     controller = tree["controllers"]["controller"]
     controller["home"] = {"pose": str(path), "max_speed": 200, "tolerance": 30, **home}
     controller["couplings"] = [
         {"joint": "head_yaw", "source": "torso_yaw", "scale": -1.0, "reference": 2048}
     ]
     return tree
+
+
+def test_home_discovers_and_filters_candidates(tmp_path):
+    tree = home_tree(tmp_path)
+    poses = tmp_path / "poses" / "follower"
+    saved = yaml.safe_load((poses / "ready.yaml").read_text())["pose"]
+    write_pose(poses / "stow.yaml", saved)
+    write_pose(poses / "center.yaml", {**saved, "head_yaw": 2048})
+    write_pose(poses / "wrong.yaml", saved, follower="other")
+    (poses / "broken.yaml").write_text("pose: [")
+    (poses / "binary.yaml").write_bytes(b"\xff")
+    write_pose(poses / "bad-joints.yaml", {**saved, 99: 0, "extra": 0})
+    home = parse_config(tree).controllers["controller"].homes["follower"]
+    assert list(home.poses) == ["ready", "center", "stow"]
+    assert home.choices is None
+    assert home.get() is home.get("") is home.get("ready")
+    assert home.get("center").values["head_yaw"] == 2048
+    assert set(home.invalid) == {"bad-joints", "binary", "broken", "wrong"}
+    assert "joints differ" in home.invalid["bad-joints"]
+    assert "UTF-8 text" in home.invalid["binary"]
+    with pytest.raises(ConfigError, match="saved for follower 'other'"):
+        home.get("wrong")
+
+    tree["controllers"]["controller"]["home"]["choices"] = ["stow", "ready", "missing"]
+    cfg = parse_config(tree)
+    home = cfg.controllers["controller"].homes["follower"]
+    assert home.choices == ("stow", "ready", "missing")
+    assert list(home.poses) == ["ready", "stow"]
+    assert home.invalid == {"missing": "no such pose"}
+    with pytest.raises(ConfigError, match="unknown home pose 'center'"):
+        home.get("center")
+    assert "valid poses: ready, stow" in home_warning(cfg, {}, 0, "center")
+    assert "follower: no such pose" in home_warning(cfg, {}, 0, "missing")
+
+    (poses / "ready.yaml").write_text("pose: [")
+    with pytest.raises(ConfigError, match="ready.yaml"):
+        parse_config(tree)
+
+
+@pytest.mark.parametrize(
+    "choices", [None, [], "ready", ["ready", ""], ["a/b"], [r"a\b"], [1]]
+)
+def test_home_choices_require_pose_names(tmp_path, choices):
+    with pytest.raises(ConfigError, match="home.choices must be a non-empty list"):
+        parse_config(home_tree(tmp_path, choices=choices))
+
+
+def test_home_choices_require_the_default(tmp_path):
+    with pytest.raises(
+        ConfigError, match="home.choices must include the default pose 'ready'"
+    ):
+        parse_config(home_tree(tmp_path, choices=["stow"]))
+
+
+def test_available_homes_requires_a_valid_pose_for_each_follower(tmp_path):
+    cfg = parse_config(home_tree(tmp_path))
+    homes = cfg.controllers["controller"].homes
+    ready = homes["follower"]
+    center, stow = Pose("center", {}), Pose("stow", {})
+    homes["follower"] = replace(
+        ready,
+        poses={"ready": ready.pose, "center": center, "stow": stow},
+        invalid={"broken": "wrong model"},
+    )
+    homes["left"] = replace(ready, poses={"ready": ready.pose, "center": center})
+    assert available_homes(cfg) == (
+        ("ready", "center"),
+        {"broken": "follower: wrong model", "stow": "left: missing pose"},
+        "ready",
+    )
+    homes["left"] = replace(homes["left"], pose=center)
+    assert available_homes(cfg) == (
+        ("center", "ready"),
+        {"broken": "follower: wrong model", "stow": "left: missing pose"},
+        "",
+    )
+    homes.clear()
+    assert available_homes(cfg) == ((), {}, "")
+
+
+def test_estimate_uses_unrounded_duration_for_the_timeout():
+    pose = Pose("ready", {"a": 10, "b": 20})
+    spec = HomeSpec(pose, 100, 1, 0.3)
+    assert spec.get("ready") == pose
+    assert spec.estimate([5, 40], JOINTS) == {
+        "worst_joint": "b",
+        "dist": 20.0,
+        "eta_s": 0.3,
+        "over_timeout": True,
+    }
 
 
 def test_leader_pose_maps_back_through_signs_offsets_and_couplings(tmp_path):
@@ -301,7 +400,7 @@ def test_session_refuses_home_while_recording_and_start_while_moving(tmp_path):
 
 @pytest.mark.e2e
 def test_session_moves_home_then_records_from_there(tmp_path):
-    from roboloom.runtime.session import Session
+    from roboloom.runtime.session import Session, SessionError
 
     project = mock_project(tmp_path / ".roboloom")
     capture_pose(project / "config.yaml", "ready")
@@ -309,6 +408,9 @@ def test_session_moves_home_then_records_from_there(tmp_path):
     saved = yaml.safe_load(pose.read_text())
     saved["pose"]["torso_yaw"], saved["pose"]["r_arm_sh_pitch1"] = 2100, 2000
     pose.write_text(yaml.safe_dump(saved))
+    saved["pose"]["torso_yaw"] = 2080
+    write_pose(pose.with_name("stow.yaml"), saved["pose"])
+    write_pose(pose.with_name("invalid.yaml"), saved["pose"], model="other")
     controller = project / "nodes" / "controller.yaml"
     controller.write_text(
         controller.read_text()
@@ -317,9 +419,39 @@ def test_session_moves_home_then_records_from_there(tmp_path):
     )
     with Session.launch(project / "config.yaml") as s:
         s.wait_ready(30)
-        s.home()
-        robot = s.status()["follower"]["fields"]
-        assert robot["home"] == "ready" and robot["home_state"] == "reached"
-        s.record("from home", 1.0, home=True)
+        with pytest.raises(SessionError, match="follower: .*saved for other"):
+            s.home(pose="invalid")
+        with pytest.raises(SessionError, match="valid poses: ready, stow"):
+            s.home(pose="unknown")
+        s.home(20, pose="stow")
+        fields = s.status()
+        assert fields["leader"]["fields"]["home"] == "stow"
+        robot = fields["follower"]["fields"]
+        assert robot["home"] == "stow" and robot["home_state"] == "reached"
+        assert robot["home_estimates"] == {
+            "ready": {
+                "worst_joint": "torso_yaw",
+                "dist": 20.0,
+                "eta_s": 0.1,
+                "over_timeout": False,
+            },
+            "stow": {
+                "worst_joint": s.cfg.followers["follower"].joint_names[0],
+                "dist": 0.0,
+                "eta_s": 0.0,
+                "over_timeout": False,
+            },
+        }
+
+        sent_ns = time.monotonic_ns()
+        s.client.send("home ready")
+        deadline = time.monotonic() + 20
+        while s.home_waiting(sent_ns):
+            assert time.monotonic() < deadline
+            time.sleep(0.1)
+        fields = s.status()
+        assert fields["leader"]["fields"]["home"] == "ready"
+        assert fields["follower"]["fields"]["home"] == "ready"
+        s.record("from home", 1.0, home="stow")
         (result,) = s.wait_saves()
     assert result.saved and result.frames > 5

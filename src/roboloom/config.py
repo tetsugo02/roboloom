@@ -194,7 +194,7 @@ class Experiment:
     task: str | None = None
     seconds: float | None = None
     episodes: int | None = None
-    home: bool | None = None
+    home: bool | str | None = None
     steps: int | None = None  # policy actions per episode, instead of seconds
     confirm: bool | None = None
 
@@ -309,8 +309,12 @@ def load_experiment(
         isinstance(episodes, bool) or not isinstance(episodes, int) or episodes < 1
     ):
         raise ConfigError(f"{where}.episodes: expected a whole number, at least 1")
-    if home is not None and not isinstance(home, bool):
-        raise ConfigError(f"{where}.home: expected true or false")
+    if "home" in raw and not (
+        isinstance(home, bool) or (isinstance(home, str) and home.strip())
+    ):
+        raise ConfigError(
+            f"{where}.home: expected true, false, or a non-empty pose name"
+        )
     if confirm is not None and not isinstance(confirm, bool):
         raise ConfigError(f"{where}.confirm: expected true or false")
     if steps is not None and (

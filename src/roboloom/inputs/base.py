@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -65,6 +65,7 @@ class ActuatedReader:
     ):
         self.device = device
         self.home_goal: dict[str, float] | None = None  # leader pose of the pair's home
+        self.home_goals: dict[str, dict[str, float]] = {}
         self.home_spec: HomeSpec | None = None
         self.home_error = ""
         # joints that take force feedback -> unit (see JointInput.feedback_units)
@@ -74,9 +75,17 @@ class ActuatedReader:
         device.read_state()
         device.enable_torque()
 
-    def set_home(self, goal: dict[str, float], spec: HomeSpec) -> None:
+    def set_home(
+        self,
+        goal: dict[str, float],
+        spec: HomeSpec,
+        *,
+        goals: Mapping[str, dict[str, float]] | None = None,
+    ) -> None:
         """The leader pose `home` moves to (the controller maps the saved follower pose)."""
         self.home_goal, self.home_spec = goal, spec
+        self.home_goals = dict(goals) if goals is not None else {}
+        self.home_goals[spec.pose.name] = goal
 
     def read(self) -> Sample:
         state = self.device.read_state()
@@ -99,9 +108,14 @@ class ActuatedReader:
                 self.home_error = "leader is limp (estop or release); restart to home"
             else:
                 spec = self.home_spec
+                pose_name = argument.strip() or spec.pose.name
+                goal = self.home_goals.get(pose_name)
+                if goal is None:
+                    self.home_error = f"unknown home pose {pose_name!r}"
+                    return
                 try:
                     self.device.begin_home(
-                        self.home_goal, spec.max_speed, spec.tolerance, spec.pose.name
+                        goal, spec.max_speed, spec.tolerance, pose_name
                     )
                 except (RuntimeError, ValueError, ConnectionError) as exc:
                     self.home_error = str(exc)

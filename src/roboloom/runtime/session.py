@@ -40,6 +40,7 @@ from ..config import (
     load_config,
     load_experiment,
 )
+from ..control.homing import available_homes
 from ..core.traits import WORST_CASE, SafetyTraits, ending_note, precautions
 from ..errors import Cancelled, ConfigError, HardwareError, RoboloomError
 from ..operator import Operator
@@ -1034,12 +1035,13 @@ class Session:
             return False  # nobody confirmed supporting the arms
         return answer.strip().lower() != "hold"
 
-    def home(self, timeout: float | None = None) -> None:
-        """Move every leader-follower pair with a `home` pose there, slowly, and wait until
-        both arrived (at most `timeout` s, default the YAML's `timeout_s`). Leaders go back to
-        their normal laws a second after arriving. Raises SessionError when a node refused or did not
-        arrive."""
-        sent_ns, limit = self.begin_home()
+    def home(self, timeout: float | None = None, *, pose: str | None = None) -> None:
+        """Move each homing pair to the named pose or its configured default.
+
+        Wait up to the positional timeout in seconds, or use the configured timeout
+        when omitted. Raise SessionError if a node refuses the move or fails to arrive.
+        """
+        sent_ns, limit = self.begin_home(pose)
         deadline = time.monotonic() + (timeout if timeout is not None else limit)
         while True:
             waiting = self.home_waiting(sent_ns)
@@ -1049,13 +1051,22 @@ class Session:
                 raise SessionError(f"home not reached: {', '.join(waiting)}")
             time.sleep(0.1)
 
-    def begin_home(self) -> tuple[int, float]:
+    def begin_home(self, pose: str | None = None) -> tuple[int, float]:
         """Send `home`; returns (send time in monotonic ns, the YAML's timeout in s)."""
         homes = [h for c in self.cfg.controllers.values() for h in c.homes.values()]
         if not homes:
             raise SessionError("no controller has a home pose (home: in its YAML)")
+        if pose is not None:
+            pose = pose.strip()
+            valid, invalid, _ = available_homes(self.cfg)
+            if pose in invalid:
+                raise SessionError(f"invalid home pose {pose!r}: {invalid[pose]}")
+            if pose not in valid:
+                raise SessionError(
+                    f"unknown home pose {pose!r}; valid poses: {', '.join(valid) or 'none'}"
+                )
         sent_ns = time.monotonic_ns()
-        self.wait_report(self.send("home"))
+        self.wait_report(self.send("home", pose=pose) if pose else self.send("home"))
         return sent_ns, max(h.timeout_s for h in homes)
 
     def home_waiting(self, sent_ns: int) -> list[str]:
@@ -1196,7 +1207,7 @@ class Session:
         on_tick: Callable[[dict], None] | None = None,
         tick_s: float = 0.2,
         ready_timeout: float = 60.0,
-        home: bool = False,
+        home: bool | str = False,
         label: Label = None,
         note: str | None = None,
         steps: int | None = None,
@@ -1213,8 +1224,8 @@ class Session:
         every `tick_s` while recording. An exception or Ctrl-C discards the episode, and
         so does a controller that fails or a follower that latches FAULT or ESTOP while
         it runs (EpisodeFailed): an episode that broke off is not saved.
-        `home=True` first moves to the saved home pose (`home`), so every episode starts
-        from the same pose.
+        home=True first moves to the configured default poses. A pose name moves
+        each homing pair to that pose before the episode starts.
         `label` is the verdict saved with the episode ("success" / "failure"), or a
         function of the stopped episode returning it (None: no verdict); `note` is
         free text (`save`).
@@ -1223,7 +1234,7 @@ class Session:
             check_label(label)  # a mistyped verdict: before the robot moves
         name = task(self.next_info()) if callable(task) else task
         if home:
-            self.home()
+            self.home(pose=home if isinstance(home, str) else None)
         self.wait_ready(
             ready_timeout
         )  # every episode starts aligned, not only the first
