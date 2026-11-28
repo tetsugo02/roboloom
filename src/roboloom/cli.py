@@ -861,6 +861,7 @@ def _operate_robot(
         episodes=getattr(args, "episodes", 1) or 1,
         home=bool(args_home),
         confirm=getattr(args, "confirm", False),
+        home_pose=args_home if isinstance(args_home, str) else None,
     )
     show = terminal and not plain and not asked
     if show:
@@ -871,6 +872,10 @@ def _operate_robot(
                 last,
                 mock=last.mock or mock,
                 video_codec=plan.video_codec or last.video_codec,
+                home=plan.home if plan.home_pose is not None else last.home,
+                home_pose=plan.home_pose
+                if plan.home_pose is not None
+                else last.home_pose,
             )
         elif given is None:  # the options start as last time, else the defaults
             plan = replace(
@@ -912,7 +917,6 @@ def _operate_robot(
                 plan,
                 live=terminal and not plain,
                 reselect=terminal,
-                cli_home=args_home if not show else None,
             )
         except RoboloomError as exc:
             if not show:
@@ -950,13 +954,12 @@ def _start(
     *,
     live: bool,
     reselect: bool,
-    cli_home: bool | str | None = None,
 ) -> str:
     from .runtime.session import Session
 
     policy = getattr(args, "policy", None)
     policy_kwargs = getattr(args, "policy_kwargs", None)
-    home = plan.home if cli_home is None else cli_home
+    home = (plan.home_pose or True) if plan.home else False
     steps = plan.steps or None
     if steps:  # the episode ends on the count; the time is only its limit
         from .runtime.session import steps_timeout

@@ -6,6 +6,7 @@ from __future__ import annotations
 import shutil
 import sys
 from argparse import Namespace
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -13,7 +14,7 @@ import pytest
 import yaml
 from conftest import mock_project, rakuda2_tree
 from rich.console import Console
-from textual.widgets import Button, Checkbox, Input, Static
+from textual.widgets import Button, Checkbox, Input, OptionList, Static
 
 from roboloom.cli import _with_config
 from roboloom.config import (
@@ -470,3 +471,129 @@ async def test_launcher_validates_config_before_infer(tmp_path, monkeypatch):
         await pilot.press("ctrl+s")
         await pilot.press("escape")
     assert app.return_value is None
+
+
+@pytest.fixture
+def home_config(tmp_path: Path) -> Path:
+    from roboloom.setup import capture_pose
+
+    project = mock_project(tmp_path)
+    path = project / "config.yaml"
+    capture_pose(path, "ready")
+    poses = project / "poses" / "follower"
+    shutil.copyfile(poses / "ready.yaml", poses / "camera_pose.yaml")
+    (poses / "broken.yaml").write_text("pose: [")
+    controller = project / "nodes" / "controller.yaml"
+    controller.write_text(
+        controller.read_text()
+        + "home:\n  pose: ../poses/follower/ready.yaml\n  max_speed: 400\n  tolerance: 30\n"
+    )
+    return path
+
+
+@pytest.mark.asyncio
+async def test_launcher_selects_and_saves_home_pose(home_config: Path):
+    app = LauncherApp(
+        home_config, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        poses = app.query_one("#home-pose", OptionList)
+        summary = app.query_one("#summary", Static)
+        assert app.query_one("#home").display and poses.display
+        assert [option.id for option in poses.options] == [
+            "ready",
+            "camera_pose",
+            "broken",
+        ]
+        assert "ready (default)" in str(poses.options[0].prompt)
+        broken = poses.get_option("broken")
+        assert broken.disabled
+        reason = str(broken.prompt)
+        assert reason.startswith("broken — unavailable: follower:")
+        assert "expected the node content" in reason
+        assert poses.highlighted == 0
+        assert app._read().home_pose is None
+        assert "home: ready" in str(summary.render())
+
+        assert await pilot.click("#home-pose", offset=(2, 2))
+        assert app._read().home_pose == "camera_pose"
+        assert "home: camera_pose" in str(summary.render())
+        poses.focus()
+        await pilot.press("up")
+        assert poses.highlighted == 0
+        assert app._read().home_pose == "camera_pose"
+        await pilot.press("enter")
+        assert app._read().home_pose == "ready"
+        await pilot.press("down", "enter")
+        assert app._read().home_pose == "camera_pose"
+        assert app._problem(replace(app._read(), home_pose="broken")) == (
+            "home pose 'broken' is unavailable: "
+            + reason.removeprefix("broken — unavailable: ")
+        )
+        assert app._problem(replace(app._read(), home_pose="missing")) == (
+            "unknown home pose 'missing'"
+        )
+
+        await pilot.click("#opt-policy")
+        assert not poses.display and not app.query_one("#home").display
+        await pilot.click("#opt-policy")
+        assert poses.display and poses.highlighted == 1
+        await pilot.press("ctrl+s")
+    plan = app.return_value
+    assert isinstance(plan, LaunchPlan)
+    assert plan.home_pose == "camera_pose"
+    save_last(home_config, plan)
+    assert load_last(home_config, app.options) == plan
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("full_config", [True, False])
+async def test_launcher_without_home_poses(tmp_path: Path, full_config: bool):
+    if full_config:
+        path = mock_project(tmp_path) / "config.yaml"
+    else:
+        path = tmp_path / "config.yaml"
+        path.write_text("options: {}\n")
+    app = LauncherApp(
+        path, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        assert app.query_one("#home").display is not full_config
+        assert not app.query_one("#home-pose").display
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home is not full_config
+
+
+@pytest.mark.parametrize(
+    ("command", "args_home", "expected"),
+    [
+        ("launch", None, "camera_pose"),
+        ("launch", "ready", "ready"),
+        ("record", "ready", "ready"),
+        ("record", True, True),
+        ("record", False, False),
+    ],
+)
+def test_operate_robot_passes_home_to_recording_plan(
+    home_config: Path, monkeypatch, command, args_home, expected
+):
+    from roboloom import cli
+    from roboloom.ui import app, launcher
+
+    save_last(
+        home_config,
+        LaunchPlan(
+            mode="record", task="pick", seconds=3, home=True, home_pose="camera_pose"
+        ),
+    )
+    monkeypatch.setattr(launcher, "choose", lambda path, plan, *, back: plan)
+    run_backend = Mock(return_value="done")
+    monkeypatch.setattr(app, "run_backend", run_backend)
+    args = Namespace(command=command, config=home_config, task="pick", seconds=3)
+    if args_home is not None:
+        args.home = args_home
+    cli._operate_robot(args, True, back=False)
+    recording = run_backend.call_args.args[0].recording
+    assert recording is not None
+    assert recording.home == expected

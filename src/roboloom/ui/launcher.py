@@ -31,12 +31,14 @@ from textual.widgets import (
     RadioSet,
     Static,
 )
+from textual.widgets.option_list import Option as ListOption
 
 from ..config import (
     CONFIG_FILE,
     INFER_OPTION,
     PROJECT_ROOT,
     Option,
+    RobotConfig,
     check_options,
     dataset_suffix,
     declared_options,
@@ -46,6 +48,7 @@ from ..config import (
     read_config,
     toggle_option,
 )
+from ..control.homing import available_homes
 from ..errors import ConfigError, RoboloomError
 from ..recording.video import VIDEO_CODECS, normalize_video_codec
 from .splitter import Splitter
@@ -77,6 +80,7 @@ class LaunchPlan:
     observe: list[str] | None = None
     video_codec: str | None = None  # None: the recorder YAML (recording.video)
     confirm: bool = False
+    home_pose: str | None = None
 
     def problem(self) -> str:
         """Why it cannot start, or ''."""
@@ -100,6 +104,7 @@ def last_path(config: Path) -> Path:
 def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
     try:
         data = yaml.safe_load(last_path(config).read_text()) or {}
+        raw_pose = data.get("home_pose")
         plan = LaunchPlan(
             mode=str(data.get("mode", "run")),
             sensors=data.get("sensors"),
@@ -112,6 +117,9 @@ def load_last(config: Path, options: dict[str, Option]) -> LaunchPlan | None:
             episodes=int(data.get("episodes", 1)),
             home=bool(data.get("home", False)),
             confirm=bool(data.get("confirm", False)),
+            home_pose=str(raw_pose)
+            if isinstance(raw_pose, str) and raw_pose.strip()
+            else None,
         )
         check_options(options, plan.options)
         return plan
@@ -391,6 +399,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     #numbers > Vertical:first-of-type { margin-right: 2; }
     #numbers Input { width: 1fr; }
     #home, #mock { margin-top: 1; }
+    #home-pose-box, #home-pose { height: auto; }
+    #home-pose { max-height: 8; }
     .option {
         height: auto; margin-bottom: 1; padding: 0 1;
         border: none; border-left: outer $panel-lighten-2; background: $boost;
@@ -436,7 +446,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 "session",
             )
         )
-        self._config_problems: dict[
+        self._config_cache: dict[
             tuple[
                 tuple[str, ...],
                 bool,
@@ -444,8 +454,12 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 tuple[str, ...] | None,
                 str | None,
             ],
-            str,
+            tuple[RobotConfig | None, str],
         ] = {}
+        self._home_pose = initial.home_pose
+        self._home_choices: (
+            tuple[tuple[str, ...], dict[str, str], str, str | None] | None
+        ) = None
         self.options = declared_options(config, raw.get("options"))
         self.sensor_names = list(raw.get("sensors") or {})
         for option in self.options.values():
@@ -529,6 +543,9 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                     yield OptionToggle(
                         "Move home before every episode", self.plan.home, id="home"
                     )
+                    with Vertical(id="home-pose-box"):
+                        yield Label("Home pose", classes="field-label")
+                        yield OptionList(id="home-pose")
                     yield OptionToggle(
                         "Ask to save or discard after every episode",
                         self.plan.confirm,
@@ -666,6 +683,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             episodes=int(number("episodes", int, 0)),
             home=self.query_one("#home", Checkbox).value,
             confirm=self.query_one("#confirm", Checkbox).value,
+            home_pose=self._home_pose,
         )
 
     def _refresh_observation_defaults(self) -> None:
@@ -715,12 +733,47 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                 why.display = bool(reason)
             plan = self._read()
             self.query_one("#recording").display = plan.mode in ("record", "infer")
-            self.query_one("#home").display = plan.mode in ("record", "infer")
+            self._sync_home(plan)
             self.query_one("#confirm").display = plan.mode in ("record", "infer")
             self.query_one("#summary", Static).update(self._summary(plan))
             self.query_one("#launch", Button).disabled = bool(self._problem(plan))
         finally:
             self._syncing = False
+
+    def _sync_home(self, plan: LaunchPlan) -> None:
+        valid, invalid, default = self._homes(plan)
+        episodic = plan.mode in ("record", "infer")
+        has_home = bool(valid or invalid)
+        self.query_one("#home").display = episodic and (
+            has_home or not self._validates_full_config
+        )
+        poses = self.query_one("#home-pose", OptionList)
+        poses.display = self.query_one("#home-pose-box").display = episodic and has_home
+
+        choices = (valid, invalid, default, plan.home_pose)
+        if choices == self._home_choices:
+            return
+        self._home_choices = choices
+        fallback = default if default in valid else next(iter(valid), None)
+        selected = plan.home_pose if plan.home_pose in valid else fallback
+        with poses.prevent(OptionList.OptionHighlighted):
+            poses.clear_options().add_options(
+                [
+                    ListOption(
+                        f"{'▸ ' if name == selected else ''}{name}"
+                        f"{' (default)' if name == default else ''}",
+                        id=name,
+                    )
+                    for name in valid
+                ]
+                + [
+                    ListOption(
+                        Text(f"{name} — unavailable: {reason}"), id=name, disabled=True
+                    )
+                    for name, reason in invalid.items()
+                ]
+            )
+            poses.highlighted = valid.index(selected) if selected is not None else None
 
     def _problem(self, plan: LaunchPlan) -> str:
         try:
@@ -731,10 +784,24 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         missing = set(observed) & (set(self.sensor_names) - set(plan.sensors or []))
         if missing:
             return f"policy observes inactive sensors: {sorted(missing)}"
-        problem = self._config_problem(plan) if self._validates_full_config else ""
-        return problem or plan.problem()
+        cfg, problem = self._validated_config(plan)
+        if problem:
+            return problem
+        if cfg is not None and plan.home and plan.home_pose:
+            valid, invalid, _ = available_homes(cfg)
+            if plan.home_pose in invalid:
+                return f"home pose {plan.home_pose!r} is unavailable: {invalid[plan.home_pose]}"
+            if (valid or invalid) and plan.home_pose not in valid:
+                return f"unknown home pose {plan.home_pose!r}"
+        return plan.problem()
 
-    def _config_problem(self, plan: LaunchPlan) -> str:
+    def _homes(self, plan: LaunchPlan) -> tuple[tuple[str, ...], dict[str, str], str]:
+        cfg, _ = self._validated_config(plan)
+        return available_homes(cfg) if cfg is not None else ((), {}, "")
+
+    def _validated_config(self, plan: LaunchPlan) -> tuple[RobotConfig | None, str]:
+        if not self._validates_full_config:
+            return None, ""
         key = (
             plan.options,
             plan.mock,
@@ -742,10 +809,9 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             tuple(plan.observe) if plan.observe is not None else None,
             plan.video_codec,
         )
-        if key not in self._config_problems:
-            problem = ""
+        if key not in self._config_cache:
             try:
-                load_config(
+                cfg = load_config(
                     self.config,
                     options=plan.options,
                     mock=True if plan.mock else None,
@@ -754,9 +820,10 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                     video_codec=plan.video_codec,
                 )
             except RoboloomError as exc:
-                problem = str(exc)
-            self._config_problems[key] = problem
-        return self._config_problems[key]
+                self._config_cache[key] = None, str(exc)
+            else:
+                self._config_cache[key] = cfg, ""
+        return self._config_cache[key]
 
     def _devices(self, plan: LaunchPlan) -> str:
         if plan.mock:
@@ -772,6 +839,10 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         ]
         if self._launch_error:
             lines.insert(0, f"last launch failed: {self._launch_error}")
+        if plan.mode in ("record", "infer") and plan.home:
+            valid, invalid, default = self._homes(plan)
+            if valid or invalid:
+                lines.append(f"home: {plan.home_pose or default or 'default'}")
         problem = self._problem(plan)
         if problem:
             return "\n".join([*lines, f"cannot launch: {problem}"])
@@ -790,6 +861,12 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         return "\n".join(lines)
 
     # -- events ------------------------------------------------------------------
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if not self._syncing and event.option_list.id == "home-pose":
+            self._home_pose = event.option.id
+            self._launch_error = ""
+            self._sync()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if self._syncing:
@@ -847,6 +924,10 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def action_launch(self) -> None:
         plan = self._read()
         if not self._problem(plan):
+            if self._validates_full_config and plan.home:
+                valid, invalid, _ = self._homes(plan)
+                if not (valid or invalid):
+                    plan = replace(plan, home=False)
             self.exit(plan)
 
     def action_cancel(self) -> None:
