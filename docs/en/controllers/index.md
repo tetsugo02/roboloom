@@ -34,10 +34,11 @@ flowchart LR
 | --- | --- |
 | Availability | At least one controller is configured and every controller follows operator input. This includes `joint`, `pose_ik`, `parts` whose inner controllers all follow operator input, and custom controllers that meet the same rule. A policy with `teleop:` uses [teleoperation and interventions](../policy/intervention.md#teleop). |
 | Readiness | `teleop` checks controller readiness and alignment as `start` does. |
-| `t` / `teleop` | Arm the followers so they follow the input. Nothing is recorded. After stopping an episode on the operator screen, save or discard it before using Teleop. |
+| `t` / `TELEOP: OFF ⇄ ON` | Toggle between following the input without recording and holding. Resolve a stopped episode before toggling |
+| `teleop` | Arm the followers to follow the input without recording |
 | `stop_teleop` | Hold the followers. Accepted outside an episode even when the followers are already holding. During an episode use `stop`. |
 | `start` | Begin recording from the current pose. The followers continue to follow the input. |
-| `home` | Use `stop_teleop` before moving home. |
+| `home [NAME]` | Toggle teleop off or send `stop_teleop` before moving home |
 
 ## By robot { #by-robot }
 

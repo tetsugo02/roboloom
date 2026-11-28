@@ -136,11 +136,14 @@ A follower's `limits` is its per-joint safety check: every joint, in order, by n
 
 ## Home pose (home) { #home }
 
-A controller's `home:` is the saved pose that the `home` command (`infer --home`, `Session.home()`, Move home on the screen) moves to. Save poses with `roboloom capture-pose <name>`, into `poses/<follower>/<name>.yaml`.
+A controller's `home:` configures moves to saved poses. Save poses with `roboloom capture-pose <name>` under `poses/<follower>/<name>.yaml`. A named move requires that pose on every homing follower. Omitting the name uses each follower's default.
+
+<span class="status status--mock">Mock only</span>
 
 | Key | Type | Default | Unit | Description |
 | --- | --- | --- | --- | --- |
-| `pose` | path | required | — | The saved pose, relative to the node file's directory (e.g. `../poses/follower/ready.yaml`) |
+| `pose` | path | required | — | Default pose file, relative to the node YAML (e.g. `../poses/follower/ready.yaml`) |
+| `choices` | non-empty list of pose names | omitted | — | Filter candidates to these file stems (e.g. `[ready, park]`). Must include the default `pose` name. When omitted, discovers every `*.yaml` alongside `pose`, usually `poses/<follower>/*.yaml` |
 | `max_speed` | number | required | follower unit/s | Speed of the move; at most the controller's `max_speed` |
 | `tolerance` | number | required | follower unit | How close counts as arrived |
 | `timeout_s` | number | `30` | s | How long to wait for arrival |

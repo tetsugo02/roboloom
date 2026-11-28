@@ -35,10 +35,10 @@ Flags of commands that open devices:
 | `roboloom check-hold [robot] <follower> --tolerance <v> [--seconds 10]` | measure `unattended` for `unknown` models | energizes |
 | `roboloom capture-pose [robot] [follower] <name> [--force]` | save current follower pose to `poses/` | reads |
 | `roboloom run [robot] [--plain]` | operator screen, many episodes | yes |
-| `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home] [--confirm] [--plain]` | fixed-length episodes. Saves automatically by default. `--confirm` asks whether to save or discard after each episode (mock only). `--plain` waits for queued writes at the end and prints final results. The operator screen logs each result and drains the queue on exit ([background saving](recording.md#background-saving)) | yes |
+| `roboloom record [robot] --task <text> --seconds <n> [--episodes 1] [--home [NAME]] [--confirm] [--plain]` | fixed-length episodes. `--home` uses the configured defaults and `--home NAME` selects a saved pose before each episode. Saves automatically by default. `--confirm` asks whether to save or discard after each episode (mock only). `--plain` waits for queued writes at the end and prints final results. The operator screen logs each result and drains the queue on exit ([background saving](recording.md#background-saving)) | yes |
 | `roboloom record\|infer --experiment <name\|file>` | run as the project's `configs/roboloom/<name>.yaml` says (robot, options, node settings such as the policy, dataset, task, length; see configuration.md); words on the command line win. `validate`, `check-dataset`, `label` take `--experiment` too | yes |
-| `roboloom infer [robot] --seconds <n> \| --steps <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home] [--confirm] [--plain]` | policy episodes (`--home`: the policy's `home:` pose first); enables option `policy`; saves only when given a task. `--confirm` requires a task from the command line or experiment file (mock only) | yes |
-| `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit\|teleop\|policy\|stop_teleop> [task]` | send one operation to a running `run`. `save success` / `save failure` saves with the verdict. When every controller follows operator input, `teleop` / `stop_teleop` work outside an episode without recording (Mock only). `stop_teleop` is accepted outside an episode even when the followers already hold. A policy with `teleop:` also supports taking over and handing back to the policy. | no |
+| `roboloom infer [robot] --seconds <n> \| --steps <n> [--episodes 1] [--policy mod:fn] [--policy-kwargs JSON] [--task <text>] [--home [NAME]] [--confirm] [--plain]` | policy episodes (`--home`: the policy's default poses first, or `--home NAME` for a saved pose); enables option `policy`; saves only when given a task. `--confirm` requires a task from the command line or experiment file (mock only) | yes |
+| `roboloom session [robot] <start\|stop\|save\|discard\|estop\|release\|home\|quit\|teleop\|policy\|stop_teleop> [argument]` | send one operation to a running `run`. The argument is a task for `start`, a verdict for `save`, or a pose name for `home`. `save success` / `save failure` saves with the verdict. When every controller follows operator input, `teleop` / `stop_teleop` work outside an episode without recording (Mock only). `stop_teleop` is accepted outside an episode even when the followers already hold. A policy with `teleop:` also supports taking over and handing back to the policy. | no |
 | `roboloom serve-policy --experiment <experiment file>` or `--from <policy YAML>` or `<module:callable> [--kwargs JSON] [--address host:port] [--authkey-env VAR]` | serve a policy from this environment to a policy node with `backend: server` (the file's `factory`, `kwargs`, `server.address`) | no |
 | `roboloom check-dataset [robot\|dataset dir] [--with a,b] [--recover]` | checks dataset integrity (exit 1 if broken) and row validity, and reports spool episodes in notes. `--recover` rolls back an interrupted dataset write | no |
 | `roboloom label [robot\|dataset dir] <episode> success\|failure [--note TEXT] [--with a,b]` | set or change a saved episode's evaluation verdict (appends to `meta/roboloom_episodes.jsonl`), print the counts | no |
@@ -74,15 +74,30 @@ uv run roboloom session start handover          # from another terminal
   also work). `run --plain` is line input.
   `tune-gravity` refuses non-TTY.
 
+Use `roboloom session [robot] home [NAME]` to move to the named pose. Omit `NAME`
+to use the configured defaults.
+
 ## Operator screen (Textual)
 
-Operations: `start <task>`, `stop` (no torque change), `save`, `discard`, `home`,
+Operations include `start <task>`, `stop` (no torque change), `save`, `discard`, `home [NAME]`,
 `release` (support confirmation), `estop`, `quit` (Cancel / follower hold / choose options
 again / supported release; Cancel selected first). Keys: Ctrl-L command input, Tab
 completion, ↑↓ history, Ctrl-N/Ctrl-P panes, **Ctrl-G emergency stop**, Ctrl-C/Ctrl-Q exit
 dialog. `FAULT`, `ESTOP`, `RELEASED` latch and never recover automatically.
 
-With `--confirm` (mock only), a stopped episode stays open for `save`,
-`save success`, `save failure` or `discard`. Discard also works while an episode
+- Space activates the focused button. The primary action starts in hold or teleop and
+  stops while recording.
+- `t` toggles `TELEOP: OFF ⇄ ON` outside an episode, or `DRIVER: POLICY ⇄ LEADER`
+  during a policy episode with `teleop:`. The button shows the current state.
+- `h` opens Move home. Select an available pose with Enter, cancel with Esc, or
+  press `e` for ESTOP.
+- `r` opens Release confirmation. In `tune-gravity`, `r` resumes instead.
+
+The launcher validates with `load_config` before enabling Launch. A launch error
+returns to the launcher with selections intact. For `record` and `infer` with a
+configured `home:`, choose the pose for pre-episode moves in the launcher.
+
+With `--confirm` (mock only), use Save, `Save success`, `Save failure`, or Discard
+while stopped. Discard also works while an episode
 of a recording plan is running (mock only). Discard repeats the episode number,
 with Home when configured.

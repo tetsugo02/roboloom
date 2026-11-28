@@ -17,11 +17,11 @@ stateDiagram-v2
   state "方策" as policy
   state "介入（leader）" as takeover
   [*] --> hold
-  hold --> pre: Teleop
+  hold --> pre: TELEOP OFF → ON
   pre --> policy: Start
   hold --> policy: Start
-  policy --> takeover: Teleop
-  takeover --> policy: Policy
+  policy --> takeover: DRIVER POLICY → LEADER
+  takeover --> policy: DRIVER LEADER → POLICY
   policy --> hold: Stop
   takeover --> hold: Stop
 ```
@@ -58,15 +58,16 @@ uv run roboloom validate --experiment cup-teleop
 uv run roboloom run --experiment cup-teleop
 ```
 
+操作画面の切り替え <span class="status status--mock">模擬のみ</span>
+
 | 操作 | key | 動き |
 | --- | --- | --- |
-| Teleop（episodeの外） | `t` | 記録せずに，leaderでfollowerを開始姿勢へ動かす |
-| `start pick up the cup` | — | 方策と記録を始める．Teleopの後ならそこから方策が引き継ぐ |
-| Teleop（episode中） | `t` | 方策を止め，leaderに切り替える（介入） |
-| Policy | `p` | leaderから方策に戻す．方策は `reset()` から始め直す |
+| `TELEOP: OFF ⇄ ON` | `t` | episode の前に leader での操作を切り替える．記録は行わない |
+| `start pick up the cup` | — | 方策と記録を始める．teleop 中は現在の姿勢から方策が引き継ぐ |
+| `DRIVER: POLICY ⇄ LEADER` | `t` | episode 中に方策と leader を切り替える．方策へ戻すと `reset()` する |
 | `stop`，`save success` | — | 止めて，成否を付けて保存する |
 
-- Teleopを押すと，followerの関節はすべて今の目標で止まります．leaderの関節が近づくか値をまたぐと，その関節から順に追従します．画面の方策の行に，まだつかまえていない関節と差（`pickup`）が出ます．
+- leader に切り替えると，followerの関節はすべて今の目標で止まります．leaderの関節が近づくか値をまたぐと，その関節から順に追従します．画面の方策の行に，まだつかまえていない関節と差（`pickup`）が出ます．
 - gripperは，triggerをfollowerの開き具合まで握り込むまで動きません．
 - 別の端末からは `uv run roboloom session teleop`，`uv run roboloom session policy` で同じ操作を送れます．
 - 詳しい動きは [teleopと介入](../../policy/intervention.md) にあります．

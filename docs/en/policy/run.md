@@ -52,7 +52,7 @@ home:
 ```
 
 - With several followers, write one per follower: `home: {left: {...}, right: {...}}`. Followers left out do not move.
-- `roboloom infer --home` moves there before every episode. The launcher offers "Move home before every episode" for `infer` as well. `home` on the operator screen and `Session.home()` / `Session.record(..., home=True)` in Python do the same.
+- `roboloom infer --home [NAME]` moves before each episode. Omit `NAME` for the configured default. In the launcher, enable `Move home before every episode` and choose a pose. In the operator screen, use [Move home](../reference/operator-screen.md#move-home). In Python, use `Session.home(pose=...)` or `Session.record(..., home=...)`. <span class="status status--mock">Mock only</span>
 - Arrival is checked with the measured joints, not the sent target. After the move, `reached` means every joint is within `tolerance`. If one is still out after 2 s, the screen shows `short` with the joint and its difference; `home` fails and `start` is refused.
 - As with teleoperation, `home` is refused while recording or following, and `start` is refused while moving home.
 - With `teleop:`, `home` moves the leader too ([Teleoperation and interventions](intervention.md#behavior)).

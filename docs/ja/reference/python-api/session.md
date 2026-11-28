@@ -131,7 +131,9 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 - `record` は，episodeの途中でcontrollerが失敗したとき（方策の例外など）と，followerがFAULT・ESTOPになったとき，そのepisodeを破棄して `EpisodeFailed`（`SessionError` の一種）を上げます．方策は次のepisodeでそのまま使えます．
 - `estop()` は，nodeが落ちたあとでも送れます（ほかのcommandは，nodeの障害を見つけると `SessionError` になります）．
 - `Session.launch` を呼んだprocessが終わると，どう終わった場合でも（強制終了，例外，端末を閉じた），dataflowは記録中のepisodeを破棄し，followerを保持させて終わります．`close()` を呼ばずに放置しても，robotが方策で動き続けることはありません．`multiprocessing` などで作った子processが残っている間は，終わったと見なされません．
-- `home(timeout=None)`：leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かし，両方が着くまで待ちます．着かないときや拒否されたときは `SessionError` です．`record(..., home=True)` は毎回のepisodeの前にこれを行います．詳しくは [Leader](../../controllers/leader.md) の「初期姿勢へ動かす」を参照してください．
+- `home(timeout=None, *, pose=None)` は各設定の既定姿勢へ動かします．`pose` に名前を渡すとその姿勢を選びます．`timeout`（秒）または設定の timeout まで到着を待ち，拒否時や未到着時は `SessionError` になります． <span class="status status--mock">模擬のみ</span>
+- `begin_home(pose=None) -> tuple[int, float]` は移動を指示し，monotonic clock の送信時刻（ns）と設定中の最大 timeout（s）を返します．`home_waiting(sent_ns)` で到着待ちの node を確認できます．
+- `record(..., home: bool | str = False)` は `False` なら移動を省き，`True` なら既定姿勢，姿勢名ならその姿勢へ episode の前に動きます．
 - `teleop()`，`policy()`，`stop_teleop()`：方策に `teleop:` があるとき，leaderに切り替え（episodeの前，または途中の介入），方策に戻し，episodeの外のteleopを終えます．詳しくは [teleopと介入](../../policy/intervention.md#teleop) を参照してください．
 - すべてのcontrollerが操作者の入力に従う構成では，`teleop()` は `start` と同じように準備状態と姿勢合わせを確認し，記録せずにfollowerを入力に従わせます．`stop_teleop()` はすべてのfollowerが保持状態になるまで待ちます．teleop中は `home()` の前に呼び出します．詳しくは [episodeの外でのteleop](../../controllers/index.md#teleop) を参照してください．<span class="status status--mock">Mock only</span>
 

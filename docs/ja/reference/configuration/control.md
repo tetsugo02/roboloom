@@ -136,11 +136,14 @@ followerの `limits` は関節ごとの安全の検査です．全関節を順�
 
 ## 初期姿勢（home） { #home }
 
-controllerの `home:` は，`home` の指令（`infer --home`，`Session.home()`，画面の Move home）で動く保存した姿勢です．姿勢は `roboloom capture-pose <名前>` で `poses/<follower>/<name>.yaml` に保存します．
+controller の `home:` は，保存した姿勢への移動を設定します．`roboloom capture-pose <name>` で `poses/<follower>/<name>.yaml` に保存します．名前を指定する場合は，移動対象のすべての follower に同名の姿勢が必要です．省略すると，各 follower の既定姿勢を使います．
+
+<span class="status status--mock">模擬のみ</span>
 
 | key | 型 | 既定値 | 単位 | 説明 |
 | --- | --- | --- | --- | --- |
-| `pose` | path | 必須 | — | 保存した姿勢．node fileのdirectoryが基準（例：`../poses/follower/ready.yaml`） |
+| `pose` | path | 必須 | — | 既定姿勢の file．node YAML からの相対 path（例 `../poses/follower/ready.yaml`） |
+| `choices` | 空でない姿勢名のリスト | 省略 | — | file 名から拡張子を除いた名前で候補を絞る（例 `[ready, park]`）．既定の `pose` の名前を含める．省略時は `pose` と同じ directory の `*.yaml`（通常 `poses/<follower>/*.yaml`）をすべて検出する |
 | `max_speed` | 数値 | 必須 | followerの単位/s | 動く速さ．controllerの `max_speed` 以下 |
 | `tolerance` | 数値 | 必須 | followerの単位 | 到着とみなす差 |
 | `timeout_s` | 数値 | `30` | s | 到着を待つ上限 |

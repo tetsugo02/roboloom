@@ -17,11 +17,11 @@ stateDiagram-v2
   state "policy" as policy
   state "intervention (leader)" as takeover
   [*] --> hold
-  hold --> pre: Teleop
+  hold --> pre: TELEOP OFF → ON
   pre --> policy: Start
   hold --> policy: Start
-  policy --> takeover: Teleop
-  takeover --> policy: Policy
+  policy --> takeover: DRIVER POLICY → LEADER
+  takeover --> policy: DRIVER LEADER → POLICY
   policy --> hold: Stop
   takeover --> hold: Stop
 ```
@@ -58,15 +58,16 @@ Check that it reports `options: policy, policy_teleop; dataset: local/rakuda2-ev
 uv run roboloom run --experiment cup-teleop
 ```
 
+The operator-screen toggle <span class="status status--mock">Mock only</span>
+
 | Operation | Key | What happens |
 | --- | --- | --- |
-| Teleop (outside an episode) | `t` | the leader moves the follower to the start pose; nothing is recorded |
-| `start pick up the cup` | — | starts the policy and the recording; after Teleop the policy takes over from there |
-| Teleop (during an episode) | `t` | stops the policy and switches to the leader (an intervention) |
-| Policy | `p` | hands back from the leader to the policy; the policy starts again from `reset()` |
+| `TELEOP: OFF ⇄ ON` | `t` | Toggles leader control before an episode. Nothing is recorded |
+| `start pick up the cup` | — | starts the policy and the recording; after teleop the policy takes over from the current pose |
+| `DRIVER: POLICY ⇄ LEADER` | `t` | Toggles between policy and leader during an episode. Handing back calls `reset()` |
 | `stop`, `save success` | — | stops and saves with a verdict |
 
-- On Teleop every follower joint stops at its current target. Each joint follows the leader once the leader joint comes close or crosses its value. The policy row on the screen shows the joints not yet picked up and their differences (`pickup`).
+- When switching to the leader every follower joint stops at its current target. Each joint follows the leader once the leader joint comes close or crosses its value. The policy row on the screen shows the joints not yet picked up and their differences (`pickup`).
 - The gripper does not move until the trigger is squeezed as far as the follower is open.
 - From another terminal, `uv run roboloom session teleop` and `uv run roboloom session policy` send the same operations.
 - The behaviour in detail is in [Teleoperation and interventions](../../policy/intervention.md).

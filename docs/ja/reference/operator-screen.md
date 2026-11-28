@@ -12,14 +12,17 @@
 
 ### Screens { #launcher-screens }
 
+launcher の検証・起動失敗時の復帰・姿勢選択 <span class="status status--mock">模擬のみ</span>
+
 | 画面・欄 | 内容 |
 | --- | --- |
 | robotの一覧 | 左に `.roboloom/` の下で `config.yaml` を持つrobot（dataset名と既定で有効なoptionつき），右に選択中のrobotの設定（file，dataset名，各optionの説明・`requires`・競合・dataset名，既定で有効か）．前回のrobotにcursorがある |
-| Operation | `run`・`record`・`infer` から選ぶ．`record` と `infer` ではtask・seconds・episodesを入力し，毎回初期姿勢へ動かすか（「move home before every episode」）も選べる |
+| Operation | `run`・`record`・`infer` から選ぶ．`record` と `infer` では task・seconds・episodes を入力する |
+| Home controls | `Move home before every episode` にチェックを入れ，姿勢を選ぶか既定の姿勢を使う．選択した設定に `home:` がある場合に `record` と `infer` で表示する |
 | Ask to save or discard after every episode | `record` と `infer` で，episodeごとの保存確認を有効にする．選択はlauncherに記憶される <span class="status status--mock">模擬のみ</span> |
 | Options | 設定の `options:` を `help` の説明付きのカードで並べる（有効は緑，競合で外れるものは黄の線と理由）．チェックを入れると `requires` のoptionも有効になり，`conflicts` のoptionは外れる．外すと，それを必要とするoptionも外れる．競合の理由はtooltipに出る．`infer` を選ぶと，`policy` という名前のoptionがあれば自動で有効になる |
 | Devices | 「mock devices (no hardware)」でmock deviceを使う．「Video codec (storage: video)」で動画の codec（`YAML / dataset`・`AV1`・`H.264`）を選ぶ．`YAML / dataset` は recorder の YAML の指定（追記では保存済みの動画の codec，どちらもなければ H.264．[Video codec](configuration/recorder.md#video-codec)） |
-| 要約 | 操作，`mock` か `HARDWARE` か（チェックを入れなくても YAML が `mode: mock` なら `mock (mode: mock in config.yaml)`），有効なoption，dataset名，動画の codec，置き換わるnode file（削除は `(removed)`）．起動できない組み合わせや入力の不足は，理由を表示してLaunchを無効にする |
+| 要約 | 操作，`mock` か `HARDWARE` か（チェックを入れなくても YAML が `mode: mock` なら `mock (mode: mock in config.yaml)`），有効なoption，dataset名，動画の codec，置き換わるnode file（削除は `(removed)`）．Launch の前に `load_config` で選択を検証する．無効な設定（例として `infer` が未知の node を観測する場合）は理由を表示し，Launch を無効にする |
 | sensorと方策の観測 | sensor起動と方策の観測の独立したチェック欄．方策の観測の欄は，推論への切り替えなどで起動optionを変更すると，選択された policy YAML の既定値に更新される．観測を明示的に選択した後は，空の選択も含め，modeやoptionを変更しても保持する（[sensor選択](cli.md#sensor-selection)） |
 | Detail | 説明 |
 | --- | --- |
@@ -31,7 +34,7 @@
 | --- | --- |
 | Enter（robotの一覧） | 選んで次の画面へ進む |
 | Esc（robotの一覧） | 何も起動せずに終了する |
-| Launch（Ctrl-S） | 起動する |
+| Launch（Ctrl-S） | 起動する．起動時に `RoboloomError` が出ると，同じ選択を保持し，error banner を表示して launcher に戻る |
 | Cancel | 何も起動せずに終了する |
 | Back（Esc） | robotの一覧から来た場合は一覧へ戻る．それ以外ではEscはCancelと同じ |
 | 境界のdrag，focusして矢印key | panelの大きさを変える（操作画面と同じ） |
@@ -42,18 +45,20 @@
 | file | 内容 |
 | --- | --- |
 | `.roboloom/logs/last_robot` | 選んだrobot．次回の一覧のcursorの位置 |
-| `.roboloom/<robot>/logs/last_launch.yaml` | 操作・option・device・sensorと観測の選択．次回の初期値．観測は，YAML の既定値を使うか，明示指定かを区別して残す |
+| `.roboloom/<robot>/logs/last_launch.yaml` | 操作・option・device・sensor と観測の選択・選んだ `home_pose`．次回の初期値．観測は，YAML の既定値を使うか，明示指定かを区別して残す |
 
 ## Layout { #layout }
 
+状態 banner と操作ボタン <span class="status status--mock">模擬のみ</span>
+
 | 領域 | 内容 |
 | --- | --- |
-| header | 機体名，mode（操作・mockか実機か・有効なoption），記録の進捗，警告 |
+| header と状態 banner | 3行で表示する．1行目は機体名と mode，赤い `[e] ESTOP` ボタン．2行目は状態と進捗で，`run` で記録中は経過時間・行数・保存済み episode 数・task を表示する．3行目は該当する場合の `Driver: POLICY` または `Driver: LEADER` badge，警告，node の状態を表示する．`start` の準備状態は Operations に表示する |
 | Status tab | node一覧と詳細．幅100文字以上では左右に並べ，それ未満ではDetailsで選択nodeの詳細を確認する |
 | recorderの行 | recorderの状態を表示し，保存待ちがあれば保存中の1件を含めて `saving N queued` を表示する．Detailsには `pending_saves` と `max_pending_saves` が出る．[background保存](../data/recording.md#background-saving) <span class="status status--mock">模擬のみ</span> |
 | Details tab | 選択nodeの状態，項目，単位，更新からの時間．node選択は表示だけを変更し，操作はdataflow全体を対象にする |
 | Logs tab | tabを選ぶまで隠す．独立してscrollでき，非表示中の新着も保持する．過去の行を読んでいる間は新着で位置を戻さない．画面は最大10,000行を保持し，doraの全logは設定の隣の `logs/` に残る |
-| Operations | すべてのtabの下に残り，表示領域の約半分を使う．対応する最小サイズ80×24でも，既定では10行以上を確保する（最小6行）．使えない操作も理由付きでmenuに残る．初期focusは操作menu |
+| Operations | どの tab でも下部に残る．状態に応じて大型の操作ボタンを切り替える．状態遷移時は主ボタンに focus を移す（command 入力中や dialog 表示中を除く）．拒否時はボタンの上にすぐ理由を表示し，ボタンを点滅させる |
 | 境界 | 一覧と詳細の間の縦の境界で左右の幅，上段とOperationsの間の横の境界で上下の高さを変える（Logsや80×24でも上下の調整ができる）．境界のdouble-clickで，その方向を既定サイズへ戻す．最小サイズを設け，paneと入力欄が操作できなくなるまで縮めることを防ぐ |
 | Detail | 説明 |
 | --- | --- |
@@ -69,7 +74,9 @@
 | 記録中のtask（詳細） | cyan |
 | 制限・拒否・error（詳細） | 黄または赤 |
 | headerの警告，未保存（`UNSAVED`） | 黄 |
-| Emergency stop | 赤 |
+| `HOLD`・`TELEOP`・`● REC` | 順に success・accent・error の色 |
+| `STOPPED`・`HOMING` | warning の色 |
+| `ESTOP`・`FAULT` | `ESTOP` は赤地に白，`FAULT` は error の色 |
 | 使えない操作 | 薄く表示 |
 | log | 記録や非常停止などの報告ごとの色を保つ |
 
@@ -90,21 +97,18 @@
 | Ctrl-R / Home（境界にfocus） | その境界を既定へ戻す |
 | Detail | 説明 |
 | --- | --- |
-| — | 入力欄・確認以外では，次の文字keyで操作を要求できます．入力中とdialog中は文字keyのshortcutを抑制します． |
+| — | 入力欄・確認以外では，次の文字keyで操作を要求できます．入力中と dialog 中は文字 key の shortcut を抑制します（Move home 内の `e` は ESTOP）． |
 
 | key | 操作 |
 | --- | --- |
-| `e` | estop |
-| `q` | quit |
-| `h` | home |
-| `s` | save |
-| `d` | discard |
-| `t` | すべてのcontrollerが操作者の入力に従う構成では，[episodeの外でのteleop](../controllers/index.md#teleop) で記録せずにfollowerを動かします（<span class="status status--mock">Mock only</span>）．方策に `teleop:` がある構成では方策からleaderに切り替えます． |
-| `p` | policy（方策に戻す．方策に `teleop:` がある構成だけ） |
-| Detail | 説明 |
-| --- | --- |
-| — | 方策の構成では，`t`・`p` は録画中も使え，使えないときは理由を表示します（[teleopと介入](../policy/intervention.md#teleop)）． |
-| — | [episodeの外でのteleop](../controllers/index.md#teleop) では，Startで現在の姿勢から記録を始め，Stop teleoperatingでfollowerを保持します．teleop中はHomeを使えません．停止したepisodeは，teleopの前に保存か破棄を済ませます．<span class="status status--mock">Mock only</span> |
+| Space | focus 中の操作ボタンを実行する．主操作は `HOLD`・`TELEOP` で開始，`● REC` で停止 |
+| `e` | ESTOP |
+| `q` | 終了 |
+| `h` | 利用できる場合に [Move home](#move-home) を開く |
+| `s` | 保存 |
+| `d` | 破棄 |
+| `r` | 確認後に脱力する．`tune-gravity` では再開 |
+| `t` | episode の外では `TELEOP: OFF ⇄ ON`，`teleop:` がある方策の episode 中は `DRIVER: POLICY ⇄ LEADER` を切り替える．ボタンは現在の状態を表示する．[episode の外での teleop](../controllers/index.md#teleop)，[方策への介入](../policy/intervention.md#teleop) <span class="status status--mock">模擬のみ</span> |
 
 | 別名 | 同じ動作 |
 | --- | --- |
@@ -129,15 +133,15 @@
 
 | Detail | 説明 |
 | --- | --- |
-| — | menuと入力欄から次の操作を使います．各操作の意味は [runの操作](cli.md#run-operations) にあります． |
+| — | 操作ボタンか command 欄を使います．[run の操作](cli.md#run-operations) を参照してください． |
 
 | 操作 | 画面での扱い |
 | --- | --- |
-| `start <task>` | `run` のStartはtask入力へ移動する．開始拒否は警告になり，状態更新は続くので準備後に再操作できる |
+| `start <task>` | `run` の Start は task 入力欄を開く．teleop 中は現在の姿勢から開始する |
 | `stop` | 追従・記録を止める |
-| `save` | 入力欄で `save success`・`save failure` と書くと，評価の成否を付けて保存する（[episodeごとの記録](../data/recording.md#episode-records)）．`success`・`failure` 以外は拒否し，episodeは保存前のまま残る |
+| `save` | 停止中は Save・`Save success`・`Save failure` を選ぶ．成否を付けるボタンは `save success`・`save failure` を送る（[episode ごとの記録](../data/recording.md#episode-records)） |
 | `discard` | episodeを破棄する |
-| `home` | controllerに初期姿勢がある場合だけ有効．到着後も準備状態を再確認する |
+| `home [NAME]` | [Move home](#move-home) か command 欄を使う．`NAME` を省くと設定の既定姿勢へ動く．teleop 中は先にオフへ切り替える．到着後に準備状態を再確認する |
 | `release` | 機器の性質（[脱力したときと放置したときの性質](configuration/followers.md#torque-off-and-unattended)）から，支える機器と物を外す機器を示して確認する |
 | `estop` | 非常停止．送信失敗・送信済みだが未確認・新しいfollower状態でのESTOP確認を区別する．busやdataflowが切断されている場合の到達は保証できない |
 | `quit` | 終了確認を開く |
@@ -147,6 +151,17 @@
 | `queued for save (N pending)` | recorderが `save` を受け付けた <span class="status status--mock">模擬のみ</span> |
 | `saved episode N 'task' (F frames)` | backgroundでの書き込みが完了した．同じ行に品質の指標が続くことがある <span class="status status--mock">模擬のみ</span> |
 | `episode 'task' was not saved: ...` | backgroundでの書き込みが失敗し，そのepisodeを破棄した <span class="status status--mock">模擬のみ</span> |
+
+### Move home { #move-home }
+
+<span class="status status--mock">模擬のみ</span>
+
+| 項目・key | 動作 |
+| --- | --- |
+| `Pose`・`worst joint`・`dist`・`time` | 姿勢，推定時間が最も長い follower のうち移動量が最大の関節，その移動量（follower の単位），推定時間．設定した timeout を超える見込みの場合は `> timeout!` が出る |
+| 利用できない姿勢 | 理由を表示し，選択を無効にする |
+| `Moves:` | 動く機器 |
+| Enter / Esc / `e` | 選択した姿勢へ動かす / cancel / ESTOP |
 
 ### Exit confirmation { #exit-confirmation }
 
@@ -175,22 +190,22 @@
 
 | 項目 | 動作 |
 | --- | --- |
-| 開始 | 毎回，準備後にStartを選ぶ．`record --home` は毎回homeへ移動する |
+| 開始 | 準備後に Start を選ぶ．`record --home [NAME]`・`infer --home [NAME]` は episode ごとに初期姿勢へ動く |
 | 保存 | 既定では `record` は自動で保存し，`infer` はtaskがある場合に自動で保存する．Stopでepisodeを早く終えた場合も，同じ保存方針を適用する |
-| 保存確認 | 時間・step数・Stopでepisodeが止まると，`--confirm` では `stopped: save or discard (episode k/N)` と表示する．Saveを選べば保存し，`save success`・`save failure` を入力すれば成否を付けて保存する．Discardで破棄できる．判断を待つ間はStartとTeleopを無効にする．書き込みが終わるか，保存待ちに入った時点で回数に数える <span class="status status--mock">模擬のみ</span> |
+| 保存確認 | 時間・step 数・Stop で episode が止まると，`--confirm` では `STOPPED — save or discard` と表示する．Save・`Save success`・`Save failure`・Discard から選ぶ．開始や teleop の前に保存か破棄を済ませる．書き込み完了時か保存待ちに入った時点で回数に数える． <span class="status status--mock">模擬のみ</span> |
 | Discard | 記録計画では，記録中も保存確認を待つ間もDiscardでepisodeを破棄できる．同じepisode番号を再び準備し，homeの指定があれば初期姿勢へ移動する <span class="status status--mock">模擬のみ</span> |
-| 回数 | 指定回数が完了すると終了確認が開く．回数は目安で，終了確認を閉じると，HomeやTeleopでrobotを動かし，Startで次のepisodeを続けられる（表示は `episode 3 (2 planned)`）．`--plain` は指定回数で終わる |
+| 回数 | 指定回数が完了すると終了確認が開く．回数は目安で，終了確認を閉じると，Move home や teleop の切り替えでrobotを動かし，Startで次のepisodeを続けられる（表示は `episode 3 (2 planned)`）．`--plain` は指定回数で終わる |
 | Detail | 説明 |
 | --- | --- |
-| — | episode中は，上部に進み具合が出ます． |
-| — | `episode 2/10  step 137/500  [█████░░░░░░░░░░░░░░░] 27%  at most 72.6 s left` |
-| — | `step` は方策が実行した行動の数で，長さをstep数で決めたとき（`infer --steps`，実験fileの `steps`）に出ます．そのepisodeは，方策が指定の手数を実行した時点で終わります．秒数で決めたときは，経過時間の割合が出ます． |
+| — | episode 中は状態 banner の2行目に進捗が出ます． |
+| — | `● REC  episode 2/10  137/500  00:27 / 01:40  [██░░░░░░░░] 27%` |
+| — | step の表示は方策が実行した行動の数で，長さを step 数で決めたとき（`infer --steps`，実験fileの `steps`）に出ます．そのepisodeは，方策が指定の手数を実行した時点で終わります．秒数で決めたときは，経過時間の割合が出ます． |
 
 ## Gravity tuning { #gravity-tuning }
 
 | Detail | 説明 |
 | --- | --- |
-| — | `tune-gravity` は別commandのままです（[`roboloom tune-gravity`](cli.md#tune-gravity)）．同じbusを開くdataflowを先に止めます．一覧で関節を選び，Detailsで関節の説明と実測・model・送信電流（mA）を確認します．menuと入力欄で次を共用します． |
+| — | `tune-gravity` は別commandのままです（[`roboloom tune-gravity`](cli.md#tune-gravity)）．同じbusを開くdataflowを先に止めます．一覧で関節を選び，Detailsで関節の説明と実測・model・送信電流（mA）を確認します．`OptionList` と command 欄で次を共用します． |
 | — | `joint <name>`<br>`gain +`<br>`gain -`<br>`hold +`<br>`hold -`<br>`compare`<br>`resume`<br>`save`<br>`estop`<br>`quit` |
 
 | key | 動作 | 範囲 |
@@ -198,6 +213,7 @@
 | `]` / `[` | 選んだ関節のgainを上げる・下げる | 0.1刻みで[0, 3] |
 | `=` / `-` | holdを上げる・下げる | 5 mA刻みで[0, 100] |
 | `0` | 重力の比較 | — |
+| `j` / `k` | 次または前の関節を選ぶ | — |
 | `r` | 支持後に通常のSTOPPEDから再開する | — |
 | Ctrl-G | 次の制御処理で脱力してESTOPをlatchする．再起動までresumeでも再通電できない | — |
 | Detail | 説明 |

@@ -52,7 +52,7 @@ home:
 ```
 
 - followerが複数のときは，`home: {left: {...}, right: {...}}` のようにfollowerごとに書きます．書かなかったfollowerは動きません．
-- `roboloom infer --home` は毎回のepisodeの前に動かします．launcherの `infer` でも「Move home before every episode」を選べます．操作画面の `home`，Pythonの `Session.home()`・`Session.record(..., home=True)` も同じです．
+- `roboloom infer --home [NAME]` は episode ごとに初期姿勢へ動かします．`NAME` を省くと既定姿勢を使います．launcher では `Move home before every episode` を有効にして姿勢を選びます．操作画面では [Move home](../reference/operator-screen.md#move-home)，Python では `Session.home(pose=...)` または `Session.record(..., home=...)` を使います． <span class="status status--mock">模擬のみ</span>
 - 到着は，送った目標ではなく測った関節で確かめます．移動のあと，すべての関節が `tolerance` 以内に入れば `reached` です．2秒たっても入らなければ `short` として関節名と差を表示し，`home` は失敗，`start` は拒否します．
 - 開始前の検査は `home` と同じく，録画中・追従中は `home` を拒否し，移動中は `start` を拒否します．
 - `teleop:` のある構成では，`home` はleaderも一緒に動かします（[teleopと介入](intervention.md#behavior)）．

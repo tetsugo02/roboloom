@@ -268,7 +268,7 @@ uv run roboloom infer --experiment path/to/file.yaml
 | `task` | 文字列 | — | — | `--task` の値 |
 | `seconds` | 数値 | — | s | `--seconds` の値 |
 | `episodes` | 整数 | — | — | `--episodes` の値 |
-| `home` | 真偽値 | — | — | `--home` の値 |
+| `home` | `true` / `false` / `<name>` | `false` | — | episode ごとに既定姿勢へ動く（`true`），移動を省く（`false`），または名前で姿勢を選ぶ（`<name>`）．[home](control.md#home) を参照 |
 | `confirm` | 真偽値 | `false` | — | `true` で `record` と `infer` の [`--confirm`](../cli.md#record) を有効にする．command lineの `--confirm` が優先 <span class="status status--mock">模擬のみ</span> |
 | `steps` | 整数 | — | 手 | `infer --steps` の値．episodeを，方策が実行した行動の数で終える．`seconds` とは同時に書けない |
 

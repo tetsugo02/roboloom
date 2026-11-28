@@ -48,14 +48,16 @@ command_deadline_ms: 300
   since its observation (`dropped`). Queue empty first: followers hold (`late_inference`).
   No blending of chunks; LeRobot RTC: not supported. A chunk must start at its
   observation's time: `roboloom.policy.replay:load` refuses async (`spec.inference`).
-- `home: {pose, max_speed, tolerance[, timeout_s]}` (several followers: `{follower: {...}}`)
-  moves the followers to a `capture-pose` pose with `home` / `Session.home()` /
-  `infer --home`. Arrival is measured: every joint within `tolerance` within 2 s after the
-  move (`reached`), else `short` – home fails and start is refused. Same for teleop homes.
+- `home: {pose, max_speed, tolerance[, timeout_s][, choices]}` (several followers: `{follower: {...}}`)
+  moves the followers to a saved pose with `home [NAME]`, `Session.home(pose=...)`, or
+  `infer --home [NAME]`. See [home configuration](configuration.md#controllers-and-followers).
+  Every joint must come within `tolerance` within 2 s after the move (`reached`).
+  Otherwise the move reports `short` and start is refused. The same applies to teleop homes.
 - `teleop: [controller.yaml]` (Rakuda2 option `policy_teleop`, dataset `-eval-teleop`):
   session commands `teleop` (outside an episode: drive with the leader, unrecorded;
   during one: an intervention), `policy` (hand back during an episode), `stop_teleop`
-  (end teleop outside an episode); `Session.teleop()/policy()/stop_teleop()`, keys `t`/`p`.
+  (end teleop outside an episode). Python uses `Session.teleop()`, `Session.policy()`,
+  and `Session.stop_teleop()`. The screen uses one `t` toggle for both directions.
   `Session.stop_teleop()` returns once every follower holds.
   Joints are taken over one by one: each holds until the leader is within the teleop
   controller's `alignment_tolerance` or crosses it (a gripper stays closed until the
@@ -100,7 +102,8 @@ command_deadline_ms: 300
 
 - With `teleop:` and `home:`, `home` moves the teleop leader to the pose as well; leader
   joints in a `law: position` group stay there afterwards (e.g. torso and head, to keep
-  the camera angle while Teleop moves the arms). Order: `home`, Teleop if needed, `start`.
+  the camera angle while the leader moves the arms). Order: `home`, toggle teleop on
+  if needed, then `start`.
 
 ## Writing a policy
 

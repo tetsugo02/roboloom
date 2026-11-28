@@ -34,11 +34,14 @@ action_horizon: 8
 # hold: []  # e.g. [follower.torso_yaw, follower.head_yaw, follower.head_pitch]
 max_speed: {follower: 1024}  # per follower, in its unit/s (counts/s here)
 command_deadline_ms: 300
-# Optional saved start pose: `home` (infer --home, Session.home()) moves the follower
-# there slowly before an episode. Save it with `roboloom capture-pose <name>`.
+# Optional saved start poses: `infer --home [NAME]` moves the follower there slowly
+# before each episode. Save poses with `roboloom capture-pose <name>`.
+# Set the default with pose. Extra poses in ../poses/follower/*.yaml are discovered
+# automatically if `choices:` is omitted. Set `choices:` to filter by name (include the default).
 # Arrival is measured: every joint within tolerance (counts) within 2 s of the move.
 # home:
 #   pose: ../poses/follower/ready.yaml
+#   # choices: [ready, park]
 #   max_speed: 200  # counts/s, at most max_speed above
 #   tolerance: 30
 #   timeout_s: 30

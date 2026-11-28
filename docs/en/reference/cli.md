@@ -41,11 +41,11 @@ A running `run` takes these operations from the operator screen or from [`robolo
 | `teleop` | Drive the followers with operator input. See [teleop outside an episode](../controllers/index.md#teleop) (<span class="status status--mock">Mock only</span>) and [teleoperation and interventions](../policy/intervention.md#teleop) for availability. |
 | `stop_teleop` | End teleop and hold the followers outside an episode. See [teleop outside an episode](../controllers/index.md#teleop) (<span class="status status--mock">Mock only</span>) and [teleoperation and interventions](../policy/intervention.md#teleop). |
 | `release` | Stop following and release actuated inputs and followers after confirming support |
-| `home` | Move the leader and follower slowly to the initial pose chosen in the controller; after arriving the leader returns to its normal laws |
+| `home [NAME]` | Move slowly to the configured default poses or the named pose. An actuated leader moves with its follower and returns to its normal laws after arrival |
 | `estop` | Emergency stop |
 | `quit` | Open the exit confirmation: Cancel, follower hold, choose options again, or supported release |
 
-The Textual operations menu shows unavailable actions with reasons, including `home` without a configured pose. Ctrl-L opens the editable command input; Ctrl-G requests emergency stop. Ctrl-C and Ctrl-Q open the same exit dialog, initially selecting Cancel. See [Operator screen](operator-screen.md) for keys, panes, confirmations, fixed-duration modes, and extension contracts.
+Textual shows state-specific action buttons and explains refusals. Ctrl-L opens the editable command input; Ctrl-G requests emergency stop. Ctrl-C and Ctrl-Q open the same exit dialog, initially selecting Cancel. See [Operator screen](operator-screen.md) for keys, panes, confirmations, fixed-duration modes, and extension contracts.
 
 `run --plain` retains line input; `record --plain` and `infer --plain` start episodes automatically. Non-TTY invocation follows the same path. The `--confirm` prompt requires a TTY on stdin. `tune-gravity` requires a TTY before device open. Python API Rich displays and prompts retain their existing behavior.
 `stop` does not turn off torque. `FAULT` / `ESTOP` / `RELEASED` do not recover automatically. The start and shutdown procedure on hardware is in [Rakuda2: teleoperated collection](../tutorials/rakuda2/collect.md).
@@ -185,7 +185,7 @@ Collect episodes of a fixed length, then exit. Select Start for each episode onc
 <span class="status status--mock">Mock only</span> With [background saving](../data/recording.md#background-saving), `--plain` waits for queued saves after the last episode and prints the saved results. The operator screen logs results as they arrive and waits for the queue on confirmed exit.
 
 ```text
-roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--confirm] [--plain] [COMMON_OPTIONS]
+roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home [NAME]] [--confirm] [--plain] [COMMON_OPTIONS]
 ```
 
 | Option | Type | Default | Description |
@@ -194,7 +194,7 @@ roboloom record [robot] --task TEXT --seconds N [--episodes N] [--home] [--confi
 | `--task TEXT` | str | required (or `task:` in the experiment file) | Task text stored with every frame |
 | `--seconds N` | float | required (or `seconds:` in the experiment file) | Length of an episode, in seconds |
 | `--episodes N` | int | 1 | Number of episodes |
-| `--home` | flag | off | Move to the controller's initial pose before every episode |
+| `--home [NAME]` | flag or pose name | off | Move to the controllers' default poses or the named pose before every episode |
 | `--confirm` | flag | off | Ask whether to save or discard after each episode. In plain mode, stdin must be a TTY. Answer `save`, `save success`, `save failure`, or `discard` (`s` and `d` also work). Discard repeats the episode number. EOF or Ctrl-C discards it and ends the run. <span class="status status--mock">Mock only</span> |
 | `--plain` | flag | off | Start episodes automatically without the operator screen |
 | Common options | — | — | [Common options](#common-options) |
@@ -210,7 +210,7 @@ uv run roboloom record --task "pick up the cup" --seconds 30 --home
 Run episodes with a policy. Enables the option `policy` automatically. Saving requires a task from `--task` or the experiment file ([Running a policy](../policy/run.md)).
 
 ```text
-roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--confirm] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
+roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home [NAME]] [--confirm] [--policy MODULE:CALLABLE] [--policy-kwargs JSON] [--task TEXT] [--plain] [COMMON_OPTIONS]
 ```
 
 | Option | Type | Default | Description |
@@ -219,7 +219,7 @@ roboloom infer [robot] (--seconds N | --steps N) [--episodes N] [--home] [--conf
 | `--seconds N` | float | this or `--steps` is required (or the experiment file) | Length of an episode, in seconds |
 | `--steps N` | int | — | End each episode after this many actions of the policy (at least 1; not together with `--seconds`) |
 | `--episodes N` | int | 1 | Number of episodes |
-| `--home` | flag | off | Move to the policy's initial pose before every episode ([policy home](../policy/run.md#home)) |
+| `--home [NAME]` | flag or pose name | off | Move to the policy's default poses or the named pose before every episode ([policy home](../policy/run.md#home)) |
 | `--policy MODULE:CALLABLE` | str | the YAML's `factory` | The callable returning the policy |
 | `--policy-kwargs JSON` | JSON | the YAML's `kwargs` | Its arguments |
 | `--task TEXT` | str | — | Task given to the policy; with it, runs are saved |
@@ -237,18 +237,20 @@ uv run roboloom infer --experiment drawer         # configs/roboloom/drawer.yaml
 Send one operation to a running `run`.
 
 ```text
-roboloom session [robot] <operation> [task]
+roboloom session [robot] <operation> [argument]
+roboloom session [robot] home [NAME]
 ```
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `robot` | robot name or path | the only robot | The configuration of the running `run` (whatever its options) |
 | `operation` | one of below | required | `start`, `stop`, `save`, `discard`, `home`, `estop`, `release`, `quit`; with `teleop:` in the policy also `teleop`, `policy`, `stop_teleop` ([teleoperation and interventions](../policy/intervention.md#teleop)). When every controller follows operator input, `teleop` and `stop_teleop` are available for [teleop outside an episode](../controllers/index.md#teleop) without recording. <span class="status status--mock">Mock only</span> |
-| `task` | str | — | For `start` the task; for `save` the verdict (`success` or `failure`) |
+| `argument` | str | — | Task for `start`, verdict (`success` or `failure`) for `save`, pose name for `home`. Omit `NAME` to use each controller's configured default |
 
 ```bash
 uv run roboloom session home
-uv run roboloom session save success               # from another terminal: save with the verdict
+uv run roboloom session home ready
+uv run roboloom session save success
 ```
 
 ## roboloom serve-policy { #serve-policy }
