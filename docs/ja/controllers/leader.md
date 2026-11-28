@@ -94,7 +94,7 @@ couplings:
 
 ## 初期姿勢へ動かす（home）
 
-保存した初期姿勢へ，leaderとfollowerを `home` の操作でゆっくり動かせます．episodeを毎回同じ姿勢から始めるためのものです．着いてから1秒後，leaderは通常の制御（重力補償とbreakaway hold）に戻るので，そのまま手で持って操作を始められます．
+保存した初期姿勢へ，leaderとfollowerを `home` の操作でゆっくり動かせます．episodeを毎回同じ姿勢から始めるためのものです．着いてから1秒後，leaderは通常の制御（重力補償とbreakaway hold）に戻るので，そのまま手で持って操作を始められます．すべてのcontrollerが操作者の入力に従う構成では，[episodeの外でのteleop](index.md#teleop)（`t`，<span class="status status--mock">Mock only</span>）で，そこから記録せずに腕を動かせます．
 
 **1. 姿勢を保存します．** followerを使いたい姿勢にしてから，dataflowを止めた状態で実行します．名前ごとに `poses/<follower>/<name>.yaml` が作られ，いくつでも保存できます．同じ名前は `--force` なしでは上書きしません．fileには保存したfollowerの名前が入り，別のfollowerでは読み込めません（左腕の姿勢を右腕で使う事故を防ぐため）．followerが複数ある設定では，`capture-pose left ready` のようにfollowerを指定します．
 
@@ -102,7 +102,7 @@ couplings:
 uv run roboloom capture-pose ready
 ```
 
-followerを姿勢にするには，遠隔操作で動かしてから `quit` で `hold`（followerを保持したまま終了）とするか，`release` 後に手で動かします．`capture-pose` はfollowerの位置を読むだけで，動かしません．busを開くときの通常の起動時の検査は行います．
+followerを姿勢にするには，遠隔操作（teleop `t`，記録なし）で動かしてから `quit` で `hold`（followerを保持したまま終了）とするか，`release` 後に手で動かします．`capture-pose` はfollowerの位置を読むだけで，動かしません．busを開くときの通常の起動時の検査は行います．
 
 **2. controllerのYAMLで使う姿勢を選びます．**
 

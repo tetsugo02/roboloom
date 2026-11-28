@@ -48,6 +48,11 @@ options: {}                     # see below
 | `parts` | exactly one, split into parts (mock-verified only) | `parts: [a.yaml, b.yaml]` (inner controller files); each inner controller has `followers: [<follower>.<part>, ...]` and its own `input`; parts come from the follower model (Rakuda2: `body`, `right_arm`, `right_gripper`, `left_arm`, `left_gripper`) or the follower YAML's `parts: {name: [joints]}`; a joint has at most one inner controller, undriven joints hold, and a part whose controller stopped commanding (input lost, released, or past its `command_deadline_ms`) gets the follower's held target, not its old one; no inner `home`/`feedback` |
 | `policy` | every follower, in configuration order | `factory`, `kwargs`, `observe`, `rate_hz`, `interpolation_multiplier`, `action_horizon`, `max_speed` per follower, `command_deadline_ms`, optional `observation_history` (1), `hold` ([]), `inference` (sync\|async), `replan_at` (auto), `interpolation` (linear\|pchip) |
 
+Teleop outside an episode is available when every controller follows operator input
+(Mock only). This covers `joint`, `pose_ik`, `parts` with operator-driven inner
+controllers, and custom controllers with `follows_operator()` returning true.
+A policy with `teleop:` supports taking over and handing back to the policy.
+
 A multi-follower controller sends nothing until every follower reported state, and stops
 commanding all of them when one latches `FAULT`/`ESTOP` or goes stale; it waits to
 re-align before commanding again.

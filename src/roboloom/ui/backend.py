@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import cast
 
 from ..config import CONFIG_FILE
+from ..controllers.teleop import teleop_mode
 from ..core.traits import ending_note
 from ..errors import Cancelled
 from ..runtime.node import start_warning
@@ -145,22 +146,23 @@ class SessionBackend:
                         int(item.get("t_ns", 0)),
                     )
                 )
-            teleop = next(
-                (
-                    n
-                    for n, c in session.cfg.controllers.items()
-                    if getattr(c, "teleop", None)
-                ),
-                None,
-            )
-            control = (
-                status.get(teleop, {}).get("fields", {}).get("control")
-                if teleop
-                else None
-            )
+            mode = teleop_mode(session.cfg.controllers)
+            control = None
+            if mode is not None and mode.policy is not None:
+                control = status.get(mode.policy, {}).get("fields", {}).get("control")
+            elif (
+                mode is not None
+                and not self._recording
+                and any(
+                    status.get(f, {}).get("fields", {}).get("armed")
+                    for f in session.cfg.followers
+                )
+            ):
+                control = "teleop"
             caps = Capabilities(
                 home=any(c.homes for c in session.cfg.controllers.values()),
-                teleop=teleop is not None,
+                teleop=mode is not None,
+                handback=mode is not None and mode.handback,
                 release=bool(session.torqued or session.actuated),
                 hold=bool(session.held),
                 torqued=bool(session.torqued),
@@ -216,7 +218,8 @@ class SessionBackend:
                     caps.home
                     and not self._busy
                     and not self._episode
-                    and not self._estop,
+                    and not self._estop
+                    and control != "teleop",
                     (
                         "no home pose"
                         if not caps.home
@@ -224,6 +227,8 @@ class SessionBackend:
                         if self._episode
                         else "ESTOP: restart required"
                         if self._estop
+                        else "stop teleoperating first"
+                        if control == "teleop"
                         else busy_reason
                     ),
                 ),
@@ -260,21 +265,26 @@ class SessionBackend:
     def _teleop_operations(
         self, caps: Capabilities, control: object, busy_reason: str
     ) -> tuple[Operation, ...]:
-        """Teleop / Policy / Stop teleop of a policy with `teleop:` (none otherwise).
-        During an episode they are allowed while the recording runs."""
+        """Teleop and Stop teleop for operator input, plus Policy when hand-back is
+        available. A policy allows Teleop and Policy while recording an intervention."""
         if not caps.teleop:
             return ()
-        busy = "" if self._recording else busy_reason
+        busy = "" if self._recording and caps.handback else busy_reason
         teleop_reason = (
             "ESTOP: restart required"
             if self._estop
-            else busy
-            or ("already teleoperating" if control == "teleop" else "")
+            else (
+                "the input already drives the episode"
+                if self._recording and not caps.handback
+                else ""
+            )
             or (
                 "stopped episode: save or discard first"
                 if self._episode and not self._recording
                 else ""
             )
+            or busy
+            or ("already teleoperating" if control == "teleop" else "")
         )
         policy_reason = (
             "only during an episode (start begins with the policy)"
@@ -284,20 +294,33 @@ class SessionBackend:
             else ""
         )
         stop_reason = (
-            "during an episode: Stop, or Policy to hand back"
+            (
+                "during an episode: Stop, or Policy to hand back"
+                if caps.handback
+                else "during an episode: Stop"
+            )
             if self._episode
             else busy_reason or ("not teleoperating" if control != "teleop" else "")
         )
+        teleop = Operation(
+            "teleop",
+            "Teleoperate (take over)"
+            if caps.handback
+            else "Teleoperate (no recording)",
+            not teleop_reason,
+            teleop_reason,
+        )
+        stop = Operation(
+            "stop_teleop", "Stop teleoperating", not stop_reason, stop_reason
+        )
+        if not caps.handback:
+            return (teleop, stop)
         return (
-            Operation(
-                "teleop", "Teleoperate (take over)", not teleop_reason, teleop_reason
-            ),
+            teleop,
             Operation(
                 "policy", "Hand back to policy", not policy_reason, policy_reason
             ),
-            Operation(
-                "stop_teleop", "Stop teleoperating", not stop_reason, stop_reason
-            ),
+            stop,
         )
 
     def submit(self, command: str) -> None:
@@ -488,7 +511,12 @@ class SessionBackend:
             self._phase = "release sent; check node status"
         elif name == "teleop":
             session.teleop()
-            self._phase = "teleoperating: joints follow once the leader reaches them"
+            mode = teleop_mode(session.cfg.controllers)
+            self._phase = (
+                "teleoperating: the followers follow the input (nothing recorded)"
+                if mode is not None and not mode.handback
+                else "teleoperating: joints follow once the leader reaches them"
+            )
         elif name == "policy":
             session.policy()
             self._phase = "recording: the policy drives"

@@ -56,6 +56,7 @@ command_deadline_ms: 300
   session commands `teleop` (outside an episode: drive with the leader, unrecorded;
   during one: an intervention), `policy` (hand back during an episode), `stop_teleop`
   (end teleop outside an episode); `Session.teleop()/policy()/stop_teleop()`, keys `t`/`p`.
+  `Session.stop_teleop()` returns once every follower holds.
   Joints are taken over one by one: each holds until the leader is within the teleop
   controller's `alignment_tolerance` or crosses it (a gripper stays closed until the
   trigger reaches it). Rows a person drove: `action.intervention` = 1. Only `type: joint`

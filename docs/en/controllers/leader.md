@@ -94,7 +94,7 @@ Joint locking and compensation have been verified with mock buses and controller
 
 ## Move to an initial pose (home)
 
-The `home` command moves the leader and the follower slowly to a saved initial pose, so that every episode starts from the same pose. One second after arriving, the leader returns to its normal laws (gravity compensation and breakaway hold), so you can take it and start operating.
+The `home` command moves the leader and the follower slowly to a saved initial pose, so that every episode starts from the same pose. One second after arriving, the leader returns to its normal laws (gravity compensation and breakaway hold), so you can take it and start operating. When every controller follows operator input, use [teleop outside an episode](index.md#teleop) (`t`, <span class="status status--mock">Mock only</span>) to move from there without recording.
 
 **1. Save a pose.** Put the follower in the pose you want, then run this with the dataflow stopped. Each name becomes `poses/<follower>/<name>.yaml`, and any number of poses can be saved. An existing name is not overwritten without `--force`. The file records the follower it was saved on and does not load on another one (so a left-arm pose is never used on the right arm). With several followers, name the follower: `capture-pose left ready`.
 
@@ -102,7 +102,7 @@ The `home` command moves the leader and the follower slowly to a saved initial p
 uv run roboloom capture-pose ready
 ```
 
-To put the follower in the pose, teleoperate it and `quit` with `hold` (exit with the follower holding), or move it by hand after `release`. `capture-pose` only reads the follower's positions and moves nothing. Opening the bus runs the usual startup checks.
+To put the follower in the pose, teleoperate it (Teleop `t`, nothing recorded) and `quit` with `hold` (exit with the follower holding), or move it by hand after `release`. `capture-pose` only reads the follower's positions and moves nothing. Opening the bus runs the usual startup checks.
 
 **2. Choose the pose in the controller YAML.**
 

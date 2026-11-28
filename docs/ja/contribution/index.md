@@ -122,6 +122,8 @@ roboloomに入っていないrobot，入力機器，sensor，controller，estima
         keys = (*FOLLOWER_KEYS, "address")
     ```
 
+- 1つの操作者入力に従う `Controller` の派生class（`uses_input` の既定値は `True`）は，[episodeの外でのteleop](../controllers/index.md#teleop) に対応します．他のcontrollerを内包するcontrollerは，その動作に合わせて `follows_operator()` をoverrideします．<span class="status status--mock">Mock only</span>
+
 - followerに要るものは，関節名と単位，`safety_traits`，`open_bus(mock)` が返すbus（`read_positions`，`write_positions`，`enable_torque`，`close`．`roboloom.drivers.base.JointBus`）です．`mock` がTrueのときは模擬のbusを返します．
 - simulatorは，同じfollowerのclassの後ろに別のbusを置きます．実機と同じ単位で話せば，datasetと方策を共有できます．
 - `control:` の制御則（`roboloom.control`）はDynamixel系のbus（count，mA，Operating Mode）を前提にしています．自前の位置制御を持つrobotでは使いません．

@@ -26,11 +26,12 @@ uv run roboloom run --with gravity
 
 1. robotの状態，sensor取得周期，recorderを確認します．初期姿勢（[home](../../controllers/leader.md)）を設定した場合は，`home` で両方を初期姿勢へ動かしてから始められます．
 2. leaderをfollowerに揃え，controllerの `following` を確認します．`aligning` の警告中は，姿勢を合わせてから開始を再試行します．
-3. `start pick up the cup` で追従・記録を始め，leaderで操作します．
-4. `stop` で止めます．`stop` はfollowerを保持し，脱力はしません．
-5. `save` でepisodeを保存に回すか，`discard` で破棄します．Logsで保存完了後の欠損率・指令の有効率・制御周期の警告を確認します．
-6. 次の `start <task>` で別episodeを収集できます．
-7. 終了時は `stop` → 保存または破棄 → leaderとfollowerの腕を支えて `quit` の順に操作し，確認で保持または支持後の脱力を明示選択します．初期選択はcancelです．
+3. 必要なら `t`（`teleop`）で [episodeの外でのteleop](../../controllers/index.md#teleop) を使い，記録せずにfollowerをleaderに従わせます．たとえば `home` からepisodeを始める姿勢まで腕を動かします．`stop_teleop` で再びfollowerを保持します．<span class="status status--mock">Mock only</span>
+4. `start pick up the cup` で追従・記録を始め，leaderで操作します．
+5. `stop` で止めます．`stop` はfollowerを保持し，脱力はしません．
+6. `save` でepisodeを保存に回すか，`discard` で破棄します．Logsで保存完了後の欠損率・指令の有効率・制御周期の警告を確認します．
+7. 次の `start <task>` で別episodeを収集できます．
+8. 終了時は `stop` → 保存または破棄 → leaderとfollowerの腕を支えて `quit` の順に操作し，確認で保持または支持後の脱力を明示選択します．初期選択はcancelです．
 
 異常時の `estop` はlatchされ，自動復帰しません．物理的な支持・停止手段を使える状態で操作してください．
 

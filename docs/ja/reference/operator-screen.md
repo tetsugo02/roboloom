@@ -99,11 +99,12 @@
 | `h` | home |
 | `s` | save |
 | `d` | discard |
-| `t` | teleop（leaderに切り替える．方策に `teleop:` がある構成だけ） |
+| `t` | すべてのcontrollerが操作者の入力に従う構成では，[episodeの外でのteleop](../controllers/index.md#teleop) で記録せずにfollowerを動かします（<span class="status status--mock">Mock only</span>）．方策に `teleop:` がある構成では方策からleaderに切り替えます． |
 | `p` | policy（方策に戻す．方策に `teleop:` がある構成だけ） |
 | Detail | 説明 |
 | --- | --- |
-| — | `t`・`p` は録画中も使え，使えないときは理由を表示します（[teleopと介入](../policy/intervention.md#teleop)）． |
+| — | 方策の構成では，`t`・`p` は録画中も使え，使えないときは理由を表示します（[teleopと介入](../policy/intervention.md#teleop)）． |
+| — | [episodeの外でのteleop](../controllers/index.md#teleop) では，Startで現在の姿勢から記録を始め，Stop teleoperatingでfollowerを保持します．teleop中はHomeを使えません．停止したepisodeは，teleopの前に保存か破棄を済ませます．<span class="status status--mock">Mock only</span> |
 
 | 別名 | 同じ動作 |
 | --- | --- |

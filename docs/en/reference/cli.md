@@ -38,6 +38,8 @@ A running `run` takes these operations from the operator screen or from [`robolo
 | `stop` | Stop following and recording (saving is a separate operation) |
 | `save` | Save the stopped episode. By default, acknowledge when queued. [Background saving](../data/recording.md#background-saving) <span class="status status--mock">Mock only</span> |
 | `discard` | Discard the episode |
+| `teleop` | Drive the followers with operator input. See [teleop outside an episode](../controllers/index.md#teleop) (<span class="status status--mock">Mock only</span>) and [teleoperation and interventions](../policy/intervention.md#teleop) for availability. |
+| `stop_teleop` | End teleop and hold the followers outside an episode. See [teleop outside an episode](../controllers/index.md#teleop) (<span class="status status--mock">Mock only</span>) and [teleoperation and interventions](../policy/intervention.md#teleop). |
 | `release` | Stop following and release actuated inputs and followers after confirming support |
 | `home` | Move the leader and follower slowly to the initial pose chosen in the controller; after arriving the leader returns to its normal laws |
 | `estop` | Emergency stop |
@@ -241,7 +243,7 @@ roboloom session [robot] <operation> [task]
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `robot` | robot name or path | the only robot | The configuration of the running `run` (whatever its options) |
-| `operation` | one of below | required | `start`, `stop`, `save`, `discard`, `home`, `estop`, `release`, `quit`; with `teleop:` in the policy also `teleop`, `policy`, `stop_teleop` ([teleoperation and interventions](../policy/intervention.md#teleop)) |
+| `operation` | one of below | required | `start`, `stop`, `save`, `discard`, `home`, `estop`, `release`, `quit`; with `teleop:` in the policy also `teleop`, `policy`, `stop_teleop` ([teleoperation and interventions](../policy/intervention.md#teleop)). When every controller follows operator input, `teleop` and `stop_teleop` are available for [teleop outside an episode](../controllers/index.md#teleop) without recording. <span class="status status--mock">Mock only</span> |
 | `task` | str | — | For `start` the task; for `save` the verdict (`success` or `failure`) |
 
 ```bash

@@ -18,6 +18,7 @@ from roboloom.config import RobotConfig, env_options, parse_config, read_config
 from roboloom.control.trace import FollowerTrace
 from roboloom.controllers.base import Controller, FollowerView
 from roboloom.controllers.policy import PolicyController
+from roboloom.controllers.teleop import teleop_mode
 from roboloom.core.protocol import Envelope, Publisher
 from roboloom.core.source import Source
 from roboloom.core.status import GcPauses, StatusReporter
@@ -38,8 +39,8 @@ COMMANDS = (
     "release",
     "home",
     "quit",
-    # a policy with `teleop:`: drive with the leader (before or during an episode), hand
-    # back to the policy during an episode, stop teleoperating outside one
+    # drive with operator input before an episode or during a policy intervention.
+    # Hand back to the policy during an episode, or stop teleoperating outside one.
     "teleop",
     "policy",
     "stop_teleop",
@@ -99,23 +100,33 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
                 f"{n} episodes are waiting to be saved (max_pending_saves {m}); "
                 "wait, then retry start"
             )
+    return controller_warning(cfg, latest, now_ns)
+
+
+def controller_warning(
+    cfg: RobotConfig, latest: dict[str, dict], now_ns: int, retry: str = "start"
+) -> str | None:
+    """Why the controllers may not drive the followers yet (not ready, not aligned,
+    moving home), or None. `retry` names the operation the messages tell to retry."""
     for name in cfg.controllers:
         status = latest.get(name)
         # Reports arrive at 4 Hz; never start from missing or outdated readiness.
         if status is None or not 0 <= now_ns - status["t_ns"] <= 1_000_000_000:
-            return f"{name}: no recent controller status; wait and retry start"
+            return f"{name}: no recent controller status; wait and retry {retry}"
         fields = status["fields"]
         state = fields.get("state")
         if state == "aligning":
             return (
                 f"{name}: move the leader: {fields.get('worst_joint')} differs by "
                 f"{fields.get('worst_diff')} (tolerance {fields.get('tolerance')}); "
-                "align the leader with the follower, then retry start"
+                f"align the leader with the follower, then retry {retry}"
             )
         if state == "failed":  # e.g. the policy did not load: waiting does not help
             return f"{name}: controller failed: {fields.get('error') or 'see its log'}"
         if state not in READY:
-            return f"{name}: controller is {state}; wait until ready, then retry start"
+            return (
+                f"{name}: controller is {state}; wait until ready, then retry {retry}"
+            )
         controller = cfg.controllers[name]
         pair = [
             *controller.followers,
@@ -126,7 +137,7 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
             if moving.get("home_state") in ("moving", "settling"):
                 return (
                     f"{node} is still moving home ({moving.get('home')}); "
-                    "wait, then retry start"
+                    f"wait, then retry {retry}"
                 )
             if node in cfg.followers and moving.get("home_state") == "short":
                 return f"{node}: {home_short(moving)}"
@@ -138,7 +149,7 @@ def start_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str
             return (
                 f"{name}: the follower is not at the leader: {fields.get('worst_joint')} "
                 f"differs by {diff} (tolerance {tolerance}); hold the leader still near "
-                "the follower, then retry start"
+                f"the follower, then retry {retry}"
             )
     return None
 
@@ -192,13 +203,39 @@ def home_warning(cfg: RobotConfig, latest: dict[str, dict], now_ns: int) -> str 
     for name in cfg.followers:
         fields = latest.get(name, {}).get("fields", {})
         if fields.get("armed"):
-            return f"{name} is following; stop it before moving home"
+            return (
+                f"{name} is following; stop it (stop, or stop_teleop) before moving "
+                "home"
+            )
     return None
 
 
-def _teleop_policy(cfg: RobotConfig) -> str | None:
-    return next(
-        (n for n, c in cfg.controllers.items() if getattr(c, "teleop", None)), None
+def _follower_warning(cfg: RobotConfig, latest: dict[str, dict]) -> str | None:
+    for follower in cfg.followers:
+        fields = latest.get(follower, {}).get("fields", {})
+        if fields.get("mode") in FollowerSafety.LATCHED:
+            return f"{follower} is {fields.get('mode')}; restart to teleoperate"
+        if fields.get("home_state") in ("moving", "settling"):
+            return f"{follower} is moving home; wait, then retry teleop"
+    return None
+
+
+def _operator_teleop_warning(
+    cfg: RobotConfig, command: str, latest: dict[str, dict], now_ns: int
+) -> str | None:
+    """Check operator teleop commands. Outside an episode, `stop_teleop` is idempotent
+    and accepted regardless of the last reported armed state."""
+    recording = latest.get("recorder", {}).get("fields", {}).get("state") == "recording"
+    if command == "policy":
+        return "no policy: the input drives the followers"
+    if command == "stop_teleop":
+        return "during an episode use stop" if recording else None
+    if recording:
+        return "an episode is running: the input already drives"
+    if any(latest.get(f, {}).get("fields", {}).get("armed") for f in cfg.followers):
+        return "already teleoperating"
+    return _follower_warning(cfg, latest) or controller_warning(
+        cfg, latest, now_ns, retry="teleop"
     )
 
 
@@ -206,11 +243,16 @@ def teleop_warning(
     cfg: RobotConfig, command: str, latest: dict[str, dict], now_ns: int
 ) -> str | None:
     """Why `teleop`, `policy` or `stop_teleop` may not run now, or None."""
-    name = _teleop_policy(cfg)
-    if name is None:
-        return "no teleoperation configured (teleop: in the policy YAML)"
+    mode = teleop_mode(cfg.controllers)
+    if mode is None:
+        return (
+            "no teleoperation configured (teleop: in the policy YAML, or "
+            "controllers that follow an operator input)"
+        )
+    if mode.policy is None:
+        return _operator_teleop_warning(cfg, command, latest, now_ns)
     recording = latest.get("recorder", {}).get("fields", {}).get("state") == "recording"
-    control = latest.get(name, {}).get("fields", {}).get("control")
+    control = latest.get(mode.policy, {}).get("fields", {}).get("control")
     if command == "policy":
         if not recording:
             return "no episode running: start one (the policy starts with it)"
@@ -221,13 +263,7 @@ def teleop_warning(
         if recording:
             return "during an episode use stop (or policy to hand back)"
         return None
-    for follower in cfg.followers:
-        fields = latest.get(follower, {}).get("fields", {})
-        if fields.get("mode") in FollowerSafety.LATCHED:
-            return f"{follower} is {fields.get('mode')}; restart to teleoperate"
-        if fields.get("home_state") in ("moving", "settling"):
-            return f"{follower} is moving home; wait, then retry teleop"
-    return None
+    return _follower_warning(cfg, latest)
 
 
 def parse_command(line: str) -> dict:

@@ -18,6 +18,7 @@ from collections.abc import Callable
 
 from rich.text import Text
 
+from ..controllers.teleop import teleop_mode
 from ..errors import Cancelled
 from ..runtime.node import start_warning
 from ..runtime.session import (
@@ -234,9 +235,16 @@ def _keys(
     screen = session.screen
     assert screen is not None
     has_home = any(c.homes for c in session.cfg.controllers.values())
-    teleop = any(getattr(c, "teleop", None) for c in session.cfg.controllers.values())
+    mode = teleop_mode(session.cfg.controllers)
+    teleop = mode is not None
+    handback = mode is not None and mode.handback
     screen.keys = command_line(
-        has_home, (*KEYS, *(("t: teleop", "p: policy") if teleop else ()))
+        has_home,
+        (
+            *KEYS,
+            *(("t: teleop",) if teleop else ()),
+            *(("p: policy",) if handback else ()),
+        ),
     )
     results: list[EpisodeResult] = []
 
@@ -255,13 +263,15 @@ def _keys(
             if ch == "e":
                 session.estop()
                 raise Cancelled("emergency stop: the follower is latched in ESTOP")
-            if teleop and ch in ("t", "p"):
+            if (teleop and ch == "t") or (handback and ch == "p"):
                 try:
                     session.teleop() if ch == "t" else session.policy()
                     session.note(
-                        "teleop: the leader drives"
-                        if ch == "t"
-                        else "the policy drives"
+                        "the policy drives"
+                        if ch == "p"
+                        else "teleop: the leader drives"
+                        if handback
+                        else "teleop: the input drives (nothing recorded)"
                     )
                 except SessionError as exc:  # refused: say why, go on
                     session.note(str(exc), "warn")
@@ -270,6 +280,8 @@ def _keys(
 
         def go_home() -> None:
             """Move home; keys stay live (q, e) while the arms move."""
+            if teleop and not handback:
+                session.stop_teleop()
             sent_ns, limit = session.begin_home()
             deadline = time.monotonic() + limit
             while waiting := session.home_waiting(sent_ns):

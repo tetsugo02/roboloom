@@ -27,6 +27,7 @@ Which controllers, sensors and policies each robot can use. What the labels mean
 | Your own robot | depends on the configuration | — | <span class="status status--mock">Mock only</span> | depends on the configuration | depends on the configuration | — |
 
 - On Rakuda2, locking leader joints (`law: position`) and the torso-yaw compensation (`couplings`) are <span class="status status--mock">Mock only</span> ([Leader](../controllers/leader.md)).
+- [Teleop outside an episode](../controllers/index.md#teleop) is available when every controller follows operator input. <span class="status status--mock">Mock only</span>
 - Configuration examples per robot are in [Rakuda2 controllers](../robots/rakuda2/controllers.md) and [PiPER controllers](../robots/piper/controllers.md).
 
 ## Sensors { #sensors }

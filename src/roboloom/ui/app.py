@@ -519,7 +519,9 @@ class OperatorApp(App[str]):
             "d": "discard",
         }
         if self.snapshot.capabilities.teleop:
-            shortcuts.update({"t": "teleop", "p": "policy"})
+            shortcuts["t"] = "teleop"
+        if self.snapshot.capabilities.handback:
+            shortcuts["p"] = "policy"
         if self.snapshot.capabilities.gravity:
             shortcuts.update(
                 {

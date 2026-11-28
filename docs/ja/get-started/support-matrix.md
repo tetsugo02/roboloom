@@ -27,6 +27,7 @@
 | 自分のrobot | 設定しだい | — | <span class="status status--mock">模擬のみ</span> | 設定しだい | 設定しだい | — |
 
 - Rakuda2のleaderの関節固定（`law: position`）と腰yawの相殺（`couplings`）は <span class="status status--mock">模擬のみ</span> です（[Leader](../controllers/leader.md)）．
+- [episodeの外でのteleop](../controllers/index.md#teleop) は，すべてのcontrollerが操作者の入力に従う構成で使えます．<span class="status status--mock">Mock only</span>
 - 機体ごとの設定例は [Rakuda2のcontroller](../robots/rakuda2/controllers.md) と [PiPERのcontroller](../robots/piper/controllers.md) にあります．
 
 ## sensor { #sensors }

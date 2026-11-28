@@ -122,6 +122,8 @@ A robot, input device, sensor, controller or estimator roboloom does not ship ca
         keys = (*FOLLOWER_KEYS, "address")
     ```
 
+- A `Controller` subclass that follows one operator input (`uses_input` defaults to `True`) supports [teleop outside an episode](../controllers/index.md#teleop). A controller that wraps other controllers overrides `follows_operator()` to describe its own behavior. <span class="status status--mock">Mock only</span>
+
 - A follower needs its joint names and unit, `safety_traits`, and the bus `open_bus(mock)` returns (`read_positions`, `write_positions`, `enable_torque`, `close`; `roboloom.drivers.base.JointBus`). With `mock` true it returns a mock bus.
 - A simulator is another bus behind the same follower class. Speak the real robot's unit and the datasets and policies are shared.
 - The `control:` laws (`roboloom.control`) assume a Dynamixel-like bus (counts, mA, operating modes). A robot with its own position control does not use them.
