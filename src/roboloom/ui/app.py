@@ -821,7 +821,7 @@ class OperatorApp(App[str]):
             button.remove_class(css_class)
             self._flash_timers.pop(button_id, None)
 
-        self._flash_timers[button_id] = self.set_timer(0.25, clear_flash)
+        self._flash_timers[button_id] = self.set_timer(0.4, clear_flash)
 
     def _reject(self, reason: str, button_id: str | None = None) -> None:
         if not self.snapshot.capabilities.gravity:

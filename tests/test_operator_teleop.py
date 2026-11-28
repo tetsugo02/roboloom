@@ -172,19 +172,30 @@ def test_home_says_how_to_end_teleoperation(tmp_path):
     assert "stop_teleop" in home_warning(cfg, _latest(now, armed=True), now)
 
 
-def test_operations_in_operator_mode():
+def test_operations_in_operator_mode(tmp_path):
+    cfg = _config(tmp_path)
+    now = time.monotonic_ns()
+    status = _latest(now)
     backend = SessionBackend(lambda: None)  # type: ignore[arg-type,return-value]
     caps = Capabilities(teleop=True)
-    ops = {o.command: o for o in backend._teleop_operations(caps, None, "")}
-    assert list(ops) == ["teleop", "stop_teleop"]  # no Policy without a policy
-    assert ops["teleop"].enabled and "no recording" in ops["teleop"].label
-    assert "not teleoperating" in ops["stop_teleop"].reason
-    ops = {o.command: o for o in backend._teleop_operations(caps, "teleop", "")}
-    assert not ops["teleop"].enabled and ops["stop_teleop"].enabled
+    ops = {
+        o.command: o
+        for o in backend._teleop_operations(cfg, caps, None, "", status, now)
+    }
+    assert list(ops) == ["teleop"]  # single toggle; no Policy without a policy
+    assert ops["teleop"].enabled and ops["teleop"].label == "TELEOP: OFF"
+    ops = {
+        o.command: o
+        for o in backend._teleop_operations(cfg, caps, "teleop", "", status, now)
+    }
+    assert list(ops) == ["stop_teleop"]
+    assert ops["stop_teleop"].enabled and ops["stop_teleop"].label == "TELEOP: ON"
     backend._episode = backend._recording = True
-    ops = {o.command: o for o in backend._teleop_operations(caps, None, "busy")}
+    ops = {
+        o.command: o
+        for o in backend._teleop_operations(cfg, caps, None, "busy", status, now)
+    }
     assert "already drives" in ops["teleop"].reason
-    assert ops["stop_teleop"].reason == "during an episode: Stop"
 
 
 def test_operator_teleop_waits_for_save_or_discard(tmp_path):

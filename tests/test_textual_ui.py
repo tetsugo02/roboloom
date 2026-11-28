@@ -586,7 +586,7 @@ async def test_refusals_appear_without_opening_logs_and_flash_available_targets(
         assert "leader is unaligned" == _status_text(app, "#action-hint")
         toggle = app.query_one("#act-teleop", Button)
         assert toggle.has_class("flash-reject", "unavailable") and not toggle.disabled
-        await pilot.pause(0.3)
+        await pilot.pause(0.45)
         assert not toggle.has_class("flash-reject")
         assert "leader is unaligned" == _status_text(app, "#action-hint")
         await pilot.click(toggle)

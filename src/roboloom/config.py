@@ -309,7 +309,7 @@ def load_experiment(
         isinstance(episodes, bool) or not isinstance(episodes, int) or episodes < 1
     ):
         raise ConfigError(f"{where}.episodes: expected a whole number, at least 1")
-    if "home" in raw and not (
+    if home is not None and not (
         isinstance(home, bool) or (isinstance(home, str) and home.strip())
     ):
         raise ConfigError(
