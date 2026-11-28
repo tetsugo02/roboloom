@@ -133,7 +133,7 @@ s.record(lambda info: input(f"task for episode {info.index}: "), seconds=20)
 - `Session.launch` を呼んだprocessが終わると，どう終わった場合でも（強制終了，例外，端末を閉じた），dataflowは記録中のepisodeを破棄し，followerを保持させて終わります．`close()` を呼ばずに放置しても，robotが方策で動き続けることはありません．`multiprocessing` などで作った子processが残っている間は，終わったと見なされません．
 - `home(timeout=None)`：leaderとfollowerを，controllerで選んだ初期姿勢へゆっくり動かし，両方が着くまで待ちます．着かないときや拒否されたときは `SessionError` です．`record(..., home=True)` は毎回のepisodeの前にこれを行います．詳しくは [Leader](../../controllers/leader.md) の「初期姿勢へ動かす」を参照してください．
 - `teleop()`，`policy()`，`stop_teleop()`：方策に `teleop:` があるとき，leaderに切り替え（episodeの前，または途中の介入），方策に戻し，episodeの外のteleopを終えます．詳しくは [teleopと介入](../../policy/intervention.md#teleop) を参照してください．
-- すべてのcontrollerが操作者の入力に従う構成では，`teleop()` は `start` と同じように準備状態と姿勢合わせを確認し，記録せずにfollowerを入力に従わせます．`stop_teleop()` でfollowerを保持します．`home()` の前にはteleopを止めます．詳しくは [episodeの外でのteleop](../../controllers/index.md#teleop) を参照してください．<span class="status status--mock">Mock only</span>
+- すべてのcontrollerが操作者の入力に従う構成では，`teleop()` は `start` と同じように準備状態と姿勢合わせを確認し，記録せずにfollowerを入力に従わせます．`stop_teleop()` はすべてのfollowerが保持状態になるまで待ちます．teleop中は `home()` の前に呼び出します．詳しくは [episodeの外でのteleop](../../controllers/index.md#teleop) を参照してください．<span class="status status--mock">Mock only</span>
 
 ```python
 s.start("wipe the table")

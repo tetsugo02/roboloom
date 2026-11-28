@@ -281,10 +281,7 @@ def _keys(
         def go_home() -> None:
             """Move home; keys stay live (q, e) while the arms move."""
             if teleop and not handback:
-                try:
-                    session.stop_teleop()
-                except SessionError:
-                    pass  # not teleoperating
+                session.stop_teleop()
             sent_ns, limit = session.begin_home()
             deadline = time.monotonic() + limit
             while waiting := session.home_waiting(sent_ns):

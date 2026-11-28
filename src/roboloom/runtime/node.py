@@ -223,21 +223,16 @@ def _follower_warning(cfg: RobotConfig, latest: dict[str, dict]) -> str | None:
 def _operator_teleop_warning(
     cfg: RobotConfig, command: str, latest: dict[str, dict], now_ns: int
 ) -> str | None:
-    """The operator's input drives the followers between
-    `teleop` and `stop_teleop` (nothing recorded) and during an episode."""
+    """Check operator teleop commands. Outside an episode, `stop_teleop` is idempotent
+    and accepted regardless of the last reported armed state."""
     recording = latest.get("recorder", {}).get("fields", {}).get("state") == "recording"
-    armed = any(latest.get(f, {}).get("fields", {}).get("armed") for f in cfg.followers)
     if command == "policy":
         return "no policy: the input drives the followers"
     if command == "stop_teleop":
-        if recording:
-            return "during an episode use stop"
-        if not armed:
-            return "not teleoperating"
-        return None
+        return "during an episode use stop" if recording else None
     if recording:
         return "an episode is running: the input already drives"
-    if armed:
+    if any(latest.get(f, {}).get("fields", {}).get("armed") for f in cfg.followers):
         return "already teleoperating"
     return _follower_warning(cfg, latest) or controller_warning(
         cfg, latest, now_ns, retry="teleop"

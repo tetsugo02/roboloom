@@ -1124,9 +1124,33 @@ class Session:
         where they are, with a fresh history)."""
         self.wait_report(self.send("policy"))
 
-    def stop_teleop(self) -> None:
-        """Stop teleoperating outside an episode; the followers hold where they are."""
+    def stop_teleop(self, timeout: float = 2.0) -> None:
+        """Stop teleoperating outside an episode and return once every follower holds.
+
+        After command acknowledgement, wait up to `timeout` seconds for fresh disarmed
+        status from each follower. Raises SessionError if confirmation times out.
+        """
+        sent_ns = time.monotonic_ns()
         self.wait_report(self.send("stop_teleop"))
+        deadline = time.monotonic() + timeout
+        while True:
+            self._check_cancelled()
+            self._check_alive()
+            status = self.status()
+            waiting = []
+            for name in self.cfg.followers:
+                item = status.get(name, {})
+                if item.get("t_ns", 0) <= sent_ns or item.get("fields", {}).get(
+                    "armed"
+                ):
+                    waiting.append(name)
+            if not waiting:
+                return
+            if time.monotonic() >= deadline:
+                raise SessionError(
+                    f"stop_teleop: {', '.join(waiting)} still following after {timeout:g} s"
+                )
+            time.sleep(0.05)
 
     def estop(self) -> None:
         """Latch the follower in ESTOP (stays until the dataflow restarts). Written

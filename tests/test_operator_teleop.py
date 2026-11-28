@@ -6,7 +6,7 @@ import time
 from collections.abc import Mapping
 
 import pytest
-from conftest import mock_project
+from conftest import make_fake_session, mock_project
 from test_operator_backends import FakeSession, Notices
 from test_parts import _arms
 from test_pose_ik import CONFIG as POSE_IK_CONFIG
@@ -17,6 +17,7 @@ from roboloom.controllers.teleop import TeleopMode, teleop_mode
 from roboloom.core.protocol import Envelope
 from roboloom.recording.schema import records_intervention
 from roboloom.runtime.node import home_warning, teleop_warning
+from roboloom.runtime.session import Session, SessionError
 from roboloom.ui.backend import RecordingPlan, SessionBackend
 from roboloom.ui.models import Capabilities, Snapshot
 
@@ -126,10 +127,41 @@ def test_stop_teleop_and_policy_in_operator_mode(tmp_path):
     cfg = _config(tmp_path)
     now = time.monotonic_ns()
     assert teleop_warning(cfg, "stop_teleop", _latest(now, armed=True), now) is None
-    assert "not teleoperating" in teleop_warning(cfg, "stop_teleop", _latest(now), now)
+    assert teleop_warning(cfg, "stop_teleop", _latest(now), now) is None
     recording = _latest(now, recorder="recording", armed=True)
-    assert "use stop" in teleop_warning(cfg, "stop_teleop", recording, now)
+    assert (
+        teleop_warning(cfg, "stop_teleop", recording, now)
+        == "during an episode use stop"
+    )
     assert "no policy" in teleop_warning(cfg, "policy", _latest(now), now)
+
+
+def test_stop_teleop_waits_for_fresh_disarmed_status(tmp_path):
+    session = make_fake_session(tmp_path)
+    session.client.new_reports.return_value = [{"id": 1, "command": "stop_teleop"}]
+    stale = time.monotonic_ns()
+
+    def statuses():
+        yield {"nodes": {"follower": _status(stale, armed=True)}}
+        yield {"nodes": {"follower": _status(stale, armed=False)}}
+        yield {"nodes": {"follower": _status(time.monotonic_ns(), armed=True)}}
+        yield {"nodes": {"follower": _status(time.monotonic_ns(), armed=False)}}
+
+    session.client.status.side_effect = statuses()
+    session.stop_teleop()
+    assert session.client.status.call_count == 4
+
+
+def test_stop_teleop_times_out_if_follower_stays_armed(tmp_path):
+    session = make_fake_session(tmp_path)
+    session.client.new_reports.return_value = [{"id": 1, "command": "stop_teleop"}]
+    session.client.status.side_effect = lambda: {
+        "nodes": {"follower": _status(time.monotonic_ns(), armed=True)}
+    }
+    with pytest.raises(
+        SessionError, match=r"stop_teleop: follower still following after 0\.01 s"
+    ):
+        session.stop_teleop(timeout=0.01)
 
 
 def test_home_says_how_to_end_teleoperation(tmp_path):
@@ -184,8 +216,6 @@ def test_operator_teleop_waits_for_save_or_discard(tmp_path):
 
 @pytest.mark.e2e
 def test_operator_teleop_then_an_episode_in_the_mock_dataflow(tmp_path):
-    from roboloom.runtime.session import Session, SessionError
-
     path = mock_project(tmp_path / ".roboloom") / "config.yaml"
     with Session.launch(path, log_dir=tmp_path / "logs", screen=False) as s:
         s.wait_ready(30)
@@ -197,7 +227,9 @@ def test_operator_teleop_then_an_episode_in_the_mock_dataflow(tmp_path):
         with pytest.raises(SessionError, match="already teleoperating"):
             s.teleop()
         s.stop_teleop()
-        time.sleep(0.5)
+        assert not s.status()["follower"]["fields"]["armed"]
+        s.teleop()
+        s.stop_teleop()
         assert not s.status()["follower"]["fields"]["armed"]
         s.teleop()
         time.sleep(0.5)
@@ -207,4 +239,5 @@ def test_operator_teleop_then_an_episode_in_the_mock_dataflow(tmp_path):
         result = s.save(wait=True)
         time.sleep(0.5)
         assert not s.status()["follower"]["fields"]["armed"]
+    assert s.process.poll() is not None
     assert result.saved
