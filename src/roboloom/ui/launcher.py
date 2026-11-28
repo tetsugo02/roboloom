@@ -37,6 +37,7 @@ from ..config import (
     CONFIG_FILE,
     INFER_OPTION,
     PROJECT_ROOT,
+    Experiment,
     Option,
     RobotConfig,
     check_options,
@@ -54,6 +55,7 @@ from ..recording.video import VIDEO_CODECS, normalize_video_codec
 from .splitter import Splitter
 
 MODES = ("run", "record", "infer")
+HOME_DEFAULT_ID = "__default__"
 # Video codec choices: `VIDEO_DEFAULT` leaves the choice to the recorder YAML (and, when
 # appending, to the saved videos); the others are recording.video.VIDEO_CODECS names.
 VIDEO_DEFAULT = "yaml"
@@ -428,10 +430,11 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         *,
         back: bool = False,
         launch_error: str = "",
+        experiment: Experiment | None = None,
     ):
         """`back`: offer Back (and Esc) to return to the robot list."""
         super().__init__()
-        self.config, self.back = config, back
+        self.config, self.back, self.experiment = config, back, experiment
         self._launch_error = launch_error
         raw = yaml.safe_load(config.read_text()) or {}
         self._validates_full_config = any(
@@ -480,7 +483,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
         observation_defaults: list[str]
         try:
-            tree = read_config(config, initial.options)
+            tree = read_config(config, initial.options, experiment=self.experiment)
             sensor_defaults = list(tree["sensors"])
             observation_defaults = next(
                 (
@@ -696,7 +699,9 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             return
         try:
             # Only controller defaults are needed; inactive sensor files stay unread.
-            tree = read_config(self.config, self.chosen, sensors=[])
+            tree = read_config(
+                self.config, self.chosen, sensors=[], experiment=self.experiment
+            )
         except (ValueError, TypeError, OSError):
             return  # incomplete configurations remain editable in the launcher
         self.observation_selection = list(
@@ -754,26 +759,49 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         if choices == self._home_choices:
             return
         self._home_choices = choices
-        fallback = default if default in valid else next(iter(valid), None)
-        selected = plan.home_pose if plan.home_pose in valid else fallback
-        with poses.prevent(OptionList.OptionHighlighted):
-            poses.clear_options().add_options(
-                [
+        if default:
+            fallback = default if default in valid else next(iter(valid), None)
+            selected = plan.home_pose if plan.home_pose in valid else fallback
+            options = [
+                ListOption(
+                    f"{'▸ ' if name == selected else ''}{name}"
+                    f"{' (default)' if name == default else ''}",
+                    id=name,
+                )
+                for name in valid
+            ]
+            highlighted = valid.index(selected) if selected is not None else None
+        else:
+            selected = plan.home_pose if plan.home_pose in valid else None
+            options = [
+                ListOption(
+                    f"{'▸ ' if selected is None else ''}Each follower's default",
+                    id=HOME_DEFAULT_ID,
+                ),
+                *(
                     ListOption(
-                        f"{'▸ ' if name == selected else ''}{name}"
-                        f"{' (default)' if name == default else ''}",
+                        f"{'▸ ' if name == selected else ''}{name}",
                         id=name,
                     )
                     for name in valid
-                ]
-                + [
-                    ListOption(
-                        Text(f"{name} — unavailable: {reason}"), id=name, disabled=True
-                    )
-                    for name, reason in invalid.items()
+                ),
+            ]
+            highlighted = 0 if selected is None else 1 + valid.index(selected)
+        with poses.prevent(OptionList.OptionHighlighted):
+            poses.clear_options().add_options(
+                [
+                    *options,
+                    *(
+                        ListOption(
+                            Text(f"{name} — unavailable: {reason}"),
+                            id=name,
+                            disabled=True,
+                        )
+                        for name, reason in invalid.items()
+                    ),
                 ]
             )
-            poses.highlighted = valid.index(selected) if selected is not None else None
+            poses.highlighted = highlighted
 
     def _problem(self, plan: LaunchPlan) -> str:
         try:
@@ -818,6 +846,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                     sensors=plan.sensors,
                     observe=plan.observe,
                     video_codec=plan.video_codec,
+                    experiment=self.experiment,
                 )
             except RoboloomError as exc:
                 self._config_cache[key] = None, str(exc)
@@ -842,7 +871,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         if plan.mode in ("record", "infer") and plan.home:
             valid, invalid, default = self._homes(plan)
             if valid or invalid:
-                lines.append(f"home: {plan.home_pose or default or 'default'}")
+                label = plan.home_pose or default or "each follower's default"
+                lines.append(f"home: {label}")
         problem = self._problem(plan)
         if problem:
             return "\n".join([*lines, f"cannot launch: {problem}"])
@@ -864,7 +894,9 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if not self._syncing and event.option_list.id == "home-pose":
-            self._home_pose = event.option.id
+            self._home_pose = (
+                None if event.option.id == HOME_DEFAULT_ID else event.option.id
+            )
             self._launch_error = ""
             self._sync()
 
@@ -938,11 +970,22 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
 
 def choose(
-    config: Path, initial: LaunchPlan, *, back: bool = False, launch_error: str = ""
+    config: Path,
+    initial: LaunchPlan,
+    *,
+    back: bool = False,
+    launch_error: str = "",
+    experiment: Experiment | None = None,
 ) -> LaunchPlan | Literal["back"] | None:
     """Show the launcher; the chosen plan (saved as the next initial one), BACK (only
     with `back`) or None (cancelled)."""
-    plan = LauncherApp(config, initial, back=back, launch_error=launch_error).run()
+    plan = LauncherApp(
+        config,
+        initial,
+        back=back,
+        launch_error=launch_error,
+        experiment=experiment,
+    ).run()
     if isinstance(plan, LaunchPlan):
         save_last(config, plan)
     return plan

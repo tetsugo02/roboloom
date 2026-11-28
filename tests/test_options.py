@@ -597,3 +597,203 @@ def test_operate_robot_passes_home_to_recording_plan(
     recording = run_backend.call_args.args[0].recording
     assert recording is not None
     assert recording.home == expected
+
+
+@pytest.mark.asyncio
+async def test_launcher_uses_active_experiment_for_validation_and_homes(
+    tmp_path: Path, monkeypatch
+):
+    from roboloom import cli
+    from roboloom.config import Experiment
+    from roboloom.ui import launcher
+
+    project = mock_project(tmp_path)
+    path = project / "config.yaml"
+    poses = project / "poses" / "follower"
+    poses.mkdir(parents=True)
+    pose = {
+        limit["name"]: 2048
+        for limit in yaml.safe_load((project / "nodes" / "follower.yaml").read_text())[
+            "limits"
+        ]
+    }
+    (poses / "ready.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "follower": "follower",
+                "model": "rakuda2",
+                "unit": "dynamixel_count",
+                "pose": pose,
+            }
+        )
+    )
+    experiment = Experiment(
+        name="with-home",
+        nodes={
+            "controllers.controller": {
+                "home": {
+                    "pose": "../poses/follower/ready.yaml",
+                    "max_speed": 200,
+                    "tolerance": 30,
+                }
+            }
+        },
+    )
+
+    app = LauncherApp(
+        path,
+        LaunchPlan(mode="record", task="pick", seconds=3, home=True),
+        experiment=experiment,
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        assert app.query_one("#home").display
+        assert app.query_one("#home-pose").display
+        assert not app.query_one("#launch", Button).disabled
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home is True
+
+    choose = Mock(
+        side_effect=[
+            LaunchPlan(mode="record", task="pick", seconds=3, home=True),
+            None,
+        ]
+    )
+    monkeypatch.setattr(launcher, "choose", choose)
+    monkeypatch.setattr(cli, "_start", Mock(return_value="reselect"))
+    cli._operate_robot(
+        Namespace(
+            command="record",
+            config=path,
+            task="pick",
+            seconds=3,
+            home=True,
+            experiment=experiment,
+        ),
+        True,
+        back=False,
+    )
+    assert choose.call_args.kwargs["experiment"] is experiment
+
+
+@pytest.mark.asyncio
+async def test_launcher_shows_per_follower_defaults_when_defaults_differ(
+    tmp_path: Path,
+):
+    from roboloom.ui.launcher import HOME_DEFAULT_ID
+
+    project = mock_project(tmp_path)
+    nodes = project / "nodes"
+    follower_cfg = yaml.safe_load((nodes / "follower.yaml").read_text())
+    leader_cfg = yaml.safe_load((nodes / "leader.yaml").read_text())
+    recorder_cfg = yaml.safe_load((nodes / "recorder.yaml").read_text())
+    recorder_cfg["max_age_ms"].update(
+        {"left": 200, "right": 200, "leader_left": 200, "leader_right": 200}
+    )
+    (nodes / "recorder.yaml").write_text(yaml.safe_dump(recorder_cfg))
+    joint_names = [limit["name"] for limit in follower_cfg["limits"]]
+    (nodes / "left.yaml").write_text(
+        yaml.safe_dump({**follower_cfg, "port": "/dev/mock-left"})
+    )
+    (nodes / "right.yaml").write_text(
+        yaml.safe_dump({**follower_cfg, "port": "/dev/mock-right"})
+    )
+    (nodes / "leader_left.yaml").write_text(
+        yaml.safe_dump({**leader_cfg, "port": "/dev/mock-leader-left"})
+    )
+    (nodes / "leader_right.yaml").write_text(
+        yaml.safe_dump({**leader_cfg, "port": "/dev/mock-leader-right"})
+    )
+
+    for follower, default_pose in (("left", "ready"), ("right", "park")):
+        pose_dir = project / "poses" / follower
+        pose_dir.mkdir(parents=True)
+        for name, value in (("ready", 2048), ("park", 2100)):
+            (pose_dir / f"{name}.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "follower": follower,
+                        "model": "rakuda2",
+                        "unit": "dynamixel_count",
+                        "pose": {joint: value for joint in joint_names},
+                    }
+                )
+            )
+        (nodes / f"ctrl_{follower}.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "type": "joint",
+                    "input": f"leader_{follower}",
+                    "followers": [follower],
+                    "alignment_tolerance": 300,
+                    "max_speed": 2048,
+                    "command_deadline_ms": 100,
+                    "input_timeout_ms": 150,
+                    "home": {
+                        "pose": f"../poses/{follower}/{default_pose}.yaml",
+                        "max_speed": 200,
+                        "tolerance": 30,
+                    },
+                }
+            )
+        )
+
+    path = project / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "repo_id": "local/dual",
+                "output": str(tmp_path / "datasets"),
+                "dataset_fps": 15,
+                "mode": "mock",
+                "inputs": {
+                    "leader_left": "nodes/leader_left.yaml",
+                    "leader_right": "nodes/leader_right.yaml",
+                },
+                "controllers": {
+                    "ctrl_left": "nodes/ctrl_left.yaml",
+                    "ctrl_right": "nodes/ctrl_right.yaml",
+                },
+                "followers": {
+                    "left": "nodes/left.yaml",
+                    "right": "nodes/right.yaml",
+                },
+                "sensors": {},
+                "recorder": "nodes/recorder.yaml",
+                "session": "nodes/session.yaml",
+            }
+        )
+    )
+
+    app = LauncherApp(
+        path, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        poses = app.query_one("#home-pose", OptionList)
+        summary = app.query_one("#summary", Static)
+        assert poses.option_count == 3
+        assert poses.get_option_at_index(0).id == HOME_DEFAULT_ID
+        assert "Each follower's default" in str(poses.get_option_at_index(0).prompt)
+        assert poses.highlighted == 0
+        assert "home: each follower's default" in str(summary.render())
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home_pose is None
+
+    app = LauncherApp(
+        path, LaunchPlan(mode="record", task="pick", seconds=3, home=True)
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        poses = app.query_one("#home-pose", OptionList)
+        poses.focus()
+        await pilot.press("down", "enter")
+        assert app._read().home_pose == "park"
+        assert "home: park" in str(app.query_one("#summary", Static).render())
+        await pilot.press("up", "enter")
+        assert app._read().home_pose is None
+        assert "home: each follower's default" in str(
+            app.query_one("#summary", Static).render()
+        )
+        await pilot.press("ctrl+s")
+    assert isinstance(app.return_value, LaunchPlan)
+    assert app.return_value.home_pose is None

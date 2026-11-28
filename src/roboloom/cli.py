@@ -11,7 +11,7 @@ import tempfile
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .agent_skills import TARGETS as SKILL_TARGETS
 from .config import (
@@ -883,14 +883,15 @@ def _operate_robot(
                 options=last.options if last is not None else select_options(options),
             )
     launch_error = ""
+    experiment = _experiment(args)
     while True:
         if show:
-            chosen = choose(
-                path,
-                plan,
-                back=back,
-                **({"launch_error": launch_error} if launch_error else {}),
-            )
+            choose_kwargs: dict[str, Any] = {"back": back}
+            if launch_error:
+                choose_kwargs["launch_error"] = launch_error
+            if experiment is not None:
+                choose_kwargs["experiment"] = experiment
+            chosen = choose(path, plan, **choose_kwargs)
             launch_error = ""
             if chosen == BACK:
                 return BACK
@@ -907,7 +908,7 @@ def _operate_robot(
                 sensors=plan.sensors,
                 observe=plan.observe,
                 video_codec=plan.video_codec,
-                experiment=_experiment(args),
+                experiment=experiment,
             )
             if terminal and not cfg.mock:
                 _commission(cfg)
