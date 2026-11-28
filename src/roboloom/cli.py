@@ -869,9 +869,16 @@ def _operate_robot(
                 plan,
                 options=last.options if last is not None else select_options(options),
             )
+    launch_error = ""
     while True:
         if show:
-            chosen = choose(path, plan, back=back)
+            chosen = choose(
+                path,
+                plan,
+                back=back,
+                **({"launch_error": launch_error} if launch_error else {}),
+            )
+            launch_error = ""
             if chosen == BACK:
                 return BACK
             if not isinstance(chosen, LaunchPlan):
@@ -879,20 +886,26 @@ def _operate_robot(
                 return None
             plan = chosen
         selected = plan.options if (show or given is not None) else None
-        cfg = load_config(
-            path,
-            options=selected,
-            mock=True if plan.mock else None,
-            sensors=plan.sensors,
-            observe=plan.observe,
-            video_codec=plan.video_codec,
-            experiment=_experiment(args),
-        )
-        if terminal and not cfg.mock:
-            _commission(cfg)
-        outcome = _start(
-            args, cfg, plan, live=terminal and not plain, reselect=terminal
-        )
+        try:
+            cfg = load_config(
+                path,
+                options=selected,
+                mock=True if plan.mock else None,
+                sensors=plan.sensors,
+                observe=plan.observe,
+                video_codec=plan.video_codec,
+                experiment=_experiment(args),
+            )
+            if terminal and not cfg.mock:
+                _commission(cfg)
+            outcome = _start(
+                args, cfg, plan, live=terminal and not plain, reselect=terminal
+            )
+        except RoboloomError as exc:
+            if not show:
+                raise
+            launch_error = str(exc)
+            continue
         if outcome != "reselect":
             return None
         show = True

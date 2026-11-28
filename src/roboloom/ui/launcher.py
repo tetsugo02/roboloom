@@ -40,12 +40,13 @@ from ..config import (
     check_options,
     dataset_suffix,
     declared_options,
+    load_config,
     option_changes,
     project_robots,
     read_config,
     toggle_option,
 )
-from ..errors import ConfigError
+from ..errors import ConfigError, RoboloomError
 from ..recording.video import VIDEO_CODECS, normalize_video_codec
 from .splitter import Splitter
 
@@ -410,11 +411,41 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         Binding("escape", "escape", "Back / Cancel"),
     ]
 
-    def __init__(self, config: Path, initial: LaunchPlan, *, back: bool = False):
+    def __init__(
+        self,
+        config: Path,
+        initial: LaunchPlan,
+        *,
+        back: bool = False,
+        launch_error: str = "",
+    ):
         """`back`: offer Back (and Esc) to return to the robot list."""
         super().__init__()
         self.config, self.back = config, back
+        self._launch_error = launch_error
         raw = yaml.safe_load(config.read_text()) or {}
+        self._validates_full_config = any(
+            key in raw
+            for key in (
+                "followers",
+                "controllers",
+                "inputs",
+                "sensors",
+                "trackers",
+                "recorder",
+                "session",
+            )
+        )
+        self._config_problems: dict[
+            tuple[
+                tuple[str, ...],
+                bool,
+                tuple[str, ...] | None,
+                tuple[str, ...] | None,
+                str | None,
+            ],
+            str,
+        ] = {}
         self.options = declared_options(config, raw.get("options"))
         self.sensor_names = list(raw.get("sensors") or {})
         for option in self.options.values():
@@ -472,7 +503,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
                         yield RadioButton(
                             mode, value=mode == self.plan.mode, id=f"mode-{mode}"
                         )
-                with Vertical(id="recording"):
+                # Initial field values should leave the last launch error visible.
+                with Vertical(id="recording"), self.prevent(Input.Changed):
                     yield Label("Task (stored with every frame)", classes="field-label")
                     yield Input(
                         self.plan.task, placeholder="e.g. pick up the cup", id="task"
@@ -699,7 +731,32 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
         missing = set(observed) & (set(self.sensor_names) - set(plan.sensors or []))
         if missing:
             return f"policy observes inactive sensors: {sorted(missing)}"
-        return plan.problem()
+        problem = self._config_problem(plan) if self._validates_full_config else ""
+        return problem or plan.problem()
+
+    def _config_problem(self, plan: LaunchPlan) -> str:
+        key = (
+            plan.options,
+            plan.mock,
+            tuple(plan.sensors) if plan.sensors is not None else None,
+            tuple(plan.observe) if plan.observe is not None else None,
+            plan.video_codec,
+        )
+        if key not in self._config_problems:
+            problem = ""
+            try:
+                load_config(
+                    self.config,
+                    options=plan.options,
+                    mock=True if plan.mock else None,
+                    sensors=plan.sensors,
+                    observe=plan.observe,
+                    video_codec=plan.video_codec,
+                )
+            except RoboloomError as exc:
+                problem = str(exc)
+            self._config_problems[key] = problem
+        return self._config_problems[key]
 
     def _devices(self, plan: LaunchPlan) -> str:
         if plan.mock:
@@ -713,6 +770,8 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
             f"{plan.mode} · {self._devices(plan)} · options: "
             + (", ".join(plan.options) or "none")
         ]
+        if self._launch_error:
+            lines.insert(0, f"last launch failed: {self._launch_error}")
         problem = self._problem(plan)
         if problem:
             return "\n".join([*lines, f"cannot launch: {problem}"])
@@ -735,6 +794,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if self._syncing:
             return
+        self._launch_error = ""
         widget_id = event.checkbox.id or ""
         if widget_id.startswith("observe-"):
             source = self.observation_names[int(widget_id.removeprefix("observe-"))]
@@ -762,6 +822,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         if self._syncing:
             return
+        self._launch_error = ""
         if (
             event.radio_set.id == "mode"
             and self._read().mode == "infer"
@@ -772,6 +833,7 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
     def on_input_changed(self, _: Input.Changed) -> None:
         if not self._syncing:
+            self._launch_error = ""
             self._sync()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -795,11 +857,11 @@ class LauncherApp(App[LaunchPlan | Literal["back"] | None]):
 
 
 def choose(
-    config: Path, initial: LaunchPlan, *, back: bool = False
+    config: Path, initial: LaunchPlan, *, back: bool = False, launch_error: str = ""
 ) -> LaunchPlan | Literal["back"] | None:
     """Show the launcher; the chosen plan (saved as the next initial one), BACK (only
     with `back`) or None (cancelled)."""
-    plan = LauncherApp(config, initial, back=back).run()
+    plan = LauncherApp(config, initial, back=back, launch_error=launch_error).run()
     if isinstance(plan, LaunchPlan):
         save_last(config, plan)
     return plan

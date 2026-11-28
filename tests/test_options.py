@@ -5,13 +5,15 @@ from __future__ import annotations
 
 import shutil
 import sys
+from argparse import Namespace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
 from conftest import mock_project, rakuda2_tree
 from rich.console import Console
-from textual.widgets import Button, Checkbox
+from textual.widgets import Button, Checkbox, Input, Static
 
 from roboloom.cli import _with_config
 from roboloom.config import (
@@ -308,6 +310,37 @@ def test_launch_without_a_robot_starts_with_the_robot_list(tmp_path, monkeypatch
     assert shown == [("alpha", True), ("beta", True)]  # Back twice, then Esc
 
 
+@pytest.mark.parametrize("failure", ["load_config", "_start"])
+def test_failed_launch_returns_to_the_same_plan(tmp_path, monkeypatch, failure):
+    from roboloom import cli
+    from roboloom.ui import launcher
+
+    path = mock_project(tmp_path) / "config.yaml"
+    selected = LaunchPlan(mode="infer", options=("policy",), mock=True, seconds=3)
+    choose = Mock(side_effect=[selected, selected, None])
+    error = ConfigError("launch failed in test")
+    start = Mock(return_value="reselect")
+    monkeypatch.setattr(launcher, "choose", choose)
+    monkeypatch.setattr(cli, "_start", start)
+    if failure == "load_config":
+        cfg = load_config(path, options=selected.options)
+        monkeypatch.setattr(cli, "load_config", Mock(side_effect=[error, cfg]))
+    else:
+        start.side_effect = [error, "reselect"]
+
+    assert (
+        cli._operate_robot(Namespace(command="launch", config=path), True, back=False)
+        is None
+    )
+
+    first, retry, reselect = choose.call_args_list
+    assert first.kwargs == {"back": False}
+    assert retry.args[0] == path
+    assert retry.args[1] is selected
+    assert retry.kwargs == {"back": False, "launch_error": str(error)}
+    assert reselect.kwargs == {"back": False}
+
+
 @pytest.mark.asyncio
 async def test_launcher_panes_resize_and_stack_when_narrow(tmp_path: Path):
     from roboloom.ui.launcher import RobotApp
@@ -398,3 +431,42 @@ async def test_launcher_preserves_explicit_observations(tmp_path, explicit):
         expected = ["digit_left"] if explicit == "initial_other" else []
         assert app._read().observe == expected
         assert not app.query_one(f"#observe-{camera}", Checkbox).value
+
+
+@pytest.mark.asyncio
+async def test_launcher_validates_config_before_infer(tmp_path, monkeypatch):
+    from roboloom.ui import launcher
+
+    path = mock_project(tmp_path) / "config.yaml"
+    validate = Mock(wraps=load_config)
+    monkeypatch.setattr(launcher, "load_config", validate)
+    app = LauncherApp(
+        path,
+        LaunchPlan(mode="infer", options=("policy",), seconds=3),
+        launch_error="session failed in test",
+    )
+    async with app.run_test(size=(100, 50)) as pilot:
+        summary = app.query_one("#summary", Static)
+        launch = app.query_one("#launch", Button)
+        assert str(summary.render()).startswith(
+            "last launch failed: session failed in test"
+        )
+        assert not launch.disabled
+        assert validate.call_count == 1
+
+        app.query_one("#task", Input).value = "pick"
+        await pilot.pause()
+        assert "last launch failed" not in str(summary.render())
+        assert validate.call_count == 1
+
+        leader = app.observation_names.index("leader")
+        await pilot.click(f"#observe-{leader}")
+        assert launch.disabled
+        assert (
+            f"cannot launch: {path}: controllers.policy observes unknown nodes ['leader']"
+            in str(summary.render())
+        )
+        assert validate.call_count == 2
+        await pilot.press("ctrl+s")
+        await pilot.press("escape")
+    assert app.return_value is None
